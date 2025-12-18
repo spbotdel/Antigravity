@@ -1,0 +1,17 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+}
+
+#tree {
+  width: 100vw;
+  height: 100vh;
+  background: #f5f5f5;
+}
+
+.node text {
+  font-size: 12px;
+  pointer-events: none;
+}
