@@ -2,79 +2,72 @@ import { parseGedcom } from "./gedcomParser.js";
 import { buildDescendantsTree } from "./treeBuilder.js";
 import { renderTree } from "./treeRenderer.js";
 
-console.log("=== НАЧАЛО ЗАГРУЗКИ ===");
+console.log("=== ПОИСК ДОСТУПНЫХ ID ===");
 
 fetch("./3.ged")
-  .then(response => {
-    console.log("Статус ответа GEDCOM:", response.status, response.statusText);
-    if (!response.ok) {
-      throw new Error(`Ошибка HTTP: ${response.status}`);
-    }
-    return response.text();
-  })
+  .then(response => response.text())
   .then(text => {
-    console.log("GEDCOM загружен. Длина:", text.length, "символов");
-    console.log("Первые 500 символов:\n", text.substring(0, 500));
-    
     const data = parseGedcom(text);
-    console.log("=== РЕЗУЛЬТАТЫ ПАРСИНГА ===");
-    console.log("Найдено людей:", Object.keys(data.people).length);
-    console.log("Найдено семей:", Object.keys(data.families).length);
     
-    // Выводим первые 10 ID людей для проверки
-    console.log("Первые 10 ID людей:", Object.keys(data.people).slice(0, 10));
+    console.log("Всего людей:", Object.keys(data.people).length);
+    console.log("Всего семей:", Object.keys(data.families).length);
     
-    // Проверяем конкретные ID
-    const testIds = ["I1", "I5", "I8", "I36"];
-    testIds.forEach(id => {
-      const person = data.people[id];
-      console.log(`Проверка ${id}:`, person ? `"${person.name}"` : "НЕ НАЙДЕН");
+    // Выводим ВСЕХ людей с их ID
+    console.log("\n=== ПОЛНЫЙ СПИСОК ЛЮДЕЙ ===");
+    Object.entries(data.people).forEach(([id, person]) => {
+      console.log(`${id}: ${person.name || "Без имени"}`);
     });
     
-    // Пробуем разные rootId
-    const rootId = "I1"; // Изменено на I1 - основатель
-    console.log(`\nПробуем построить дерево от ${rootId}...`);
+    // Ищем подходящий rootId (у кого есть семья или дети)
+    console.log("\n=== ПОИСК ПОДХОДЯЩЕГО ROOTID ===");
     
-    const person = data.people[rootId];
-    if (!person) {
-      console.error(`ОШИБКА: Человек с ID ${rootId} не найден!`);
-      console.log("Доступные ID:", Object.keys(data.people));
-      return;
-    }
-    
-    console.log(`Найден: ${person.name} (${rootId})`);
-    
-    const treeData = buildDescendantsTree(rootId, data);
-    console.log("Результат buildDescendantsTree:", treeData);
-    
-    if (!treeData || !treeData.children) {
-      console.warn("treeData не содержит детей. Попробуем другой ID...");
-      
-      // Ищем кого-то с семьей
-      const personWithFamily = Object.values(data.people).find(p => 
-        p.familiesAsSpouse && p.familiesAsSpouse.length > 0
+    // Вариант 1: Ищем по имени
+    const targetNames = ["Леонид", "Егор", "Валентина", "Евангелина"];
+    targetNames.forEach(name => {
+      const found = Object.entries(data.people).find(([id, p]) => 
+        p.name && p.name.includes(name)
       );
-      
-      if (personWithFamily) {
-        console.log(`Найден человек с семьей: ${personWithFamily.name} (${personWithFamily.id})`);
-        const alternativeTree = buildDescendantsTree(personWithFamily.id, data);
-        console.log("Альтернативное дерево:", alternativeTree);
-        renderTree(alternativeTree);
-      } else {
-        console.error("Ни у кого нет семьи!");
-        renderTree(null);
+      if (found) {
+        console.log(`Найден "${name}": ${found[0]} - "${found[1].name}"`);
       }
-    } else {
+    });
+    
+    // Вариант 2: Ищем того, у кого есть дети
+    const personWithChildren = Object.entries(data.people).find(([id, p]) => {
+      if (!p.familiesAsSpouse || p.familiesAsSpouse.length === 0) return false;
+      
+      // Проверяем, есть ли у него дети в какой-либо семье
+      return p.familiesAsSpouse.some(famId => {
+        const fam = data.families[famId];
+        return fam && fam.children && fam.children.length > 0;
+      });
+    });
+    
+    if (personWithChildren) {
+      console.log(`\nНайден человек с детьми: ${personWithChildren[0]} - "${personWithChildren[1].name}"`);
+      
+      // Строим дерево от этого человека
+      const treeData = buildDescendantsTree(personWithChildren[0], data);
+      console.log("Построено дерево:", treeData);
       renderTree(treeData);
+    } else {
+      // Если не нашли человека с детьми, берем первого в списке
+      const firstId = Object.keys(data.people)[0];
+      if (firstId) {
+        console.log(`\nБерем первого в списке: ${firstId}`);
+        const treeData = buildDescendantsTree(firstId, data);
+        renderTree(treeData);
+      } else {
+        console.error("Нет данных о людях!");
+      }
     }
   })
   .catch(error => {
-    console.error("КРИТИЧЕСКАЯ ОШИБКА:", error);
+    console.error("Ошибка:", error);
     document.getElementById("tree").innerHTML = `
-      <div style="padding: 20px; color: red;">
-        <h3>Ошибка загрузки</h3>
+      <div style="padding: 20px;">
+        <h3>Ошибка</h3>
         <p>${error.message}</p>
-        <p>Проверьте консоль для подробностей.</p>
       </div>
     `;
   });
