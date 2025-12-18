@@ -91,11 +91,3 @@ export function renderTree(rootData) {
             return dates.join(' / ');
         });
 }
-
-node.select("rect")
-  .attr("fill", d => {
-    // Разные цвета для разных поколений
-    const depth = d.depth;
-    const colors = ["#4CAF50", "#2196F3", "#FF9800", "#9C27B0", "#F44336"];
-    return colors[depth] || "#607D8B";
-  });
