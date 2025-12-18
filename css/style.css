@@ -1,60 +1,75 @@
-/* css/style.css */
-html, body {
+/* Улучшенные стили для дерева */
+html,
+body {
     margin: 0;
     padding: 0;
     width: 100%;
     height: 100%;
-    overflow: hidden; /* Убираем scroll на всей странице */
-    font-family: 'Arial', sans-serif;
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 #tree {
     width: 100%;
     height: 100%;
-    /* Гарантируем, что контейнер занимает всё пространство */
-    position: absolute;
-    top: 0;
-    left: 0;
 }
 
-/* Стили для SVG-контейнера от D3 */
-svg {
-    display: block; /* Убирает лишние отступы вокруг SVG */
+/* Контролы для навигации */
+.controls {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.controls button {
+    display: block;
     width: 100%;
-    height: 100%;
-}
-
-/* Стили для узлов дерева */
-.node rect {
-    fill: #ffffff;
-    stroke: #2c3e50;
-    stroke-width: 2px;
-    stroke-opacity: 0.8;
-    rx: 8; /* Закругленные углы */
-    ry: 8;
-    filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.1));
-    transition: fill 0.3s ease;
-}
-
-.node rect:hover {
-    fill: #e3f2fd;
-    stroke: #1565c0;
+    margin: 5px 0;
+    padding: 8px 15px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 5px;
     cursor: pointer;
+    transition: background 0.3s;
 }
 
-.node text {
-    font-size: 14px;
-    font-weight: 500;
-    fill: #2c3e50;
-    pointer-events: none; /* Чтобы текст не мешал кликам */
-    text-anchor: middle;
+.controls button:hover {
+    background: #2980b9;
 }
 
-/* Стили для связей (линий) */
-.link {
-    fill: none;
-    stroke: #95a5a6;
-    stroke-width: 2px;
-    stroke-opacity: 0.6;
+/* Легенда */
+.legend {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 300px;
+}
+
+.legend h4 {
+    margin-top: 0;
+    color: #2c3e50;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin: 5px 0;
+}
+
+.legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    margin-right: 10px;
 }

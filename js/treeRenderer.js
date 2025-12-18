@@ -168,3 +168,14 @@ function formatDate(dateStr) {
     // Упрощаем дату для отображения
     return dateStr.replace(/(\d{1,2})\s+([A-Z]{3})\s+(\d{4})/, "$1 $2 $3");
 }
+// Заменяем функцию getGenerationColor на getFamilyLineColor
+function getFamilyLineColor(familyLineCode) {
+    // Создаем цвет на основе кода семейной линии
+    const hue = (familyLineCode * 137) % 360; // Золотое сечение для распределения
+    return `hsl(${hue}, 70%, 65%)`;
+}
+
+// В рендеринге меняем цвет карточек:
+node.append("rect")
+    .attr("fill", d => getFamilyLineColor(d.data.familyLine || 0))
+// ... остальные атрибуты
