@@ -1,55 +1,96 @@
-import { parseGedcom } from "./gedcomParser.js";
-import { buildDescendantsTree } from "./treeBuilder.js";
-import { renderTree } from "./treeRenderer.js";
+// js/gedcomParser.js - Минимальная рабочая версия
+export function parseGedcom(text) {
+  const people = {};
+  const families = {};
+  let current = null;
+  let inEvent = false;
+  let currentEvent = null;
 
-console.log("=== ЗАГРУЗКА GEDCOM ===");
+  const lines = text.split(/\r?\n/);
 
-fetch("./3.ged")
-  .then(response => response.text())
-  .then(text => {
-    // Проверяем первые символы файла
-    console.log("Первые 200 символов файла:");
-    console.log(text.substring(0, 200));
-    
-    const data = parseGedcom(text);
-    
-    // Выводим ВСЕХ людей
-    console.log("\n=== ВСЕ ЛЮДИ В ФАЙЛЕ ===");
-    Object.entries(data.people).forEach(([id, person]) => {
-      console.log(`${id}: "${person.name || 'Без имени'}"`);
-    });
-    
-    // Пробуем найти Леонида
-    const leonidId = Object.keys(data.people).find(id => {
-      const person = data.people[id];
-      return person.name && person.name.includes('Леонид');
-    });
-    
-    if (leonidId) {
-      console.log(`\nНайден Леонид: ${leonidId}`);
-      const treeData = buildDescendantsTree(leonidId, data);
-      renderTree(treeData);
-    } else {
-      // Берем первого человека с детьми
-      const personWithFamily = Object.entries(data.people).find(([id, p]) => 
-        p.familiesAsSpouse && p.familiesAsSpouse.length > 0
-      );
-      
-      if (personWithFamily) {
-        console.log(`\nБерем человека с семьей: ${personWithFamily[0]} - "${personWithFamily[1].name}"`);
-        const treeData = buildDescendantsTree(personWithFamily[0], data);
-        renderTree(treeData);
-      } else if (Object.keys(data.people).length > 0) {
-        // Берем просто первого человека
-        const firstId = Object.keys(data.people)[0];
-        console.log(`\nБерем первого человека: ${firstId}`);
-        const treeData = buildDescendantsTree(firstId, data);
-        renderTree(treeData);
+  for (let line of lines) {
+    if (!line.trim()) continue;
+
+    const match = line.match(/^\s*(\d+)\s+(@?[A-Za-z0-9_]+@?)(?:\s+(.+))?$/);
+    if (!match) continue;
+
+    const level = parseInt(match[1], 10);
+    let tag = match[2];
+    const value = match[3] || '';
+
+    // Убираем @ из ID
+    if (tag.startsWith('@') && tag.endsWith('@')) {
+      tag = tag.slice(1, -1);
+    }
+    const cleanValue = value.replace(/@/g, '');
+
+    // Обработка уровня 0
+    if (level === 0) {
+      inEvent = false;
+      currentEvent = null;
+
+      if (tag.startsWith('I')) {
+        current = { type: 'INDI', id: tag };
+        people[tag] = {
+          id: tag,
+          name: '',
+          gender: '',
+          birth: '',
+          death: '',
+          familiesAsSpouse: [],
+          familiesAsChild: []
+        };
+        continue;
+      } else if (tag.startsWith('F')) {
+        current = { type: 'FAM', id: tag };
+        families[tag] = {
+          id: tag,
+          husband: null,
+          wife: null,
+          children: []
+        };
+        continue;
       } else {
-        console.error("Нет данных о людях!");
+        current = null;
+        continue;
       }
     }
-  })
-  .catch(error => {
-    console.error("Ошибка загрузки:", error);
-  });
+
+    if (!current) continue;
+
+    // Обработка INDI
+    if (current.type === 'INDI') {
+      const p = people[current.id];
+
+      if (tag === 'NAME') {
+        p.name = cleanValue.replace(/\//g, ' ').trim();
+      } else if (tag === 'SEX') {
+        p.gender = cleanValue;
+      } else if (tag === 'BIRT' || tag === 'DEAT') {
+        inEvent = true;
+        currentEvent = tag;
+      } else if (tag === 'DATE' && inEvent && currentEvent) {
+        if (currentEvent === 'BIRT') p.birth = cleanValue;
+        if (currentEvent === 'DEAT') p.death = cleanValue;
+        inEvent = false;
+        currentEvent = null;
+      } else if (tag === 'FAMS') {
+        if (cleanValue) p.familiesAsSpouse.push(cleanValue);
+      } else if (tag === 'FAMC') {
+        if (cleanValue) p.familiesAsChild.push(cleanValue);
+      }
+    }
+
+    // Обработка FAM
+    else if (current.type === 'FAM') {
+      const f = families[current.id];
+
+      if (tag === 'HUSB') f.husband = cleanValue;
+      else if (tag === 'WIFE') f.wife = cleanValue;
+      else if (tag === 'CHIL') f.children.push(cleanValue);
+    }
+  }
+
+  console.log('Парсинг завершен:', Object.keys(people).length, 'людей,', Object.keys(families).length, 'семей');
+  return { people, families };
+}
