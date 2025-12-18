@@ -1,0 +1,2255 @@
+<<<<<<< HEAD
+﻿0 HEAD
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 DEST MyFamilyTree
+1 SOUR MyFamilyTree
+2 VERS 15.0.6.0
+2 NAME My Family Tree
+2 CORP Chronoplex Software
+1 SUBM @U0@
+1 DATE 17 DEC 2025
+2 TIME 20:46:48.107
+1 LANG English
+1 FILE 3.ged
+0 @U0@ SUBM
+1 _UID 654639bc-a4be-4794-84ac-3d635a9015e8
+1 NAME Сергей Белостоцкий
+1 ADDR Санкт-Петербург
+1 EMAIL spbotdel@@gmail.com
+1 WWW serbell.ru
+1 CHAN
+2 DATE 10 DEC 2025
+3 TIME 00:00:00.000
+0 @I0@ INDI
+1 _UID 9f651b7f-8016-4c59-b8ea-28edce8e8818
+1 NAME Егор /Миторфанович Русяйкин/
+2 TYPE birth
+2 GIVN Егор
+2 SURN Русяйкин
+2 _PATN Миторфанович
+1 SEX M
+1 DEAT Y
+1 FAMS @F0@
+1 NOTE Основатель рода Русяйкиных
+2 _NSTY Y
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:52:19.256
+0 @I1@ INDI
+1 _UID a3dddc25-69f3-4eb8-b3cc-d6e45a4ff785
+1 NAME Васса /Егоровна/
+2 TYPE birth
+2 GIVN Васса
+2 _PATN Егоровна
+1 SEX F
+1 BIRT
+2 DATE 1892
+2 _UID d2c0257a-f281-4ba4-8716-e345dcce2158
+2 _UID 7e277cce-6d5c-48f7-bdb7-6c47c62b5ea0
+1 DEAT
+2 DATE 1986
+2 _UID 46291ea5-12e9-44d0-9556-3903b1e24c80
+2 _UID b44d4fa0-1ae8-4a38-a04c-b5fcca7ce271
+1 FAMS @F0@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I2@ INDI
+1 _UID 4e61de9e-22aa-43e3-bd5b-ddaff20c35a7
+1 NAME Зоя /Егоровна Русяйкина/
+2 TYPE birth
+2 GIVN Зоя
+2 SURN Русяйкина
+2 _PATN Егоровна
+1 SEX F
+1 FAMC @F0@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I3@ INDI
+1 _UID 1fd116ed-0e38-41da-8f50-02c25433f099
+1 NAME Пётр /Егорович Русяйкин/
+2 TYPE birth
+2 GIVN Пётр
+2 SURN Русяйкин
+2 _PATN Егорович
+1 SEX M
+1 FAMC @F0@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I4@ INDI
+1 _UID 526ae35f-5e23-4cd1-a357-e0d801e06a33
+1 NAME Леонид /Егорович Русяйкин/
+2 TYPE birth
+2 GIVN Леонид
+2 SURN Русяйкин
+2 _PATN Егорович
+1 SEX M
+1 BIRT
+2 DATE 20 AUG 1928
+2 FAMC @F0@
+2 _UID 5c7d711d-e912-4d20-968f-81d4f159cab2
+2 _UID 4c938ba0-5673-414a-9a4e-8f77758199f6
+1 DEAT
+2 DATE 28 JAN 2002
+2 _UID 7c5423ab-fa9c-498c-85a4-54d285ade890
+2 _UID e77f702c-13e0-4b54-9ac2-092f75e2d0c6
+1 FAMC @F0@
+1 FAMS @F17@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I5@ INDI
+1 _UID d55fc22b-afca-43d2-b6f9-787c5f70d04d
+1 NAME Анна /Егоровна Русяйкина/
+2 TYPE birth
+2 GIVN Анна
+2 SURN Русяйкина
+2 _PATN Егоровна
+1 SEX F
+1 FAMC @F0@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I6@ INDI
+1 _UID 106d9f3a-87ed-4052-9024-0ca64a3a386e
+1 NAME Валентина /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Валентина
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 25 MAR 1955
+2 _UID a2173391-fcee-46cc-b766-b6909faf74d5
+2 _UID 101baaf4-5f35-47c4-8189-0df1bbdf7056
+1 FAMC @F17@
+1 FAMS @F1@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I7@ INDI
+1 _UID 1d49ed9d-ae68-4686-a4e7-89b26e12573c
+1 NAME Александр /Леонидович Русяйкин/
+2 TYPE birth
+2 GIVN Александр
+2 SURN Русяйкин
+2 _PATN Леонидович
+1 SEX M
+1 BIRT
+2 DATE 22 JUN 1957
+2 _UID 40afa5c1-5df0-4aff-b0d9-7a78a8daafd0
+2 _UID 2de0cef9-ba7f-4928-936d-30259f22daa2
+1 FAMC @F17@
+1 FAMS @F4@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I8@ INDI
+1 _UID 694d88c9-c7a8-401e-9d2f-f0a85d984fec
+1 NAME Любовь /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Любовь
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 16 JUL 1959
+2 _UID 30c8fed4-1f4b-4317-95d4-876291ed3013
+2 _UID 56422bd3-778a-412a-8412-ebe00a509359
+1 FAMC @F17@
+1 FAMS @F7@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I9@ INDI
+1 _UID 3f377885-e9d2-4bd7-acf1-5c55f924c9c1
+1 NAME Людмила /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Людмила
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 14 SEP 1961
+2 _UID 1ca17008-fcf9-41d1-88ce-a4f20e584488
+2 _UID 352c522f-cddc-43ec-b930-9b9f9219e00f
+1 FAMC @F17@
+1 FAMS @F9@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I10@ INDI
+1 _UID 19ab8a3d-c5bc-4db4-b8a7-c576894a0203
+1 NAME Ольга /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Ольга
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 13 MAR 1963
+2 _UID 66d2d566-1fad-4fda-8905-3e41e9f2d8a3
+2 _UID 7d23d68e-89f0-4750-93fa-4934086fbfb7
+1 FAMC @F17@
+1 FAMS @F11@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I11@ INDI
+1 _UID 4a5653ee-34b6-450d-b703-8a8725106313
+1 NAME Елена /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Елена
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 14 NOV 1965
+2 _UID 9d673e24-0fd6-4888-bfe9-598ab3d30fd5
+2 _UID 8bb3a5db-2749-4b70-ad1c-888136c2427a
+1 FAMC @F17@
+1 FAMS @F14@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I12@ INDI
+1 _UID 80db34cd-cf4e-4cb4-bf12-7e03c1351674
+1 NAME Иван /Николаевич Кроликов/
+2 TYPE birth
+2 GIVN Иван
+2 SURN Кроликов
+2 _PATN Николаевич
+1 SEX M
+1 BIRT
+2 DATE 30 OCT 1954
+2 _UID 602fa3fc-54b4-4b75-946d-f11555d105ad
+2 _UID 44ab4a29-e966-486e-a2ff-b8698714ad0b
+1 FAMS @F1@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I13@ INDI
+1 _UID d7d8c145-1b92-45a0-b7ad-5be3677a6685
+1 NAME Константин /Иванович Кроликов/
+2 TYPE birth
+2 GIVN Константин
+2 SURN Кроликов
+2 _PATN Иванович
+1 SEX M
+1 BIRT
+2 DATE 9 SEP 1983
+2 _UID b988b6f6-bd76-4edf-ab7e-9fa53c140131
+2 _UID 4fc64eea-c0cc-4510-939f-2e4066b21f05
+1 FAMC @F1@
+1 FAMS @F2@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I14@ INDI
+1 _UID b25151b3-4150-4d5a-b1a3-55ce1f22f151
+1 NAME Елена /Ивановна Кроликова/
+2 TYPE birth
+2 GIVN Елена
+2 SURN Кроликова
+2 _PATN Ивановна
+1 SEX F
+1 BIRT
+2 DATE 22 JUL 1985
+2 _UID 8fe6ca5f-f0ee-4ea0-bf66-fd4638e4ec60
+2 _UID 936293f6-5a12-413e-8102-6d5fa93b76fd
+1 FAMC @F1@
+1 FAMS @F3@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I15@ INDI
+1 _UID 21a3fc35-a2d4-4d60-8aa7-77bb43827a6a
+1 NAME Юлия /Владимировна Швабенланд/
+2 TYPE birth
+2 GIVN Юлия
+2 SURN Швабенланд
+2 _PATN Владимировна
+1 SEX F
+1 BIRT
+2 DATE 3 DEC 1985
+2 _UID 08d93d0d-24bd-4684-b3ec-e48c99601b70
+2 _UID 8da3e600-14bb-4221-aab9-5dcb09c5d51f
+1 FAMS @F2@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I16@ INDI
+1 _UID 9b34c275-50a6-4cc1-a572-f413e64bfd3e
+1 NAME Марк /Константинович Швабенланд/
+2 TYPE birth
+2 GIVN Марк
+2 SURN Швабенланд
+2 _PATN Константинович
+1 SEX M
+1 BIRT
+2 DATE 27 MAR 2013
+2 _UID b9369d2f-6dd1-4794-9afc-554b321e7e73
+2 _UID 78627a92-009e-45c5-b5d9-ff03a644aa8f
+1 FAMC @F2@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I17@ INDI
+1 _UID 7c3696a4-364a-433d-b4f3-242b6f4c82cb
+1 NAME Павел /Николаевич Вычуров/
+2 TYPE birth
+2 GIVN Павел
+2 SURN Вычуров
+2 _PATN Николаевич
+1 SEX M
+1 BIRT
+2 DATE 25 DEC 1982
+2 _UID f5df32cf-7efd-4416-8dcf-a0bd2d8a4129
+2 _UID f7e97283-6140-4ced-a045-b4aa14954d10
+1 FAMS @F3@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I18@ INDI
+1 _UID cfe2ff6a-6676-46d5-9e6b-c88334c800a8
+1 NAME Людмила /Николаевна Пачина/
+2 TYPE birth
+2 GIVN Людмила
+2 SURN Пачина
+2 _PATN Николаевна
+1 SEX F
+1 BIRT
+2 DATE 24 OCT 1959
+2 _UID d72317c0-f743-4db2-b774-673d31a1bc5b
+2 _UID a11527fc-4855-4b81-a4eb-b4498ad6173b
+1 FAMS @F4@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I19@ INDI
+1 _UID 77217945-7a6a-40f2-b86a-2a153a6275ed
+1 NAME Денис /Александрович Русяйкин/
+2 TYPE birth
+2 GIVN Денис
+2 SURN Русяйкин
+2 _PATN Александрович
+1 SEX M
+1 BIRT
+2 DATE 12 SEP 1980
+2 _UID 37adfbdc-ebd4-40d5-9ad5-60703d9e0a0c
+2 _UID 94674fe2-f7d3-4800-9f53-9a4288c78d2b
+1 FAMC @F4@
+1 FAMS @F5@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I20@ INDI
+1 _UID ff561a30-1f1c-4800-95f6-60e58af63ae4
+1 NAME Татьяна /Александровна Русяйкина/
+2 TYPE birth
+2 GIVN Татьяна
+2 SURN Русяйкина
+2 _PATN Александровна
+1 SEX F
+1 BIRT
+2 DATE 25 JUL 1985
+2 _UID 608a5659-cc98-42cb-a45d-c17b9f0ae4d5
+2 _UID 76a92b5c-ad97-40b7-a761-55a3bc6efb5e
+1 FAMC @F4@
+1 FAMS @F6@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I21@ INDI
+1 _UID b9b0bc1b-09e1-46c4-873c-2a761c914eb1
+1 NAME Ксения //
+2 TYPE birth
+2 GIVN Ксения
+1 SEX F
+1 FAMS @F5@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I22@ INDI
+1 _UID 5a6b5002-fb30-4a78-85b0-99bb027f7300
+1 NAME Алексей /Денисович Русяйкин/
+2 TYPE birth
+2 GIVN Алексей
+2 SURN Русяйкин
+2 _PATN Денисович
+1 SEX M
+1 BIRT
+2 DATE 22 DEC 2013
+2 _UID 74d51c71-3a6d-4328-8957-51a74473529c
+2 _UID 25386e50-343b-4b92-8874-7e889f70837e
+1 FAMC @F5@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I23@ INDI
+1 _UID 77752fd3-9abd-471e-9b4f-33e3aeeaf2c5
+1 NAME Александр /Юрьевич Рогозин/
+2 TYPE birth
+2 GIVN Александр
+2 SURN Рогозин
+2 _PATN Юрьевич
+1 SEX M
+1 BIRT
+2 DATE 17 NOV 1984
+2 _UID 92e4adb7-c583-4cdf-9217-ce3c0603d78b
+2 _UID 9867cf6d-fa61-4508-aa1b-e99022882696
+1 FAMS @F6@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I24@ INDI
+1 _UID 59ea6540-75c5-4076-9ae1-a134a82c65a5
+1 NAME Максим /Александрович Рогозин/
+2 TYPE birth
+2 GIVN Максим
+2 SURN Рогозин
+2 _PATN Александрович
+1 SEX M
+1 BIRT
+2 DATE 9 SEP 2004
+2 _UID 1bebca1b-a6b3-4eeb-b0ba-9a28f1276f96
+2 _UID 742cce1e-af68-4f3f-bb7e-ecd0111b469b
+1 FAMC @F6@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I25@ INDI
+1 _UID a9fb093b-44cc-44b5-b299-cbf1b8c58792
+1 NAME Владимир /Иванович Евдокимов/
+2 TYPE birth
+2 GIVN Владимир
+2 SURN Евдокимов
+2 _PATN Иванович
+1 SEX M
+1 BIRT
+2 DATE 6 JAN 1961
+2 _UID 4b92dd9f-418f-465e-b2da-9a5780058191
+2 _UID c8f689b7-b991-4d76-a16d-ae23a9d68320
+1 FAMS @F7@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I26@ INDI
+1 _UID eedc0047-7c6e-4bac-a6cf-38f4cb052e6e
+1 NAME Вячеслав /Владимирович Евдокимов/
+2 TYPE birth
+2 GIVN Вячеслав
+2 SURN Евдокимов
+2 _PATN Владимирович
+1 SEX M
+1 BIRT
+2 DATE 21 MAY 1987
+2 _UID d9227a14-10e0-442d-9513-a5db2fe49260
+2 _UID 90d4b6be-7912-4a64-9028-9c5b1027561a
+1 FAMC @F7@
+1 FAMS @F8@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I27@ INDI
+1 _UID d2b96c2c-dc5d-4d5f-b6a0-693294b0dea0
+1 NAME Елена /Игоревна Ходачкова/
+2 TYPE birth
+2 GIVN Елена
+2 SURN Ходачкова
+2 _PATN Игоревна
+1 SEX F
+1 FAMS @F8@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I28@ INDI
+1 _UID 7cb7c2d0-7ad0-49fd-b4f0-fd7b078cc69d
+1 NAME Ян /Вячеславович Евдокимов/
+2 TYPE birth
+2 GIVN Ян
+2 SURN Евдокимов
+2 _PATN Вячеславович
+1 SEX M
+1 BIRT
+2 DATE 27 APR 2013
+2 _UID d65b1555-9c82-4c32-a8ff-6457d1fa9ddb
+2 _UID 74479af1-1874-4416-a919-0417e757f8cb
+1 FAMC @F8@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I29@ INDI
+1 _UID b3df1815-286a-4997-83bf-aa411845f681
+1 NAME Виктор /Владимирович Луканин/
+2 TYPE birth
+2 GIVN Виктор
+2 SURN Луканин
+2 _PATN Владимирович
+1 SEX M
+1 BIRT
+2 DATE 15 DEC 1958
+2 _UID fea64583-35e9-45a2-9afd-2c26aeb264f9
+2 _UID 994a4e73-6c48-4ea5-99ca-e7b1a4d27607
+1 FAMS @F9@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I30@ INDI
+1 _UID ffc36e7a-4e9c-4695-a6f4-52e764c94f37
+1 NAME Владимир /Викторович Луканин/
+2 TYPE birth
+2 GIVN Владимир
+2 SURN Луканин
+2 _PATN Викторович
+1 SEX M
+1 BIRT
+2 DATE 16 OCT 1980
+2 _UID f37b529c-d6e7-4666-b51d-94ff1ce1d0e0
+2 _UID ef089a39-6d7f-4223-822a-2119d1ef1d49
+1 DEAT
+2 DATE 10 MAR 1991
+2 _UID 0e9baaa6-bd6c-42dd-8b23-ef607c1f088c
+2 _UID 034b8aab-213c-447c-828d-d39f32ef9b5b
+1 FAMC @F9@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I31@ INDI
+1 _UID e2d4b2b7-7e81-4c96-805c-5a7a0068bf0e
+1 NAME Екатерина /Викторовна Луканина/
+2 TYPE birth
+2 GIVN Екатерина
+2 SURN Луканина
+2 _PATN Викторовна
+1 SEX F
+1 BIRT
+2 DATE 28 NOV 1983
+2 _UID 0891fa60-2f37-4dab-88a9-facc0a294c6f
+2 _UID 8b2834eb-b269-41e2-87ca-f450ab62f50a
+1 FAMC @F9@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I32@ INDI
+1 _UID 6bdfb349-a0b6-47fa-b0a1-e0f308f92fb2
+1 NAME Леонид /Викторович Луканин/
+2 TYPE birth
+2 GIVN Леонид
+2 SURN Луканин
+2 _PATN Викторович
+1 SEX M
+1 BIRT
+2 DATE 26 SEP 1985
+2 _UID 012df7a0-41bb-4c10-88f8-2123a16f9cb3
+2 _UID dbe42a27-a512-4699-ab68-74f181993732
+1 FAMC @F9@
+1 FAMS @F10@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I33@ INDI
+1 _UID cadb95a3-a9c9-4592-8c45-cccdb4820cad
+1 NAME Евгения /Павловна/
+2 TYPE birth
+2 GIVN Евгения
+2 SURN Павловна
+1 SEX F
+1 BIRT
+2 DATE 21 JUN 1986
+2 _UID d01e47c6-5558-43cb-818f-0857fccfc472
+2 _UID 7179a280-cfcf-45f1-863b-240e9c9cf1aa
+1 FAMS @F10@
+1 CHAN
+2 DATE 10 DEC 2025
+3 TIME 00:00:00.000
+0 @I34@ INDI
+1 _UID 773fcd03-3eec-4711-92b0-863991e75a14
+1 NAME Евангелина /Леонидовна Луканина/
+2 TYPE birth
+2 GIVN Евангелина
+2 SURN Луканина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 11 JAN 2012
+2 _UID 80cc81b4-eeea-4460-952d-802635f5609f
+2 _UID 55d2cd15-42a9-4879-a55b-9befc06dbde5
+1 FAMC @F10@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I35@ INDI
+1 _UID f8d103a6-c99e-4774-ae37-64c7a70bd4bb
+1 NAME Василий /Михайлович Гостев/
+2 TYPE birth
+2 GIVN Василий
+2 SURN Гостев
+2 _PATN Михайлович
+1 SEX M
+1 BIRT
+2 DATE 18 MAY 1958
+2 _UID afba1ab4-73d2-4dfb-8c2f-e41f6cb621c3
+2 _UID 286fe4cd-d55d-4e88-984e-54ff6b5009e6
+1 FAMS @F11@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I36@ INDI
+1 _UID 5e58bf9f-93cc-4dd6-8842-2b78aedc22ce
+1 NAME Людмила /Васильевна Гостева/
+2 TYPE birth
+2 GIVN Людмила
+2 SURN Гостева
+2 _PATN Васильевна
+1 SEX F
+1 BIRT
+2 DATE 17 NOV 1983
+2 _UID f21e29b4-d32a-47aa-9428-e37f33fd5a5b
+2 _UID 2f20e391-db66-4aee-be26-65aeac4f15bb
+1 FAMC @F11@
+1 FAMS @F12@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I37@ INDI
+1 _UID 343e9b65-1b56-40a1-8e6a-fd9200f7e5ce
+1 NAME Светлана /Васильевна Гостева/
+2 TYPE birth
+2 GIVN Светлана
+2 SURN Гостева
+2 _PATN Васильевна
+1 SEX F
+1 BIRT
+2 DATE 27 FEB 1985
+2 _UID 923b8173-cf89-4694-a615-74495f08834f
+2 _UID 624c0699-a44c-4469-b0be-8390cb7fb4f5
+1 FAMC @F11@
+1 FAMS @F13@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I38@ INDI
+1 _UID 701ebe0d-bb57-4cd4-9695-1c5877a56bc5
+1 NAME Татьяна /Васильевна Гостева/
+2 TYPE birth
+2 GIVN Татьяна
+2 SURN Гостева
+2 _PATN Васильевна
+1 SEX F
+1 BIRT
+2 DATE 4 SEP 1986
+2 _UID e33c788d-ec60-41f5-b7e3-4dbc1998859b
+2 _UID c15805ea-ea8c-49cd-bed7-7d0604fa4229
+1 DEAT
+2 DATE 22 MAR 2009
+2 _UID fda6727d-2282-42ff-a443-00f148697c6f
+2 _UID 94e6a02d-ad1a-415f-b294-0f3c5f9c3257
+1 FAMC @F11@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I39@ INDI
+1 _UID 42480292-d631-4b0a-8ea0-44386c9569e7
+1 NAME Юрий /Леонидович Терзо/
+2 TYPE birth
+2 GIVN Юрий
+2 SURN Терзо
+2 _PATN Леонидович
+1 SEX M
+1 BIRT
+2 DATE 7 FEB 1981
+2 _UID 582dec6e-af38-4f90-98c2-b2bc370164ec
+2 _UID aefc465f-e4b3-4c27-b123-e27ce2488d9e
+1 FAMS @F12@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I40@ INDI
+1 _UID c1523a91-864f-4fc0-bf3a-1e87998a09b6
+1 NAME Максим /Юрьевич Терзо/
+2 TYPE birth
+2 GIVN Максим
+2 SURN Терзо
+2 _PATN Юрьевич
+1 SEX M
+1 BIRT
+2 DATE 7 NOV 2010
+2 _UID cd5c990c-00dc-42a4-a91f-5108f48d286d
+2 _UID 18ea6176-6137-4afe-ab21-4d6d5306c13d
+1 FAMC @F12@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I41@ INDI
+1 _UID d434d446-309a-4458-9f18-4663d208ca95
+1 NAME Роман /Юрьевич Терзо/
+2 TYPE birth
+2 GIVN Роман
+2 SURN Терзо
+2 _PATN Юрьевич
+1 SEX M
+1 BIRT
+2 DATE 13 JUN 2014
+2 _UID ebef2f5e-63ee-412f-9499-11eb983f26b8
+2 _UID 519003d6-5173-422b-8afd-ae0ac471f127
+1 FAMC @F12@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I42@ INDI
+1 _UID e0cdee36-d4b6-4148-9b75-77ac406e2187
+1 NAME Владимир /Анатольевич Трухин/
+2 TYPE birth
+2 GIVN Владимир
+2 SURN Трухин
+2 _PATN Анатольевич
+1 SEX M
+1 BIRT
+2 DATE 14 SEP 1980
+2 _UID fcf2d141-3b76-4b72-96d8-bf2efe321810
+2 _UID 37efbea9-dd4d-4f94-a162-1979cde6f9b3
+1 FAMS @F13@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I43@ INDI
+1 _UID cd6109ad-1618-45db-8219-c8ad9fc9d3d2
+1 NAME Алексей /Владимирович Трухин/
+2 TYPE birth
+2 GIVN Алексей
+2 SURN Трухин
+2 _PATN Владимирович
+1 SEX M
+1 BIRT
+2 DATE 19 OCT 2011
+2 _UID cea72585-17a1-42cc-ac6c-248bcb896564
+2 _UID 03ea30f7-c213-410d-9838-992b63fdf6e9
+1 FAMC @F13@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I44@ INDI
+1 _UID 21ce26e7-e036-4732-b301-477ab3deef06
+1 NAME Ульяна /Владимировна Трухина/
+2 TYPE birth
+2 GIVN Ульяна
+2 SURN Трухина
+2 _PATN Владимировна
+1 SEX F
+1 BIRT
+2 DATE 29 JUL 2014
+2 _UID 9a89004e-0436-4410-8a2c-616eccbe3c2d
+2 _UID 36985d0e-300d-45ad-bc60-a94c772da9eb
+1 FAMC @F13@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I45@ INDI
+1 _UID 9006fb83-22d1-491c-8e07-d4f2c178af9e
+1 NAME Николай /Николаевич Селиванов/
+2 TYPE birth
+2 GIVN Николай
+2 SURN Селиванов
+2 _PATN Николаевич
+1 SEX M
+1 BIRT
+2 DATE 10 DEC 1958
+2 _UID eb93ac9d-210b-4b44-9d38-97ed98c7f6c6
+2 _UID 3db52dac-36f4-4d0b-979e-296271cc958c
+1 FAMS @F14@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I46@ INDI
+1 _UID 1a9c04e2-b44f-4d8f-8d0d-57cde349e38b
+1 NAME Мария /Николаевна Селиванова/
+2 TYPE birth
+2 GIVN Мария
+2 SURN Селиванова
+2 _PATN Николаевна
+1 SEX F
+1 BIRT
+2 DATE 12 NOV 1990
+2 _UID 22331d0c-bb3f-4136-8a1f-f9e0be193f30
+2 _UID 54e1aa1f-4fa2-48e9-abbf-fd9a75678859
+1 FAMC @F14@
+1 FAMS @F15@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I47@ INDI
+1 _UID b8e3fbb8-fdbf-4e3d-9d35-3f94d6d81d57
+1 NAME Анна /Николаевна Селиванова/
+2 TYPE birth
+2 GIVN Анна
+2 SURN Селиванова
+2 _PATN Николаевна
+1 SEX F
+1 BIRT
+2 DATE 31 MAY 1994
+2 _UID d6ca475b-b760-4dc7-9dbe-7dd3581c881e
+2 _UID 1ae1c2cb-f9db-4d1b-956c-2ac1a4b50da1
+1 FAMC @F14@
+1 FAMS @F16@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:44:21.892
+0 @I48@ INDI
+1 _UID 4ce32f47-0355-4c73-afcf-005f3733383b
+1 NAME Михаил /Александрович Барсуков/
+2 TYPE birth
+2 GIVN Михаил
+2 SURN Барсуков
+2 _PATN Александрович
+1 SEX M
+1 BIRT
+2 DATE 30 AUG 1989
+2 _UID 61bf39bc-3f9c-479b-b3ee-07d901e5fbe3
+2 _UID 33f1d85f-a35c-4254-a78e-471417d55aae
+1 FAMS @F15@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I49@ INDI
+1 _UID 3e807c6a-22d1-43d8-b94c-056052ad907d
+1 NAME Валерия /Михайловна Барсукова/
+2 TYPE birth
+2 GIVN Валерия
+2 SURN Барсукова
+2 _PATN Михайловна
+1 SEX F
+1 BIRT
+2 DATE 21 JAN 2012
+2 _UID dff5b159-8f40-4288-9654-9d8eba7eaa2b
+2 _UID 8f4ced27-1ec3-4b4d-9f37-ea15c99e41b6
+1 FAMC @F15@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I50@ INDI
+1 _UID 15415588-68e9-4fc1-89a3-53d675bb83ff
+1 NAME Анна /Михайловна Барсукова/
+2 TYPE birth
+2 GIVN Анна
+2 SURN Барсукова
+2 _PATN Михайловна
+1 SEX F
+1 BIRT
+2 DATE 30 SEP 2013
+2 _UID 5a9e3d7a-98da-48ee-a258-06a620d25212
+2 _UID 513024ea-3851-4782-bc77-cf8918374188
+1 FAMC @F15@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I51@ INDI
+1 _UID 7e0a3064-ceba-469b-ae15-c7c8e05cb4a9
+1 NAME Евгений /Олегович Оверчук/
+2 TYPE aka
+2 GIVN Евгений
+2 SURN Оверчук
+2 _PATN Олегович
+1 SEX M
+1 FAMS @F16@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:44:21.892
+0 @I52@ INDI
+1 _UID a9fea6e4-91af-4c58-92b7-bbd923d1f10d
+1 NAME Пелагея /Ивановна Баяндина/
+2 TYPE birth
+2 GIVN Пелагея
+2 SURN Баяндина
+2 _PATN Ивановна
+1 SEX F
+1 BIRT
+2 DATE 15 MAY 1927
+2 _UID f7a7e50b-121d-4e57-bb4e-6fae03ed93bb
+1 DEAT
+2 DATE 13 SEP 2003
+2 _UID ac6e9ab3-81ac-4838-8280-b5f6173056cc
+1 FAMS @F17@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @F0@ FAM
+1 HUSB @I0@
+1 WIFE @I1@
+1 MARR
+2 TYPE marriage
+2 DATE ABT 1910
+2 _UID c04a9cc0-f68a-4246-8254-e9dc635a38ed
+2 _UID 16d4c784-8077-4dcb-8522-683799ff3741
+1 _MSTAT current
+1 CHIL @I4@
+1 CHIL @I2@
+1 CHIL @I3@
+1 CHIL @I5@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F1@ FAM
+1 HUSB @I12@
+1 WIFE @I6@
+1 MARR
+2 TYPE marriage
+2 DATE 13 JAN 1983
+2 _UID b152a442-31de-45e9-8123-c0047087bfc1
+2 _UID 1d5bec20-4c37-4a6f-94d5-92676ffa8c20
+1 _MSTAT current
+1 CHIL @I13@
+1 CHIL @I14@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F2@ FAM
+1 HUSB @I13@
+1 WIFE @I15@
+1 MARR
+2 TYPE marriage
+2 DATE ABT 2010
+2 _UID e6f40519-b925-45de-8905-20fc906cfb89
+2 _UID 26df2e62-08e5-4bdf-8573-2b6e0ab2d855
+1 _MSTAT current
+1 CHIL @I16@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F3@ FAM
+1 HUSB @I17@
+1 WIFE @I14@
+1 MARR
+2 TYPE marriage
+2 DATE 4 MAR 2005
+2 _UID 3bd2e9a5-6aa0-4b8a-814e-d9c1aab11546
+2 _UID f792c7ce-4c00-4bea-ab7d-53199c2b736c
+1 _MSTAT current
+1 CHAN
+2 DATE 10 DEC 2025
+3 TIME 00:00:00.000
+0 @F4@ FAM
+1 HUSB @I7@
+1 WIFE @I18@
+1 MARR
+2 TYPE marriage
+2 DATE 28 SEP 1979
+2 _UID 2ed41712-d512-4769-8928-8dcbea3fb092
+2 _UID 7ec26ede-f412-4bbd-a9bd-72aafb455f38
+1 _MSTAT current
+1 CHIL @I19@
+1 CHIL @I20@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F5@ FAM
+1 HUSB @I19@
+1 WIFE @I21@
+1 MARR
+2 TYPE marriage
+2 _UID b71f315a-232b-4c64-8bb5-7721759df8c7
+2 _UID b92702bc-07fb-4f86-8648-7edf60b0a361
+1 _MSTAT current
+1 CHIL @I22@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F6@ FAM
+1 HUSB @I23@
+1 WIFE @I20@
+1 MARR
+2 TYPE marriage
+2 DATE 4 JUN 2004
+2 _UID 50a7c1c5-26bb-487b-a52a-3c56e35ca983
+2 _UID c2707bef-1fde-4049-9afb-4be042714503
+1 _MSTAT current
+1 CHIL @I24@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F7@ FAM
+1 HUSB @I25@
+1 WIFE @I8@
+1 MARR
+2 TYPE marriage
+2 DATE 16 AUG 1986
+2 _UID 07abfd1f-3a04-42a8-b3d4-79b6fd840ad6
+2 _UID be9122cf-5f30-4ea4-91ac-7ba8cf8058e2
+1 _MSTAT current
+1 CHIL @I26@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F8@ FAM
+1 HUSB @I26@
+1 WIFE @I27@
+1 MARR
+2 TYPE marriage
+2 DATE 25 JUL 2012
+2 _UID 958bdb4b-0108-43bd-a8ee-5281703e3e2d
+2 _UID 1ebb3570-d5b6-49f6-ab57-21b3e0b0bee2
+1 _MSTAT current
+1 CHIL @I28@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F9@ FAM
+1 HUSB @I29@
+1 WIFE @I9@
+1 MARR
+2 TYPE marriage
+2 DATE 19 SEP 1980
+2 _UID a0df822b-2ce7-4af8-af82-ec7bbf03a95c
+2 _UID 0b7eb3f0-01a0-4ae6-8a94-f57f0e1514c9
+1 _MSTAT current
+1 CHIL @I30@
+1 CHIL @I31@
+1 CHIL @I32@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F10@ FAM
+1 HUSB @I32@
+1 WIFE @I33@
+1 MARR
+2 TYPE marriage
+2 DATE ABT 2010
+2 _UID ba4851f5-91f4-44ea-91c5-f1295375c936
+2 _UID 4869a93f-bd81-4ad7-9548-c32591308065
+1 _MSTAT current
+1 CHIL @I34@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F11@ FAM
+1 HUSB @I35@
+1 WIFE @I10@
+1 MARR
+2 TYPE marriage
+2 DATE 4 DEC 1982
+2 _UID e4e37641-190f-420a-9dec-bce6a702b07b
+2 _UID 493f851c-3e01-4d40-b713-7433edc1b817
+1 _MSTAT current
+1 CHIL @I36@
+1 CHIL @I37@
+1 CHIL @I38@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F12@ FAM
+1 HUSB @I39@
+1 WIFE @I36@
+1 MARR
+2 TYPE marriage
+2 DATE 29 JUN 2011
+2 _UID 75e87b52-303a-48e0-beab-f3dff0e2a99b
+2 _UID ff1e7c95-90ab-49f5-986e-c063d745de06
+1 _MSTAT current
+1 CHIL @I40@
+1 CHIL @I41@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F13@ FAM
+1 HUSB @I42@
+1 WIFE @I37@
+1 MARR
+2 TYPE marriage
+2 DATE 20 MAY 2011
+2 _UID cb6e8169-0a9c-42b4-9ef9-5d49fe393659
+2 _UID 24966e24-7aab-45bc-bd15-2890249d2363
+1 _MSTAT current
+1 CHIL @I43@
+1 CHIL @I44@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F14@ FAM
+1 HUSB @I45@
+1 WIFE @I11@
+1 MARR
+2 TYPE marriage
+2 DATE 19 SEP 1987
+2 _UID 55d71f7b-e35c-45d4-8901-06faaf271109
+2 _UID 59ba276e-63ae-4649-aeae-d6162fceacd4
+1 _MSTAT current
+1 CHIL @I46@
+1 CHIL @I47@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F15@ FAM
+1 HUSB @I48@
+1 WIFE @I46@
+1 MARR
+2 TYPE marriage
+2 DATE 9 DEC 2011
+2 _UID 003c7d86-d5da-4e7b-94fa-c9823e3cf7b3
+2 _UID 1bc04b74-df31-48f3-9362-ea3b755fa8f9
+1 _MSTAT current
+1 CHIL @I49@
+1 CHIL @I50@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F16@ FAM
+1 HUSB @I51@
+1 WIFE @I47@
+1 MARR
+2 TYPE marriage
+2 _UID 608c7f18-a259-4785-acbb-97f4dccb0f27
+2 _UID 27d4e6ee-a5b1-4dec-9e4b-4b1578e316ec
+1 _MSTAT current
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:44:21.892
+0 @F17@ FAM
+1 HUSB @I4@
+1 WIFE @I52@
+1 MARR
+2 TYPE marriage
+2 _UID de821f9f-e999-4ad3-a7a4-8eacb6fd70a3
+1 _MSTAT current
+1 CHIL @I6@
+1 CHIL @I7@
+1 CHIL @I8@
+1 CHIL @I9@
+1 CHIL @I10@
+1 CHIL @I11@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 TRLR
+=======
+﻿0 HEAD
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 DEST MyFamilyTree
+1 SOUR MyFamilyTree
+2 VERS 15.0.6.0
+2 NAME My Family Tree
+2 CORP Chronoplex Software
+1 SUBM @U0@
+1 DATE 17 DEC 2025
+2 TIME 20:46:48.107
+1 LANG English
+1 FILE 3.ged
+0 @U0@ SUBM
+1 _UID 654639bc-a4be-4794-84ac-3d635a9015e8
+1 NAME Сергей Белостоцкий
+1 ADDR Санкт-Петербург
+1 EMAIL spbotdel@@gmail.com
+1 WWW serbell.ru
+1 CHAN
+2 DATE 10 DEC 2025
+3 TIME 00:00:00.000
+0 @I0@ INDI
+1 _UID 9f651b7f-8016-4c59-b8ea-28edce8e8818
+1 NAME Егор /Миторфанович Русяйкин/
+2 TYPE birth
+2 GIVN Егор
+2 SURN Русяйкин
+2 _PATN Миторфанович
+1 SEX M
+1 DEAT Y
+1 FAMS @F0@
+1 NOTE Основатель рода Русяйкиных
+2 _NSTY Y
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:52:19.256
+0 @I1@ INDI
+1 _UID a3dddc25-69f3-4eb8-b3cc-d6e45a4ff785
+1 NAME Васса /Егоровна/
+2 TYPE birth
+2 GIVN Васса
+2 _PATN Егоровна
+1 SEX F
+1 BIRT
+2 DATE 1892
+2 _UID d2c0257a-f281-4ba4-8716-e345dcce2158
+2 _UID 7e277cce-6d5c-48f7-bdb7-6c47c62b5ea0
+1 DEAT
+2 DATE 1986
+2 _UID 46291ea5-12e9-44d0-9556-3903b1e24c80
+2 _UID b44d4fa0-1ae8-4a38-a04c-b5fcca7ce271
+1 FAMS @F0@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I2@ INDI
+1 _UID 4e61de9e-22aa-43e3-bd5b-ddaff20c35a7
+1 NAME Зоя /Егоровна Русяйкина/
+2 TYPE birth
+2 GIVN Зоя
+2 SURN Русяйкина
+2 _PATN Егоровна
+1 SEX F
+1 FAMC @F0@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I3@ INDI
+1 _UID 1fd116ed-0e38-41da-8f50-02c25433f099
+1 NAME Пётр /Егорович Русяйкин/
+2 TYPE birth
+2 GIVN Пётр
+2 SURN Русяйкин
+2 _PATN Егорович
+1 SEX M
+1 FAMC @F0@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I4@ INDI
+1 _UID 526ae35f-5e23-4cd1-a357-e0d801e06a33
+1 NAME Леонид /Егорович Русяйкин/
+2 TYPE birth
+2 GIVN Леонид
+2 SURN Русяйкин
+2 _PATN Егорович
+1 SEX M
+1 BIRT
+2 DATE 20 AUG 1928
+2 FAMC @F0@
+2 _UID 5c7d711d-e912-4d20-968f-81d4f159cab2
+2 _UID 4c938ba0-5673-414a-9a4e-8f77758199f6
+1 DEAT
+2 DATE 28 JAN 2002
+2 _UID 7c5423ab-fa9c-498c-85a4-54d285ade890
+2 _UID e77f702c-13e0-4b54-9ac2-092f75e2d0c6
+1 FAMC @F0@
+1 FAMS @F17@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I5@ INDI
+1 _UID d55fc22b-afca-43d2-b6f9-787c5f70d04d
+1 NAME Анна /Егоровна Русяйкина/
+2 TYPE birth
+2 GIVN Анна
+2 SURN Русяйкина
+2 _PATN Егоровна
+1 SEX F
+1 FAMC @F0@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I6@ INDI
+1 _UID 106d9f3a-87ed-4052-9024-0ca64a3a386e
+1 NAME Валентина /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Валентина
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 25 MAR 1955
+2 _UID a2173391-fcee-46cc-b766-b6909faf74d5
+2 _UID 101baaf4-5f35-47c4-8189-0df1bbdf7056
+1 FAMC @F17@
+1 FAMS @F1@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I7@ INDI
+1 _UID 1d49ed9d-ae68-4686-a4e7-89b26e12573c
+1 NAME Александр /Леонидович Русяйкин/
+2 TYPE birth
+2 GIVN Александр
+2 SURN Русяйкин
+2 _PATN Леонидович
+1 SEX M
+1 BIRT
+2 DATE 22 JUN 1957
+2 _UID 40afa5c1-5df0-4aff-b0d9-7a78a8daafd0
+2 _UID 2de0cef9-ba7f-4928-936d-30259f22daa2
+1 FAMC @F17@
+1 FAMS @F4@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I8@ INDI
+1 _UID 694d88c9-c7a8-401e-9d2f-f0a85d984fec
+1 NAME Любовь /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Любовь
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 16 JUL 1959
+2 _UID 30c8fed4-1f4b-4317-95d4-876291ed3013
+2 _UID 56422bd3-778a-412a-8412-ebe00a509359
+1 FAMC @F17@
+1 FAMS @F7@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I9@ INDI
+1 _UID 3f377885-e9d2-4bd7-acf1-5c55f924c9c1
+1 NAME Людмила /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Людмила
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 14 SEP 1961
+2 _UID 1ca17008-fcf9-41d1-88ce-a4f20e584488
+2 _UID 352c522f-cddc-43ec-b930-9b9f9219e00f
+1 FAMC @F17@
+1 FAMS @F9@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I10@ INDI
+1 _UID 19ab8a3d-c5bc-4db4-b8a7-c576894a0203
+1 NAME Ольга /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Ольга
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 13 MAR 1963
+2 _UID 66d2d566-1fad-4fda-8905-3e41e9f2d8a3
+2 _UID 7d23d68e-89f0-4750-93fa-4934086fbfb7
+1 FAMC @F17@
+1 FAMS @F11@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I11@ INDI
+1 _UID 4a5653ee-34b6-450d-b703-8a8725106313
+1 NAME Елена /Леонидовна Русяйкина/
+2 TYPE birth
+2 GIVN Елена
+2 SURN Русяйкина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 14 NOV 1965
+2 _UID 9d673e24-0fd6-4888-bfe9-598ab3d30fd5
+2 _UID 8bb3a5db-2749-4b70-ad1c-888136c2427a
+1 FAMC @F17@
+1 FAMS @F14@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I12@ INDI
+1 _UID 80db34cd-cf4e-4cb4-bf12-7e03c1351674
+1 NAME Иван /Николаевич Кроликов/
+2 TYPE birth
+2 GIVN Иван
+2 SURN Кроликов
+2 _PATN Николаевич
+1 SEX M
+1 BIRT
+2 DATE 30 OCT 1954
+2 _UID 602fa3fc-54b4-4b75-946d-f11555d105ad
+2 _UID 44ab4a29-e966-486e-a2ff-b8698714ad0b
+1 FAMS @F1@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I13@ INDI
+1 _UID d7d8c145-1b92-45a0-b7ad-5be3677a6685
+1 NAME Константин /Иванович Кроликов/
+2 TYPE birth
+2 GIVN Константин
+2 SURN Кроликов
+2 _PATN Иванович
+1 SEX M
+1 BIRT
+2 DATE 9 SEP 1983
+2 _UID b988b6f6-bd76-4edf-ab7e-9fa53c140131
+2 _UID 4fc64eea-c0cc-4510-939f-2e4066b21f05
+1 FAMC @F1@
+1 FAMS @F2@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I14@ INDI
+1 _UID b25151b3-4150-4d5a-b1a3-55ce1f22f151
+1 NAME Елена /Ивановна Кроликова/
+2 TYPE birth
+2 GIVN Елена
+2 SURN Кроликова
+2 _PATN Ивановна
+1 SEX F
+1 BIRT
+2 DATE 22 JUL 1985
+2 _UID 8fe6ca5f-f0ee-4ea0-bf66-fd4638e4ec60
+2 _UID 936293f6-5a12-413e-8102-6d5fa93b76fd
+1 FAMC @F1@
+1 FAMS @F3@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I15@ INDI
+1 _UID 21a3fc35-a2d4-4d60-8aa7-77bb43827a6a
+1 NAME Юлия /Владимировна Швабенланд/
+2 TYPE birth
+2 GIVN Юлия
+2 SURN Швабенланд
+2 _PATN Владимировна
+1 SEX F
+1 BIRT
+2 DATE 3 DEC 1985
+2 _UID 08d93d0d-24bd-4684-b3ec-e48c99601b70
+2 _UID 8da3e600-14bb-4221-aab9-5dcb09c5d51f
+1 FAMS @F2@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I16@ INDI
+1 _UID 9b34c275-50a6-4cc1-a572-f413e64bfd3e
+1 NAME Марк /Константинович Швабенланд/
+2 TYPE birth
+2 GIVN Марк
+2 SURN Швабенланд
+2 _PATN Константинович
+1 SEX M
+1 BIRT
+2 DATE 27 MAR 2013
+2 _UID b9369d2f-6dd1-4794-9afc-554b321e7e73
+2 _UID 78627a92-009e-45c5-b5d9-ff03a644aa8f
+1 FAMC @F2@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @I17@ INDI
+1 _UID 7c3696a4-364a-433d-b4f3-242b6f4c82cb
+1 NAME Павел /Николаевич Вычуров/
+2 TYPE birth
+2 GIVN Павел
+2 SURN Вычуров
+2 _PATN Николаевич
+1 SEX M
+1 BIRT
+2 DATE 25 DEC 1982
+2 _UID f5df32cf-7efd-4416-8dcf-a0bd2d8a4129
+2 _UID f7e97283-6140-4ced-a045-b4aa14954d10
+1 FAMS @F3@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I18@ INDI
+1 _UID cfe2ff6a-6676-46d5-9e6b-c88334c800a8
+1 NAME Людмила /Николаевна Пачина/
+2 TYPE birth
+2 GIVN Людмила
+2 SURN Пачина
+2 _PATN Николаевна
+1 SEX F
+1 BIRT
+2 DATE 24 OCT 1959
+2 _UID d72317c0-f743-4db2-b774-673d31a1bc5b
+2 _UID a11527fc-4855-4b81-a4eb-b4498ad6173b
+1 FAMS @F4@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I19@ INDI
+1 _UID 77217945-7a6a-40f2-b86a-2a153a6275ed
+1 NAME Денис /Александрович Русяйкин/
+2 TYPE birth
+2 GIVN Денис
+2 SURN Русяйкин
+2 _PATN Александрович
+1 SEX M
+1 BIRT
+2 DATE 12 SEP 1980
+2 _UID 37adfbdc-ebd4-40d5-9ad5-60703d9e0a0c
+2 _UID 94674fe2-f7d3-4800-9f53-9a4288c78d2b
+1 FAMC @F4@
+1 FAMS @F5@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I20@ INDI
+1 _UID ff561a30-1f1c-4800-95f6-60e58af63ae4
+1 NAME Татьяна /Александровна Русяйкина/
+2 TYPE birth
+2 GIVN Татьяна
+2 SURN Русяйкина
+2 _PATN Александровна
+1 SEX F
+1 BIRT
+2 DATE 25 JUL 1985
+2 _UID 608a5659-cc98-42cb-a45d-c17b9f0ae4d5
+2 _UID 76a92b5c-ad97-40b7-a761-55a3bc6efb5e
+1 FAMC @F4@
+1 FAMS @F6@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I21@ INDI
+1 _UID b9b0bc1b-09e1-46c4-873c-2a761c914eb1
+1 NAME Ксения //
+2 TYPE birth
+2 GIVN Ксения
+1 SEX F
+1 FAMS @F5@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I22@ INDI
+1 _UID 5a6b5002-fb30-4a78-85b0-99bb027f7300
+1 NAME Алексей /Денисович Русяйкин/
+2 TYPE birth
+2 GIVN Алексей
+2 SURN Русяйкин
+2 _PATN Денисович
+1 SEX M
+1 BIRT
+2 DATE 22 DEC 2013
+2 _UID 74d51c71-3a6d-4328-8957-51a74473529c
+2 _UID 25386e50-343b-4b92-8874-7e889f70837e
+1 FAMC @F5@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I23@ INDI
+1 _UID 77752fd3-9abd-471e-9b4f-33e3aeeaf2c5
+1 NAME Александр /Юрьевич Рогозин/
+2 TYPE birth
+2 GIVN Александр
+2 SURN Рогозин
+2 _PATN Юрьевич
+1 SEX M
+1 BIRT
+2 DATE 17 NOV 1984
+2 _UID 92e4adb7-c583-4cdf-9217-ce3c0603d78b
+2 _UID 9867cf6d-fa61-4508-aa1b-e99022882696
+1 FAMS @F6@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I24@ INDI
+1 _UID 59ea6540-75c5-4076-9ae1-a134a82c65a5
+1 NAME Максим /Александрович Рогозин/
+2 TYPE birth
+2 GIVN Максим
+2 SURN Рогозин
+2 _PATN Александрович
+1 SEX M
+1 BIRT
+2 DATE 9 SEP 2004
+2 _UID 1bebca1b-a6b3-4eeb-b0ba-9a28f1276f96
+2 _UID 742cce1e-af68-4f3f-bb7e-ecd0111b469b
+1 FAMC @F6@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:29:39.414
+0 @I25@ INDI
+1 _UID a9fb093b-44cc-44b5-b299-cbf1b8c58792
+1 NAME Владимир /Иванович Евдокимов/
+2 TYPE birth
+2 GIVN Владимир
+2 SURN Евдокимов
+2 _PATN Иванович
+1 SEX M
+1 BIRT
+2 DATE 6 JAN 1961
+2 _UID 4b92dd9f-418f-465e-b2da-9a5780058191
+2 _UID c8f689b7-b991-4d76-a16d-ae23a9d68320
+1 FAMS @F7@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I26@ INDI
+1 _UID eedc0047-7c6e-4bac-a6cf-38f4cb052e6e
+1 NAME Вячеслав /Владимирович Евдокимов/
+2 TYPE birth
+2 GIVN Вячеслав
+2 SURN Евдокимов
+2 _PATN Владимирович
+1 SEX M
+1 BIRT
+2 DATE 21 MAY 1987
+2 _UID d9227a14-10e0-442d-9513-a5db2fe49260
+2 _UID 90d4b6be-7912-4a64-9028-9c5b1027561a
+1 FAMC @F7@
+1 FAMS @F8@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I27@ INDI
+1 _UID d2b96c2c-dc5d-4d5f-b6a0-693294b0dea0
+1 NAME Елена /Игоревна Ходачкова/
+2 TYPE birth
+2 GIVN Елена
+2 SURN Ходачкова
+2 _PATN Игоревна
+1 SEX F
+1 FAMS @F8@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I28@ INDI
+1 _UID 7cb7c2d0-7ad0-49fd-b4f0-fd7b078cc69d
+1 NAME Ян /Вячеславович Евдокимов/
+2 TYPE birth
+2 GIVN Ян
+2 SURN Евдокимов
+2 _PATN Вячеславович
+1 SEX M
+1 BIRT
+2 DATE 27 APR 2013
+2 _UID d65b1555-9c82-4c32-a8ff-6457d1fa9ddb
+2 _UID 74479af1-1874-4416-a919-0417e757f8cb
+1 FAMC @F8@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I29@ INDI
+1 _UID b3df1815-286a-4997-83bf-aa411845f681
+1 NAME Виктор /Владимирович Луканин/
+2 TYPE birth
+2 GIVN Виктор
+2 SURN Луканин
+2 _PATN Владимирович
+1 SEX M
+1 BIRT
+2 DATE 15 DEC 1958
+2 _UID fea64583-35e9-45a2-9afd-2c26aeb264f9
+2 _UID 994a4e73-6c48-4ea5-99ca-e7b1a4d27607
+1 FAMS @F9@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I30@ INDI
+1 _UID ffc36e7a-4e9c-4695-a6f4-52e764c94f37
+1 NAME Владимир /Викторович Луканин/
+2 TYPE birth
+2 GIVN Владимир
+2 SURN Луканин
+2 _PATN Викторович
+1 SEX M
+1 BIRT
+2 DATE 16 OCT 1980
+2 _UID f37b529c-d6e7-4666-b51d-94ff1ce1d0e0
+2 _UID ef089a39-6d7f-4223-822a-2119d1ef1d49
+1 DEAT
+2 DATE 10 MAR 1991
+2 _UID 0e9baaa6-bd6c-42dd-8b23-ef607c1f088c
+2 _UID 034b8aab-213c-447c-828d-d39f32ef9b5b
+1 FAMC @F9@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I31@ INDI
+1 _UID e2d4b2b7-7e81-4c96-805c-5a7a0068bf0e
+1 NAME Екатерина /Викторовна Луканина/
+2 TYPE birth
+2 GIVN Екатерина
+2 SURN Луканина
+2 _PATN Викторовна
+1 SEX F
+1 BIRT
+2 DATE 28 NOV 1983
+2 _UID 0891fa60-2f37-4dab-88a9-facc0a294c6f
+2 _UID 8b2834eb-b269-41e2-87ca-f450ab62f50a
+1 FAMC @F9@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I32@ INDI
+1 _UID 6bdfb349-a0b6-47fa-b0a1-e0f308f92fb2
+1 NAME Леонид /Викторович Луканин/
+2 TYPE birth
+2 GIVN Леонид
+2 SURN Луканин
+2 _PATN Викторович
+1 SEX M
+1 BIRT
+2 DATE 26 SEP 1985
+2 _UID 012df7a0-41bb-4c10-88f8-2123a16f9cb3
+2 _UID dbe42a27-a512-4699-ab68-74f181993732
+1 FAMC @F9@
+1 FAMS @F10@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I33@ INDI
+1 _UID cadb95a3-a9c9-4592-8c45-cccdb4820cad
+1 NAME Евгения /Павловна/
+2 TYPE birth
+2 GIVN Евгения
+2 SURN Павловна
+1 SEX F
+1 BIRT
+2 DATE 21 JUN 1986
+2 _UID d01e47c6-5558-43cb-818f-0857fccfc472
+2 _UID 7179a280-cfcf-45f1-863b-240e9c9cf1aa
+1 FAMS @F10@
+1 CHAN
+2 DATE 10 DEC 2025
+3 TIME 00:00:00.000
+0 @I34@ INDI
+1 _UID 773fcd03-3eec-4711-92b0-863991e75a14
+1 NAME Евангелина /Леонидовна Луканина/
+2 TYPE birth
+2 GIVN Евангелина
+2 SURN Луканина
+2 _PATN Леонидовна
+1 SEX F
+1 BIRT
+2 DATE 11 JAN 2012
+2 _UID 80cc81b4-eeea-4460-952d-802635f5609f
+2 _UID 55d2cd15-42a9-4879-a55b-9befc06dbde5
+1 FAMC @F10@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I35@ INDI
+1 _UID f8d103a6-c99e-4774-ae37-64c7a70bd4bb
+1 NAME Василий /Михайлович Гостев/
+2 TYPE birth
+2 GIVN Василий
+2 SURN Гостев
+2 _PATN Михайлович
+1 SEX M
+1 BIRT
+2 DATE 18 MAY 1958
+2 _UID afba1ab4-73d2-4dfb-8c2f-e41f6cb621c3
+2 _UID 286fe4cd-d55d-4e88-984e-54ff6b5009e6
+1 FAMS @F11@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I36@ INDI
+1 _UID 5e58bf9f-93cc-4dd6-8842-2b78aedc22ce
+1 NAME Людмила /Васильевна Гостева/
+2 TYPE birth
+2 GIVN Людмила
+2 SURN Гостева
+2 _PATN Васильевна
+1 SEX F
+1 BIRT
+2 DATE 17 NOV 1983
+2 _UID f21e29b4-d32a-47aa-9428-e37f33fd5a5b
+2 _UID 2f20e391-db66-4aee-be26-65aeac4f15bb
+1 FAMC @F11@
+1 FAMS @F12@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:35:19.015
+0 @I37@ INDI
+1 _UID 343e9b65-1b56-40a1-8e6a-fd9200f7e5ce
+1 NAME Светлана /Васильевна Гостева/
+2 TYPE birth
+2 GIVN Светлана
+2 SURN Гостева
+2 _PATN Васильевна
+1 SEX F
+1 BIRT
+2 DATE 27 FEB 1985
+2 _UID 923b8173-cf89-4694-a615-74495f08834f
+2 _UID 624c0699-a44c-4469-b0be-8390cb7fb4f5
+1 FAMC @F11@
+1 FAMS @F13@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I38@ INDI
+1 _UID 701ebe0d-bb57-4cd4-9695-1c5877a56bc5
+1 NAME Татьяна /Васильевна Гостева/
+2 TYPE birth
+2 GIVN Татьяна
+2 SURN Гостева
+2 _PATN Васильевна
+1 SEX F
+1 BIRT
+2 DATE 4 SEP 1986
+2 _UID e33c788d-ec60-41f5-b7e3-4dbc1998859b
+2 _UID c15805ea-ea8c-49cd-bed7-7d0604fa4229
+1 DEAT
+2 DATE 22 MAR 2009
+2 _UID fda6727d-2282-42ff-a443-00f148697c6f
+2 _UID 94e6a02d-ad1a-415f-b294-0f3c5f9c3257
+1 FAMC @F11@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I39@ INDI
+1 _UID 42480292-d631-4b0a-8ea0-44386c9569e7
+1 NAME Юрий /Леонидович Терзо/
+2 TYPE birth
+2 GIVN Юрий
+2 SURN Терзо
+2 _PATN Леонидович
+1 SEX M
+1 BIRT
+2 DATE 7 FEB 1981
+2 _UID 582dec6e-af38-4f90-98c2-b2bc370164ec
+2 _UID aefc465f-e4b3-4c27-b123-e27ce2488d9e
+1 FAMS @F12@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I40@ INDI
+1 _UID c1523a91-864f-4fc0-bf3a-1e87998a09b6
+1 NAME Максим /Юрьевич Терзо/
+2 TYPE birth
+2 GIVN Максим
+2 SURN Терзо
+2 _PATN Юрьевич
+1 SEX M
+1 BIRT
+2 DATE 7 NOV 2010
+2 _UID cd5c990c-00dc-42a4-a91f-5108f48d286d
+2 _UID 18ea6176-6137-4afe-ab21-4d6d5306c13d
+1 FAMC @F12@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I41@ INDI
+1 _UID d434d446-309a-4458-9f18-4663d208ca95
+1 NAME Роман /Юрьевич Терзо/
+2 TYPE birth
+2 GIVN Роман
+2 SURN Терзо
+2 _PATN Юрьевич
+1 SEX M
+1 BIRT
+2 DATE 13 JUN 2014
+2 _UID ebef2f5e-63ee-412f-9499-11eb983f26b8
+2 _UID 519003d6-5173-422b-8afd-ae0ac471f127
+1 FAMC @F12@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I42@ INDI
+1 _UID e0cdee36-d4b6-4148-9b75-77ac406e2187
+1 NAME Владимир /Анатольевич Трухин/
+2 TYPE birth
+2 GIVN Владимир
+2 SURN Трухин
+2 _PATN Анатольевич
+1 SEX M
+1 BIRT
+2 DATE 14 SEP 1980
+2 _UID fcf2d141-3b76-4b72-96d8-bf2efe321810
+2 _UID 37efbea9-dd4d-4f94-a162-1979cde6f9b3
+1 FAMS @F13@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I43@ INDI
+1 _UID cd6109ad-1618-45db-8219-c8ad9fc9d3d2
+1 NAME Алексей /Владимирович Трухин/
+2 TYPE birth
+2 GIVN Алексей
+2 SURN Трухин
+2 _PATN Владимирович
+1 SEX M
+1 BIRT
+2 DATE 19 OCT 2011
+2 _UID cea72585-17a1-42cc-ac6c-248bcb896564
+2 _UID 03ea30f7-c213-410d-9838-992b63fdf6e9
+1 FAMC @F13@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I44@ INDI
+1 _UID 21ce26e7-e036-4732-b301-477ab3deef06
+1 NAME Ульяна /Владимировна Трухина/
+2 TYPE birth
+2 GIVN Ульяна
+2 SURN Трухина
+2 _PATN Владимировна
+1 SEX F
+1 BIRT
+2 DATE 29 JUL 2014
+2 _UID 9a89004e-0436-4410-8a2c-616eccbe3c2d
+2 _UID 36985d0e-300d-45ad-bc60-a94c772da9eb
+1 FAMC @F13@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I45@ INDI
+1 _UID 9006fb83-22d1-491c-8e07-d4f2c178af9e
+1 NAME Николай /Николаевич Селиванов/
+2 TYPE birth
+2 GIVN Николай
+2 SURN Селиванов
+2 _PATN Николаевич
+1 SEX M
+1 BIRT
+2 DATE 10 DEC 1958
+2 _UID eb93ac9d-210b-4b44-9d38-97ed98c7f6c6
+2 _UID 3db52dac-36f4-4d0b-979e-296271cc958c
+1 FAMS @F14@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I46@ INDI
+1 _UID 1a9c04e2-b44f-4d8f-8d0d-57cde349e38b
+1 NAME Мария /Николаевна Селиванова/
+2 TYPE birth
+2 GIVN Мария
+2 SURN Селиванова
+2 _PATN Николаевна
+1 SEX F
+1 BIRT
+2 DATE 12 NOV 1990
+2 _UID 22331d0c-bb3f-4136-8a1f-f9e0be193f30
+2 _UID 54e1aa1f-4fa2-48e9-abbf-fd9a75678859
+1 FAMC @F14@
+1 FAMS @F15@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I47@ INDI
+1 _UID b8e3fbb8-fdbf-4e3d-9d35-3f94d6d81d57
+1 NAME Анна /Николаевна Селиванова/
+2 TYPE birth
+2 GIVN Анна
+2 SURN Селиванова
+2 _PATN Николаевна
+1 SEX F
+1 BIRT
+2 DATE 31 MAY 1994
+2 _UID d6ca475b-b760-4dc7-9dbe-7dd3581c881e
+2 _UID 1ae1c2cb-f9db-4d1b-956c-2ac1a4b50da1
+1 FAMC @F14@
+1 FAMS @F16@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:44:21.892
+0 @I48@ INDI
+1 _UID 4ce32f47-0355-4c73-afcf-005f3733383b
+1 NAME Михаил /Александрович Барсуков/
+2 TYPE birth
+2 GIVN Михаил
+2 SURN Барсуков
+2 _PATN Александрович
+1 SEX M
+1 BIRT
+2 DATE 30 AUG 1989
+2 _UID 61bf39bc-3f9c-479b-b3ee-07d901e5fbe3
+2 _UID 33f1d85f-a35c-4254-a78e-471417d55aae
+1 FAMS @F15@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I49@ INDI
+1 _UID 3e807c6a-22d1-43d8-b94c-056052ad907d
+1 NAME Валерия /Михайловна Барсукова/
+2 TYPE birth
+2 GIVN Валерия
+2 SURN Барсукова
+2 _PATN Михайловна
+1 SEX F
+1 BIRT
+2 DATE 21 JAN 2012
+2 _UID dff5b159-8f40-4288-9654-9d8eba7eaa2b
+2 _UID 8f4ced27-1ec3-4b4d-9f37-ea15c99e41b6
+1 FAMC @F15@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I50@ INDI
+1 _UID 15415588-68e9-4fc1-89a3-53d675bb83ff
+1 NAME Анна /Михайловна Барсукова/
+2 TYPE birth
+2 GIVN Анна
+2 SURN Барсукова
+2 _PATN Михайловна
+1 SEX F
+1 BIRT
+2 DATE 30 SEP 2013
+2 _UID 5a9e3d7a-98da-48ee-a258-06a620d25212
+2 _UID 513024ea-3851-4782-bc77-cf8918374188
+1 FAMC @F15@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:43:28.412
+0 @I51@ INDI
+1 _UID 7e0a3064-ceba-469b-ae15-c7c8e05cb4a9
+1 NAME Евгений /Олегович Оверчук/
+2 TYPE aka
+2 GIVN Евгений
+2 SURN Оверчук
+2 _PATN Олегович
+1 SEX M
+1 FAMS @F16@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:44:21.892
+0 @I52@ INDI
+1 _UID a9fea6e4-91af-4c58-92b7-bbd923d1f10d
+1 NAME Пелагея /Ивановна Баяндина/
+2 TYPE birth
+2 GIVN Пелагея
+2 SURN Баяндина
+2 _PATN Ивановна
+1 SEX F
+1 BIRT
+2 DATE 15 MAY 1927
+2 _UID f7a7e50b-121d-4e57-bb4e-6fae03ed93bb
+1 DEAT
+2 DATE 13 SEP 2003
+2 _UID ac6e9ab3-81ac-4838-8280-b5f6173056cc
+1 FAMS @F17@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:24:05.424
+0 @F0@ FAM
+1 HUSB @I0@
+1 WIFE @I1@
+1 MARR
+2 TYPE marriage
+2 DATE ABT 1910
+2 _UID c04a9cc0-f68a-4246-8254-e9dc635a38ed
+2 _UID 16d4c784-8077-4dcb-8522-683799ff3741
+1 _MSTAT current
+1 CHIL @I4@
+1 CHIL @I2@
+1 CHIL @I3@
+1 CHIL @I5@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F1@ FAM
+1 HUSB @I12@
+1 WIFE @I6@
+1 MARR
+2 TYPE marriage
+2 DATE 13 JAN 1983
+2 _UID b152a442-31de-45e9-8123-c0047087bfc1
+2 _UID 1d5bec20-4c37-4a6f-94d5-92676ffa8c20
+1 _MSTAT current
+1 CHIL @I13@
+1 CHIL @I14@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F2@ FAM
+1 HUSB @I13@
+1 WIFE @I15@
+1 MARR
+2 TYPE marriage
+2 DATE ABT 2010
+2 _UID e6f40519-b925-45de-8905-20fc906cfb89
+2 _UID 26df2e62-08e5-4bdf-8573-2b6e0ab2d855
+1 _MSTAT current
+1 CHIL @I16@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F3@ FAM
+1 HUSB @I17@
+1 WIFE @I14@
+1 MARR
+2 TYPE marriage
+2 DATE 4 MAR 2005
+2 _UID 3bd2e9a5-6aa0-4b8a-814e-d9c1aab11546
+2 _UID f792c7ce-4c00-4bea-ab7d-53199c2b736c
+1 _MSTAT current
+1 CHAN
+2 DATE 10 DEC 2025
+3 TIME 00:00:00.000
+0 @F4@ FAM
+1 HUSB @I7@
+1 WIFE @I18@
+1 MARR
+2 TYPE marriage
+2 DATE 28 SEP 1979
+2 _UID 2ed41712-d512-4769-8928-8dcbea3fb092
+2 _UID 7ec26ede-f412-4bbd-a9bd-72aafb455f38
+1 _MSTAT current
+1 CHIL @I19@
+1 CHIL @I20@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F5@ FAM
+1 HUSB @I19@
+1 WIFE @I21@
+1 MARR
+2 TYPE marriage
+2 _UID b71f315a-232b-4c64-8bb5-7721759df8c7
+2 _UID b92702bc-07fb-4f86-8648-7edf60b0a361
+1 _MSTAT current
+1 CHIL @I22@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F6@ FAM
+1 HUSB @I23@
+1 WIFE @I20@
+1 MARR
+2 TYPE marriage
+2 DATE 4 JUN 2004
+2 _UID 50a7c1c5-26bb-487b-a52a-3c56e35ca983
+2 _UID c2707bef-1fde-4049-9afb-4be042714503
+1 _MSTAT current
+1 CHIL @I24@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F7@ FAM
+1 HUSB @I25@
+1 WIFE @I8@
+1 MARR
+2 TYPE marriage
+2 DATE 16 AUG 1986
+2 _UID 07abfd1f-3a04-42a8-b3d4-79b6fd840ad6
+2 _UID be9122cf-5f30-4ea4-91ac-7ba8cf8058e2
+1 _MSTAT current
+1 CHIL @I26@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F8@ FAM
+1 HUSB @I26@
+1 WIFE @I27@
+1 MARR
+2 TYPE marriage
+2 DATE 25 JUL 2012
+2 _UID 958bdb4b-0108-43bd-a8ee-5281703e3e2d
+2 _UID 1ebb3570-d5b6-49f6-ab57-21b3e0b0bee2
+1 _MSTAT current
+1 CHIL @I28@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F9@ FAM
+1 HUSB @I29@
+1 WIFE @I9@
+1 MARR
+2 TYPE marriage
+2 DATE 19 SEP 1980
+2 _UID a0df822b-2ce7-4af8-af82-ec7bbf03a95c
+2 _UID 0b7eb3f0-01a0-4ae6-8a94-f57f0e1514c9
+1 _MSTAT current
+1 CHIL @I30@
+1 CHIL @I31@
+1 CHIL @I32@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F10@ FAM
+1 HUSB @I32@
+1 WIFE @I33@
+1 MARR
+2 TYPE marriage
+2 DATE ABT 2010
+2 _UID ba4851f5-91f4-44ea-91c5-f1295375c936
+2 _UID 4869a93f-bd81-4ad7-9548-c32591308065
+1 _MSTAT current
+1 CHIL @I34@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F11@ FAM
+1 HUSB @I35@
+1 WIFE @I10@
+1 MARR
+2 TYPE marriage
+2 DATE 4 DEC 1982
+2 _UID e4e37641-190f-420a-9dec-bce6a702b07b
+2 _UID 493f851c-3e01-4d40-b713-7433edc1b817
+1 _MSTAT current
+1 CHIL @I36@
+1 CHIL @I37@
+1 CHIL @I38@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F12@ FAM
+1 HUSB @I39@
+1 WIFE @I36@
+1 MARR
+2 TYPE marriage
+2 DATE 29 JUN 2011
+2 _UID 75e87b52-303a-48e0-beab-f3dff0e2a99b
+2 _UID ff1e7c95-90ab-49f5-986e-c063d745de06
+1 _MSTAT current
+1 CHIL @I40@
+1 CHIL @I41@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F13@ FAM
+1 HUSB @I42@
+1 WIFE @I37@
+1 MARR
+2 TYPE marriage
+2 DATE 20 MAY 2011
+2 _UID cb6e8169-0a9c-42b4-9ef9-5d49fe393659
+2 _UID 24966e24-7aab-45bc-bd15-2890249d2363
+1 _MSTAT current
+1 CHIL @I43@
+1 CHIL @I44@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F14@ FAM
+1 HUSB @I45@
+1 WIFE @I11@
+1 MARR
+2 TYPE marriage
+2 DATE 19 SEP 1987
+2 _UID 55d71f7b-e35c-45d4-8901-06faaf271109
+2 _UID 59ba276e-63ae-4649-aeae-d6162fceacd4
+1 _MSTAT current
+1 CHIL @I46@
+1 CHIL @I47@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F15@ FAM
+1 HUSB @I48@
+1 WIFE @I46@
+1 MARR
+2 TYPE marriage
+2 DATE 9 DEC 2011
+2 _UID 003c7d86-d5da-4e7b-94fa-c9823e3cf7b3
+2 _UID 1bc04b74-df31-48f3-9362-ea3b755fa8f9
+1 _MSTAT current
+1 CHIL @I49@
+1 CHIL @I50@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 @F16@ FAM
+1 HUSB @I51@
+1 WIFE @I47@
+1 MARR
+2 TYPE marriage
+2 _UID 608c7f18-a259-4785-acbb-97f4dccb0f27
+2 _UID 27d4e6ee-a5b1-4dec-9e4b-4b1578e316ec
+1 _MSTAT current
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 20:44:21.892
+0 @F17@ FAM
+1 HUSB @I4@
+1 WIFE @I52@
+1 MARR
+2 TYPE marriage
+2 _UID de821f9f-e999-4ad3-a7a4-8eacb6fd70a3
+1 _MSTAT current
+1 CHIL @I6@
+1 CHIL @I7@
+1 CHIL @I8@
+1 CHIL @I9@
+1 CHIL @I10@
+1 CHIL @I11@
+1 CHAN
+2 DATE 17 DEC 2025
+3 TIME 17:57:43.521
+0 TRLR
+>>>>>>> 5bd2c9a43160ac9887d568ed67f000bb761d87c9

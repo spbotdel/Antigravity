@@ -1,135 +1,93 @@
-<<<<<<< HEAD
 export function renderTree(rootData) {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+    console.log("Рендеринг дерева:", rootData);
 
-  d3.select("#tree").selectAll("*").remove();
+    // Очищаем контейнер
+    const container = d3.select("#tree");
+    container.selectAll("*").remove();
 
-  const svg = d3.select("#tree")
-    .append("svg")
-    .attr("width", width)
-    .attr("height", height);
+    // Если данных нет
+    if (!rootData || !rootData.children) {
+        container.html("<p style='padding:20px;'>Данные дерева отсутствуют или rootId указан неверно.</p>");
+        return;
+    }
 
-  const g = svg.append("g");
+    const width = window.innerWidth;
+    const height = window.innerHeight;
 
-  // Zoom + Pan
-  svg.call(
-    d3.zoom()
-      .scaleExtent([0.3, 3])
-      .on("zoom", (event) => {
-        g.attr("transform", event.transform);
-      })
-  );
+    const svg = container
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
 
-  const treeLayout = d3.tree()
-    .size([width - 200, height - 200]);
+    const g = svg.append("g")
+        .attr("transform", `translate(${width / 2}, 50)`);
 
-  const root = d3.hierarchy(rootData);
-  treeLayout(root);
-
-  // Линии
-  g.selectAll(".link")
-    .data(root.links())
-    .enter()
-    .append("path")
-    .attr("class", "link")
-    .attr("fill", "none")
-    .attr("stroke", "#999")
-    .attr("stroke-width", 1.5)
-    .attr("d", d3.linkVertical()
-      .x(d => d.x)
-      .y(d => d.y)
+    // Zoom + Pan
+    svg.call(
+        d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            })
     );
 
-  // Узлы
-  const node = g.selectAll(".node")
-    .data(root.descendants())
-    .enter()
-    .append("g")
-    .attr("class", "node")
-    .attr("transform", d => `translate(${d.x},${d.y})`);
+    // Создаем иерархию
+    const root = d3.hierarchy(rootData);
+    const treeLayout = d3.tree().size([width - 100, height - 200]);
 
-  // Карточка
-  node.append("rect")
-    .attr("x", -70)
-    .attr("y", -20)
-    .attr("width", 140)
-    .attr("height", 40)
-    .attr("rx", 8)
-    .attr("fill", "#fff")
-    .attr("stroke", "#333");
+    treeLayout(root);
 
-  // Имя
-  node.append("text")
-    .attr("text-anchor", "middle")
-    .attr("dy", "0.35em")
-    .text(d => d.data.name);
+    // Рисуем линии
+    g.selectAll(".link")
+        .data(root.links())
+        .enter()
+        .append("path")
+        .attr("class", "link")
+        .attr("fill", "none")
+        .attr("stroke", "#999")
+        .attr("stroke-width", 1.5)
+        .attr("d", d3.linkHorizontal()
+            .x(d => d.y)
+            .y(d => d.x)
+        );
+
+    // Создаем узлы
+    const node = g.selectAll(".node")
+        .data(root.descendants())
+        .enter()
+        .append("g")
+        .attr("class", "node")
+        .attr("transform", d => `translate(${d.y},${d.x})`);
+
+    // Карточка
+    node.append("rect")
+        .attr("x", -80)
+        .attr("y", -25)
+        .attr("width", 160)
+        .attr("height", 50)
+        .attr("rx", 6)
+        .attr("fill", "#fff")
+        .attr("stroke", "#333")
+        .attr("stroke-width", 1);
+
+    // Имя
+    node.append("text")
+        .attr("text-anchor", "middle")
+        .attr("dy", "-0.5em")
+        .style("font-size", "14px")
+        .style("font-weight", "bold")
+        .text(d => d.data.name);
+
+    // Даты (если есть)
+    node.append("text")
+        .attr("text-anchor", "middle")
+        .attr("dy", "1.2em")
+        .style("font-size", "11px")
+        .style("fill", "#666")
+        .text(d => {
+            const dates = [];
+            if (d.data.birth) dates.push(`род. ${d.data.birth}`);
+            if (d.data.death) dates.push(`ум. ${d.data.death}`);
+            return dates.join(' / ');
+        });
 }
-=======
-export function renderTree(rootData) {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-
-  d3.select("#tree").selectAll("*").remove();
-
-  const svg = d3.select("#tree")
-    .append("svg")
-    .attr("width", width)
-    .attr("height", height);
-
-  const g = svg.append("g");
-
-  // Zoom + Pan
-  svg.call(
-    d3.zoom()
-      .scaleExtent([0.3, 3])
-      .on("zoom", (event) => {
-        g.attr("transform", event.transform);
-      })
-  );
-
-  const treeLayout = d3.tree()
-    .size([width - 200, height - 200]);
-
-  const root = d3.hierarchy(rootData);
-  treeLayout(root);
-
-  // Линии
-  g.selectAll(".link")
-    .data(root.links())
-    .enter()
-    .append("path")
-    .attr("class", "link")
-    .attr("fill", "none")
-    .attr("stroke", "#999")
-    .attr("stroke-width", 1.5)
-    .attr("d", d3.linkVertical()
-      .x(d => d.x)
-      .y(d => d.y)
-    );
-
-  // Узлы
-  const node = g.selectAll(".node")
-    .data(root.descendants())
-    .enter()
-    .append("g")
-    .attr("class", "node")
-    .attr("transform", d => `translate(${d.x},${d.y})`);
-
-  // Карточка
-  node.append("rect")
-    .attr("x", -70)
-    .attr("y", -20)
-    .attr("width", 140)
-    .attr("height", 40)
-    .attr("rx", 8)
-    .attr("fill", "#fff")
-    .attr("stroke", "#333");
-
-  // Имя
-  node.append("text")
-    .attr("text-anchor", "middle")
-    .attr("dy", "0.35em")
-    .text(d => d.data.name);
-}
->>>>>>> 5bd2c9a43160ac9887d568ed67f000bb761d87c9

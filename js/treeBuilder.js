@@ -1,57 +1,45 @@
-<<<<<<< HEAD
 export function buildDescendantsTree(personId, data, visited = new Set()) {
-  if (visited.has(personId)) return null;
-  visited.add(personId);
+    if (visited.has(personId)) {
+        console.warn("Обнаружен цикл для ID:", personId);
+        return null;
+    }
+    visited.add(personId);
 
-  const person = data.people[personId];
-  if (!person) return null;
+    const person = data.people[personId];
+    if (!person) {
+        console.warn("Не найден человек с ID:", personId);
+        return null;
+    }
 
-  const node = {
-    id: person.id,
-    name: person.name,
-    birth: person.birth,
-    death: person.death,
-    children: []
-  };
+    // Для отладки
+    console.log("Обрабатываем:", personId, person.name);
 
-  person.familiesAsSpouse.forEach(famId => {
-    const fam = data.families[famId];
-    if (!fam) return;
+    const node = {
+        id: person.id,
+        name: person.name || "Без имени",
+        birth: person.birth,
+        death: person.death,
+        children: []
+    };
 
-    fam.children.forEach(childId => {
-      const childNode = buildDescendantsTree(childId, data, visited);
-      if (childNode) node.children.push(childNode);
-    });
-  });
+    // Обрабатываем только первую семью для простоты
+    if (person.familiesAsSpouse.length > 0) {
+        const famId = person.familiesAsSpouse[0];
+        const fam = data.families[famId];
+        
+        if (fam && fam.children) {
+            console.log("Найдены дети в семье", famId, ":", fam.children);
+            
+            fam.children.forEach(childId => {
+                const childNode = buildDescendantsTree(childId, data, visited);
+                if (childNode) {
+                    node.children.push(childNode);
+                }
+            });
+        }
+    } else {
+        console.log("Нет семьи для", personId);
+    }
 
-  return node;
+    return node;
 }
-=======
-export function buildDescendantsTree(personId, data, visited = new Set()) {
-  if (visited.has(personId)) return null;
-  visited.add(personId);
-
-  const person = data.people[personId];
-  if (!person) return null;
-
-  const node = {
-    id: person.id,
-    name: person.name,
-    birth: person.birth,
-    death: person.death,
-    children: []
-  };
-
-  person.familiesAsSpouse.forEach(famId => {
-    const fam = data.families[famId];
-    if (!fam) return;
-
-    fam.children.forEach(childId => {
-      const childNode = buildDescendantsTree(childId, data, visited);
-      if (childNode) node.children.push(childNode);
-    });
-  });
-
-  return node;
-}
->>>>>>> 5bd2c9a43160ac9887d568ed67f000bb761d87c9
