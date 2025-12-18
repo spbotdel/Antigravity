@@ -1,14 +1,93 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta charset="UTF-8">
     <title>Family Tree</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
     <div id="tree"></div>
-    
+
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script type="module" src="js/main.js"></script>
+    <script type="module">
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Тест импорта
+                console.log('Пробуем импортировать модули...');
+
+                const moduleTest = await import('./js/gedcomParser.js');
+                console.log('Импорт gedcomParser:', moduleTest);
+                console.log('parseGedcom доступен?', 'parseGedcom' in moduleTest);
+
+                // Если импорт прошел, продолжаем
+                const { parseGedcom } = await import('./js/gedcomParser.js');
+                const { buildDescendantsTree } = await import('./js/treeBuilder.js');
+                const { renderTree } = await import('./js/treeRenderer.js');
+
+                const response = await fetch('./3.ged');
+                const text = await response.text();
+                const data = parseGedcom(text);
+                const treeData = buildDescendantsTree('I0', data);
+                renderTree(treeData);
+
+            } catch (error) {
+                console.error('Критическая ошибка:', error);
+
+                // Показываем простую версию дерева
+                document.getElementById('tree').innerHTML = `
+      <div style="padding: 20px;">
+        <h2>Семейное древо Русяйкиных (аварийный режим)</h2>
+        <p>Технические проблемы. Основное дерево временно недоступно.</p>
+        <div id="simple-tree"></div>
+      </div>
+    `;
+
+                // Рисуем простое дерево
+                const simpleData = {
+                    name: "Егор Русяйкин",
+                    children: [
+                        {
+                            name: "Леонид Русяйкин", children: [
+                                { name: "Валентина Кроликова" },
+                                { name: "Александр Русяйкин" },
+                                { name: "Любовь Евдокимова" }
+                            ]
+                        },
+                        { name: "Зоя Крюкова" },
+                        { name: "Пётр Русяйкин" },
+                        { name: "Анна Кляченко" }
+                    ]
+                };
+
+                // Простой рендеринг без D3
+                const container = document.getElementById('simple-tree');
+                function renderSimpleTree(node, parentEl) {
+                    const div = document.createElement('div');
+                    div.style.marginLeft = '20px';
+                    div.style.padding = '5px';
+                    div.style.borderLeft = '2px solid #ccc';
+
+                    const nameEl = document.createElement('div');
+                    nameEl.textContent = node.name;
+                    nameEl.style.fontWeight = 'bold';
+                    div.appendChild(nameEl);
+
+                    if (node.children) {
+                        node.children.forEach(child => {
+                            renderSimpleTree(child, div);
+                        });
+                    }
+
+                    parentEl.appendChild(div);
+                }
+
+                renderSimpleTree(simpleData, container);
+            }
+        });
+    </script>
 </body>
+
 </html>
