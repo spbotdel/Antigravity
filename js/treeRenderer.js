@@ -191,18 +191,50 @@ export function renderTree(rootData) {
 }
 
 // Вспомогательные функции
+// treeRenderer.js - функция getGenerationColor (заменить)
 function getGenerationColor(depth) {
+    // Приглушенная пастельная палитра
     const colors = [
-        "#3498db", "#2ecc71", "#e74c3c",
-        "#9b59b6", "#f39c12", "#1abc9c"
+        "#5D6D7E",    // Серо-синий (основатель) - спокойный, авторитетный
+        "#7D8A8E",    // Серо-зеленый (дети)
+        "#95A5A6",    // Серый (внуки)
+        "#AEB6BF",    // Светло-серый (правнуки)
+        "#D5DBDB",    // Очень светлый серый
+        "#EAEDED"     // Почти белый
     ];
-    return colors[depth] || colors[colors.length - 1];
+
+    // Или альтернативная теплая палитра:
+    const warmColors = [
+        "#8B7355",    // Коричневый (основатель)
+        "#A67C52",    // Коричнево-бежевый (дети)
+        "#C19A6B",    // Бежевый (внуки)
+        "#D4B483",    // Светло-бежевый (правнуки)
+        "#E6D5B8",    // Очень светлый бежевый
+        "#F5EBDC"     // Кремовый
+    ];
+
+    // Или холодная синяя палитра:
+    const blueColors = [
+        "#2C3E50",    // Темно-синий (основатель)
+        "#34495E",    // Синий (дети)
+        "#5D6D7E",    // Серо-синий (внуки)
+        "#7F8C8D",    // Серый (правнуки)
+        "#BDC3C7",    // Светло-серый
+        "#ECF0F1"     // Почти белый
+    ];
+
+    // Выберите палитру (меняйте на warmColors или blueColors по желанию)
+    const palette = blueColors; // ← ИЗМЕНИТЕ ЗДЕСЬ НА warmColors ИЛИ blueColors
+
+    return palette[Math.min(depth, palette.length - 1)];
 }
 
+// Также обновите lightenColor для более мягкого эффекта
 function lightenColor(color) {
-    return d3.color(color).brighter(0.5);
+    const d3color = d3.color(color);
+    if (!d3color) return color;
+    return d3color.brighter(0.3); // Меньше осветление
 }
-
 function formatDate(dateStr) {
     if (!dateStr) return '';
     const months = {
