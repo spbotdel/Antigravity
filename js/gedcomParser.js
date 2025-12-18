@@ -1,107 +1,55 @@
-export function parseGedcom(text) {
-  const lines = text.split(/\r?\n/);
-  const people = {};
-  const families = {};
-  let current = null;
-  let lastTag = null;
+import { parseGedcom } from "./gedcomParser.js";
+import { buildDescendantsTree } from "./treeBuilder.js";
+import { renderTree } from "./treeRenderer.js";
 
-  for (let line of lines) {
-    if (!line.trim()) continue;
+console.log("=== ЗАГРУЗКА GEDCOM ===");
 
-    const match = line.match(/^(\d+)\s+(@?)(\S+)(@?)(?:\s+(.+))?$/);
-    if (!match) continue;
-
-    const level = parseInt(match[1]);
-    const tag = match[3]; // Берем тег без @
-    const value = match[5] || '';
-
-    // Очищаем ID от всех символов @
-    const cleanValue = value.replace(/@/g, '');
-
-    // Новый объект (INDI или FAM)
-    if (level === 0) {
-      lastTag = null;
+fetch("./3.ged")
+  .then(response => response.text())
+  .then(text => {
+    // Проверяем первые символы файла
+    console.log("Первые 200 символов файла:");
+    console.log(text.substring(0, 200));
+    
+    const data = parseGedcom(text);
+    
+    // Выводим ВСЕХ людей
+    console.log("\n=== ВСЕ ЛЮДИ В ФАЙЛЕ ===");
+    Object.entries(data.people).forEach(([id, person]) => {
+      console.log(`${id}: "${person.name || 'Без имени'}"`);
+    });
+    
+    // Пробуем найти Леонида
+    const leonidId = Object.keys(data.people).find(id => {
+      const person = data.people[id];
+      return person.name && person.name.includes('Леонид');
+    });
+    
+    if (leonidId) {
+      console.log(`\nНайден Леонид: ${leonidId}`);
+      const treeData = buildDescendantsTree(leonidId, data);
+      renderTree(treeData);
+    } else {
+      // Берем первого человека с детьми
+      const personWithFamily = Object.entries(data.people).find(([id, p]) => 
+        p.familiesAsSpouse && p.familiesAsSpouse.length > 0
+      );
       
-      // Проверяем, начинается ли тег с I (человек) или F (семья)
-      if (tag && (tag.startsWith('I') || tag.startsWith('@I'))) {
-        // Извлекаем чистый ID (без @)
-        const cleanId = tag.replace(/@/g, '');
-        current = { type: 'INDI', id: cleanId };
-        people[cleanId] = {
-          id: cleanId,
-          name: '',
-          gender: '',
-          birth: '',
-          death: '',
-          familiesAsSpouse: [],
-          familiesAsChild: []
-        };
-        continue;
-      } else if (tag && (tag.startsWith('F') || tag.startsWith('@F'))) {
-        const cleanId = tag.replace(/@/g, '');
-        current = { type: 'FAM', id: cleanId };
-        families[cleanId] = {
-          id: cleanId,
-          husband: null,
-          wife: null,
-          children: []
-        };
-        continue;
+      if (personWithFamily) {
+        console.log(`\nБерем человека с семьей: ${personWithFamily[0]} - "${personWithFamily[1].name}"`);
+        const treeData = buildDescendantsTree(personWithFamily[0], data);
+        renderTree(treeData);
+      } else if (Object.keys(data.people).length > 0) {
+        // Берем просто первого человека
+        const firstId = Object.keys(data.people)[0];
+        console.log(`\nБерем первого человека: ${firstId}`);
+        const treeData = buildDescendantsTree(firstId, data);
+        renderTree(treeData);
+      } else {
+        console.error("Нет данных о людях!");
       }
     }
-
-    if (!current) continue;
-
-    // --- PERSON ---
-    if (current.type === 'INDI') {
-      const p = people[current.id];
-
-      if (tag === 'NAME') {
-        p.name = cleanValue.replace(/\//g, '').trim();
-      } else if (tag === 'SEX') {
-        p.gender = cleanValue;
-      } else if (tag === 'BIRT' || tag === 'DEAT') {
-        lastTag = tag;
-      } else if (tag === 'DATE' && lastTag) {
-        if (lastTag === 'BIRT') p.birth = cleanValue;
-        if (lastTag === 'DEAT') p.death = cleanValue;
-        lastTag = null;
-      } else if (tag === 'FAMS') {
-        const cleanFamId = cleanValue;
-        if (cleanFamId) p.familiesAsSpouse.push(cleanFamId);
-      } else if (tag === 'FAMC') {
-        const cleanFamId = cleanValue;
-        if (cleanFamId) p.familiesAsChild.push(cleanFamId);
-      }
-    }
-
-    // --- FAMILY ---
-    if (current.type === 'FAM') {
-      const f = families[current.id];
-      if (tag === 'HUSB') {
-        const cleanPersonId = cleanValue;
-        if (cleanPersonId) f.husband = cleanPersonId;
-      } else if (tag === 'WIFE') {
-        const cleanPersonId = cleanValue;
-        if (cleanPersonId) f.wife = cleanPersonId;
-      } else if (tag === 'CHIL') {
-        const cleanPersonId = cleanValue;
-        if (cleanPersonId) f.children.push(cleanPersonId);
-      }
-    }
-  }
-
-  // Дополнительная проверка связей
-  console.log("Парсинг завершен. Статистика:");
-  console.log("- Уникальных людей:", Object.keys(people).length);
-  console.log("- Уникальных семей:", Object.keys(families).length);
-  
-  // Проверяем несколько случайных записей
-  const sampleIds = Object.keys(people).slice(0, 3);
-  sampleIds.forEach(id => {
-    const p = people[id];
-    console.log(`Пример ${id}: "${p.name}", семьи: ${p.familiesAsSpouse.length}`);
+  })
+  .catch(error => {
+    console.error("Ошибка загрузки:", error);
   });
-
-  return { people, families };
-}
