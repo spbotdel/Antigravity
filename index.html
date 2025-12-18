@@ -9,7 +9,88 @@
 
 <body>
     <div id="tree"></div>
+    <!-- Добавьте после <div id="tree"></div> -->
+    <div class="controls">
+        <h4 style="margin: 0 0 10px 0;">Управление</h4>
+        <button onclick="zoomIn()">Увеличить (+)</button>
+        <button onclick="zoomOut()">Уменьшить (-)</button>
+        <button onclick="resetView()">Сбросить вид</button>
+        <button onclick="toggleColors()">Переключить цвета</button>
+        <button onclick="exportPNG()">Экспорт PNG</button>
+    </div>
 
+    <div class="legend">
+        <h4>Поколения:</h4>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #3498db;"></div>
+            <span>Основатель (Егор)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #2ecc71;"></div>
+            <span>Дети (4 человека)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #e74c3c;"></div>
+            <span>Внуки (6 человек)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #9b59b6;"></div>
+            <span>Правнуки (остальные)</span>
+        </div>
+    </div>
+
+    <script>
+        // Функции управления
+        let currentZoom = 1;
+        const zoomStep = 0.2;
+
+        function zoomIn() {
+            currentZoom += zoomStep;
+            d3.select('svg g').transition().duration(300)
+                .attr('transform', `scale(${currentZoom})`);
+        }
+
+        function zoomOut() {
+            currentZoom = Math.max(0.2, currentZoom - zoomStep);
+            d3.select('svg g').transition().duration(300)
+                .attr('transform', `scale(${currentZoom})`);
+        }
+
+        function resetView() {
+            currentZoom = 1;
+            d3.select('svg g').transition().duration(500)
+                .attr('transform', 'translate(80, 80) scale(1)');
+        }
+
+        function toggleColors() {
+            // Переключение между поколениями и семейными линиями
+            const rects = d3.selectAll('.node rect');
+            const currentFill = rects.attr('fill');
+            // Логика переключения цветов
+        }
+
+        function exportPNG() {
+            const svg = document.querySelector('svg');
+            const serializer = new XMLSerializer();
+            const source = serializer.serializeToString(svg);
+            const image = new Image();
+
+            image.onload = function () {
+                const canvas = document.createElement('canvas');
+                canvas.width = svg.clientWidth;
+                canvas.height = svg.clientHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(image, 0, 0);
+
+                const link = document.createElement('a');
+                link.download = 'семейное-древо.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            };
+
+            image.src = 'data:image/svg+xml;base64,' + btoa(source);
+        }
+    </script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script type="module" src="js/main.js"></script>
     <script type="module">
