@@ -192,43 +192,40 @@ export function renderTree(rootData) {
 
 // Вспомогательные функции
 // treeRenderer.js - функция getGenerationColor (заменить)
-function getGenerationColor(depth) {
-    // Приглушенная пастельная палитра
-    const colors = [
-        "#5D6D7E",    // Серо-синий (основатель) - спокойный, авторитетный
-        "#7D8A8E",    // Серо-зеленый (дети)
-        "#95A5A6",    // Серый (внуки)
-        "#AEB6BF",    // Светло-серый (правнуки)
-        "#D5DBDB",    // Очень светлый серый
-        "#EAEDED"     // Почти белый
-    ];
+// В renderTree, после создания foreignObject для имени, обновите:
 
-    // Или альтернативная теплая палитра:
-    const warmColors = [
-        "#8B7355",    // Коричневый (основатель)
-        "#A67C52",    // Коричнево-бежевый (дети)
-        "#C19A6B",    // Бежевый (внуки)
-        "#D4B483",    // Светло-бежевый (правнуки)
-        "#E6D5B8",    // Очень светлый бежевый
-        "#F5EBDC"     // Кремовый
-    ];
+// Имя с правильным цветом
+foreign.append("xhtml:div")
+    .style("width", "100%")
+    .style("height", "100%")
+    .style("display", "flex")
+    .style("align-items", "center")
+    .style("justify-content", "center")
+    .style("font-size", "14px")
+    .style("font-weight", "bold")
+    .style("color", d => getTextColor(getGenerationColor(d.depth))) // ← ВАЖНО!
+    .style("text-align", "center")
+    .style("word-break", "break-word")
+    .style("overflow", "hidden")
+    .style("padding", "0 5px")
+    .html(`<div style="max-width: 100%;">${d.data.name}</div>`);
 
-    // Или холодная синяя палитра:
-    const blueColors = [
-        "#2C3E50",    // Темно-синий (основатель)
-        "#34495E",    // Синий (дети)
-        "#5D6D7E",    // Серо-синий (внуки)
-        "#7F8C8D",    // Серый (правнуки)
-        "#BDC3C7",    // Светло-серый
-        "#ECF0F1"     // Почти белый
-    ];
-
-    // Выберите палитру (меняйте на warmColors или blueColors по желанию)
-    const palette = colors; // ← ИЗМЕНИТЕ ЗДЕСЬ НА warmColors ИЛИ blueColors
-
-    return palette[Math.min(depth, palette.length - 1)];
-}
-
+// Даты также с правильным цветом
+datesForeign.append("xhtml:div")
+    .style("width", "100%")
+    .style("height", "100%")
+    .style("display", "flex")
+    .style("align-items", "center")
+    .style("justify-content", "center")
+    .style("font-size", "11px")
+    .style("color", d => getTextColor(getGenerationColor(d.depth))) // ← ВАЖНО!
+    .style("text-align", "center")
+    .html(() => {
+        const dates = [];
+        if (d.data.birth) dates.push(`род. ${formatDate(d.data.birth)}`);
+        if (d.data.death) dates.push(`ум. ${formatDate(d.data.death)}`);
+        return dates.join(' / ');
+    });
 // Также обновите lightenColor для более мягкого эффекта
 function lightenColor(color) {
     const d3color = d3.color(color);
