@@ -2,31 +2,27 @@
 <html lang="ru">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Семейное древо Русяйкиных</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Семейное древо</title>
 
-    <!-- Подключаем D3 -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-
-    <!-- Подключаем Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        /* ===== СБРОС И БАЗОВЫЕ СТИЛИ ===== */
         * {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
+            box-sizing: border-box
         }
 
         html,
         body {
             width: 100%;
             height: 100%;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             overflow: hidden;
+            font-family: Segoe UI, Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)
         }
 
         .app-container {
@@ -34,48 +30,46 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            position: relative;
+            position: relative
         }
 
-        /* ===== ШАПКА ===== */
         .app-header {
-            background: rgba(44, 62, 80, 0.95);
-            color: white;
+            background: rgba(44, 62, 80, .95);
+            color: #fff;
             padding: 12px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .2);
             z-index: 100;
-            flex-shrink: 0;
+            flex-shrink: 0
         }
 
         .logo {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 12px
         }
 
         .logo i {
             font-size: 28px;
-            color: #3498db;
+            color: #3498db
         }
 
         .logo h1 {
             font-size: 20px;
-            font-weight: 600;
+            font-weight: 600
         }
 
         .controls {
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 20px
         }
 
-        /* Поиск */
         .search-container {
             position: relative;
-            min-width: 250px;
+            min-width: 250px
         }
 
         .search-container i {
@@ -83,7 +77,7 @@
             left: 12px;
             top: 50%;
             transform: translateY(-50%);
-            color: #95a5a6;
+            color: #95a5a6
         }
 
         #search-input {
@@ -91,20 +85,20 @@
             padding: 10px 15px 10px 40px;
             border: 2px solid #34495e;
             border-radius: 25px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
+            background: rgba(255, 255, 255, .1);
+            color: #fff;
             font-size: 14px;
-            transition: all 0.3s;
+            transition: all .3s
         }
 
         #search-input:focus {
             outline: none;
             border-color: #3498db;
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, .15)
         }
 
         #search-input::placeholder {
-            color: #95a5a6;
+            color: #95a5a6
         }
 
         .search-results {
@@ -112,13 +106,13 @@
             top: 100%;
             left: 0;
             right: 0;
-            background: white;
+            background: #fff;
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
             max-height: 300px;
             overflow-y: auto;
             display: none;
-            z-index: 1000;
+            z-index: 1000
         }
 
         .search-result-item {
@@ -128,21 +122,20 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: background 0.2s;
+            transition: background .2s
         }
 
         .search-result-item:hover {
-            background: #f5f5f5;
+            background: #f5f5f5
         }
 
         .search-result-item:last-child {
-            border-bottom: none;
+            border-bottom: none
         }
 
-        /* Кнопки управления */
         .control-buttons {
             display: flex;
-            gap: 8px;
+            gap: 8px
         }
 
         .ctrl-btn {
@@ -150,101 +143,94 @@
             height: 40px;
             border-radius: 50%;
             border: none;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
+            background: rgba(255, 255, 255, .1);
+            color: #fff;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 16px;
-            transition: all 0.3s;
+            transition: all .3s
         }
 
         .ctrl-btn:hover {
             background: #3498db;
-            transform: translateY(-2px);
+            transform: translateY(-2px)
         }
 
-        /* ===== ОСНОВНАЯ ОБЛАСТЬ ===== */
         .main-content {
             flex: 1;
             overflow: hidden;
-            position: relative;
+            position: relative
         }
 
         #tree-container {
             width: 100%;
             height: 100%;
-            overflow: hidden;
+            overflow: hidden
         }
 
         #tree {
             width: 100%;
-            height: 100%;
+            height: 100%
         }
 
-        /* ===== ФУТЕР ===== */
         .app-footer {
-            background: rgba(44, 62, 80, 0.9);
-            color: white;
+            background: rgba(44, 62, 80, .9);
+            color: #fff;
             padding: 10px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-size: 14px;
             flex-shrink: 0;
-            z-index: 90;
-        }
-
-        .status-info {
-            flex: 1;
+            z-index: 90
         }
 
         .legend {
             display: flex;
-            gap: 20px;
+            gap: 20px
         }
 
         .legend-item {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 8px
         }
 
         .color-box {
             width: 16px;
             height: 16px;
-            border-radius: 3px;
+            border-radius: 3px
         }
 
         .color-box.male {
-            background: #3498db;
+            background: #3498db
         }
 
         .color-box.female {
-            background: #e74c3c;
+            background: #e74c3c
         }
 
-        /* ===== ИНФОРМАЦИОННАЯ ПАНЕЛЬ (ВКЛАДКА СПРАВА) ===== */
+        /* info panel */
         .info-panel {
             position: fixed;
             top: 80px;
             right: 0;
             width: 360px;
             height: calc(100vh - 140px);
-            background: white;
+            background: #fff;
             border-radius: 14px 0 0 14px;
-            box-shadow: 0 12px 34px rgba(0, 0, 0, 0.25);
+            box-shadow: 0 12px 34px rgba(0, 0, 0, .25);
             z-index: 200;
             overflow: hidden;
-
             transform: translateX(calc(100% - 46px));
-            transition: transform 0.25s ease;
-            display: block;
+            transition: transform .25s ease;
+            display: block
         }
 
         .info-panel.open {
-            transform: translateX(0);
+            transform: translateX(0)
         }
 
         .info-tab {
@@ -253,43 +239,43 @@
             top: 110px;
             width: 46px;
             height: 140px;
-            background: rgba(44, 62, 80, 0.95);
+            background: rgba(44, 62, 80, .95);
             border-radius: 12px 0 0 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 10px 22px rgba(0, 0, 0, .18)
         }
 
         .info-tab i {
             color: #fff;
-            font-size: 18px;
+            font-size: 18px
         }
 
         .info-header {
             background: #2c3e50;
-            color: white;
+            color: #fff;
             padding: 15px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: sticky;
             top: 0;
-            z-index: 2;
+            z-index: 2
         }
 
         .info-header h3 {
             font-size: 16px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 10px
         }
 
         .close-btn {
             background: none;
             border: none;
-            color: white;
+            color: #fff;
             font-size: 24px;
             cursor: pointer;
             line-height: 1;
@@ -300,56 +286,55 @@
             align-items: center;
             justify-content: center;
             border-radius: 50%;
-            transition: background 0.3s;
+            transition: background .3s
         }
 
         .close-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, .1)
         }
 
         .info-content {
             padding: 20px;
             max-height: calc(100% - 56px);
-            overflow-y: auto;
+            overflow-y: auto
         }
 
         .empty-info {
             text-align: center;
             color: #7f8c8d;
-            padding: 20px;
+            padding: 20px
         }
 
         .empty-info i {
             font-size: 48px;
             margin-bottom: 15px;
-            opacity: 0.5;
+            opacity: .5
         }
 
-        /* Стили для информации о человеке */
         .person-details {
-            animation: fadeIn 0.3s ease;
+            animation: fadeIn .3s ease
         }
 
         @keyframes fadeIn {
             from {
-                opacity: 0;
+                opacity: 0
             }
 
             to {
-                opacity: 1;
+                opacity: 1
             }
         }
 
         .detail-row {
             margin-bottom: 15px;
             padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #eee
         }
 
         .detail-row:last-child {
             margin-bottom: 0;
             padding-bottom: 0;
-            border-bottom: none;
+            border-bottom: none
         }
 
         .detail-label {
@@ -358,12 +343,12 @@
             margin-bottom: 5px;
             font-size: 13px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: .5px
         }
 
         .detail-value {
             color: #34495e;
-            font-size: 15px;
+            font-size: 15px
         }
 
         .family-member {
@@ -371,333 +356,133 @@
             align-items: center;
             gap: 10px;
             padding: 8px 0;
-            border-bottom: 1px dashed #eee;
+            border-bottom: 1px dashed #eee
         }
 
         .family-member:last-child {
-            border-bottom: none;
+            border-bottom: none
         }
 
         .family-member i {
             color: #3498db;
-            width: 20px;
+            width: 20px
         }
 
-        /* мобильная адаптация для панели */
-        @media (max-width: 768px) {
-            .info-panel {
-                width: min(92vw, 420px);
-                top: auto;
-                bottom: 70px;
-                height: min(70vh, 520px);
-            }
-
-            .info-tab {
-                top: 90px;
-            }
-        }
-
-        /* ===== МОДАЛЬНОЕ ОКНО ПОМОЩИ ===== */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 500px;
-            max-height: 80vh;
-            overflow: hidden;
-            animation: modalAppear 0.3s ease;
-        }
-
-        @keyframes modalAppear {
-            from {
-                transform: scale(0.9);
-                opacity: 0;
-            }
-
-            to {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        .modal-header {
-            background: #2c3e50;
-            color: white;
-            padding: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .modal-header h2 {
-            font-size: 18px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .modal-body {
-            padding: 25px;
-            overflow-y: auto;
-            max-height: calc(80vh - 70px);
-        }
-
-        .modal-body h3 {
-            color: #2c3e50;
-            margin: 20px 0 10px 0;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .modal-body h3:first-child {
-            margin-top: 0;
-        }
-
-        .modal-body ul {
-            list-style: none;
-            padding-left: 20px;
-        }
-
-        .modal-body li {
-            margin-bottom: 8px;
-            padding-left: 20px;
-            position: relative;
-        }
-
-        .modal-body li:before {
-            content: "•";
-            color: #3498db;
-            font-weight: bold;
-            position: absolute;
-            left: 0;
-        }
-
-        .legend-modal {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 15px;
-        }
-
-        .legend-modal div {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        /* ===== СТИЛИ ДЛЯ D3 ДЕРЕВА ===== */
-        .node {
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .node rect {
-            fill: white;
-            stroke-width: 2;
-            rx: 8;
-            ry: 8;
-            filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.15));
-            transition: all 0.3s;
-        }
-
-        .node.male rect {
-            stroke: #3498db;
-        }
-
-        .node.female rect {
-            stroke: #e74c3c;
-        }
-
-        .node:hover rect {
-            stroke-width: 3;
-            filter: drop-shadow(2px 2px 10px rgba(0, 0, 0, 0.2));
-            transform: scale(1.05);
-        }
-
-        .node.selected rect {
-            stroke-width: 4;
-            stroke: #f39c12;
-            fill: #fff9e6;
-        }
-
-        .node text {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            pointer-events: none;
-            user-select: none;
-        }
-
-        .node .name {
-            font-weight: 600;
-            font-size: 14px;
-            fill: #2c3e50;
-        }
-
-        .node .dates {
-            font-size: 11px;
-            fill: #7f8c8d;
-        }
-
-        .node .toggle-btn {
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .node .toggle-btn circle {
-            fill: #27ae60;
-            stroke: #219653;
-            stroke-width: 1;
-        }
-
-        .node .toggle-btn text {
-            fill: white;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .node.collapsed .toggle-btn circle {
-            fill: #e74c3c;
-            stroke: #c0392b;
-        }
-
+        /* d3 */
         .link {
             fill: none;
-            stroke: rgba(44, 62, 80, 0.28);
+            stroke: rgba(44, 62, 80, .28);
             stroke-width: 2.2;
-            stroke-linecap: round;
+            stroke-linecap: round
         }
 
-        /* ===== АДАПТИВНОСТЬ ===== */
-        @media (max-width: 768px) {
+        .node {
+            cursor: pointer
+        }
+
+        .card-shadow {
+            filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, .15))
+        }
+
+        .node.selected .person-outer {
+            stroke: #f39c12 !important;
+            stroke-width: 4 !important
+        }
+
+        .node.selected .couple-outer {
+            stroke: #f39c12 !important;
+            stroke-width: 4 !important
+        }
+
+        @media (max-width:768px) {
             .app-header {
                 flex-direction: column;
                 gap: 15px;
-                padding: 15px;
+                padding: 15px
             }
 
             .controls {
                 width: 100%;
                 flex-direction: column;
-                gap: 15px;
+                gap: 15px
             }
 
             .search-container {
-                width: 100%;
+                width: 100%
             }
 
             .app-footer {
                 flex-direction: column;
                 gap: 10px;
                 text-align: center;
-                padding: 15px;
+                padding: 15px
             }
 
             .legend {
-                justify-content: center;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .logo h1 {
-                font-size: 16px;
+                justify-content: center
             }
 
-            .control-buttons {
-                flex-wrap: wrap;
-                justify-content: center;
+            .info-panel {
+                width: min(92vw, 420px);
+                top: auto;
+                bottom: 70px;
+                height: min(70vh, 520px)
             }
 
-            .modal-content {
-                width: 95%;
+            .info-tab {
+                top: 90px
             }
         }
     </style>
 </head>
 
 <body>
-    <!-- Главный контейнер -->
     <div class="app-container">
-        <!-- Шапка с управлением -->
         <header class="app-header">
             <div class="logo">
                 <i class="fas fa-tree"></i>
-                <h1>Семейное древо Русяйкиных</h1>
+                <h1>Семейное древо</h1>
             </div>
 
             <div class="controls">
-                <!-- Поиск -->
                 <div class="search-container">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="search-input" placeholder="Найти человека...">
+                    <input id="search-input" type="text" placeholder="Найти человека..." />
                     <div id="search-results" class="search-results"></div>
                 </div>
 
-                <!-- Кнопки управления -->
                 <div class="control-buttons">
-                    <button id="zoom-in" class="ctrl-btn" title="Увеличить">
-                        <i class="fas fa-search-plus"></i>
-                    </button>
-                    <button id="zoom-out" class="ctrl-btn" title="Уменьшить">
-                        <i class="fas fa-search-minus"></i>
-                    </button>
-                    <button id="reset-view" class="ctrl-btn" title="Сбросить вид">
-                        <i class="fas fa-expand-arrows-alt"></i>
-                    </button>
-                    <button id="export-btn" class="ctrl-btn" title="Сохранить как PNG">
-                        <i class="fas fa-download"></i>
-                    </button>
-                    <button id="help-btn" class="ctrl-btn" title="Помощь">
-                        <i class="fas fa-question-circle"></i>
-                    </button>
+                    <button id="zoom-in" class="ctrl-btn" title="Увеличить"><i class="fas fa-search-plus"></i></button>
+                    <button id="zoom-out" class="ctrl-btn" title="Уменьшить"><i
+                            class="fas fa-search-minus"></i></button>
+                    <button id="reset-view" class="ctrl-btn" title="Сбросить вид"><i
+                            class="fas fa-expand-arrows-alt"></i></button>
                 </div>
             </div>
         </header>
 
-        <!-- Основное содержимое - только дерево -->
         <main class="main-content">
             <div id="tree-container">
                 <div id="tree"></div>
             </div>
         </main>
 
-        <!-- Статусная строка внизу -->
         <footer class="app-footer">
             <div class="status-info">
-                <span id="person-count">0</span> человек в дереве |
+                <span id="person-count">0</span> человек |
                 Выбрано: <span id="selected-person">никто</span> |
                 <span id="tree-stats">Загрузка...</span>
             </div>
             <div class="legend">
                 <div class="legend-item">
-                    <div class="color-box male"></div>
-                    <span>Мужчина</span>
+                    <div class="color-box male"></div><span>Мужчина</span>
                 </div>
                 <div class="legend-item">
-                    <div class="color-box female"></div>
-                    <span>Женщина</span>
+                    <div class="color-box female"></div><span>Женщина</span>
                 </div>
             </div>
         </footer>
 
-        <!-- Всплывающая панель с информацией (вкладка справа) -->
         <div id="info-panel" class="info-panel">
             <div id="info-tab" class="info-tab" title="Информация"><i class="fas fa-user"></i></div>
             <div class="info-header">
@@ -711,105 +496,51 @@
                 </div>
             </div>
         </div>
-
-        <!-- Модальное окно помощи (появляется по кнопке) -->
-        <div id="help-modal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2><i class="fas fa-question-circle"></i> Как пользоваться</h2>
-                    <button class="close-modal">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <h3><i class="fas fa-mouse-pointer"></i> Управление деревом:</h3>
-                    <ul>
-                        <li><strong>Клик на человека</strong> — открыть ветку (предки слева, потомки справа) и показать
-                            информацию</li>
-                        <li><strong>Двойной клик на человека</strong> — развернуть/свернуть потомков (в полном режиме)
-                        </li>
-                        <li><strong>На телефоне: долгое нажатие</strong> — развернуть/свернуть ветку</li>
-                        <li><strong>Перетаскивание</strong> — перемещение по дереву</li>
-                        <li><strong>Колесико мыши</strong> — масштабирование</li>
-                    </ul>
-
-                    <h3><i class="fas fa-search"></i> Поиск:</h3>
-                    <p>Введите имя в поисковую строку для быстрого перехода к человеку</p>
-
-                    <h3><i class="fas fa-palette"></i> Обозначения:</h3>
-                    <div class="legend-modal">
-                        <div>
-                            <div class="color-box male"></div> Мужчина
-                        </div>
-                        <div>
-                            <div class="color-box female"></div> Женщина
-                        </div>
-                        <div><i class="fas fa-plus-circle" style="color: #27ae60;"></i> Развернуть ветку</div>
-                        <div><i class="fas fa-minus-circle" style="color: #e74c3c;"></i> Свернуть ветку</div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
-    <!-- ВСЕ СКРИПТЫ БУДУТ ЗДЕСЬ -->
     <script>
-        // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
+        /* =========================
+           DATA + STATE
+        ========================= */
         let allData = null;
-        let treeData = null;
-        let currentPersonId = null;
         let zoom = null;
-        let currentScale = 1;
-        let collapsedNodes = new Set();
 
-        // ===== РЕЖИМ "ВЕТКА" (ancestors + descendants) =====
-        let fullTreeData = null;        // исходное дерево (потомки от root)
-        let rootPersonId = null;        // корневой человек (для возврата)
-        let isBranchMode = false;       // режим ветки
-        let branchFocusId = null;       // выбранный человек (центр ветки)
-        let branchColorById = new Map();// цвета ветвей в режиме ветки
+        let currentPersonId = null;
 
-        // ===== ОСНОВНАЯ ФУНКЦИЯ =====
+        let rootPersonId = null;
+        let isBranchMode = false;
+        let branchFocusId = null;
+        let branchColorById = new Map();
+
+        /* =========================
+           INIT
+        ========================= */
         async function initApp() {
             console.log('🚀 Загрузка семейного древа...');
-
             try {
-                // Загружаем GEDCOM файл
                 const response = await fetch('./3.ged');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 const text = await response.text();
 
-                // Парсим данные
                 allData = parseGedcom(text);
                 console.log('✅ Загружено людей:', Object.keys(allData.people).length);
 
-                // Находим корневого человека
-                let rootId = findRootPerson(allData);
-                console.log('🌳 Корневой человек:', rootId, allData.people[rootId]?.name);
+                rootPersonId = findRootPerson(allData);
+                console.log('🌳 Корневой человек:', rootPersonId, allData.people[rootPersonId]?.name);
 
-                // Строим дерево потомков
-                treeData = buildDescendantsTree(rootId, allData);
-
-                // Сохраняем исходное дерево для возврата из режима "ветка"
-                rootPersonId = rootId;
-                fullTreeData = structuredClone(treeData);
-
-                // Рендерим дерево
-                renderTree();
-
-                // Настраиваем управление
+                renderFullTree();
                 setupControls();
-
-                // Обновляем статистику
+                setupSearch();
                 updateStats();
-
-            } catch (error) {
-                console.error('❌ Ошибка загрузки:', error);
-                showError('Не удалось загрузить данные. Проверьте файл 3.ged');
+            } catch (err) {
+                console.error('❌ Ошибка загрузки:', err);
+                document.getElementById('tree-stats').textContent = 'Ошибка';
             }
         }
 
-        // ===== ПАРСЕР GEDCOM =====
+        /* =========================
+           GEDCOM PARSER
+        ========================= */
         function parseGedcom(text) {
             const people = {};
             const families = {};
@@ -818,8 +549,7 @@
             let currentEvent = null;
 
             const lines = text.split(/\r?\n/);
-
-            for (let line of lines) {
+            for (const line of lines) {
                 if (!line.trim()) continue;
 
                 const match = line.match(/^\s*(\d+)\s+(@?[A-Za-z0-9_]+@?)(?:\s+(.+))?$/);
@@ -829,104 +559,51 @@
                 let tag = match[2];
                 const value = match[3] || '';
 
-                // Убираем @ из ID
-                if (tag.startsWith('@') && tag.endsWith('@')) {
-                    tag = tag.slice(1, -1);
-                }
+                if (tag.startsWith('@') && tag.endsWith('@')) tag = tag.slice(1, -1);
                 const cleanValue = value.replace(/@/g, '');
 
-                // Обработка уровня 0
                 if (level === 0) {
-                    inEvent = false;
-                    currentEvent = null;
+                    inEvent = false; currentEvent = null;
 
                     if (value.includes('INDI')) {
                         current = { type: 'INDI', id: tag };
-                        people[tag] = {
-                            id: tag,
-                            name: '',
-                            gender: '',
-                            birth: '',
-                            death: '',
-                            familiesAsSpouse: [],
-                            familiesAsChild: []
-                        };
+                        people[tag] = { id: tag, name: '', gender: '', birth: '', death: '', familiesAsSpouse: [], familiesAsChild: [] };
                     } else if (value.includes('FAM')) {
                         current = { type: 'FAM', id: tag };
-                        families[tag] = {
-                            id: tag,
-                            husband: null,
-                            wife: null,
-                            children: [],
-                            marriage: ''
-                        };
-                    } else {
-                        current = null;
-                    }
+                        families[tag] = { id: tag, husband: null, wife: null, children: [], marriage: '' };
+                    } else current = null;
                     continue;
                 }
 
                 if (!current) continue;
 
-                // Обработка событий
                 if (level === 1) {
-                    inEvent = false;
-                    currentEvent = null;
-
-                    if (tag === 'BIRT') {
-                        inEvent = true;
-                        currentEvent = 'birth';
-                    } else if (tag === 'DEAT') {
-                        inEvent = true;
-                        currentEvent = 'death';
-                    } else if (tag === 'MARR' && current.type === 'FAM') {
-                        inEvent = true;
-                        currentEvent = 'marriage';
-                    }
+                    inEvent = false; currentEvent = null;
+                    if (tag === 'BIRT') { inEvent = true; currentEvent = 'birth'; }
+                    else if (tag === 'DEAT') { inEvent = true; currentEvent = 'death'; }
+                    else if (tag === 'MARR' && current.type === 'FAM') { inEvent = true; currentEvent = 'marriage'; }
                 }
 
-                // Обработка данных человека
                 if (current.type === 'INDI') {
-                    const person = people[current.id];
-
+                    const p = people[current.id];
                     if (level === 1) {
-                        switch (tag) {
-                            case 'NAME':
-                                person.name = cleanValue.replace(/\//g, '');
-                                break;
-                            case 'SEX':
-                                person.gender = cleanValue;
-                                break;
-                            case 'FAMS':
-                                person.familiesAsSpouse.push(cleanValue);
-                                break;
-                            case 'FAMC':
-                                person.familiesAsChild.push(cleanValue);
-                                break;
-                        }
+                        if (tag === 'NAME') p.name = cleanValue.replace(/\//g, '');
+                        if (tag === 'SEX') p.gender = cleanValue;
+                        if (tag === 'FAMS') p.familiesAsSpouse.push(cleanValue);
+                        if (tag === 'FAMC') p.familiesAsChild.push(cleanValue);
                     } else if (level === 2 && inEvent && tag === 'DATE') {
-                        person[currentEvent] = cleanValue;
+                        p[currentEvent] = cleanValue;
                     }
                 }
 
-                // Обработка данных семьи
                 if (current.type === 'FAM') {
-                    const family = families[current.id];
-
+                    const f = families[current.id];
                     if (level === 1) {
-                        switch (tag) {
-                            case 'HUSB':
-                                family.husband = cleanValue;
-                                break;
-                            case 'WIFE':
-                                family.wife = cleanValue;
-                                break;
-                            case 'CHIL':
-                                family.children.push(cleanValue);
-                                break;
-                        }
+                        if (tag === 'HUSB') f.husband = cleanValue;
+                        if (tag === 'WIFE') f.wife = cleanValue;
+                        if (tag === 'CHIL') f.children.push(cleanValue);
                     } else if (level === 2 && inEvent && tag === 'DATE') {
-                        family[currentEvent] = cleanValue;
+                        f[currentEvent] = cleanValue;
                     }
                 }
             }
@@ -934,56 +611,154 @@
             return { people, families };
         }
 
-        // ===== ПОМОЩНИК: НАЙТИ КОРНЕВОГО ЧЕЛОВЕКА =====
         function findRootPerson(data) {
-            // Ищем человека без родителей (нет FAMC)
-            for (let id in data.people) {
-                if (data.people[id].familiesAsChild.length === 0) {
-                    return id;
-                }
+            for (const id in data.people) {
+                if ((data.people[id].familiesAsChild || []).length === 0) return id;
             }
-            // Если не нашли, берем первого
             return Object.keys(data.people)[0];
         }
 
-        // ===== ПОМОЩНИК: ПОСТРОИТЬ ДЕРЕВО ПОТОМКОВ =====
-        function buildDescendantsTree(personId, data, visited = new Set()) {
+        /* =========================
+           TREE MODEL: PERSON -> COUPLE(FAM) -> CHILDREN
+        ========================= */
+        function buildDescendantsWithCouples(personId, data, visited = new Set()) {
             if (!personId || visited.has(personId)) return null;
             visited.add(personId);
 
-            const person = data.people[personId];
-            if (!person) return null;
+            const p = data.people[personId];
+            if (!p) return null;
 
             const node = {
-                id: person.id,
-                name: person.name || 'Без имени',
-                birth: person.birth || '',
-                death: person.death || '',
-                gender: person.gender || '',
+                type: 'person',
+                id: p.id,
+                name: p.name || 'Без имени',
+                gender: p.gender || '',
+                birth: p.birth || '',
+                death: p.death || '',
                 children: []
             };
 
-            // Находим детей через семьи, где человек супруг
-            const spouseFams = person.familiesAsSpouse || [];
-            for (let famId of spouseFams) {
+            for (const famId of (p.familiesAsSpouse || [])) {
                 const fam = data.families[famId];
                 if (!fam) continue;
 
-                for (let childId of fam.children) {
-                    const childNode = buildDescendantsTree(childId, data, new Set(visited));
-                    if (childNode) node.children.push(childNode);
+                const couple = {
+                    type: 'couple',
+                    famId,
+                    husbandId: fam.husband || null,
+                    wifeId: fam.wife || null,
+                    marriage: fam.marriage || '',
+                    children: []
+                };
+
+                for (const childId of (fam.children || [])) {
+                    const childNode = buildDescendantsWithCouples(childId, data, new Set(visited));
+                    if (childNode) couple.children.push(childNode);
                 }
+
+                if (!couple.children.length) delete couple.children;
+                node.children.push(couple);
             }
 
-            if (node.children.length === 0) {
-                delete node.children;
-            }
+            if (!node.children.length) delete node.children;
             return node;
         }
 
-        // ===== РЕЖИМ "ВЕТКА": один клик показывает предков слева и потомков справа =====
+        // ancestors couples chain for branch mode
+        function buildAncestorsCouplesForPerson(personId, data) {
+            const focus = data.people[personId];
+            const famc = focus?.familiesAsChild?.[0];
+            if (!famc) return null;
+
+            const fam = data.families[famc];
+            if (!fam) return null;
+
+            const couple = {
+                type: 'couple',
+                famId: fam.id,
+                husbandId: fam.husband || null,
+                wifeId: fam.wife || null,
+                marriage: fam.marriage || '',
+                children: []
+            };
+
+            const fatherId = fam.husband || null;
+            const motherId = fam.wife || null;
+
+            const fatherCouple = fatherId ? buildAncestorsCouplesForPerson(fatherId, data) : null;
+            const motherCouple = motherId ? buildAncestorsCouplesForPerson(motherId, data) : null;
+
+            if (fatherCouple) couple.children.push(fatherCouple);
+            if (motherCouple) couple.children.push(motherCouple);
+
+            if (!couple.children.length) delete couple.children;
+            return couple;
+        }
+
+        /* =========================
+           BRANCH COLORS
+        ========================= */
+        function computeBranchColorsForBranchMode(focusId) {
+            const map = new Map();
+            const palette = (n) => Array.from({ length: n }, (_, i) => `hsl(${Math.round(i * 360 / n)}, 70%, 45%)`);
+
+            // descendants: each union under focus -> different color
+            const desc = buildDescendantsWithCouples(focusId, allData);
+            const unions = desc?.children || [];
+            const colors = palette(Math.max(3, unions.length || 3));
+
+            unions.forEach((u, idx) => {
+                const color = colors[idx % colors.length];
+
+                if (u.husbandId) map.set(u.husbandId, color);
+                if (u.wifeId) map.set(u.wifeId, color);
+
+                const walk = (n) => {
+                    if (!n) return;
+                    if (n.type === 'person') map.set(n.id, color);
+                    (n.children || []).forEach(walk);
+                };
+                (u.children || []).forEach(walk);
+            });
+
+            // ancestors: father/mother lines
+            const fatherColor = "hsl(210, 75%, 40%)";
+            const motherColor = "hsl(340, 75%, 45%)";
+
+            const parentCouple = buildAncestorsCouplesForPerson(focusId, allData);
+            if (parentCouple) {
+                if (parentCouple.husbandId) markLine(parentCouple.husbandId, fatherColor);
+                if (parentCouple.wifeId) markLine(parentCouple.wifeId, motherColor);
+            }
+
+            function markLine(startId, color) {
+                let cur = startId;
+                const seen = new Set();
+                while (cur && !seen.has(cur)) {
+                    seen.add(cur);
+                    map.set(cur, color);
+
+                    const p = allData.people[cur];
+                    const famc = p?.familiesAsChild?.[0];
+                    if (!famc) break;
+                    const fam = allData.families[famc];
+                    if (!fam) break;
+
+                    if (fam.husband) map.set(fam.husband, color);
+                    if (fam.wife) map.set(fam.wife, color);
+
+                    cur = (color === fatherColor) ? fam.husband : fam.wife;
+                }
+            }
+
+            map.set(focusId, "hsl(35, 90%, 45%)"); // focus accent
+            return map;
+        }
+
+        /* =========================
+           UI ACTIONS
+        ========================= */
         function onPersonClick(personId) {
-            // всегда показываем инфо
             selectPerson(personId);
 
             if (!isBranchMode) {
@@ -993,683 +768,465 @@
                 return;
             }
 
-            // если уже в ветке
             if (branchFocusId === personId) {
-                // повторный клик по тому же — вернуть исходное дерево
                 isBranchMode = false;
                 branchFocusId = null;
-                treeData = structuredClone(fullTreeData);
-                renderTree();
+                renderFullTree();
                 return;
             }
 
-            // клик по другому человеку — перестроить ветку на него
             branchFocusId = personId;
             renderBranchView(personId);
         }
 
-        function buildAncestorsTree(personId, data, visited = new Set()) {
-            if (!personId || visited.has(personId)) return null;
-            visited.add(personId);
-
-            const p = data.people[personId];
-            if (!p) return null;
-
-            const node = {
-                id: p.id,
-                name: p.name || "Без имени",
-                birth: p.birth || "",
-                death: p.death || "",
-                gender: p.gender || "",
-                children: []
-            };
-
-            const famc = (p.familiesAsChild && p.familiesAsChild[0]) ? p.familiesAsChild[0] : null;
-            if (!famc) return node;
-
-            const fam = data.families[famc];
-            if (!fam) return node;
-
-            const fatherId = fam.husband || null;
-            const motherId = fam.wife || null;
-
-            const fatherNode = fatherId ? buildAncestorsTree(fatherId, data, new Set(visited)) : null;
-            const motherNode = motherId ? buildAncestorsTree(motherId, data, new Set(visited)) : null;
-
-            if (fatherNode) node.children.push(fatherNode);
-            if (motherNode) node.children.push(motherNode);
-
-            return node;
+        function selectPerson(personId) {
+            currentPersonId = personId;
+            const p = allData.people[personId];
+            document.getElementById('selected-person').textContent = p?.name || 'неизвестно';
+            showPersonInfo(personId);
         }
 
-        function computeBranchColorsForBranchMode(focusId) {
-            const map = new Map();
-            const palette = (n) => Array.from({ length: n }, (_, i) => `hsl(${Math.round(i * 360 / n)}, 70%, 45%)`);
-
-            // предки: отец / мать
-            const fatherColor = "hsl(210, 75%, 40%)";
-            const motherColor = "hsl(340, 75%, 45%)";
-
-            const anc = buildAncestorsTree(focusId, allData);
-            if (anc && anc.children && anc.children.length) {
-                const [fNode, mNode] = anc.children;
-                const walk = (node, color) => {
-                    if (!node) return;
-                    map.set(node.id, color);
-                    (node.children || []).forEach(ch => walk(ch, color));
-                };
-                if (fNode) walk(fNode, fatherColor);
-                if (mNode) walk(mNode, motherColor);
-            }
-
-            // потомки: каждая ветка от ребенка — свой цвет
-            const desc = buildDescendantsTree(focusId, allData);
-            const kids = (desc && desc.children) ? desc.children : [];
-            const colors = palette(Math.max(3, kids.length || 3));
-
-            kids.forEach((kid, idx) => {
-                const color = colors[idx % colors.length];
-                const walk = (node) => {
-                    if (!node) return;
-                    map.set(node.id, color);
-                    (node.children || []).forEach(walk);
-                };
-                walk(kid);
-            });
-
-            // фокусный человек — акцент
-            map.set(focusId, "hsl(35, 90%, 45%)");
-
-            return map;
+        /* =========================
+           RENDER
+        ========================= */
+        function clearTree() {
+            d3.select("#tree").selectAll("*").remove();
         }
 
-        function drawPersonCard(selection, isCenter = false) {
-            selection.append("rect")
-                .attr("x", -105)
-                .attr("y", -42)
-                .attr("width", 210)
-                .attr("height", 84)
-                .attr("rx", 14)
-                .attr("ry", 14)
-                .attr("fill", "white")
-                .attr("stroke-width", isCenter ? 4 : 2)
-                .attr("stroke", d => {
-                    const id = d.data?.id || d.id;
-                    return branchColorById.get(id) || (
-                        (d.data?.gender === 'M' ? '#3498db' : d.data?.gender === 'F' ? '#e74c3c' : '#95a5a6')
-                    );
-                });
-
-            selection.append("foreignObject")
-                .attr("x", -97)
-                .attr("y", -36)
-                .attr("width", 194)
-                .attr("height", 72)
-                .append("xhtml:div")
-                .style("width", "100%")
-                .style("height", "100%")
-                .style("display", "flex")
-                .style("flex-direction", "column")
-                .style("justify-content", "center")
-                .style("align-items", "center")
-                .style("padding", "6px")
-                .html(d => {
-                    const data = d.data || d;
-                    const name = `<div style="font-weight:700;font-size:14px;text-align:center;line-height:1.2;word-break:break-word;">
-                        ${data.name || "Без имени"}
-                    </div>`;
-
-                    const dates = [];
-                    if (data.birth) dates.push(`род. ${formatDate(data.birth)}`);
-                    if (data.death) dates.push(`ум. ${formatDate(data.death)}`);
-
-                    const datesHtml = dates.length
-                        ? `<div style="margin-top:4px;font-size:11px;color:#7f8c8d;text-align:center;line-height:1.2;">
-                            ${dates.join(" / ")}
-                        </div>`
-                        : "";
-
-                    return name + datesHtml;
-                });
+        function renderFullTree() {
+            branchColorById = new Map(); // full mode: default male/female strokes
+            const data = buildDescendantsWithCouples(rootPersonId, allData);
+            renderHierarchyTree(data, { mode: 'full' });
         }
 
         function renderBranchView(focusId) {
-            const container = d3.select("#tree");
-            container.selectAll("*").remove();
+            branchColorById = computeBranchColorsForBranchMode(focusId);
 
+            const centerPerson = makePersonNode(focusId);
+            const descData = buildDescendantsWithCouples(focusId, allData);
+
+            const ancCouple = buildAncestorsCouplesForPerson(focusId, allData);
+            const ancRoot = structuredClone(centerPerson);
+            if (ancCouple) ancRoot.children = [ancCouple]; else delete ancRoot.children;
+
+            renderBranchHierarchy(centerPerson, descData, ancRoot);
+        }
+
+        function makePersonNode(personId) {
+            const p = allData.people[personId];
+            return {
+                type: 'person',
+                id: personId,
+                name: p?.name || 'Без имени',
+                gender: p?.gender || '',
+                birth: p?.birth || '',
+                death: p?.death || ''
+            };
+        }
+
+        function renderHierarchyTree(data) {
+            clearTree();
+            const container = d3.select("#tree");
             const width = container.node().clientWidth;
             const height = container.node().clientHeight;
 
             const svg = container.append("svg")
-                .attr("width", width)
-                .attr("height", height)
+                .attr("width", width).attr("height", height)
                 .attr("viewBox", `0 0 ${width} ${height}`);
 
             const g = svg.append("g");
 
-            zoom = d3.zoom()
-                .scaleExtent([0.1, 3])
-                .on("zoom", (event) => {
-                    currentScale = event.transform.k;
-                    g.attr("transform", event.transform);
-                });
-
+            zoom = d3.zoom().scaleExtent([0.1, 3]).on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            });
             svg.call(zoom);
 
-            // цвета ветвей в режиме ветки
-            branchColorById = computeBranchColorsForBranchMode(focusId);
-
             const treeLayout = d3.tree()
-                .nodeSize([120, 280])
-                .separation((a, b) => a.parent === b.parent ? 1.2 : 1.5);
+                .nodeSize([120, 290])
+                .separation((a, b) => a.parent === b.parent ? 1.15 : 1.35);
 
-            const descendantsData = buildDescendantsTree(focusId, allData);
-            const ancestorsData = buildAncestorsTree(focusId, allData);
+            const root = d3.hierarchy(data);
+            treeLayout(root);
 
-            const descRoot = d3.hierarchy(descendantsData);
-            treeLayout(descRoot);
-
-            const ancRoot = d3.hierarchy(ancestorsData);
-            treeLayout(ancRoot);
-            ancRoot.descendants().forEach(d => { d.y = -d.y; });
-
-            const descNodes = descRoot.descendants().filter(d => d.data.id !== focusId);
-            const ancNodes = ancRoot.descendants().filter(d => d.data.id !== focusId);
-
-            const descLinks = descRoot.links().filter(l => l.target.data.id !== focusId);
-            const ancLinks = ancRoot.links().filter(l => l.target.data.id !== focusId);
-
-            const cx = width / 2;
-            const cy = height / 2;
+            const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
 
             g.selectAll(".link")
-                .data([...descLinks, ...ancLinks], d => `${d.source.data.id}-${d.target.data.id}`)
+                .data(root.links(), d => `${keyNode(d.source.data)}-${keyNode(d.target.data)}`)
                 .enter()
                 .append("path")
                 .attr("class", "link")
-                .attr("d", d3.linkHorizontal()
-                    .x(d => cx + d.y)
-                    .y(d => cy + d.x)
-                );
-
-            const sideNodes = [...descNodes, ...ancNodes];
+                .attr("d", d => {
+                    const o = { x: d.source.x, y: d.source.y };
+                    return linkGen({ source: o, target: o });
+                })
+                .transition().duration(350)
+                .attr("d", d => linkGen({ source: { x: d.source.x, y: d.source.y }, target: { x: d.target.x, y: d.target.y } }));
 
             const node = g.selectAll(".node")
-                .data(sideNodes, d => d.data.id)
+                .data(root.descendants(), d => keyNode(d.data))
                 .enter()
                 .append("g")
-                .attr("class", d => `node ${d.data.gender || 'unknown'}`)
-                .attr("data-id", d => d.data.id)
-                .attr("transform", d => `translate(${cx + d.y},${cy + d.x})`)
-                .on("click", function (event, d) {
-                    event.stopPropagation();
-                    onPersonClick(d.data.id);
-                });
+                .attr("class", d => `node ${d.data.type}`)
+                .attr("transform", d => `translate(${d.y},${d.x})`);
 
-            drawPersonCard(node);
+            drawNode(node);
 
-            const centerPerson = allData.people[focusId] || { id: focusId, name: "Без имени" };
-
-            const centerNode = g.append("g")
-                .attr("class", `node selected ${centerPerson.gender || 'unknown'}`)
-                .attr("data-id", focusId)
-                .attr("transform", `translate(${cx},${cy})`)
-                .on("click", function (event) {
-                    event.stopPropagation();
-                    onPersonClick(focusId);
-                });
-
-            // для центра "подложим" данные в формате d.data
-            centerNode.datum({ data: { ...centerPerson, id: focusId } });
-            drawPersonCard(centerNode, true);
-
-            // авто-вписывание
-            const bounds = g.node().getBBox();
-            const scale = Math.min(
-                0.92,
-                (width - 120) / bounds.width,
-                (height - 120) / bounds.height
-            );
-
-            const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
-            const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
-
-            svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+            fitToScreen(svg, g, width, height);
         }
 
-        // ===== РЕНДЕР ДЕРЕВА =====
-        function renderTree() {
-            // Очищаем контейнер
-            d3.select("#tree").selectAll("*").remove();
-
+        function renderBranchHierarchy(centerPerson, descData, ancRootData) {
+            clearTree();
             const container = d3.select("#tree");
             const width = container.node().clientWidth;
             const height = container.node().clientHeight;
 
-            // Создаем SVG
             const svg = container.append("svg")
-                .attr("width", width)
-                .attr("height", height)
+                .attr("width", width).attr("height", height)
                 .attr("viewBox", `0 0 ${width} ${height}`);
 
             const g = svg.append("g");
 
-            // Настраиваем zoom
-            zoom = d3.zoom()
-                .scaleExtent([0.1, 3])
-                .on("zoom", (event) => {
-                    currentScale = event.transform.k;
-                    g.attr("transform", event.transform);
-                });
-
+            zoom = d3.zoom().scaleExtent([0.1, 3]).on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            });
             svg.call(zoom);
 
-            // Создаем layout дерева
             const treeLayout = d3.tree()
-                .nodeSize([100, 250])
-                .separation((a, b) => a.parent === b.parent ? 1 : 1.5);
+                .nodeSize([120, 290])
+                .separation((a, b) => a.parent === b.parent ? 1.15 : 1.35);
 
-            // Создаем hierarchy
-            const root = d3.hierarchy(treeData);
+            const descRoot = d3.hierarchy(descData);
+            treeLayout(descRoot);
 
-            // Применяем layout
-            treeLayout(root);
+            const ancRoot = d3.hierarchy(ancRootData);
+            treeLayout(ancRoot);
+            ancRoot.descendants().forEach(d => { d.y = -d.y; });
 
-            // Центрируем дерево
-            const xExtent = d3.extent(root.descendants(), d => d.x);
-            const yExtent = d3.extent(root.descendants(), d => d.y);
+            const focusId = branchFocusId;
 
-            const treeWidth = yExtent[1] - yExtent[0];
-            const treeHeight = xExtent[1] - xExtent[0];
+            const descNodes = descRoot.descendants().filter(d => !(d.data.type === 'person' && d.data.id === focusId));
+            const ancNodes = ancRoot.descendants().filter(d => !(d.data.type === 'person' && d.data.id === focusId));
 
-            const xOffset = (width - treeWidth) / 2 - yExtent[0];
-            const yOffset = (height - treeHeight) / 2 - xExtent[0];
+            const descLinks = descRoot.links().filter(l => !(l.target.data.type === 'person' && l.target.data.id === focusId));
+            const ancLinks = ancRoot.links().filter(l => !(l.target.data.type === 'person' && l.target.data.id === focusId));
 
-            // Устанавливаем начальное положение
-            const initialTransform = d3.zoomIdentity.translate(xOffset, yOffset).scale(0.8);
-            svg.call(zoom.transform, initialTransform);
+            const cx = width / 2, cy = height / 2;
 
-            // Функция обновления (для анимации)
-            function update(source) {
-                // === ОТОБРАЖЕНИЕ ЛИНИЙ ===
-                const links = source.links();
+            const linkGen = d3.linkHorizontal()
+                .x(p => cx + p.y)
+                .y(p => cy + p.x);
 
-                // генератор линий: x = y, y = x (т.к. дерево "вправо")
-                const linkGen = d3.linkHorizontal()
-                    .x(d => d.y)
-                    .y(d => d.x);
+            g.selectAll(".link")
+                .data([...descLinks, ...ancLinks], d => `${keyNode(d.source.data)}-${keyNode(d.target.data)}`)
+                .enter()
+                .append("path")
+                .attr("class", "link")
+                .attr("d", d => linkGen({ source: { x: d.source.x, y: d.source.y }, target: { x: d.source.x, y: d.source.y } }))
+                .transition().duration(350)
+                .attr("d", d => linkGen({ source: { x: d.source.x, y: d.source.y }, target: { x: d.target.x, y: d.target.y } }));
 
-                const link = g.selectAll(".link")
-                    .data(links, d => d.target.data.id);
+            const side = g.selectAll(".node")
+                .data([...descNodes, ...ancNodes], d => keyNode(d.data))
+                .enter()
+                .append("g")
+                .attr("class", d => `node ${d.data.type}`)
+                .attr("transform", d => `translate(${cx + d.y},${cy + d.x})`);
 
-                // Вход: рисуем линию "из точки" (у источника), чтобы анимация была красивой
-                link.enter()
-                    .append("path")
-                    .attr("class", "link")
-                    .attr("d", d => {
-                        const o = { x: d.source.x, y: d.source.y };
-                        return linkGen({ source: o, target: o });
-                    })
-                    .merge(link)
-                    .transition()
-                    .duration(400)
-                    .attr("d", linkGen);
+            drawNode(side);
 
-                // Выход
-                link.exit().remove();
+            const centerSel = g.append("g")
+                .attr("class", "node person selected")
+                .attr("transform", `translate(${cx},${cy})`);
+            centerSel.datum({ data: centerPerson });
+            drawNode(centerSel);
 
-                // === ОТОБРАЖЕНИЕ УЗЛОВ ===
-                const nodes = source.descendants();
+            fitToScreen(svg, g, width, height);
+        }
 
-                const node = g.selectAll(".node")
-                    .data(nodes, d => d.data.id);
+        function fitToScreen(svg, g, width, height) {
+            const bounds = g.node().getBBox();
+            const scale = Math.min(0.92, (width - 120) / bounds.width, (height - 120) / bounds.height);
+            const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
+            const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
+            svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+        }
 
-                // Вход
-                const nodeEnter = node.enter()
-                    .append("g")
-                    .attr("class", d => `node ${d.data.gender || 'unknown'}`)
-                    .attr("data-id", d => d.data.id)
-                    .attr("transform", d => `translate(${d.y},${d.x})`)
-                    .attr("cursor", "pointer")
-                    .on("click", function (event, d) {
-                        event.stopPropagation();
-                        onPersonClick(d.data.id);
-                    })
-                    .on("dblclick", function (event, d) {
-                        event.stopPropagation();
-                        toggleBranch(d, g, treeLayout);
-                    });
+        function drawNode(sel) {
+            sel.each(function (d) {
+                const g = d3.select(this);
+                const data = d.data;
 
-                // Прямоугольник узла
-                nodeEnter.append("rect")
-                    .attr("x", -100)
-                    .attr("y", -40)
-                    .attr("width", 200)
-                    .attr("height", 80)
-                    .attr("rx", 10)
-                    .attr("ry", 10)
-                    .attr("fill", "white")
-                    .attr("stroke", d => d.data.gender === 'M' ? '#3498db' :
-                        d.data.gender === 'F' ? '#e74c3c' : '#95a5a6')
-                    .attr("stroke-width", 2);
+                if (data.type === 'person') {
+                    drawPersonCard(g, data);
+                    if (currentPersonId === data.id) g.classed("selected", true);
+                    g.on("click", (event) => { event.stopPropagation(); onPersonClick(data.id); });
+                    return;
+                }
 
-                // Добавляем текст через foreignObject для лучшей поддержки длинных имен
-                nodeEnter.append("foreignObject")
-                    .attr("x", -90)
-                    .attr("y", -35)
-                    .attr("width", 180)
-                    .attr("height", 70)
+                if (data.type === 'couple') {
+                    drawCoupleCard(g, data);
+                    if (currentPersonId && (currentPersonId === data.husbandId || currentPersonId === data.wifeId)) g.classed("selected", true);
+                    return;
+                }
+            });
+        }
+
+        function drawPersonCard(g, p) {
+            const stroke = branchColorById.get(p.id) || (p.gender === 'M' ? '#3498db' : p.gender === 'F' ? '#e74c3c' : '#95a5a6');
+
+            g.append("rect")
+                .attr("class", "person-outer card-shadow")
+                .attr("x", -105).attr("y", -42).attr("width", 210).attr("height", 84)
+                .attr("rx", 14).attr("ry", 14)
+                .attr("fill", "#fff")
+                .attr("stroke", stroke)
+                .attr("stroke-width", 2);
+
+            g.append("foreignObject")
+                .attr("x", -97).attr("y", -36).attr("width", 194).attr("height", 72)
+                .append("xhtml:div")
+                .style("width", "100%").style("height", "100%")
+                .style("display", "flex").style("flex-direction", "column")
+                .style("justify-content", "center").style("align-items", "center")
+                .style("padding", "6px")
+                .html(() => {
+                    const dates = [];
+                    if (p.birth) dates.push(`род. ${escapeHtml(formatDate(p.birth))}`);
+                    if (p.death) dates.push(`ум. ${escapeHtml(formatDate(p.death))}`);
+                    return `
+        <div style="font-weight:700;font-size:14px;text-align:center;line-height:1.2;word-break:break-word;color:#2c3e50">
+          ${escapeHtml(p.name || 'Без имени')}
+        </div>
+        ${dates.length ? `<div style="margin-top:4px;font-size:11px;color:#7f8c8d;text-align:center;line-height:1.2">${dates.join(' / ')}</div>` : ''}
+      `;
+                });
+        }
+
+        function drawCoupleCard(g, c) {
+            const husband = c.husbandId ? allData.people[c.husbandId] : null;
+            const wife = c.wifeId ? allData.people[c.wifeId] : null;
+
+            const hName = husband?.name || (c.husbandId ? 'Без имени' : '—');
+            const wName = wife?.name || (c.wifeId ? 'Без имени' : '—');
+
+            const hGender = husband?.gender || 'M';
+            const wGender = wife?.gender || 'F';
+
+            const hStroke = (c.husbandId && branchColorById.get(c.husbandId)) || (hGender === 'M' ? '#3498db' : '#95a5a6');
+            const wStroke = (c.wifeId && branchColorById.get(c.wifeId)) || (wGender === 'F' ? '#e74c3c' : '#95a5a6');
+
+            const outerStroke = (branchColorById.get(c.husbandId) || branchColorById.get(c.wifeId)) || '#95a5a6';
+
+            const W = 280, H = 92, half = W / 2;
+
+            g.append("rect")
+                .attr("class", "couple-outer card-shadow")
+                .attr("x", -W / 2).attr("y", -H / 2).attr("width", W).attr("height", H)
+                .attr("rx", 16).attr("ry", 16)
+                .attr("fill", "#fff")
+                .attr("stroke", outerStroke)
+                .attr("stroke-width", 2);
+
+            g.append("line")
+                .attr("x1", 0).attr("y1", -H / 2 + 10).attr("x2", 0).attr("y2", H / 2 - 10)
+                .attr("stroke", "rgba(44,62,80,.18)")
+                .attr("stroke-width", 1.5);
+
+            // husband clickable area
+            g.append("rect")
+                .attr("x", -W / 2 + 6).attr("y", -H / 2 + 6).attr("width", half - 12).attr("height", H - 12)
+                .attr("rx", 12).attr("ry", 12)
+                .attr("fill", "rgba(52,152,219,.06)")
+                .attr("stroke", hStroke)
+                .attr("stroke-width", 2)
+                .style("cursor", c.husbandId ? "pointer" : "default")
+                .on("click", (event) => { event.stopPropagation(); if (c.husbandId) onPersonClick(c.husbandId); });
+
+            g.append("foreignObject")
+                .attr("x", -W / 2 + 14).attr("y", -H / 2 + 12).attr("width", half - 28).attr("height", H - 24)
+                .style("pointer-events", "none")
+                .append("xhtml:div")
+                .style("width", "100%").style("height", "100%")
+                .style("display", "flex").style("flex-direction", "column")
+                .style("justify-content", "center").style("align-items", "center")
+                .style("text-align", "center")
+                .html(`
+      <div style="font-weight:700;font-size:13px;line-height:1.15;color:#2c3e50;word-break:break-word">${escapeHtml(hName)}</div>
+      ${(husband?.birth || husband?.death) ? `<div style="margin-top:4px;font-size:10px;color:#7f8c8d">${formatLife(husband)}</div>` : ''}
+    `);
+
+            // wife clickable area
+            g.append("rect")
+                .attr("x", 6).attr("y", -H / 2 + 6).attr("width", half - 12).attr("height", H - 12)
+                .attr("rx", 12).attr("ry", 12)
+                .attr("fill", "rgba(231,76,60,.06)")
+                .attr("stroke", wStroke)
+                .attr("stroke-width", 2)
+                .style("cursor", c.wifeId ? "pointer" : "default")
+                .on("click", (event) => { event.stopPropagation(); if (c.wifeId) onPersonClick(c.wifeId); });
+
+            g.append("foreignObject")
+                .attr("x", 14).attr("y", -H / 2 + 12).attr("width", half - 28).attr("height", H - 24)
+                .style("pointer-events", "none")
+                .append("xhtml:div")
+                .style("width", "100%").style("height", "100%")
+                .style("display", "flex").style("flex-direction", "column")
+                .style("justify-content", "center").style("align-items", "center")
+                .style("text-align", "center")
+                .html(`
+      <div style="font-weight:700;font-size:13px;line-height:1.15;color:#2c3e50;word-break:break-word">${escapeHtml(wName)}</div>
+      ${(wife?.birth || wife?.death) ? `<div style="margin-top:4px;font-size:10px;color:#7f8c8d">${formatLife(wife)}</div>` : ''}
+    `);
+
+            if (c.marriage) {
+                g.append("foreignObject")
+                    .attr("x", -60).attr("y", H / 2 - 18).attr("width", 120).attr("height", 24)
+                    .style("pointer-events", "none")
                     .append("xhtml:div")
-                    .style("width", "100%")
-                    .style("height", "100%")
-                    .style("display", "flex")
-                    .style("flex-direction", "column")
-                    .style("justify-content", "center")
-                    .style("align-items", "center")
-                    .style("text-align", "center")
-                    .style("padding", "5px")
-                    .html(d => {
-                        const name = `<div style="font-weight: 600; font-size: 14px; color: #2c3e50; line-height: 1.2;">
-                            ${d.data.name}
-                        </div>`;
-
-                        let dates = '';
-                        if (d.data.birth || d.data.death) {
-                            const birth = d.data.birth ? formatDate(d.data.birth) : '';
-                            const death = d.data.death ? formatDate(d.data.death) : '';
-                            dates = `<div style="font-size: 11px; color: #7f8c8d; margin-top: 4px;">
-                                ${birth}${death ? ' - ' + death : ''}
-                            </div>`;
-                        }
-
-                        return name + dates;
-                    });
-
-                // Кнопка развернуть/свернуть (только для узлов с детьми)
-                nodeEnter.filter(d => d.children || d._children)
-                    .append("g")
-                    .attr("class", "toggle-btn")
-                    .attr("transform", "translate(85, 0)")
-                    .on("click", function (event, d) {
-                        event.stopPropagation();
-                        toggleBranch(d, g, treeLayout);
-                    })
-                    .append("circle")
-                    .attr("r", 12)
-                    .attr("fill", d => d.children ? "#e74c3c" : "#27ae60")
-                    .attr("stroke", d => d.children ? "#c0392b" : "#219653")
-                    .attr("stroke-width", 1);
-
-                nodeEnter.filter(d => d.children || d._children)
-                    .select(".toggle-btn")
-                    .append("text")
-                    .attr("text-anchor", "middle")
-                    .attr("dy", "0.35em")
-                    .attr("fill", "white")
-                    .attr("font-size", "12px")
-                    .attr("font-weight", "bold")
-                    .text(d => d.children ? "-" : "+");
-
-                // Обновление
-                const nodeUpdate = nodeEnter.merge(node);
-
-                nodeUpdate
-                    .transition()
-                    .duration(400)
-                    .attr("transform", d => `translate(${d.y},${d.x})`);
-
-                // Выделяем выбранного
-                nodeUpdate.classed("selected", d => d.data.id === currentPersonId);
-
-                // Выход
-                node.exit().remove();
+                    .style("width", "100%").style("height", "100%")
+                    .style("display", "flex").style("align-items", "center").style("justify-content", "center")
+                    .html(`
+        <div style="padding:3px 10px;border-radius:999px;background:rgba(44,62,80,.08);font-size:10px;color:#2c3e50">
+          <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(formatDate(c.marriage))}
+        </div>
+      `);
             }
-
-            // Отрисовываем
-            update(root);
         }
 
-        // ===== РАЗВОРАЧИВАНИЕ/СВОРАЧИВАНИЕ ВЕТКИ =====
-        function toggleBranch(d, g, treeLayout) {
-            if (d.children) {
-                d._children = d.children;
-                d.children = null;
-                collapsedNodes.add(d.data.id);
-            } else {
-                d.children = d._children;
-                d._children = null;
-                collapsedNodes.delete(d.data.id);
-            }
+        function keyNode(n) { return `${n.type}:${n.type === 'person' ? n.id : n.famId}`; }
 
-            // Перестраиваем layout и перерисовываем
-            treeLayout(d3.hierarchy(treeData));
-
-            // Просто перерисовываем весь вид (проще/надежнее)
-            renderTree();
-        }
-
-        // ===== ВЫБОР ЧЕЛОВЕКА =====
-        function selectPerson(personId) {
-            currentPersonId = personId;
-
-            const person = allData.people[personId];
-            document.getElementById('selected-person').textContent = person?.name || 'неизвестно';
-
-            showPersonInfo(personId);
-
-            // Если мы в полном режиме — обновим выделение рамки
-            if (!isBranchMode) renderTree();
-        }
-
-        // ===== ПАНЕЛЬ ИНФОРМАЦИИ О ЧЕЛОВЕКЕ =====
+        /* =========================
+           INFO PANEL
+        ========================= */
         function showPersonInfo(personId) {
             const person = allData.people[personId];
             if (!person) return;
 
             const infoDiv = document.getElementById('person-info');
 
-            // Собираем родителей
+            // parents
             let parents = [];
-            if (person.familiesAsChild.length > 0) {
+            if (person.familiesAsChild?.length) {
                 const fam = allData.families[person.familiesAsChild[0]];
                 if (fam) {
-                    if (fam.husband && allData.people[fam.husband]) {
-                        parents.push({ role: 'Отец', id: fam.husband, icon: 'fas fa-male' });
-                    }
-                    if (fam.wife && allData.people[fam.wife]) {
-                        parents.push({ role: 'Мать', id: fam.wife, icon: 'fas fa-female' });
-                    }
+                    if (fam.husband && allData.people[fam.husband]) parents.push({ role: 'Отец', id: fam.husband, icon: 'fas fa-male' });
+                    if (fam.wife && allData.people[fam.wife]) parents.push({ role: 'Мать', id: fam.wife, icon: 'fas fa-female' });
                 }
             }
 
-            // Собираем супругов и детей
+            // spouses + children
             let spouses = [];
             let children = [];
-            for (let famId of person.familiesAsSpouse) {
+            for (const famId of (person.familiesAsSpouse || [])) {
                 const fam = allData.families[famId];
                 if (!fam) continue;
 
-                // Супруг
                 const spouseId = fam.husband === personId ? fam.wife : fam.husband;
-                if (spouseId && allData.people[spouseId]) {
-                    spouses.push({ id: spouseId, marriage: fam.marriage });
-                }
+                if (spouseId && allData.people[spouseId]) spouses.push({ id: spouseId, marriage: fam.marriage });
 
-                // Дети
-                for (let childId of fam.children) {
-                    if (allData.people[childId]) {
-                        children.push(childId);
-                    }
+                for (const childId of (fam.children || [])) {
+                    if (allData.people[childId]) children.push(childId);
                 }
             }
 
-            // Формируем HTML
             let html = `
-                <div class="person-details">
-                    <div class="detail-row">
-                        <div class="detail-label">Имя</div>
-                        <div class="detail-value">${person.name || 'Неизвестно'}</div>
-                    </div>
+    <div class="person-details">
+      <div class="detail-row">
+        <div class="detail-label">Имя</div>
+        <div class="detail-value">${escapeHtml(person.name || 'Неизвестно')}</div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">Пол</div>
+        <div class="detail-value">${person.gender === 'M' ? 'Мужской' : person.gender === 'F' ? 'Женский' : 'Неизвестно'}</div>
+      </div>
+      ${person.birth ? `
+      <div class="detail-row">
+        <div class="detail-label">Дата рождения</div>
+        <div class="detail-value">${escapeHtml(formatDate(person.birth))}</div>
+      </div>`: ''}
+      ${person.death ? `
+      <div class="detail-row">
+        <div class="detail-label">Дата смерти</div>
+        <div class="detail-value">${escapeHtml(formatDate(person.death))}</div>
+      </div>`: ''}
+  `;
 
-                    <div class="detail-row">
-                        <div class="detail-label">Пол</div>
-                        <div class="detail-value">
-                            ${person.gender === 'M' ? 'Мужской' : person.gender === 'F' ? 'Женский' : 'Неизвестно'}
-                        </div>
-                    </div>
-
-                    ${person.birth ? `
-                    <div class="detail-row">
-                        <div class="detail-label">Дата рождения</div>
-                        <div class="detail-value">${formatDate(person.birth)}</div>
-                    </div>` : ''}
-
-                    ${person.death ? `
-                    <div class="detail-row">
-                        <div class="detail-label">Дата смерти</div>
-                        <div class="detail-value">${formatDate(person.death)}</div>
-                    </div>` : ''}
-            `;
-
-            if (parents.length > 0) {
-                html += `
-                    <div class="detail-row">
-                        <div class="detail-label">Родители</div>
-                        <div class="detail-value">
-                `;
+            if (parents.length) {
+                html += `<div class="detail-row"><div class="detail-label">Родители</div><div class="detail-value">`;
                 parents.forEach(p => {
                     html += `
-                        <div class="family-member" onclick="onPersonClick('${p.id}')" style="cursor: pointer;">
-                            <i class="${p.icon}"></i>
-                            <span><strong>${p.role}:</strong> ${allData.people[p.id].name}</span>
-                        </div>
-                    `;
+        <div class="family-member" style="cursor:pointer" onclick="onPersonClick('${p.id}')">
+          <i class="${p.icon}"></i>
+          <span><strong>${p.role}:</strong> ${escapeHtml(allData.people[p.id].name)}</span>
+        </div>`;
                 });
                 html += `</div></div>`;
             }
 
-            if (spouses.length > 0) {
-                html += `
-                    <div class="detail-row">
-                        <div class="detail-label">Супруг(а)</div>
-                        <div class="detail-value">
-                `;
+            if (spouses.length) {
+                html += `<div class="detail-row"><div class="detail-label">Супруг(а)</div><div class="detail-value">`;
                 spouses.forEach(s => {
-                    const spouse = allData.people[s.id];
+                    const sp = allData.people[s.id];
                     html += `
-                        <div class="family-member" onclick="onPersonClick('${s.id}')" style="cursor: pointer;">
-                            <i class="fas fa-heart"></i>
-                            <span>${spouse.name}${s.marriage ? ` (брак: ${formatDate(s.marriage)})` : ''}</span>
-                        </div>
-                    `;
+        <div class="family-member" style="cursor:pointer" onclick="onPersonClick('${s.id}')">
+          <i class="fas fa-heart"></i>
+          <span>${escapeHtml(sp.name)}${s.marriage ? ` (брак: ${escapeHtml(formatDate(s.marriage))})` : ''}</span>
+        </div>`;
                 });
                 html += `</div></div>`;
             }
 
-            if (children.length > 0) {
-                html += `
-                    <div class="detail-row">
-                        <div class="detail-label">Дети (${children.length})</div>
-                        <div class="detail-value">
-                `;
-                children.forEach(childId => {
-                    const child = allData.people[childId];
+            if (children.length) {
+                html += `<div class="detail-row"><div class="detail-label">Дети (${children.length})</div><div class="detail-value">`;
+                children.forEach(cid => {
                     html += `
-                        <div class="family-member" onclick="onPersonClick('${childId}')" style="cursor: pointer;">
-                            <i class="fas fa-child"></i>
-                            <span>${child.name}</span>
-                        </div>
-                    `;
+        <div class="family-member" style="cursor:pointer" onclick="onPersonClick('${cid}')">
+          <i class="fas fa-child"></i>
+          <span>${escapeHtml(allData.people[cid].name)}</span>
+        </div>`;
                 });
                 html += `</div></div>`;
             }
 
             html += `</div>`;
-
             infoDiv.innerHTML = html;
             document.getElementById('info-panel').classList.add('open');
         }
 
-        // ===== НАСТРОЙКА УПРАВЛЕНИЯ =====
+        /* =========================
+           CONTROLS + SEARCH
+        ========================= */
         function setupControls() {
-            // Zoom кнопки
-            document.getElementById('zoom-in').addEventListener('click', () => {
-                d3.select("#tree svg").transition().call(zoom.scaleBy, 1.2);
-            });
-
-            document.getElementById('zoom-out').addEventListener('click', () => {
-                d3.select("#tree svg").transition().call(zoom.scaleBy, 0.8);
-            });
-
+            document.getElementById('zoom-in').addEventListener('click', () => d3.select("#tree svg").transition().call(zoom.scaleBy, 1.2));
+            document.getElementById('zoom-out').addEventListener('click', () => d3.select("#tree svg").transition().call(zoom.scaleBy, 0.8));
             document.getElementById('reset-view').addEventListener('click', () => {
-                if (isBranchMode && branchFocusId) {
-                    renderBranchView(branchFocusId);
-                } else {
-                    renderTree();
-                }
+                if (isBranchMode && branchFocusId) renderBranchView(branchFocusId);
+                else renderFullTree();
             });
 
-            // Закрыть инфо-панель
-            document.getElementById('close-info').addEventListener('click', () => {
-                document.getElementById('info-panel').classList.remove('open');
-            });
-
-            // Вкладка (язычок) справа — открыть/закрыть панель
-            document.getElementById('info-tab').addEventListener('click', () => {
-                document.getElementById('info-panel').classList.toggle('open');
-            });
-
-            // Помощь
-            const helpModal = document.getElementById('help-modal');
-            document.getElementById('help-btn').addEventListener('click', () => {
-                helpModal.classList.add('active');
-            });
-
-            document.querySelector('.close-modal').addEventListener('click', () => {
-                helpModal.classList.remove('active');
-            });
-
-            helpModal.addEventListener('click', (e) => {
-                if (e.target === helpModal) {
-                    helpModal.classList.remove('active');
-                }
-            });
-
-            // Поиск
-            setupSearch();
-
-            // Экспорт
-            document.getElementById('export-btn').addEventListener('click', exportAsPNG);
+            document.getElementById('close-info').addEventListener('click', () => document.getElementById('info-panel').classList.remove('open'));
+            document.getElementById('info-tab').addEventListener('click', () => document.getElementById('info-panel').classList.toggle('open'));
         }
 
-        // ===== ПОИСК =====
         function setupSearch() {
             const input = document.getElementById('search-input');
             const resultsDiv = document.getElementById('search-results');
 
             input.addEventListener('input', () => {
                 const query = input.value.trim().toLowerCase();
-
-                if (query.length < 2) {
-                    resultsDiv.style.display = 'none';
-                    return;
-                }
+                if (query.length < 2) { resultsDiv.style.display = 'none'; return; }
 
                 const matches = Object.values(allData.people)
                     .filter(p => p.name && p.name.toLowerCase().includes(query))
                     .slice(0, 10);
 
-                if (matches.length === 0) {
-                    resultsDiv.style.display = 'none';
-                    return;
-                }
+                if (!matches.length) { resultsDiv.style.display = 'none'; return; }
 
                 resultsDiv.innerHTML = matches.map(p => `
-                    <div class="search-result-item" data-id="${p.id}">
-                        <span>${p.name}</span>
-                        <small>${p.birth ? formatDate(p.birth) : ''}</small>
-                    </div>
-                `).join('');
+      <div class="search-result-item" data-id="${p.id}">
+        <span>${escapeHtml(p.name)}</span>
+        <small>${p.birth ? escapeHtml(formatDate(p.birth)) : ''}</small>
+      </div>`).join('');
 
                 resultsDiv.style.display = 'block';
 
@@ -1684,35 +1241,42 @@
             });
 
             document.addEventListener('click', (e) => {
-                if (!resultsDiv.contains(e.target) && e.target !== input) {
-                    resultsDiv.style.display = 'none';
-                }
+                if (!resultsDiv.contains(e.target) && e.target !== input) resultsDiv.style.display = 'none';
             });
         }
 
-        // ===== ОБНОВИТЬ СТАТИСТИКУ =====
         function updateStats() {
             document.getElementById('person-count').textContent = Object.keys(allData.people).length;
             document.getElementById('tree-stats').textContent = 'Готово';
         }
 
-        // ===== ВСПОМОГАТЕЛЬНОЕ: ФОРМАТ ДАТ =====
-        function formatDate(dateStr) {
-            // Просто возвращаем как есть (GEDCOM форматы разные)
-            return dateStr;
+        /* =========================
+           HELPERS
+        ========================= */
+        function formatDate(s) { return s || ''; }
+
+        function formatLife(p) {
+            if (!p) return '';
+            const b = p.birth ? formatDate(p.birth) : '';
+            const d = p.death ? formatDate(p.death) : '';
+            if (b && d) return `${escapeHtml(b)} — ${escapeHtml(d)}`;
+            if (b) return `${escapeHtml(b)}`;
+            if (d) return `ум. ${escapeHtml(d)}`;
+            return '';
         }
 
-        // ===== ЭКСПОРТ В PNG =====
-        function exportAsPNG() {
-            alert("Экспорт PNG: в текущей версии — заглушка. Можно добавить позже.");
+        function escapeHtml(s) {
+            return String(s || '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", "&#039;");
         }
 
-        // ===== ПОКАЗ ОШИБКИ =====
-        function showError(msg) {
-            document.getElementById('tree-stats').textContent = msg;
-        }
-
-        // ===== ЗАПУСК =====
+        /* =========================
+           START
+        ========================= */
         initApp();
     </script>
 </body>
