@@ -73,3 +73,14 @@ body {
     border-radius: 4px;
     margin-right: 10px;
 }
+
+.text-block {
+    line-height: 1.3;
+    /* Достаточная высота строки */
+    padding: 5px 0;
+    /* Умеренные отступы */
+    min-height: auto;
+    /* Не ограничивать высоту */
+    overflow: visible;
+    /* Не обрезать содержимое */
+}
