@@ -71,7 +71,7 @@ export function renderTree(rootData) {
         .append("g")
         .attr("class", "node")
         .attr("transform", d => `translate(${d.y},${d.x})`)
-        .attr("data-depth", d => d.depth); // Сохраняем глубину для CSS
+        .attr("data-depth", d => d.depth);
 
     // Функция для определения цвета фона
     function getGenerationColor(depth) {
@@ -88,7 +88,6 @@ export function renderTree(rootData) {
 
     // Функция для определения цвета текста
     function getTextColor(bgColor) {
-        // Простая логика: для темных цветов - белый текст, для светлых - темный
         const darkColors = ['#2C3E50', '#34495E', '#5D6D7E'];
         return darkColors.includes(bgColor) ? '#FFFFFF' : '#2C3E50';
     }
@@ -96,9 +95,9 @@ export function renderTree(rootData) {
     // Карточки
     node.append("rect")
         .attr("x", -100)
-        .attr("y", -35)
+        .attr("y", -40)  // Немного увеличили высоту
         .attr("width", 200)
-        .attr("height", 70)
+        .attr("height", 80)  // Увеличили высоту карточки с 70 до 80
         .attr("rx", 10)
         .attr("ry", 10)
         .attr("fill", d => getGenerationColor(d.depth))
@@ -130,49 +129,56 @@ export function renderTree(rootData) {
         const bgColor = getGenerationColor(d.depth);
         const textColor = getTextColor(bgColor);
 
-        // Имя
-        const nameForeign = nodeGroup.append("foreignObject")
+        // ОДИН ЕДИНЫЙ foreignObject для всего текста
+        const infoForeign = nodeGroup.append("foreignObject")
             .attr("x", -95)
-            .attr("y", -30)
+            .attr("y", -35)    // Позиция
             .attr("width", 190)
-            .attr("height", 30);
+            .attr("height", 75); // Достаточная высота для 3 строк
 
-        nameForeign.append("xhtml:div")
+        infoForeign.append("xhtml:div")
             .style("width", "100%")
             .style("height", "100%")
             .style("display", "flex")
-            .style("align-items", "center")
+            .style("flex-direction", "column")
             .style("justify-content", "center")
-            .style("font-size", "14px")
-            .style("font-weight", "bold")
-            .style("color", textColor)
-            .style("text-align", "center")
-            .style("word-break", "break-word")
-            .style("overflow", "hidden")
-            .style("padding", "0 5px")
-            .html(`<div style="max-width: 100%;">${d.data.name}</div>`);
-
-        // Даты
-        const datesForeign = nodeGroup.append("foreignObject")
-            .attr("x", -95)
-            .attr("y", 0)
-            .attr("width", 190)
-            .attr("height", 20);
-
-        datesForeign.append("xhtml:div")
-            .style("width", "100%")
-            .style("height", "100%")
-            .style("display", "flex")
             .style("align-items", "center")
-            .style("justify-content", "center")
-            .style("font-size", "11px")
-            .style("color", textColor)
-            .style("text-align", "center")
+            .style("font-family", "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif")
+            .style("padding", "8px 5px")
             .html(() => {
+                // Имя с нормальным межстрочным интервалом
+                const nameHtml = `
+                    <div style="
+                        font-weight: bold; 
+                        font-size: 14px; 
+                        text-align: center;
+                        line-height: 1.3;
+                        margin-bottom: 4px;
+                        word-break: break-word;
+                        overflow: hidden;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 2;
+                        -webkit-box-orient: vertical;
+                    ">
+                        ${d.data.name}
+                    </div>
+                `;
+
+                // Даты
                 const dates = [];
                 if (d.data.birth) dates.push(`род. ${formatDate(d.data.birth)}`);
                 if (d.data.death) dates.push(`ум. ${formatDate(d.data.death)}`);
-                return dates.join(' / ');
+
+                const datesHtml = dates.length ?
+                    `<div style="
+                        font-size: 11px; 
+                        color: ${textColor};
+                        opacity: 0.9;
+                        text-align: center;
+                        line-height: 1.2;
+                    ">${dates.join(' / ')}</div>` : '';
+
+                return nameHtml + datesHtml;
             });
     });
 
@@ -210,7 +216,7 @@ export function renderTree(rootData) {
     console.log("Рендеринг завершен успешно");
 }
 
-// Вспомогательные функции (оставьте их в конце файла)
+// Вспомогательные функции
 function formatDate(dateStr) {
     if (!dateStr) return '';
     const months = {
