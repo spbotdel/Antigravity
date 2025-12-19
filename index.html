@@ -6,291 +6,295 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Семейное древо Русяйкиных</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        .tree-tooltip {
-            font-family: Arial, sans-serif;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-
-        .controls {
-            position: fixed;
-            top: 20px;
-            right: 20px;
+        /* Стили для контекстного меню и мобильной адаптации */
+        .context-menu {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             z-index: 1000;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            min-width: 150px;
+            min-width: 180px;
+            overflow: hidden;
         }
 
-        .controls button {
-            display: block;
-            width: 100%;
-            margin: 8px 0;
-            padding: 10px;
+        .context-menu div {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background 0.2s;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .context-menu div:last-child {
+            border-bottom: none;
+        }
+
+        .context-menu div:hover {
+            background: #f5f5f5;
+        }
+
+        .mobile-toggle-btn {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #3498db;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-toggle-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+        }
+
+        .node-controls {
+            display: flex;
+            gap: 5px;
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .control-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
             background: #3498db;
             color: white;
             border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
-
-        .controls button:hover {
-            background: #2980b9;
-        }
-
-        .legend {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            max-width: 250px;
-        }
-
-        .legend-item {
             display: flex;
             align-items: center;
-            margin: 8px 0;
-        }
-
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            margin-right: 10px;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
         }
     </style>
 </head>
 
 <body>
-    <div id="tree"></div>
+    <div class="container">
+        <!-- Шапка -->
+        <header>
+            <div class="header-content">
+                <h1><i class="fas fa-tree"></i> Семейное древо Русяйкиных</h1>
+                <p class="subtitle">Исследуйте историю своей семьи</p>
+            </div>
 
-    <div class="controls">
-        <h4 style="margin: 0 0 10px 0; color: #2c3e50;">Управление</h4>
-        <button onclick="window.treeControls?.zoomIn()">Увеличить (+)</button>
-        <button onclick="window.treeControls?.zoomOut()">Уменьшить (-)</button>
-        <button onclick="window.treeControls?.resetView()">Сбросить вид</button>
-        <button onclick="window.treeControls?.exportPNG()">Сохранить PNG</button>
-    </div>
+            <div class="controls">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="search" placeholder="Найти человека...">
+                </div>
 
-    <div class="legend">
-        <h4 style="margin: 0 0 10px 0; color: #2c3e50;">Поколения:</h4>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #2C3E50;"></div>
-            <span style="color: #2c3e50;">Основатель (Егор)</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #34495E;"></div>
-            <span style="color: #2c3e50;">Дети (4 человека)</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #5D6D7E;"></div>
-            <span style="color: #2c3e50;">Внуки (6 человек)</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #7F8C8D;"></div>
-            <span style="color: #2c3e50;">Правнуки</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #95A5A6;"></div>
-            <span style="color: #2c3e50;">Поколение 5+</span>
-        </div>
-    </div>
+                <div class="control-buttons">
+                    <button id="view-full-tree" class="btn btn-primary">
+                        <i class="fas fa-sitemap"></i> Все дерево
+                    </button>
+                    <button id="export-png" class="btn btn-success">
+                        <i class="fas fa-download"></i> Сохранить
+                    </button>
+                    <button id="toggle-help" class="btn btn-info">
+                        <i class="fas fa-question-circle"></i> Помощь
+                    </button>
+                </div>
+            </div>
+        </header>
 
-    <!-- ОДИН ЕДИНСТВЕННЫЙ СКРИПТ -->
-    <script>
-        // ========== ЕДИНСТВЕННАЯ ВЕРСИЯ СКРИПТА ==========
+        <!-- Основное содержимое -->
+        <div class="main-content">
+            <!-- Левая панель - список людей -->
+            <aside class="sidebar left-sidebar">
+                <div class="sidebar-header">
+                    <h3><i class="fas fa-users"></i> Список людей</h3>
+                    <span id="person-count" class="badge">0</span>
+                </div>
 
-        // Загружаем D3 перед всем остальным
-        const d3Script = document.createElement('script');
-        d3Script.src = 'https://d3js.org/d3.v7.min.js';
-        d3Script.onload = initApp;
-        d3Script.onerror = function () {
-            console.error('Не удалось загрузить D3.js');
-            showError('Не удалось загрузить необходимые библиотеки');
-        };
-        document.head.appendChild(d3Script);
-
-        function showError(message) {
-            const treeDiv = document.getElementById('tree');
-            if (treeDiv) {
-                treeDiv.innerHTML = `
-                <div style="padding: 40px; text-align: center; color: #666;">
-                    <h3>Семейное древо Русяйкиных</h3>
-                    <p>${message}</p>
-                    <div style="margin: 20px;">
-                        <button onclick="location.reload()" style="
-                            padding: 10px 20px;
-                            background: #3498db;
-                            color: white;
-                            border: none;
-                            border-radius: 5px;
-                            cursor: pointer;
-                            margin: 5px;
-                        ">Обновить страницу</button>
-                        <button onclick="loadFallbackTree()" style="
-                            padding: 10px 20px;
-                            background: #2ecc71;
-                            color: white;
-                            border: none;
-                            border-radius: 5px;
-                            cursor: pointer;
-                            margin: 5px;
-                        ">Загрузить упрощенную версию</button>
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>Поколение:</label>
+                        <select id="generation-filter">
+                            <option value="all">Все</option>
+                            <option value="0">Поколение 1</option>
+                            <option value="1">Поколение 2</option>
+                            <option value="2">Поколение 3</option>
+                            <option value="3">Поколение 4+</option>
+                        </select>
                     </div>
                 </div>
-            `;
-            }
-        }
 
-        function loadFallbackTree() {
-            const treeDiv = document.getElementById('tree');
-            if (treeDiv) {
-                treeDiv.innerHTML = `
-                <div style="padding: 20px; max-width: 800px; margin: 0 auto;">
-                    <h2 style="text-align: center; color: #2c3e50;">Семейное древо Русяйкиных (упрощенная версия)</h2>
-                    <div id="simple-tree" style="margin-top: 20px;"></div>
+                <div id="person-list" class="person-list">
+                    <!-- Список будет заполнен JavaScript -->
+                    <div class="loading">Загрузка списка...</div>
                 </div>
-            `;
-                renderSimpleTree();
-            }
-        }
+            </aside>
 
-        // Основная функция инициализации
-        async function initApp() {
-            try {
-                console.log('D3 загружена, начинаем инициализацию...');
-
-                // Проверяем наличие D3
-                if (typeof d3 === 'undefined') {
-                    throw new Error('D3 не определена после загрузки');
-                }
-
-                // Динамически импортируем модули ES6
-                const modulePromises = [
-                    import('./js/gedcomParser.js'),
-                    import('./js/treeBuilder.js'),
-                    import('./js/treeRenderer.js')
-                ];
-
-                const modules = await Promise.all(modulePromises);
-                const { parseGedcom } = modules[0];
-                const { buildDescendantsTree } = modules[1];
-                const { renderTree } = modules[2];
-
-                console.log('Модули загружены, загружаем данные...');
-
-                // Загружаем GEDCOM
-                const response = await fetch('./3.ged');
-                if (!response.ok) {
-                    throw new Error(`Ошибка загрузки файла: ${response.status}`);
-                }
-
-                const text = await response.text();
-                console.log('GEDCOM загружен, размер:', text.length, 'символов');
-
-                // Парсим данные
-                const data = parseGedcom(text);
-                console.log('Данные распарсены:', Object.keys(data.people).length, 'человек');
-
-                // Строим дерево
-                const treeData = buildDescendantsTree('I0', data);
-                console.log('Дерево построено, начинаем рендеринг...');
-
-                // Рендерим
-                renderTree(treeData);
-
-                // Обновляем заголовок
-                document.title = `Древо Русяйкиных: ${treeData.name}`;
-
-                // Показываем сообщение об успехе
-                setTimeout(() => {
-                    const successMsg = document.createElement('div');
-                    successMsg.innerHTML = `
-                    <div style="
-                        position: fixed;
-                        bottom: 20px;
-                        right: 20px;
-                        background: #2ecc71;
-                        color: white;
-                        padding: 10px 15px;
-                        border-radius: 5px;
-                        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-                        z-index: 10000;
-                        animation: fadeIn 0.3s;
-                    ">
-                        ✅ Дерево успешно загружено
+            <!-- Центральная область - дерево -->
+            <main class="tree-area">
+                <div class="tree-header">
+                    <div class="breadcrumb" id="breadcrumb">
+                        <span class="breadcrumb-item" data-id="root">Все дерево</span>
                     </div>
-                `;
-                    document.body.appendChild(successMsg);
-                    setTimeout(() => successMsg.remove(), 3000);
-                }, 500);
 
-            } catch (error) {
-                console.error('Ошибка при инициализации:', error);
-                showError(`Ошибка загрузки: ${error.message}`);
-            }
-        }
+                    <div class="tree-controls">
+                        <button id="zoom-in" class="icon-btn" title="Увеличить">
+                            <i class="fas fa-search-plus"></i>
+                        </button>
+                        <button id="zoom-out" class="icon-btn" title="Уменьшить">
+                            <i class="fas fa-search-minus"></i>
+                        </button>
+                        <button id="reset-view" class="icon-btn" title="Сбросить вид">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </button>
+                        <button id="toggle-layout" class="icon-btn" title="Изменить вид">
+                            <i class="fas fa-project-diagram"></i>
+                        </button>
+                    </div>
+                </div>
 
-        // Упрощенное дерево на случай проблем
-        function renderSimpleTree() {
-            const simpleData = {
-                name: "Егор Миторфанович Русяйкин",
-                children: [
-                    {
-                        name: "Леонид Егорович Русяйкин",
-                        children: [
-                            { name: "Валентина Леонидовна" },
-                            { name: "Александр Леонидович" },
-                            { name: "Любовь Леонидовна" },
-                            { name: "Людмила Леонидовна" },
-                            { name: "Ольга Леонидовна" },
-                            { name: "Елена Леонидовна" }
-                        ]
-                    },
-                    { name: "Зоя Егоровна" },
-                    { name: "Пётр Егорович" },
-                    { name: "Анна Егоровна" }
-                ]
-            };
+                <div class="tree-container">
+                    <div id="tree"></div>
+                </div>
 
-            function createTreeNode(person, level = 0) {
-                const div = document.createElement('div');
-                div.style.marginLeft = (level * 30) + 'px';
-                div.style.padding = '10px';
-                div.style.marginBottom = '5px';
-                div.style.background = level === 0 ? '#3498db' :
-                    level === 1 ? '#2ecc71' :
-                        level === 2 ? '#e74c3c' : '#9b59b6';
-                div.style.color = 'white';
-                div.style.borderRadius = '5px';
-                div.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                <div class="tree-footer">
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="color-box male"></div>
+                            <span>Мужчина</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="color-box female"></div>
+                            <span>Женщина</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="color-box unknown"></div>
+                            <span>Пол неизвестен</span>
+                        </div>
+                    </div>
+                    <div class="stats" id="tree-stats">
+                        <span id="node-count">0</span> человек
+                    </div>
+                </div>
+            </main>
 
-                div.textContent = person.name;
+            <!-- Правая панель - детали -->
+            <aside class="sidebar right-sidebar">
+                <div class="sidebar-header">
+                    <h3><i class="fas fa-user-circle"></i> Информация</h3>
+                    <button id="close-details" class="icon-btn small">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
 
-                if (person.children) {
-                    person.children.forEach(child => {
-                        div.appendChild(createTreeNode(child, level + 1));
-                    });
-                }
+                <div id="person-details">
+                    <div class="empty-state">
+                        <i class="fas fa-mouse-pointer"></i>
+                        <p>Выберите человека на дереве для просмотра подробной информации</p>
+                    </div>
+                </div>
 
-                return div;
-            }
+                <div class="quick-actions" id="quick-actions" style="display: none;">
+                    <h4>Быстрые действия</h4>
+                    <div class="action-buttons">
+                        <button id="expand-branch" class="btn btn-small">
+                            <i class="fas fa-plus-circle"></i> Развернуть ветку
+                        </button>
+                        <button id="collapse-branch" class="btn btn-small">
+                            <i class="fas fa-minus-circle"></i> Свернуть ветку
+                        </button>
+                        <button id="show-parents" class="btn btn-small">
+                            <i class="fas fa-level-up-alt"></i> К родителям
+                        </button>
+                        <button id="show-children" class="btn btn-small">
+                            <i class="fas fa-level-down-alt"></i> К детям
+                        </button>
+                    </div>
+                </div>
+            </aside>
+        </div>
 
-            const container = document.getElementById('simple-tree');
-            if (container) {
-                container.appendChild(createTreeNode(simpleData));
-            }
-        }
-        // ========== КОНЕЦ СКРИПТА ==========
-    </script>
+        <!-- Футер -->
+        <footer>
+            <div class="footer-content">
+                <div class="footer-left">
+                    <p><i class="fas fa-code-branch"></i> Семейное древо Русяйкиных • Версия 2.0</p>
+                    <p class="small">Данные загружены из GEDCOM файла</p>
+                </div>
+                <div class="footer-right">
+                    <p id="current-person"></p>
+                    <p class="small" id="tree-info">Загрузка...</p>
+                </div>
+            </div>
+        </footer>
+
+        <!-- Кнопка для мобильных (появляется только на маленьких экранах) -->
+        <button id="mobile-menu-toggle" class="mobile-toggle-btn">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+
+    <!-- Модальное окно помощи -->
+    <div id="help-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-question-circle"></i> Как пользоваться деревом</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="help-section">
+                    <h4><i class="fas fa-desktop"></i> На компьютере:</h4>
+                    <ul>
+                        <li><strong>Клик</strong> — выбрать человека</li>
+                        <li><strong>Двойной клик</strong> — развернуть/свернуть ветку</li>
+                        <li><strong>Правый клик</strong> — контекстное меню</li>
+                        <li><strong>Колесико мыши</strong> — масштабирование</li>
+                        <li><strong>Перетаскивание</strong> — перемещение по дереву</li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h4><i class="fas fa-mobile-alt"></i> На телефоне/планшете:</h4>
+                    <ul>
+                        <li><strong>Один тап</strong> — выбрать человека</li>
+                        <li><strong>Быстрый двойной тап</strong> — развернуть/свернуть ветку</li>
+                        <li><strong>Длинное нажатие</strong> — контекстное меню</li>
+                        <li><strong>Два пальца (жест "щипок")</strong> — масштабирование</li>
+                        <li><strong>Кнопки "+/-" на узлах</strong> — управление ветками</li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h4><i class="fas fa-lightbulb"></i> Советы:</h4>
+                    <ul>
+                        <li>Используйте поиск для быстрого перехода к человеку</li>
+                        <li>Нажмите "Все дерево" чтобы вернуться к общему виду</li>
+                        <li>Экспортируйте дерево в PNG для сохранения или печати</li>
+                        <li>Цвет узлов показывает поколение человека</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Подключаем скрипты -->
+    <script type="module" src="js/main.js"></script>
 </body>
 
 </html>
