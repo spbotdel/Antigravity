@@ -69,7 +69,7 @@
 
         .search-container {
             position: relative;
-            min-width: 250px
+            min-width: 260px
         }
 
         .search-container i {
@@ -389,11 +389,6 @@
             stroke-width: 4 !important
         }
 
-        .node.selected .couple-outer {
-            stroke: #f39c12 !important;
-            stroke-width: 4 !important
-        }
-
         @media (max-width:768px) {
             .app-header {
                 flex-direction: column;
@@ -492,7 +487,8 @@
             <div id="person-info" class="info-content">
                 <div class="empty-info">
                     <i class="fas fa-mouse-pointer"></i>
-                    <p>Кликните на человека в дереве, чтобы увидеть информацию</p>
+                    <p>Выберите человека, чтобы увидеть информацию</p>
+                    <p style="margin-top:8px;font-size:12px;color:#95a5a6">Панель открывается по вкладке справа</p>
                 </div>
             </div>
         </div>
@@ -506,11 +502,11 @@
         let zoom = null;
 
         let currentPersonId = null;
-
         let rootPersonId = null;
+
+        // branch mode (one click toggles)
         let isBranchMode = false;
         let branchFocusId = null;
-        let branchColorById = new Map();
 
         /* =========================
            INIT
@@ -619,9 +615,11 @@
         }
 
         /* =========================
-           TREE MODEL: PERSON -> COUPLE(FAM) -> CHILDREN
+           TREE MODEL (NO DUPLICATES)
+           person -> union -> children(person...)
+           union is a tiny node, spouse shown as a side card
         ========================= */
-        function buildDescendantsWithCouples(personId, data, visited = new Set()) {
+        function buildDescendantsWithUnions(personId, data, visited = new Set()) {
             if (!personId || visited.has(personId)) return null;
             visited.add(personId);
 
@@ -642,117 +640,59 @@
                 const fam = data.families[famId];
                 if (!fam) continue;
 
-                const couple = {
-                    type: 'couple',
+                const spouseId = (fam.husband === personId) ? fam.wife : fam.husband;
+
+                const union = {
+                    type: 'union',
                     famId,
-                    husbandId: fam.husband || null,
-                    wifeId: fam.wife || null,
+                    primaryId: personId,
+                    spouseId: spouseId || null,
                     marriage: fam.marriage || '',
                     children: []
                 };
 
                 for (const childId of (fam.children || [])) {
-                    const childNode = buildDescendantsWithCouples(childId, data, new Set(visited));
-                    if (childNode) couple.children.push(childNode);
+                    const childNode = buildDescendantsWithUnions(childId, data, new Set(visited));
+                    if (childNode) union.children.push(childNode);
                 }
 
-                if (!couple.children.length) delete couple.children;
-                node.children.push(couple);
+                if (!union.children.length) delete union.children;
+                node.children.push(union);
             }
 
             if (!node.children.length) delete node.children;
             return node;
         }
 
-        // ancestors couples chain for branch mode
-        function buildAncestorsCouplesForPerson(personId, data) {
-            const focus = data.people[personId];
-            const famc = focus?.familiesAsChild?.[0];
+        // ancestors for branch: parent unions (parents, grandparents...) without duplicating persons
+        function buildAncestorsUnionsForPerson(personId, data) {
+            const p = data.people[personId];
+            const famc = p?.familiesAsChild?.[0];
             if (!famc) return null;
 
             const fam = data.families[famc];
             if (!fam) return null;
 
-            const couple = {
-                type: 'couple',
+            const fatherId = fam.husband || null;
+            const motherId = fam.wife || null;
+
+            const node = {
+                type: 'anc_union',
                 famId: fam.id,
-                husbandId: fam.husband || null,
-                wifeId: fam.wife || null,
+                fatherId,
+                motherId,
                 marriage: fam.marriage || '',
                 children: []
             };
 
-            const fatherId = fam.husband || null;
-            const motherId = fam.wife || null;
+            const fatherParents = fatherId ? buildAncestorsUnionsForPerson(fatherId, data) : null;
+            const motherParents = motherId ? buildAncestorsUnionsForPerson(motherId, data) : null;
 
-            const fatherCouple = fatherId ? buildAncestorsCouplesForPerson(fatherId, data) : null;
-            const motherCouple = motherId ? buildAncestorsCouplesForPerson(motherId, data) : null;
+            if (fatherParents) node.children.push(fatherParents);
+            if (motherParents) node.children.push(motherParents);
+            if (!node.children.length) delete node.children;
 
-            if (fatherCouple) couple.children.push(fatherCouple);
-            if (motherCouple) couple.children.push(motherCouple);
-
-            if (!couple.children.length) delete couple.children;
-            return couple;
-        }
-
-        /* =========================
-           BRANCH COLORS
-        ========================= */
-        function computeBranchColorsForBranchMode(focusId) {
-            const map = new Map();
-            const palette = (n) => Array.from({ length: n }, (_, i) => `hsl(${Math.round(i * 360 / n)}, 70%, 45%)`);
-
-            // descendants: each union under focus -> different color
-            const desc = buildDescendantsWithCouples(focusId, allData);
-            const unions = desc?.children || [];
-            const colors = palette(Math.max(3, unions.length || 3));
-
-            unions.forEach((u, idx) => {
-                const color = colors[idx % colors.length];
-
-                if (u.husbandId) map.set(u.husbandId, color);
-                if (u.wifeId) map.set(u.wifeId, color);
-
-                const walk = (n) => {
-                    if (!n) return;
-                    if (n.type === 'person') map.set(n.id, color);
-                    (n.children || []).forEach(walk);
-                };
-                (u.children || []).forEach(walk);
-            });
-
-            // ancestors: father/mother lines
-            const fatherColor = "hsl(210, 75%, 40%)";
-            const motherColor = "hsl(340, 75%, 45%)";
-
-            const parentCouple = buildAncestorsCouplesForPerson(focusId, allData);
-            if (parentCouple) {
-                if (parentCouple.husbandId) markLine(parentCouple.husbandId, fatherColor);
-                if (parentCouple.wifeId) markLine(parentCouple.wifeId, motherColor);
-            }
-
-            function markLine(startId, color) {
-                let cur = startId;
-                const seen = new Set();
-                while (cur && !seen.has(cur)) {
-                    seen.add(cur);
-                    map.set(cur, color);
-
-                    const p = allData.people[cur];
-                    const famc = p?.familiesAsChild?.[0];
-                    if (!famc) break;
-                    const fam = allData.families[famc];
-                    if (!fam) break;
-
-                    if (fam.husband) map.set(fam.husband, color);
-                    if (fam.wife) map.set(fam.wife, color);
-
-                    cur = (color === fatherColor) ? fam.husband : fam.wife;
-                }
-            }
-
-            map.set(focusId, "hsl(35, 90%, 45%)"); // focus accent
-            return map;
+            return node;
         }
 
         /* =========================
@@ -784,44 +724,33 @@
             const p = allData.people[personId];
             document.getElementById('selected-person').textContent = p?.name || 'неизвестно';
             showPersonInfo(personId);
+            // ВАЖНО: панель не открываем автоматически
         }
 
         /* =========================
            RENDER
         ========================= */
-        function clearTree() {
-            d3.select("#tree").selectAll("*").remove();
-        }
+        function clearTree() { d3.select("#tree").selectAll("*").remove(); }
 
         function renderFullTree() {
-            branchColorById = new Map(); // full mode: default male/female strokes
-            const data = buildDescendantsWithCouples(rootPersonId, allData);
-            renderHierarchyTree(data, { mode: 'full' });
+            const data = buildDescendantsWithUnions(rootPersonId, allData);
+            renderHierarchyTree(data);
         }
 
         function renderBranchView(focusId) {
-            branchColorById = computeBranchColorsForBranchMode(focusId);
+            const center = makePersonNode(focusId);
+            const desc = buildDescendantsWithUnions(focusId, allData);
 
-            const centerPerson = makePersonNode(focusId);
-            const descData = buildDescendantsWithCouples(focusId, allData);
+            const ancUnion = buildAncestorsUnionsForPerson(focusId, allData);
+            const ancRoot = structuredClone(center);
+            if (ancUnion) ancRoot.children = [ancUnion]; else delete ancRoot.children;
 
-            const ancCouple = buildAncestorsCouplesForPerson(focusId, allData);
-            const ancRoot = structuredClone(centerPerson);
-            if (ancCouple) ancRoot.children = [ancCouple]; else delete ancRoot.children;
-
-            renderBranchHierarchy(centerPerson, descData, ancRoot);
+            renderBranchHierarchy(center, desc, ancRoot);
         }
 
         function makePersonNode(personId) {
             const p = allData.people[personId];
-            return {
-                type: 'person',
-                id: personId,
-                name: p?.name || 'Без имени',
-                gender: p?.gender || '',
-                birth: p?.birth || '',
-                death: p?.death || ''
-            };
+            return { type: 'person', id: personId, name: p?.name || 'Без имени', gender: p?.gender || '', birth: p?.birth || '', death: p?.death || '' };
         }
 
         function renderHierarchyTree(data) {
@@ -836,14 +765,12 @@
 
             const g = svg.append("g");
 
-            zoom = d3.zoom().scaleExtent([0.1, 3]).on("zoom", (event) => {
-                g.attr("transform", event.transform);
-            });
+            zoom = d3.zoom().scaleExtent([0.1, 3]).on("zoom", (event) => g.attr("transform", event.transform));
             svg.call(zoom);
 
             const treeLayout = d3.tree()
-                .nodeSize([120, 290])
-                .separation((a, b) => a.parent === b.parent ? 1.15 : 1.35);
+                .nodeSize([150, 420]) // место под боковые карточки
+                .separation((a, b) => a.parent === b.parent ? 1.1 : 1.35);
 
             const root = d3.hierarchy(data);
             treeLayout(root);
@@ -859,7 +786,7 @@
                     const o = { x: d.source.x, y: d.source.y };
                     return linkGen({ source: o, target: o });
                 })
-                .transition().duration(350)
+                .transition().duration(300)
                 .attr("d", d => linkGen({ source: { x: d.source.x, y: d.source.y }, target: { x: d.target.x, y: d.target.y } }));
 
             const node = g.selectAll(".node")
@@ -869,8 +796,7 @@
                 .attr("class", d => `node ${d.data.type}`)
                 .attr("transform", d => `translate(${d.y},${d.x})`);
 
-            drawNode(node);
-
+            drawNode(node, { mode: 'full' });
             fitToScreen(svg, g, width, height);
         }
 
@@ -886,14 +812,12 @@
 
             const g = svg.append("g");
 
-            zoom = d3.zoom().scaleExtent([0.1, 3]).on("zoom", (event) => {
-                g.attr("transform", event.transform);
-            });
+            zoom = d3.zoom().scaleExtent([0.1, 3]).on("zoom", (event) => g.attr("transform", event.transform));
             svg.call(zoom);
 
             const treeLayout = d3.tree()
-                .nodeSize([120, 290])
-                .separation((a, b) => a.parent === b.parent ? 1.15 : 1.35);
+                .nodeSize([150, 420])
+                .separation((a, b) => a.parent === b.parent ? 1.1 : 1.35);
 
             const descRoot = d3.hierarchy(descData);
             treeLayout(descRoot);
@@ -912,9 +836,7 @@
 
             const cx = width / 2, cy = height / 2;
 
-            const linkGen = d3.linkHorizontal()
-                .x(p => cx + p.y)
-                .y(p => cy + p.x);
+            const linkGen = d3.linkHorizontal().x(p => cx + p.y).y(p => cy + p.x);
 
             g.selectAll(".link")
                 .data([...descLinks, ...ancLinks], d => `${keyNode(d.source.data)}-${keyNode(d.target.data)}`)
@@ -922,7 +844,7 @@
                 .append("path")
                 .attr("class", "link")
                 .attr("d", d => linkGen({ source: { x: d.source.x, y: d.source.y }, target: { x: d.source.x, y: d.source.y } }))
-                .transition().duration(350)
+                .transition().duration(300)
                 .attr("d", d => linkGen({ source: { x: d.source.x, y: d.source.y }, target: { x: d.target.x, y: d.target.y } }));
 
             const side = g.selectAll(".node")
@@ -932,26 +854,27 @@
                 .attr("class", d => `node ${d.data.type}`)
                 .attr("transform", d => `translate(${cx + d.y},${cy + d.x})`);
 
-            drawNode(side);
+            drawNode(side, { mode: 'branch' });
 
+            // center
             const centerSel = g.append("g")
                 .attr("class", "node person selected")
                 .attr("transform", `translate(${cx},${cy})`);
             centerSel.datum({ data: centerPerson });
-            drawNode(centerSel);
+            drawNode(centerSel, { mode: 'branch', center: true });
 
             fitToScreen(svg, g, width, height);
         }
 
         function fitToScreen(svg, g, width, height) {
             const bounds = g.node().getBBox();
-            const scale = Math.min(0.92, (width - 120) / bounds.width, (height - 120) / bounds.height);
+            const scale = Math.min(0.92, (width - 140) / bounds.width, (height - 140) / bounds.height);
             const tx = width / 2 - (bounds.x + bounds.width / 2) * scale;
             const ty = height / 2 - (bounds.y + bounds.height / 2) * scale;
             svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
         }
 
-        function drawNode(sel) {
+        function drawNode(sel, ctx) {
             sel.each(function (d) {
                 const g = d3.select(this);
                 const data = d.data;
@@ -963,137 +886,199 @@
                     return;
                 }
 
-                if (data.type === 'couple') {
-                    drawCoupleCard(g, data);
-                    if (currentPersonId && (currentPersonId === data.husbandId || currentPersonId === data.wifeId)) g.classed("selected", true);
+                if (data.type === 'union') {
+                    drawUnionNode(g, data);
+                    return;
+                }
+
+                if (data.type === 'anc_union') {
+                    drawAncestorUnionNode(g, data);
                     return;
                 }
             });
         }
 
+        /* =========================
+           DRAW: PERSON
+        ========================= */
         function drawPersonCard(g, p) {
-            const stroke = branchColorById.get(p.id) || (p.gender === 'M' ? '#3498db' : p.gender === 'F' ? '#e74c3c' : '#95a5a6');
+            const stroke = (p.gender === 'M' ? '#3498db' : p.gender === 'F' ? '#e74c3c' : '#95a5a6');
 
             g.append("rect")
                 .attr("class", "person-outer card-shadow")
-                .attr("x", -105).attr("y", -42).attr("width", 210).attr("height", 84)
-                .attr("rx", 14).attr("ry", 14)
+                .attr("x", -110).attr("y", -44).attr("width", 220).attr("height", 88)
+                .attr("rx", 16).attr("ry", 16)
                 .attr("fill", "#fff")
                 .attr("stroke", stroke)
                 .attr("stroke-width", 2);
 
             g.append("foreignObject")
-                .attr("x", -97).attr("y", -36).attr("width", 194).attr("height", 72)
+                .attr("x", -100).attr("y", -38).attr("width", 200).attr("height", 76)
                 .append("xhtml:div")
                 .style("width", "100%").style("height", "100%")
                 .style("display", "flex").style("flex-direction", "column")
                 .style("justify-content", "center").style("align-items", "center")
+                .style("text-align", "center")
                 .style("padding", "6px")
                 .html(() => {
                     const dates = [];
                     if (p.birth) dates.push(`род. ${escapeHtml(formatDate(p.birth))}`);
                     if (p.death) dates.push(`ум. ${escapeHtml(formatDate(p.death))}`);
                     return `
-        <div style="font-weight:700;font-size:14px;text-align:center;line-height:1.2;word-break:break-word;color:#2c3e50">
-          ${escapeHtml(p.name || 'Без имени')}
-        </div>
-        ${dates.length ? `<div style="margin-top:4px;font-size:11px;color:#7f8c8d;text-align:center;line-height:1.2">${dates.join(' / ')}</div>` : ''}
+        <div style="font-weight:800;font-size:14px;line-height:1.15;color:#2c3e50;word-break:break-word">${escapeHtml(p.name || 'Без имени')}</div>
+        ${dates.length ? `<div style="margin-top:6px;font-size:11px;color:#7f8c8d;line-height:1.2">${dates.join(' / ')}</div>` : ''}
       `;
                 });
         }
 
-        function drawCoupleCard(g, c) {
-            const husband = c.husbandId ? allData.people[c.husbandId] : null;
-            const wife = c.wifeId ? allData.people[c.wifeId] : null;
-
-            const hName = husband?.name || (c.husbandId ? 'Без имени' : '—');
-            const wName = wife?.name || (c.wifeId ? 'Без имени' : '—');
-
-            const hGender = husband?.gender || 'M';
-            const wGender = wife?.gender || 'F';
-
-            const hStroke = (c.husbandId && branchColorById.get(c.husbandId)) || (hGender === 'M' ? '#3498db' : '#95a5a6');
-            const wStroke = (c.wifeId && branchColorById.get(c.wifeId)) || (wGender === 'F' ? '#e74c3c' : '#95a5a6');
-
-            const outerStroke = (branchColorById.get(c.husbandId) || branchColorById.get(c.wifeId)) || '#95a5a6';
-
-            const W = 280, H = 92, half = W / 2;
-
-            g.append("rect")
-                .attr("class", "couple-outer card-shadow")
-                .attr("x", -W / 2).attr("y", -H / 2).attr("width", W).attr("height", H)
-                .attr("rx", 16).attr("ry", 16)
-                .attr("fill", "#fff")
-                .attr("stroke", outerStroke)
+        /* =========================
+           DRAW: UNION (descendants)
+        ========================= */
+        function drawUnionNode(g, u) {
+            g.append("circle")
+                .attr("r", 8)
+                .attr("fill", "rgba(44,62,80,.18)")
+                .attr("stroke", "rgba(44,62,80,.35)")
                 .attr("stroke-width", 2);
 
-            g.append("line")
-                .attr("x1", 0).attr("y1", -H / 2 + 10).attr("x2", 0).attr("y2", H / 2 - 10)
-                .attr("stroke", "rgba(44,62,80,.18)")
-                .attr("stroke-width", 1.5);
-
-            // husband clickable area
-            g.append("rect")
-                .attr("x", -W / 2 + 6).attr("y", -H / 2 + 6).attr("width", half - 12).attr("height", H - 12)
-                .attr("rx", 12).attr("ry", 12)
-                .attr("fill", "rgba(52,152,219,.06)")
-                .attr("stroke", hStroke)
-                .attr("stroke-width", 2)
-                .style("cursor", c.husbandId ? "pointer" : "default")
-                .on("click", (event) => { event.stopPropagation(); if (c.husbandId) onPersonClick(c.husbandId); });
-
-            g.append("foreignObject")
-                .attr("x", -W / 2 + 14).attr("y", -H / 2 + 12).attr("width", half - 28).attr("height", H - 24)
-                .style("pointer-events", "none")
-                .append("xhtml:div")
-                .style("width", "100%").style("height", "100%")
-                .style("display", "flex").style("flex-direction", "column")
-                .style("justify-content", "center").style("align-items", "center")
-                .style("text-align", "center")
-                .html(`
-      <div style="font-weight:700;font-size:13px;line-height:1.15;color:#2c3e50;word-break:break-word">${escapeHtml(hName)}</div>
-      ${(husband?.birth || husband?.death) ? `<div style="margin-top:4px;font-size:10px;color:#7f8c8d">${formatLife(husband)}</div>` : ''}
-    `);
-
-            // wife clickable area
-            g.append("rect")
-                .attr("x", 6).attr("y", -H / 2 + 6).attr("width", half - 12).attr("height", H - 12)
-                .attr("rx", 12).attr("ry", 12)
-                .attr("fill", "rgba(231,76,60,.06)")
-                .attr("stroke", wStroke)
-                .attr("stroke-width", 2)
-                .style("cursor", c.wifeId ? "pointer" : "default")
-                .on("click", (event) => { event.stopPropagation(); if (c.wifeId) onPersonClick(c.wifeId); });
-
-            g.append("foreignObject")
-                .attr("x", 14).attr("y", -H / 2 + 12).attr("width", half - 28).attr("height", H - 24)
-                .style("pointer-events", "none")
-                .append("xhtml:div")
-                .style("width", "100%").style("height", "100%")
-                .style("display", "flex").style("flex-direction", "column")
-                .style("justify-content", "center").style("align-items", "center")
-                .style("text-align", "center")
-                .html(`
-      <div style="font-weight:700;font-size:13px;line-height:1.15;color:#2c3e50;word-break:break-word">${escapeHtml(wName)}</div>
-      ${(wife?.birth || wife?.death) ? `<div style="margin-top:4px;font-size:10px;color:#7f8c8d">${formatLife(wife)}</div>` : ''}
-    `);
-
-            if (c.marriage) {
+            if (u.marriage) {
                 g.append("foreignObject")
-                    .attr("x", -60).attr("y", H / 2 - 18).attr("width", 120).attr("height", 24)
+                    .attr("x", -78).attr("y", 14).attr("width", 156).attr("height", 26)
                     .style("pointer-events", "none")
                     .append("xhtml:div")
                     .style("width", "100%").style("height", "100%")
                     .style("display", "flex").style("align-items", "center").style("justify-content", "center")
                     .html(`
-        <div style="padding:3px 10px;border-radius:999px;background:rgba(44,62,80,.08);font-size:10px;color:#2c3e50">
-          <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(formatDate(c.marriage))}
+        <div style="padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.85);font-size:10px;color:#2c3e50;box-shadow:0 6px 14px rgba(0,0,0,.08)">
+          <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(formatDate(u.marriage))}
         </div>
       `);
             }
+
+            // spouse mini card to the right (not a tree node)
+            if (u.spouseId && allData.people[u.spouseId]) {
+                const sp = allData.people[u.spouseId];
+
+                const x = 230;
+                const y = 0;
+
+                g.append("path")
+                    .attr("d", `M 10 0 C 55 0, 110 0, ${x - 105} ${y}`)
+                    .attr("fill", "none")
+                    .attr("stroke", "rgba(44,62,80,.22)")
+                    .attr("stroke-width", 2);
+
+                const mini = g.append("g")
+                    .attr("transform", `translate(${x},${y})`)
+                    .style("cursor", "pointer")
+                    .on("click", (event) => {
+                        event.stopPropagation();
+                        onPersonClick(u.spouseId);
+                    });
+
+                drawMiniPersonCard(mini, sp);
+            }
         }
 
-        function keyNode(n) { return `${n.type}:${n.type === 'person' ? n.id : n.famId}`; }
+        function drawMiniPersonCard(g, person) {
+            const gender = person.gender || "";
+            const stroke = (gender === 'M' ? '#3498db' : gender === 'F' ? '#e74c3c' : '#95a5a6');
+
+            g.append("rect")
+                .attr("class", "card-shadow")
+                .attr("x", -98).attr("y", -30).attr("width", 196).attr("height", 60)
+                .attr("rx", 14).attr("ry", 14)
+                .attr("fill", "#fff")
+                .attr("stroke", stroke)
+                .attr("stroke-width", 2);
+
+            g.append("foreignObject")
+                .attr("x", -90).attr("y", -24).attr("width", 180).attr("height", 48)
+                .style("pointer-events", "none")
+                .append("xhtml:div")
+                .style("width", "100%").style("height", "100%")
+                .style("display", "flex").style("flex-direction", "column")
+                .style("justify-content", "center").style("align-items", "center")
+                .style("text-align", "center")
+                .html(`
+      <div style="font-weight:800;font-size:12px;line-height:1.15;color:#2c3e50;word-break:break-word">${escapeHtml(person.name || 'Без имени')}</div>
+      ${(person.birth || person.death) ? `<div style="margin-top:4px;font-size:10px;color:#7f8c8d">${formatLife(person)}</div>` : ''}
+    `);
+        }
+
+        /* =========================
+           DRAW: ANCESTOR UNION (parents)
+        ========================= */
+        function drawAncestorUnionNode(g, u) {
+            g.append("circle")
+                .attr("r", 8)
+                .attr("fill", "rgba(44,62,80,.18)")
+                .attr("stroke", "rgba(44,62,80,.35)")
+                .attr("stroke-width", 2);
+
+            if (u.marriage) {
+                g.append("foreignObject")
+                    .attr("x", -78).attr("y", 14).attr("width", 156).attr("height", 26)
+                    .style("pointer-events", "none")
+                    .append("xhtml:div")
+                    .style("width", "100%").style("height", "100%")
+                    .style("display", "flex").style("align-items", "center").style("justify-content", "center")
+                    .html(`
+        <div style="padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.85);font-size:10px;color:#2c3e50;box-shadow:0 6px 14px rgba(0,0,0,.08)">
+          <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(formatDate(u.marriage))}
+        </div>
+      `);
+            }
+
+            // father (upper-left)
+            if (u.fatherId && allData.people[u.fatherId]) {
+                const fp = allData.people[u.fatherId];
+                const x = -230, y = -50;
+
+                g.append("path")
+                    .attr("d", `M -10 0 C -55 0, -110 ${y}, ${x + 105} ${y}`)
+                    .attr("fill", "none")
+                    .attr("stroke", "rgba(44,62,80,.22)")
+                    .attr("stroke-width", 2);
+
+                const mini = g.append("g")
+                    .attr("transform", `translate(${x},${y})`)
+                    .style("cursor", "pointer")
+                    .on("click", (event) => {
+                        event.stopPropagation();
+                        onPersonClick(u.fatherId);
+                    });
+                drawMiniPersonCard(mini, fp);
+            }
+
+            // mother (lower-left)
+            if (u.motherId && allData.people[u.motherId]) {
+                const mp = allData.people[u.motherId];
+                const x = -230, y = 50;
+
+                g.append("path")
+                    .attr("d", `M -10 0 C -55 0, -110 ${y}, ${x + 105} ${y}`)
+                    .attr("fill", "none")
+                    .attr("stroke", "rgba(44,62,80,.22)")
+                    .attr("stroke-width", 2);
+
+                const mini = g.append("g")
+                    .attr("transform", `translate(${x},${y})`)
+                    .style("cursor", "pointer")
+                    .on("click", (event) => {
+                        event.stopPropagation();
+                        onPersonClick(u.motherId);
+                    });
+                drawMiniPersonCard(mini, mp);
+            }
+        }
+
+        function keyNode(n) {
+            if (n.type === 'person') return `person:${n.id}`;
+            if (n.type === 'union') return `union:${n.famId}:${n.primaryId || ''}`;
+            if (n.type === 'anc_union') return `anc_union:${n.famId}`;
+            return `${n.type}:${n.id || n.famId || ''}`;
+        }
 
         /* =========================
            INFO PANEL
@@ -1104,7 +1089,6 @@
 
             const infoDiv = document.getElementById('person-info');
 
-            // parents
             let parents = [];
             if (person.familiesAsChild?.length) {
                 const fam = allData.families[person.familiesAsChild[0]];
@@ -1114,7 +1098,6 @@
                 }
             }
 
-            // spouses + children
             let spouses = [];
             let children = [];
             for (const famId of (person.familiesAsSpouse || [])) {
@@ -1122,7 +1105,7 @@
                 if (!fam) continue;
 
                 const spouseId = fam.husband === personId ? fam.wife : fam.husband;
-                if (spouseId && allData.people[spouseId]) spouses.push({ id: spouseId, marriage: fam.marriage });
+                spouses.push({ id: spouseId || null, marriage: fam.marriage || '' });
 
                 for (const childId of (fam.children || [])) {
                     if (allData.people[childId]) children.push(childId);
@@ -1166,11 +1149,11 @@
             if (spouses.length) {
                 html += `<div class="detail-row"><div class="detail-label">Супруг(а)</div><div class="detail-value">`;
                 spouses.forEach(s => {
-                    const sp = allData.people[s.id];
+                    const spName = s.id && allData.people[s.id] ? allData.people[s.id].name : '—';
                     html += `
-        <div class="family-member" style="cursor:pointer" onclick="onPersonClick('${s.id}')">
+        <div class="family-member" style="cursor:${s.id ? 'pointer' : 'default'}" ${s.id ? `onclick="onPersonClick('${s.id}')"` : ''}>
           <i class="fas fa-heart"></i>
-          <span>${escapeHtml(sp.name)}${s.marriage ? ` (брак: ${escapeHtml(formatDate(s.marriage))})` : ''}</span>
+          <span>${escapeHtml(spName)}${s.marriage ? ` (дата: ${escapeHtml(formatDate(s.marriage))})` : ''}</span>
         </div>`;
                 });
                 html += `</div></div>`;
@@ -1190,7 +1173,6 @@
 
             html += `</div>`;
             infoDiv.innerHTML = html;
-            document.getElementById('info-panel').classList.add('open');
         }
 
         /* =========================
