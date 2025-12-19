@@ -744,7 +744,6 @@
 
     <!-- ВСЕ СКРИПТЫ БУДУТ ЗДЕСЬ -->
     <script>
-        // ВСЯ ЛОГИКА БУДЕТ ЗДЕСЬ (скопируйте из раздела data.js ниже)
         // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
         let allData = null;
         let treeData = null;
@@ -760,14 +759,18 @@
             try {
                 // Загружаем GEDCOM файл
                 const response = await fetch('./3.ged');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const text = await response.text();
 
                 // Парсим данные
                 allData = parseGedcom(text);
                 console.log('✅ Загружено людей:', Object.keys(allData.people).length);
 
-                // Находим корневого человека (Егора или первого с детьми)
+                // Находим корневого человека
                 let rootId = findRootPerson(allData);
+                console.log('🌳 Корневой человек:', rootId, allData.people[rootId]?.name);
 
                 // Строим дерево потомков
                 treeData = buildDescendantsTree(rootId, allData);
@@ -924,7 +927,7 @@
                 death: person.death || '',
                 gender: person.gender || '',
                 children: [],
-                _children: [] // Для хранения свёрнутых детей
+                _children: []
             };
 
             // Добавляем детей
@@ -951,6 +954,11 @@
             const container = d3.select("#tree");
             container.selectAll("*").remove();
 
+            if (!treeData) {
+                container.html('<div style="padding: 40px; text-align: center; color: white;"><h3>Дерево не загружено</h3><p>Проверьте данные</p></div>');
+                return;
+            }
+
             const width = container.node().clientWidth;
             const height = container.node().clientHeight;
 
@@ -964,13 +972,6 @@
 
             // Создаем иерархию
             const root = d3.hierarchy(treeData);
-
-            // Сворачиваем все узлы кроме корневого
-            root.descendants().forEach(d => {
-                if (d.depth > 2) { // Оставляем развёрнутыми только 2 уровня
-                    d.children = null;
-                }
-            });
 
             // Настраиваем дерево
             const treeLayout = d3.tree()
@@ -987,27 +988,14 @@
 
             svg.call(zoom);
 
-            // Центрируем вид
-            const initialX = width / 2;
-            const initialY = 100;
-            const initialScale = 0.8;
-
-            svg.call(zoom.transform, d3.zoomIdentity
-                .translate(initialX, initialY)
-                .scale(initialScale));
-
             // Обновляем дерево
-            updateTree(root, g, treeLayout);
+            update(root, g, treeLayout);
 
-            // Обработчик изменения размера окна
-            window.addEventListener('resize', () => {
-                const newWidth = container.node().clientWidth;
-                const newHeight = container.node().clientHeight;
-                svg.attr("width", newWidth).attr("height", newHeight);
-            });
+            // Центрируем вид
+            centerView(svg, root, width, height);
         }
 
-        function updateTree(source, g, treeLayout) {
+        function update(source, g, treeLayout) {
             // Вычисляем новое расположение узлов
             treeLayout(source);
 
@@ -1056,12 +1044,7 @@
                 })
                 .on("dblclick", function (event, d) {
                     event.stopPropagation();
-                    toggleBranch(d);
-                })
-                .on("contextmenu", function (event, d) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    toggleBranch(d);
+                    toggleBranch(d, g, treeLayout);
                 });
 
             // Прямоугольник узла
@@ -1124,7 +1107,7 @@
                 .attr("transform", "translate(85, 0)")
                 .on("click", function (event, d) {
                     event.stopPropagation();
-                    toggleBranch(d);
+                    toggleBranch(d, g, treeLayout);
                 })
                 .append("circle")
                 .attr("r", 12)
@@ -1152,12 +1135,10 @@
             node.exit()
                 .transition()
                 .duration(300)
-                .attr("transform", d => `translate(${source.y},${source.x})`)
                 .remove();
         }
 
-        // ===== ФУНКЦИИ УПРАВЛЕНИЯ =====
-        function toggleBranch(d) {
+        function toggleBranch(d, g, treeLayout) {
             if (d.children) {
                 // Сворачиваем
                 d._children = d.children;
@@ -1171,8 +1152,363 @@
             }
 
             // Обновляем дерево
-            const g = d3.select("#tree g");
-            const treeLayout = d3.tree()
+            update(d.parent || d, g, treeLayout);
+        }
+
+        function centerView(svg, root, width, height) {
+            const nodes = root.descendants();
+            if (nodes.length === 0) return;
+
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+
+            nodes.forEach(d => {
+                if (d.x < minX) minX = d.x;
+                if (d.x > maxX) maxX = d.x;
+                if (d.y < minY) minY = d.y;
+                if (d.y > maxY) maxY = d.y;
+            });
+
+            // Добавляем отступы
+            minX -= 100;
+            maxX += 100;
+            minY -= 100;
+            maxY += 100;
+
+            const treeWidth = maxY - minY;
+            const treeHeight = maxX - minX;
+
+            const scale = Math.min(
+                0.9,
+                (width - 200) / treeWidth,
+                (height - 200) / treeHeight
+            );
+
+            const translateX = (width - treeWidth * scale) / 2 - minY * scale;
+            const translateY = (height - treeHeight * scale) / 2 - minX * scale;
+
+            svg.call(zoom.transform, d3.zoomIdentity
+                .translate(translateX, translateY)
+                .scale(scale));
+        }
+
+        // ===== ФУНКЦИИ УПРАВЛЕНИЯ =====
+        function setupControls() {
+            // Кнопки масштабирования
+            document.getElementById('zoom-in').addEventListener('click', () => {
+                const svg = d3.select("#tree svg");
+                svg.transition().duration(300).call(zoom.scaleBy, 1.2);
+            });
+
+            document.getElementById('zoom-out').addEventListener('click', () => {
+                const svg = d3.select("#tree svg");
+                svg.transition().duration(300).call(zoom.scaleBy, 0.8);
+            });
+
+            document.getElementById('reset-view').addEventListener('click', () => {
+                const svg = d3.select("#tree svg");
+                const container = d3.select("#tree");
+                const width = container.node().clientWidth;
+                const height = container.node().clientHeight;
+                const root = d3.hierarchy(treeData);
+                centerView(svg, root, width, height);
+            });
+
+            // Экспорт
+            document.getElementById('export-btn').addEventListener('click', exportPNG);
+
+            // Помощь
+            document.getElementById('help-btn').addEventListener('click', () => {
+                document.getElementById('help-modal').classList.add('active');
+            });
+
+            // Закрытие модального окна
+            document.querySelector('.close-modal').addEventListener('click', () => {
+                document.getElementById('help-modal').classList.remove('active');
+            });
+
+            // Закрытие информационной панели
+            document.getElementById('close-info').addEventListener('click', () => {
+                document.getElementById('info-panel').style.display = 'none';
+            });
+
+            // Поиск
+            const searchInput = document.getElementById('search-input');
+            searchInput.addEventListener('input', handleSearch);
+
+            // Клик вне модального окна
+            window.addEventListener('click', (event) => {
+                const modal = document.getElementById('help-modal');
+                if (event.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+
+            // Для мобильных: долгое нажатие = двойной клик
+            let touchTimer;
+            document.addEventListener('touchstart', (e) => {
+                if (e.target.closest('.node')) {
+                    touchTimer = setTimeout(() => {
+                        const node = e.target.closest('.node');
+                        const nodeId = node.getAttribute('data-id');
+                        const nodeElement = d3.select(`[data-id="${nodeId}"]`);
+                        const d = nodeElement.datum();
+                        if (d) {
+                            const g = d3.select("#tree g");
+                            const treeLayout = d3.tree()
+                                .nodeSize([120, 300])
+                                .separation((a, b) => a.parent === b.parent ? 1.2 : 1.5);
+                            toggleBranch(d, g, treeLayout);
+                        }
+                    }, 500);
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', () => {
+                clearTimeout(touchTimer);
+            });
+        }
+
+        function selectPerson(personId) {
+            currentPersonId = personId;
+
+            // Снимаем выделение со всех узлов
+            d3.selectAll('.node').classed('selected', false);
+
+            // Выделяем выбранный узел
+            d3.select(`[data-id="${personId}"]`).classed('selected', true);
+
+            // Показываем информацию
+            showPersonInfo(personId);
+
+            // Обновляем статус
+            document.getElementById('selected-person').textContent =
+                allData.people[personId]?.name || 'Неизвестно';
+        }
+
+        function showPersonInfo(personId) {
+            const person = allData.people[personId];
+            if (!person) return;
+
+            // Показываем панель
+            document.getElementById('info-panel').style.display = 'block';
+
+            // Формируем HTML
+            let html = `
+        <div class="person-details">
+            <div class="detail-row">
+                <div class="detail-label">ФИО</div>
+                <div class="detail-value">${person.name || 'Без имени'}</div>
+            </div>
+    `;
+
+            if (person.birth) {
+                html += `
+            <div class="detail-row">
+                <div class="detail-label">Дата рождения</div>
+                <div class="detail-value">${formatDate(person.birth)}</div>
+            </div>
+        `;
+            }
+
+            if (person.death) {
+                html += `
+            <div class="detail-row">
+                <div class="detail-label">Дата смерти</div>
+                <div class="detail-value">${formatDate(person.death)}</div>
+            </div>
+        `;
+            }
+
+            if (person.gender) {
+                html += `
+            <div class="detail-row">
+                <div class="detail-label">Пол</div>
+                <div class="detail-value">${person.gender === 'M' ? 'Мужской' : 'Женский'}</div>
+            </div>
+        `;
+            }
+
+            // Ищем семью
+            if (person.familiesAsSpouse && person.familiesAsSpouse.length > 0) {
+                const family = allData.families[person.familiesAsSpouse[0]];
+                if (family) {
+                    // Супруг(а)
+                    const spouseId = person.gender === 'M' ? family.wife : family.husband;
+                    if (spouseId) {
+                        const spouse = allData.people[spouseId];
+                        html += `
+                    <div class="detail-row">
+                        <div class="detail-label">Супруг(а)</div>
+                        <div class="detail-value">
+                            <a href="#" onclick="selectPerson('${spouseId}'); return false;" style="color: #3498db;">
+                                ${spouse?.name || 'Неизвестно'}
+                            </a>
+                        </div>
+                    </div>
+                `;
+                    }
+
+                    // Дети
+                    if (family.children && family.children.length > 0) {
+                        html += `
+                    <div class="detail-row">
+                        <div class="detail-label">Дети (${family.children.length})</div>
+                        <div class="detail-value">
+                `;
+
+                        family.children.forEach(childId => {
+                            const child = allData.people[childId];
+                            html += `
+                        <div class="family-member">
+                            <i class="fas fa-child"></i>
+                            <a href="#" onclick="selectPerson('${childId}'); return false;" style="color: #3498db;">
+                                ${child?.name || 'Неизвестно'}
+                            </a>
+                        </div>
+                    `;
+                        });
+
+                        html += `</div></div>`;
+                    }
+                }
+            }
+
+            html += `</div>`;
+
+            document.getElementById('person-info').innerHTML = html;
+        }
+
+        function handleSearch() {
+            const searchTerm = this.value.toLowerCase().trim();
+            const resultsContainer = document.getElementById('search-results');
+
+            if (searchTerm.length < 2) {
+                resultsContainer.style.display = 'none';
+                return;
+            }
+
+            const results = [];
+            Object.entries(allData.people).forEach(([id, person]) => {
+                if (person.name && person.name.toLowerCase().includes(searchTerm)) {
+                    results.push({ id, name: person.name, birth: person.birth });
+                }
+            });
+
+            if (results.length > 0) {
+                let html = '';
+                results.slice(0, 10).forEach(result => {
+                    html += `
+                <div class="search-result-item" onclick="selectPerson('${result.id}'); this.parentElement.style.display='none';">
+                    <span>${result.name}</span>
+                    ${result.birth ? `<small>${formatDate(result.birth)}</small>` : ''}
+                </div>
+            `;
+                });
+
+                resultsContainer.innerHTML = html;
+                resultsContainer.style.display = 'block';
+            } else {
+                resultsContainer.style.display = 'none';
+            }
+        }
+
+        function updateStats() {
+            if (!allData) return;
+
+            const personCount = Object.keys(allData.people).length;
+            document.getElementById('person-count').textContent = personCount;
+            document.getElementById('tree-stats').textContent =
+                `${personCount} человек, ${Object.keys(allData.families).length} семей`;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const months = {
+                'JAN': 'янв', 'FEB': 'фев', 'MAR': 'мар',
+                'APR': 'апр', 'MAY': 'май', 'JUN': 'июн',
+                'JUL': 'июл', 'AUG': 'авг', 'SEP': 'сен',
+                'OCT': 'окт', 'NOV': 'ноя', 'DEC': 'дек'
+            };
+
+            const match = dateStr.match(/(\d{1,2})\s+([A-Z]{3})\s+(\d{4})/);
+            if (match) {
+                const [, day, month, year] = match;
+                return `${day} ${months[month] || month} ${year}`;
+            }
+            return dateStr;
+        }
+
+        function exportPNG() {
+            try {
+                const svgElement = document.querySelector('#tree svg');
+                if (!svgElement) {
+                    alert('SVG элемент не найден!');
+                    return;
+                }
+
+                const serializer = new XMLSerializer();
+                const svgString = serializer.serializeToString(svgElement);
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+
+                const scale = 2;
+                canvas.width = svgElement.clientWidth * scale;
+                canvas.height = svgElement.clientHeight * scale;
+
+                img.onload = function () {
+                    ctx.scale(scale, scale);
+                    ctx.drawImage(img, 0, 0);
+
+                    const link = document.createElement('a');
+                    const timestamp = new Date().toISOString().slice(0, 10);
+                    link.download = `семейное-древо-${timestamp}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                };
+
+                img.src = 'data:image/svg+xml;base64,' + btoa(
+                    '<?xml version="1.0" encoding="UTF-8" standalone="no"?>' +
+                    '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' +
+                    svgString
+                );
+
+            } catch (error) {
+                console.error('Ошибка экспорта PNG:', error);
+                alert('Ошибка при сохранении: ' + error.message);
+            }
+        }
+
+        function showError(message) {
+            const container = document.getElementById('tree');
+            container.innerHTML = `
+        <div style="padding: 40px; text-align: center; color: white;">
+            <h3>Ошибка загрузки</h3>
+            <p>${message}</p>
+            <button onclick="location.reload()" style="
+                padding: 10px 20px;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                margin-top: 20px;
+            ">Обновить страницу</button>
+        </div>
+    `;
+        }
+
+        // ===== ЗАПУСК ПРИЛОЖЕНИЯ =====
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('📱 DOM загружен, запускаем приложение...');
+            initApp();
+        });
+
+        // Экспортируем функции для глобального использования
+        window.selectPerson = selectPerson;
+        window.formatDate = formatDate;
     </script>
 </body>
 
