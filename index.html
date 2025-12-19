@@ -5,296 +5,1175 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Семейное древо Русяйкиных</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Подключаем D3 -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- Подключаем Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
-        /* Стили для контекстного меню и мобильной адаптации */
-        .context-menu {
-            position: absolute;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-            z-index: 1000;
-            min-width: 180px;
+        /* ===== СБРОС И БАЗОВЫЕ СТИЛИ ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             overflow: hidden;
         }
 
-        .context-menu div {
-            padding: 12px 15px;
-            cursor: pointer;
-            border-bottom: 1px solid #eee;
-            transition: background 0.2s;
+        .app-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* ===== ШАПКА ===== */
+        .app-header {
+            background: rgba(44, 62, 80, 0.95);
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 100;
+            flex-shrink: 0;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo i {
+            font-size: 28px;
+            color: #3498db;
+        }
+
+        .logo h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* Поиск */
+        .search-container {
+            position: relative;
+            min-width: 250px;
+        }
+
+        .search-container i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #95a5a6;
+        }
+
+        #search-input {
+            width: 100%;
+            padding: 10px 15px 10px 40px;
+            border: 2px solid #34495e;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
             font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        #search-input:focus {
+            outline: none;
+            border-color: #3498db;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        #search-input::placeholder {
+            color: #95a5a6;
+        }
+
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1000;
+        }
+
+        .search-result-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .search-result-item:hover {
+            background: #f5f5f5;
+        }
+
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Кнопки управления */
+        .control-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .ctrl-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .ctrl-btn:hover {
+            background: #3498db;
+            transform: translateY(-2px);
+        }
+
+        /* ===== ОСНОВНАЯ ОБЛАСТЬ ===== */
+        .main-content {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #tree-container {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #tree {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ===== ФУТЕР ===== */
+        .app-footer {
+            background: rgba(44, 62, 80, 0.9);
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            flex-shrink: 0;
+            z-index: 90;
+        }
+
+        .status-info {
+            flex: 1;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .color-box {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        .color-box.male {
+            background: #3498db;
+        }
+
+        .color-box.female {
+            background: #e74c3c;
+        }
+
+        /* ===== ИНФОРМАЦИОННАЯ ПАНЕЛЬ ===== */
+        .info-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            width: 320px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            z-index: 200;
+            display: none;
+            overflow: hidden;
+            animation: slideInRight 0.3s ease;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .info-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .info-header h3 {
+            font-size: 16px;
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
-        .context-menu div:last-child {
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.3s;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .info-content {
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .empty-info {
+            text-align: center;
+            color: #7f8c8d;
+            padding: 20px;
+        }
+
+        .empty-info i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        /* Стили для информации о человеке */
+        .person-details {
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .detail-row {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .detail-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
             border-bottom: none;
         }
 
-        .context-menu div:hover {
-            background: #f5f5f5;
+        .detail-label {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .mobile-toggle-btn {
+        .detail-value {
+            color: #34495e;
+            font-size: 15px;
+        }
+
+        .family-member {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px dashed #eee;
+        }
+
+        .family-member:last-child {
+            border-bottom: none;
+        }
+
+        .family-member i {
+            color: #3498db;
+            width: 20px;
+        }
+
+        /* ===== МОДАЛЬНОЕ ОКНО ПОМОЩИ ===== */
+        .modal {
             display: none;
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #3498db;
-            color: white;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
             z-index: 1000;
+            align-items: center;
+            justify-content: center;
         }
 
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: hidden;
+            animation: modalAppear 0.3s ease;
+        }
+
+        @keyframes modalAppear {
+            from {
+                transform: scale(0.9);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-body {
+            padding: 25px;
+            overflow-y: auto;
+            max-height: calc(80vh - 70px);
+        }
+
+        .modal-body h3 {
+            color: #2c3e50;
+            margin: 20px 0 10px 0;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-body h3:first-child {
+            margin-top: 0;
+        }
+
+        .modal-body ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+
+        .modal-body li {
+            margin-bottom: 8px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .modal-body li:before {
+            content: "•";
+            color: #3498db;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        .legend-modal {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .legend-modal div {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* ===== СТИЛИ ДЛЯ D3 ДЕРЕВА ===== */
+        .node {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .node rect {
+            fill: white;
+            stroke-width: 2;
+            rx: 8;
+            ry: 8;
+            filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.15));
+            transition: all 0.3s;
+        }
+
+        .node.male rect {
+            stroke: #3498db;
+        }
+
+        .node.female rect {
+            stroke: #e74c3c;
+        }
+
+        .node:hover rect {
+            stroke-width: 3;
+            filter: drop-shadow(2px 2px 10px rgba(0, 0, 0, 0.2));
+            transform: scale(1.05);
+        }
+
+        .node.selected rect {
+            stroke-width: 4;
+            stroke: #f39c12;
+            fill: #fff9e6;
+        }
+
+        .node text {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .node .name {
+            font-weight: 600;
+            font-size: 14px;
+            fill: #2c3e50;
+        }
+
+        .node .dates {
+            font-size: 11px;
+            fill: #7f8c8d;
+        }
+
+        .node .toggle-btn {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .node .toggle-btn circle {
+            fill: #27ae60;
+            stroke: #219653;
+            stroke-width: 1;
+        }
+
+        .node .toggle-btn text {
+            fill: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .node.collapsed .toggle-btn circle {
+            fill: #e74c3c;
+            stroke: #c0392b;
+        }
+
+        .link {
+            fill: none;
+            stroke: #95a5a6;
+            stroke-width: 2;
+            stroke-opacity: 0.6;
+            transition: all 0.3s;
+        }
+
+        .link:hover {
+            stroke-opacity: 1;
+            stroke-width: 3;
+        }
+
+        /* ===== АДАПТИВНОСТЬ ===== */
         @media (max-width: 768px) {
-            .mobile-toggle-btn {
-                display: flex;
-                align-items: center;
+            .app-header {
+                flex-direction: column;
+                gap: 15px;
+                padding: 15px;
+            }
+
+            .controls {
+                width: 100%;
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .search-container {
+                width: 100%;
+            }
+
+            .info-panel {
+                width: calc(100% - 40px);
+                top: auto;
+                bottom: 80px;
+                right: 20px;
+                left: 20px;
+                animation: slideInUp 0.3s ease;
+            }
+
+            @keyframes slideInUp {
+                from {
+                    transform: translateY(100%);
+                    opacity: 0;
+                }
+
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+
+            .app-footer {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+                padding: 15px;
+            }
+
+            .legend {
                 justify-content: center;
             }
         }
 
-        .node-controls {
-            display: flex;
-            gap: 5px;
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
+        @media (max-width: 480px) {
+            .logo h1 {
+                font-size: 16px;
+            }
 
-        .control-btn {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: #3498db;
-            color: white;
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 12px;
+            .control-buttons {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .modal-content {
+                width: 95%;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <!-- Шапка -->
-        <header>
-            <div class="header-content">
-                <h1><i class="fas fa-tree"></i> Семейное древо Русяйкиных</h1>
-                <p class="subtitle">Исследуйте историю своей семьи</p>
+    <!-- Главный контейнер -->
+    <div class="app-container">
+        <!-- Шапка с управлением -->
+        <header class="app-header">
+            <div class="logo">
+                <i class="fas fa-tree"></i>
+                <h1>Семейное древо Русяйкиных</h1>
             </div>
 
             <div class="controls">
-                <div class="search-box">
+                <!-- Поиск -->
+                <div class="search-container">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="search" placeholder="Найти человека...">
+                    <input type="text" id="search-input" placeholder="Найти человека...">
+                    <div id="search-results" class="search-results"></div>
                 </div>
 
+                <!-- Кнопки управления -->
                 <div class="control-buttons">
-                    <button id="view-full-tree" class="btn btn-primary">
-                        <i class="fas fa-sitemap"></i> Все дерево
+                    <button id="zoom-in" class="ctrl-btn" title="Увеличить">
+                        <i class="fas fa-search-plus"></i>
                     </button>
-                    <button id="export-png" class="btn btn-success">
-                        <i class="fas fa-download"></i> Сохранить
+                    <button id="zoom-out" class="ctrl-btn" title="Уменьшить">
+                        <i class="fas fa-search-minus"></i>
                     </button>
-                    <button id="toggle-help" class="btn btn-info">
-                        <i class="fas fa-question-circle"></i> Помощь
+                    <button id="reset-view" class="ctrl-btn" title="Сбросить вид">
+                        <i class="fas fa-expand-arrows-alt"></i>
+                    </button>
+                    <button id="export-btn" class="ctrl-btn" title="Сохранить как PNG">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button id="help-btn" class="ctrl-btn" title="Помощь">
+                        <i class="fas fa-question-circle"></i>
                     </button>
                 </div>
             </div>
         </header>
 
-        <!-- Основное содержимое -->
-        <div class="main-content">
-            <!-- Левая панель - список людей -->
-            <aside class="sidebar left-sidebar">
-                <div class="sidebar-header">
-                    <h3><i class="fas fa-users"></i> Список людей</h3>
-                    <span id="person-count" class="badge">0</span>
-                </div>
+        <!-- Основное содержимое - только дерево -->
+        <main class="main-content">
+            <div id="tree-container">
+                <div id="tree"></div>
+            </div>
+        </main>
 
-                <div class="filters">
-                    <div class="filter-group">
-                        <label>Поколение:</label>
-                        <select id="generation-filter">
-                            <option value="all">Все</option>
-                            <option value="0">Поколение 1</option>
-                            <option value="1">Поколение 2</option>
-                            <option value="2">Поколение 3</option>
-                            <option value="3">Поколение 4+</option>
-                        </select>
-                    </div>
+        <!-- Статусная строка внизу -->
+        <footer class="app-footer">
+            <div class="status-info">
+                <span id="person-count">0</span> человек в дереве |
+                Выбрано: <span id="selected-person">никто</span> |
+                <span id="tree-stats">Загрузка...</span>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="color-box male"></div>
+                    <span>Мужчина</span>
                 </div>
-
-                <div id="person-list" class="person-list">
-                    <!-- Список будет заполнен JavaScript -->
-                    <div class="loading">Загрузка списка...</div>
-                </div>
-            </aside>
-
-            <!-- Центральная область - дерево -->
-            <main class="tree-area">
-                <div class="tree-header">
-                    <div class="breadcrumb" id="breadcrumb">
-                        <span class="breadcrumb-item" data-id="root">Все дерево</span>
-                    </div>
-
-                    <div class="tree-controls">
-                        <button id="zoom-in" class="icon-btn" title="Увеличить">
-                            <i class="fas fa-search-plus"></i>
-                        </button>
-                        <button id="zoom-out" class="icon-btn" title="Уменьшить">
-                            <i class="fas fa-search-minus"></i>
-                        </button>
-                        <button id="reset-view" class="icon-btn" title="Сбросить вид">
-                            <i class="fas fa-expand-arrows-alt"></i>
-                        </button>
-                        <button id="toggle-layout" class="icon-btn" title="Изменить вид">
-                            <i class="fas fa-project-diagram"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="tree-container">
-                    <div id="tree"></div>
-                </div>
-
-                <div class="tree-footer">
-                    <div class="legend">
-                        <div class="legend-item">
-                            <div class="color-box male"></div>
-                            <span>Мужчина</span>
-                        </div>
-                        <div class="legend-item">
-                            <div class="color-box female"></div>
-                            <span>Женщина</span>
-                        </div>
-                        <div class="legend-item">
-                            <div class="color-box unknown"></div>
-                            <span>Пол неизвестен</span>
-                        </div>
-                    </div>
-                    <div class="stats" id="tree-stats">
-                        <span id="node-count">0</span> человек
-                    </div>
-                </div>
-            </main>
-
-            <!-- Правая панель - детали -->
-            <aside class="sidebar right-sidebar">
-                <div class="sidebar-header">
-                    <h3><i class="fas fa-user-circle"></i> Информация</h3>
-                    <button id="close-details" class="icon-btn small">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <div id="person-details">
-                    <div class="empty-state">
-                        <i class="fas fa-mouse-pointer"></i>
-                        <p>Выберите человека на дереве для просмотра подробной информации</p>
-                    </div>
-                </div>
-
-                <div class="quick-actions" id="quick-actions" style="display: none;">
-                    <h4>Быстрые действия</h4>
-                    <div class="action-buttons">
-                        <button id="expand-branch" class="btn btn-small">
-                            <i class="fas fa-plus-circle"></i> Развернуть ветку
-                        </button>
-                        <button id="collapse-branch" class="btn btn-small">
-                            <i class="fas fa-minus-circle"></i> Свернуть ветку
-                        </button>
-                        <button id="show-parents" class="btn btn-small">
-                            <i class="fas fa-level-up-alt"></i> К родителям
-                        </button>
-                        <button id="show-children" class="btn btn-small">
-                            <i class="fas fa-level-down-alt"></i> К детям
-                        </button>
-                    </div>
-                </div>
-            </aside>
-        </div>
-
-        <!-- Футер -->
-        <footer>
-            <div class="footer-content">
-                <div class="footer-left">
-                    <p><i class="fas fa-code-branch"></i> Семейное древо Русяйкиных • Версия 2.0</p>
-                    <p class="small">Данные загружены из GEDCOM файла</p>
-                </div>
-                <div class="footer-right">
-                    <p id="current-person"></p>
-                    <p class="small" id="tree-info">Загрузка...</p>
+                <div class="legend-item">
+                    <div class="color-box female"></div>
+                    <span>Женщина</span>
                 </div>
             </div>
         </footer>
 
-        <!-- Кнопка для мобильных (появляется только на маленьких экранах) -->
-        <button id="mobile-menu-toggle" class="mobile-toggle-btn">
-            <i class="fas fa-bars"></i>
-        </button>
-    </div>
-
-    <!-- Модальное окно помощи -->
-    <div id="help-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-question-circle"></i> Как пользоваться деревом</h3>
-                <button class="close-modal">&times;</button>
+        <!-- Всплывающая панель с информацией (появляется при клике) -->
+        <div id="info-panel" class="info-panel">
+            <div class="info-header">
+                <h3><i class="fas fa-user"></i> Информация</h3>
+                <button id="close-info" class="close-btn">&times;</button>
             </div>
-            <div class="modal-body">
-                <div class="help-section">
-                    <h4><i class="fas fa-desktop"></i> На компьютере:</h4>
+            <div id="person-info" class="info-content">
+                <div class="empty-info">
+                    <i class="fas fa-mouse-pointer"></i>
+                    <p>Кликните на человека в дереве, чтобы увидеть информацию</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модальное окно помощи (появляется по кнопке) -->
+        <div id="help-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-question-circle"></i> Как пользоваться</h2>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <h3><i class="fas fa-mouse-pointer"></i> Управление деревом:</h3>
                     <ul>
-                        <li><strong>Клик</strong> — выбрать человека</li>
-                        <li><strong>Двойной клик</strong> — развернуть/свернуть ветку</li>
-                        <li><strong>Правый клик</strong> — контекстное меню</li>
-                        <li><strong>Колесико мыши</strong> — масштабирование</li>
+                        <li><strong>Клик на человека</strong> — показать информацию</li>
+                        <li><strong>Двойной клик на человека</strong> — развернуть/свернуть его ветку</li>
+                        <li><strong>На телефоне: долгое нажатие</strong> — развернуть/свернуть ветку</li>
                         <li><strong>Перетаскивание</strong> — перемещение по дереву</li>
+                        <li><strong>Колесико мыши</strong> — масштабирование</li>
                     </ul>
-                </div>
 
-                <div class="help-section">
-                    <h4><i class="fas fa-mobile-alt"></i> На телефоне/планшете:</h4>
-                    <ul>
-                        <li><strong>Один тап</strong> — выбрать человека</li>
-                        <li><strong>Быстрый двойной тап</strong> — развернуть/свернуть ветку</li>
-                        <li><strong>Длинное нажатие</strong> — контекстное меню</li>
-                        <li><strong>Два пальца (жест "щипок")</strong> — масштабирование</li>
-                        <li><strong>Кнопки "+/-" на узлах</strong> — управление ветками</li>
-                    </ul>
-                </div>
+                    <h3><i class="fas fa-search"></i> Поиск:</h3>
+                    <p>Введите имя в поисковую строку для быстрого перехода к человеку</p>
 
-                <div class="help-section">
-                    <h4><i class="fas fa-lightbulb"></i> Советы:</h4>
-                    <ul>
-                        <li>Используйте поиск для быстрого перехода к человеку</li>
-                        <li>Нажмите "Все дерево" чтобы вернуться к общему виду</li>
-                        <li>Экспортируйте дерево в PNG для сохранения или печати</li>
-                        <li>Цвет узлов показывает поколение человека</li>
-                    </ul>
+                    <h3><i class="fas fa-palette"></i> Обозначения:</h3>
+                    <div class="legend-modal">
+                        <div>
+                            <div class="color-box male"></div> Мужчина
+                        </div>
+                        <div>
+                            <div class="color-box female"></div> Женщина
+                        </div>
+                        <div><i class="fas fa-plus-circle" style="color: #27ae60;"></i> Развернуть ветку</div>
+                        <div><i class="fas fa-minus-circle" style="color: #e74c3c;"></i> Свернуть ветку</div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Подключаем скрипты -->
-    <script type="module" src="js/main.js"></script>
+    <!-- ВСЕ СКРИПТЫ БУДУТ ЗДЕСЬ -->
+    <script>
+        // ВСЯ ЛОГИКА БУДЕТ ЗДЕСЬ (скопируйте из раздела data.js ниже)
+        // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
+        let allData = null;
+        let treeData = null;
+        let currentPersonId = null;
+        let zoom = null;
+        let currentScale = 1;
+        let collapsedNodes = new Set();
+
+        // ===== ОСНОВНАЯ ФУНКЦИЯ =====
+        async function initApp() {
+            console.log('🚀 Загрузка семейного древа...');
+
+            try {
+                // Загружаем GEDCOM файл
+                const response = await fetch('./3.ged');
+                const text = await response.text();
+
+                // Парсим данные
+                allData = parseGedcom(text);
+                console.log('✅ Загружено людей:', Object.keys(allData.people).length);
+
+                // Находим корневого человека (Егора или первого с детьми)
+                let rootId = findRootPerson(allData);
+
+                // Строим дерево потомков
+                treeData = buildDescendantsTree(rootId, allData);
+
+                // Рендерим дерево
+                renderTree();
+
+                // Настраиваем управление
+                setupControls();
+
+                // Обновляем статистику
+                updateStats();
+
+            } catch (error) {
+                console.error('❌ Ошибка загрузки:', error);
+                showError('Не удалось загрузить данные. Проверьте файл 3.ged');
+            }
+        }
+
+        // ===== ПАРСЕР GEDCOM =====
+        function parseGedcom(text) {
+            const people = {};
+            const families = {};
+            let current = null;
+            let inEvent = false;
+            let currentEvent = null;
+
+            const lines = text.split(/\r?\n/);
+
+            for (let line of lines) {
+                if (!line.trim()) continue;
+
+                const match = line.match(/^\s*(\d+)\s+(@?[A-Za-z0-9_]+@?)(?:\s+(.+))?$/);
+                if (!match) continue;
+
+                const level = parseInt(match[1], 10);
+                let tag = match[2];
+                const value = match[3] || '';
+
+                // Убираем @ из ID
+                if (tag.startsWith('@') && tag.endsWith('@')) {
+                    tag = tag.slice(1, -1);
+                }
+                const cleanValue = value.replace(/@/g, '');
+
+                // Обработка уровня 0
+                if (level === 0) {
+                    inEvent = false;
+                    currentEvent = null;
+
+                    if (tag.startsWith('I')) {
+                        current = { type: 'INDI', id: tag };
+                        people[tag] = {
+                            id: tag,
+                            name: '',
+                            gender: '',
+                            birth: '',
+                            death: '',
+                            familiesAsSpouse: [],
+                            familiesAsChild: []
+                        };
+                        continue;
+                    } else if (tag.startsWith('F')) {
+                        current = { type: 'FAM', id: tag };
+                        families[tag] = {
+                            id: tag,
+                            husband: null,
+                            wife: null,
+                            children: []
+                        };
+                        continue;
+                    } else {
+                        current = null;
+                        continue;
+                    }
+                }
+
+                if (!current) continue;
+
+                // Обработка INDI
+                if (current.type === 'INDI') {
+                    const p = people[current.id];
+
+                    if (tag === 'NAME') {
+                        p.name = cleanValue.replace(/\//g, ' ').trim();
+                    } else if (tag === 'SEX') {
+                        p.gender = cleanValue;
+                    } else if (tag === 'BIRT' || tag === 'DEAT') {
+                        inEvent = true;
+                        currentEvent = tag;
+                    } else if (tag === 'DATE' && inEvent && currentEvent) {
+                        if (currentEvent === 'BIRT') p.birth = cleanValue;
+                        if (currentEvent === 'DEAT') p.death = cleanValue;
+                        inEvent = false;
+                        currentEvent = null;
+                    } else if (tag === 'FAMS') {
+                        if (cleanValue) p.familiesAsSpouse.push(cleanValue);
+                    } else if (tag === 'FAMC') {
+                        if (cleanValue) p.familiesAsChild.push(cleanValue);
+                    }
+                }
+
+                // Обработка FAM
+                else if (current.type === 'FAM') {
+                    const f = families[current.id];
+
+                    if (tag === 'HUSB') f.husband = cleanValue;
+                    else if (tag === 'WIFE') f.wife = cleanValue;
+                    else if (tag === 'CHIL') f.children.push(cleanValue);
+                }
+            }
+
+            return { people, families };
+        }
+
+        // ===== ПОСТРОЕНИЕ ДЕРЕВА =====
+        function findRootPerson(data) {
+            // Сначала ищем по имени "Егор"
+            for (const [id, person] of Object.entries(data.people)) {
+                if (person.name && person.name.includes('Егор')) {
+                    return id;
+                }
+            }
+
+            // Ищем того, у кого есть дети
+            for (const [id, person] of Object.entries(data.people)) {
+                if (person.familiesAsSpouse && person.familiesAsSpouse.length > 0) {
+                    for (const famId of person.familiesAsSpouse) {
+                        const family = data.families[famId];
+                        if (family && family.children && family.children.length > 0) {
+                            return id;
+                        }
+                    }
+                }
+            }
+
+            // Возвращаем первого в списке
+            return Object.keys(data.people)[0];
+        }
+
+        function buildDescendantsTree(personId, data, visited = new Set()) {
+            if (visited.has(personId)) {
+                return null;
+            }
+            visited.add(personId);
+
+            const person = data.people[personId];
+            if (!person) return null;
+
+            const node = {
+                id: person.id,
+                name: person.name || 'Без имени',
+                birth: person.birth || '',
+                death: person.death || '',
+                gender: person.gender || '',
+                children: [],
+                _children: [] // Для хранения свёрнутых детей
+            };
+
+            // Добавляем детей
+            if (person.familiesAsSpouse && person.familiesAsSpouse.length > 0) {
+                for (const famId of person.familiesAsSpouse) {
+                    const family = data.families[famId];
+                    if (family && family.children) {
+                        for (const childId of family.children) {
+                            const childNode = buildDescendantsTree(childId, data, new Set(visited));
+                            if (childNode) {
+                                node.children.push(childNode);
+                                node._children.push(childNode);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return node;
+        }
+
+        // ===== РЕНДЕРИНГ ДЕРЕВА =====
+        function renderTree() {
+            const container = d3.select("#tree");
+            container.selectAll("*").remove();
+
+            const width = container.node().clientWidth;
+            const height = container.node().clientHeight;
+
+            const svg = container
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("viewBox", `0 0 ${width} ${height}`);
+
+            const g = svg.append("g");
+
+            // Создаем иерархию
+            const root = d3.hierarchy(treeData);
+
+            // Сворачиваем все узлы кроме корневого
+            root.descendants().forEach(d => {
+                if (d.depth > 2) { // Оставляем развёрнутыми только 2 уровня
+                    d.children = null;
+                }
+            });
+
+            // Настраиваем дерево
+            const treeLayout = d3.tree()
+                .nodeSize([120, 300])
+                .separation((a, b) => a.parent === b.parent ? 1.2 : 1.5);
+
+            // Настраиваем зум
+            zoom = d3.zoom()
+                .scaleExtent([0.1, 3])
+                .on("zoom", (event) => {
+                    currentScale = event.transform.k;
+                    g.attr("transform", event.transform);
+                });
+
+            svg.call(zoom);
+
+            // Центрируем вид
+            const initialX = width / 2;
+            const initialY = 100;
+            const initialScale = 0.8;
+
+            svg.call(zoom.transform, d3.zoomIdentity
+                .translate(initialX, initialY)
+                .scale(initialScale));
+
+            // Обновляем дерево
+            updateTree(root, g, treeLayout);
+
+            // Обработчик изменения размера окна
+            window.addEventListener('resize', () => {
+                const newWidth = container.node().clientWidth;
+                const newHeight = container.node().clientHeight;
+                svg.attr("width", newWidth).attr("height", newHeight);
+            });
+        }
+
+        function updateTree(source, g, treeLayout) {
+            // Вычисляем новое расположение узлов
+            treeLayout(source);
+
+            // === ОТОБРАЖЕНИЕ СВЯЗЕЙ ===
+            const links = source.links();
+
+            const link = g.selectAll(".link")
+                .data(links, d => `${d.source.data.id}-${d.target.data.id}`);
+
+            // Вход
+            link.enter()
+                .append("path")
+                .attr("class", "link")
+                .attr("fill", "none")
+                .attr("stroke", "#95a5a6")
+                .attr("stroke-width", 2)
+                .attr("stroke-opacity", 0.6)
+                .attr("d", d3.linkHorizontal()
+                    .x(d => d.y)
+                    .y(d => d.x));
+
+            // Обновление
+            link.attr("d", d3.linkHorizontal()
+                .x(d => d.y)
+                .y(d => d.x));
+
+            // Выход
+            link.exit().remove();
+
+            // === ОТОБРАЖЕНИЕ УЗЛОВ ===
+            const nodes = source.descendants();
+
+            const node = g.selectAll(".node")
+                .data(nodes, d => d.data.id);
+
+            // Вход
+            const nodeEnter = node.enter()
+                .append("g")
+                .attr("class", d => `node ${d.data.gender || 'unknown'}`)
+                .attr("data-id", d => d.data.id)
+                .attr("transform", d => `translate(${d.y},${d.x})`)
+                .attr("cursor", "pointer")
+                .on("click", function (event, d) {
+                    event.stopPropagation();
+                    selectPerson(d.data.id);
+                })
+                .on("dblclick", function (event, d) {
+                    event.stopPropagation();
+                    toggleBranch(d);
+                })
+                .on("contextmenu", function (event, d) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleBranch(d);
+                });
+
+            // Прямоугольник узла
+            nodeEnter.append("rect")
+                .attr("x", -100)
+                .attr("y", -40)
+                .attr("width", 200)
+                .attr("height", 80)
+                .attr("rx", 10)
+                .attr("ry", 10)
+                .attr("fill", "white")
+                .attr("stroke", d => d.data.gender === 'M' ? '#3498db' :
+                    d.data.gender === 'F' ? '#e74c3c' : '#95a5a6')
+                .attr("stroke-width", 2);
+
+            // Имя
+            nodeEnter.append("foreignObject")
+                .attr("x", -95)
+                .attr("y", -35)
+                .attr("width", 190)
+                .attr("height", 50)
+                .append("xhtml:div")
+                .style("width", "100%")
+                .style("height", "100%")
+                .style("display", "flex")
+                .style("flex-direction", "column")
+                .style("justify-content", "center")
+                .style("align-items", "center")
+                .style("font-family", "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif")
+                .style("padding", "5px")
+                .html(d => {
+                    const name = `<div style="
+                font-weight: bold; 
+                font-size: 14px; 
+                text-align: center;
+                line-height: 1.3;
+                margin-bottom: 4px;
+                word-break: break-word;
+            ">${d.data.name}</div>`;
+
+                    const dates = [];
+                    if (d.data.birth) dates.push(`род. ${formatDate(d.data.birth)}`);
+                    if (d.data.death) dates.push(`ум. ${formatDate(d.data.death)}`);
+
+                    const datesHtml = dates.length ?
+                        `<div style="
+                    font-size: 11px; 
+                    color: #7f8c8d;
+                    text-align: center;
+                    line-height: 1.2;
+                ">${dates.join(' / ')}</div>` : '';
+
+                    return name + datesHtml;
+                });
+
+            // Кнопка развернуть/свернуть (только для узлов с детьми)
+            nodeEnter.filter(d => d.children || d._children)
+                .append("g")
+                .attr("class", "toggle-btn")
+                .attr("transform", "translate(85, 0)")
+                .on("click", function (event, d) {
+                    event.stopPropagation();
+                    toggleBranch(d);
+                })
+                .append("circle")
+                .attr("r", 12)
+                .attr("fill", d => d.children ? "#e74c3c" : "#27ae60")
+                .attr("stroke", d => d.children ? "#c0392b" : "#219653")
+                .attr("stroke-width", 1);
+
+            nodeEnter.filter(d => d.children || d._children)
+                .select(".toggle-btn")
+                .append("text")
+                .attr("y", 4)
+                .attr("text-anchor", "middle")
+                .attr("fill", "white")
+                .attr("font-size", "12px")
+                .attr("font-weight", "bold")
+                .text(d => d.children ? "−" : "+");
+
+            // Обновление
+            node.merge(nodeEnter)
+                .transition()
+                .duration(300)
+                .attr("transform", d => `translate(${d.y},${d.x})`);
+
+            // Выход
+            node.exit()
+                .transition()
+                .duration(300)
+                .attr("transform", d => `translate(${source.y},${source.x})`)
+                .remove();
+        }
+
+        // ===== ФУНКЦИИ УПРАВЛЕНИЯ =====
+        function toggleBranch(d) {
+            if (d.children) {
+                // Сворачиваем
+                d._children = d.children;
+                d.children = null;
+                collapsedNodes.add(d.data.id);
+            } else {
+                // Разворачиваем
+                d.children = d._children;
+                d._children = null;
+                collapsedNodes.delete(d.data.id);
+            }
+
+            // Обновляем дерево
+            const g = d3.select("#tree g");
+            const treeLayout = d3.tree()
+    </script>
 </body>
 
 </html>
