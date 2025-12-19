@@ -732,6 +732,55 @@
         ========================= */
         function clearTree() { d3.select("#tree").selectAll("*").remove(); }
 
+        function rx(d) { return (d._rx ?? d.x); }
+        function ry(d) { return (d._ry ?? d.y); }
+
+        // Прижимаем union к родителю (на одну горизонталь), чтобы супруг был у мужа/жены, а не у ребенка
+        function applyInlineUnionPositions(root, dir = +1) {
+            // dir=+1 для потомков (вправо), dir=-1 для предков (влево)
+            const UNION_DY = 170 * dir; // расстояние от человека до узла союза по X (y в координатах tree)
+            const STEP = 420;          // общий шаг поколений (должен совпадать с nodeSize второй координатой)
+
+            root.descendants().forEach(d => {
+                d._rx = d.x;
+                d._ry = d.y;
+
+                if (d.data.type === 'union' && d.parent) {
+                    // ставим узел союза рядом с человеком, а не “между поколениями”
+                    d._rx = d.parent.x;
+                    d._ry = d.parent.y + UNION_DY;
+
+                    // ВАЖНО: детей союза “стартуем” от нормального шага поколений
+                    // (tree-layout уже их посчитал относительно union.y, но union мы сместили,
+                    // поэтому детям тоже компенсируем, чтобы они не “подъезжали” к человеку)
+                    const oldUnionY = d.y;
+                    const newUnionY = d._ry;
+                    const delta = newUnionY - oldUnionY;
+
+                    // сдвигаем всё поддерево union (кроме самого union) на delta
+                    d.descendants().forEach((sub, idx) => {
+                        if (idx === 0) return; // сам union
+                        sub._ry = (sub._ry ?? sub.y) + delta;
+                    });
+                }
+
+                if (d.data.type === 'anc_union' && d.parent) {
+                    // для предков тоже “на одной линии” с фокусом, но влево
+                    d._rx = d.parent.x;
+                    d._ry = d.parent.y - 170;
+
+                    const oldY = d.y;
+                    const newY = d._ry;
+                    const delta = newY - oldY;
+
+                    d.descendants().forEach((sub, idx) => {
+                        if (idx === 0) return;
+                        sub._ry = (sub._ry ?? sub.y) + delta;
+                    });
+                }
+            });
+        }
+
         function renderFullTree() {
             const data = buildDescendantsWithUnions(rootPersonId, allData);
             renderHierarchyTree(data);
@@ -774,8 +823,11 @@
 
             const root = d3.hierarchy(data);
             treeLayout(root);
+            applyInlineUnionPositions(root, +1);
 
             const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
+            // мы будем подавать туда {x: rx(d), y: ry(d)}
+
 
             g.selectAll(".link")
                 .data(root.links(), d => `${keyNode(d.source.data)}-${keyNode(d.target.data)}`)
@@ -794,7 +846,8 @@
                 .enter()
                 .append("g")
                 .attr("class", d => `node ${d.data.type}`)
-                .attr("transform", d => `translate(${d.y},${d.x})`);
+                .attr("transform", d => `translate(${ry(d)},${rx(d)})`);
+
 
             drawNode(node, { mode: 'full' });
             fitToScreen(svg, g, width, height);
@@ -821,10 +874,16 @@
 
             const descRoot = d3.hierarchy(descData);
             treeLayout(descRoot);
+            applyInlineUnionPositions(descRoot, +1);
+
 
             const ancRoot = d3.hierarchy(ancRootData);
             treeLayout(ancRoot);
+            applyInlineUnionPositions(ancRoot, -1);
+
             ancRoot.descendants().forEach(d => { d.y = -d.y; });
+            applyInlineUnionPositions(ancRoot, -1);
+
 
             const focusId = branchFocusId;
 
@@ -843,9 +902,36 @@
                 .enter()
                 .append("path")
                 .attr("class", "link")
-                .attr("d", d => linkGen({ source: { x: d.source.x, y: d.source.y }, target: { x: d.source.x, y: d.source.y } }))
+                .attr("d", d => {
+                    const o = { x: rx(d.source), y: ry(d.source) };
+                    return linkGen({ source: o, target: o });
+                })
                 .transition().duration(300)
-                .attr("d", d => linkGen({ source: { x: d.source.x, y: d.source.y }, target: { x: d.target.x, y: d.target.y } }));
+                .attr("d", d => linkGen({
+                    source: { x: rx(d.source), y: ry(d.source) },
+                    target: { x: rx(d.target), y: ry(d.target) }
+                }));
+
+                .attr("d", d => {
+                    const o = { x: rx(d.source), y: ry(d.source) };
+                    return linkGen({ source: o, target: o });
+                })
+                .transition().duration(300)
+                .attr("d", d => linkGen({
+                    source: { x: rx(d.source), y: ry(d.source) },
+                    target: { x: rx(d.target), y: ry(d.target) }
+                }));
+
+                .attr("d", d => {
+                    const o = { x: rx(d.source), y: ry(d.source) };
+                    return linkGen({ source: o, target: o });
+                })
+                .transition().duration(300)
+                .attr("d", d => linkGen({
+                    source: { x: rx(d.source), y: ry(d.source) },
+                    target: { x: rx(d.target), y: ry(d.target) }
+                }));
+
 
             const side = g.selectAll(".node")
                 .data([...descNodes, ...ancNodes], d => keyNode(d.data))
