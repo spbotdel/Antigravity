@@ -224,7 +224,7 @@ function getGenerationColor(depth) {
     ];
 
     // Выберите палитру (меняйте на warmColors или blueColors по желанию)
-    const palette = warmColors; // ← ИЗМЕНИТЕ ЗДЕСЬ НА warmColors ИЛИ blueColors
+    const palette = colors; // ← ИЗМЕНИТЕ ЗДЕСЬ НА warmColors ИЛИ blueColors
 
     return palette[Math.min(depth, palette.length - 1)];
 }
