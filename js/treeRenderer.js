@@ -214,7 +214,7 @@ function getGenerationColor(depth) {
     ];
 
     // Или холодная синяя палитра:
-    const warmColors = [
+    const blueColors = [
         "#2C3E50",    // Темно-синий (основатель)
         "#34495E",    // Синий (дети)
         "#5D6D7E",    // Серо-синий (внуки)
@@ -224,7 +224,7 @@ function getGenerationColor(depth) {
     ];
 
     // Выберите палитру (меняйте на warmColors или blueColors по желанию)
-    const palette = blueColors; // ← ИЗМЕНИТЕ ЗДЕСЬ НА warmColors ИЛИ blueColors
+    const palette = warmColors; // ← ИЗМЕНИТЕ ЗДЕСЬ НА warmColors ИЛИ blueColors
 
     return palette[Math.min(depth, palette.length - 1)];
 }
