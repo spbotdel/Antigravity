@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -104,7 +104,7 @@
 
         .logo h1 {
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
             letter-spacing: .2px
         }
 
@@ -255,8 +255,8 @@
             left: -66px;
             top: 110px;
             width: 66px;
-            height: 260px;
-            background: rgba(15, 23, 42, .88);
+            height: 280px;
+            background: rgba(15, 23, 42, .90);
             border: 1px solid rgba(255, 255, 255, .10);
             border-right: none;
             color: #fff;
@@ -297,12 +297,12 @@
             font-size: 15px;
         }
 
-        /* БУКВЫ СВЕРХУ ВНИЗ (как ты показал) */
+        /* Имя + Фамилия, буквами сверху вниз */
         .info-tab-label {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
+            gap: 18px;
             width: 100%;
             height: 100%;
             overflow: hidden;
@@ -313,16 +313,17 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 2px;
+            gap: 3px;
         }
 
         .vchar {
             font-weight: 800;
             letter-spacing: .6px;
-            font-size: 12px;
-            line-height: 12px;
-            color: rgba(255, 255, 255, .94);
+            font-size: 13px;
+            line-height: 13px;
+            color: rgba(255, 255, 255, .96);
             text-transform: none;
+            text-shadow: 0 1px 0 rgba(0, 0, 0, .18);
         }
 
         .info-header {
@@ -336,14 +337,13 @@
         }
 
         .info-header-title {
-            font-weight: 700;
+            font-weight: 800;
             font-size: 14px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
-        /* кнопка-стрелка */
         .toggle-btn {
             width: 36px;
             height: 36px;
@@ -385,7 +385,7 @@
 
         .section-title {
             font-size: 12px;
-            font-weight: 800;
+            font-weight: 900;
             color: rgba(15, 23, 42, .72);
             text-transform: uppercase;
             letter-spacing: .6px;
@@ -414,7 +414,7 @@
         }
 
         .li-name {
-            font-weight: 700;
+            font-weight: 800;
             font-size: 13px;
             color: rgba(15, 23, 42, .90);
         }
@@ -442,12 +442,10 @@
                 transform: translateY(0);
             }
 
-            /* side tab hide on portrait */
             .info-tab {
                 display: none;
             }
 
-            /* header becomes handle */
             .info-header {
                 cursor: pointer;
                 padding: 12px 14px;
@@ -482,7 +480,6 @@
         </div>
 
         <div id="info-panel" class="info-panel">
-            <!-- DESKTOP TAB -->
             <div id="info-tab" class="info-tab" title="Информация">
                 <div class="info-tab-inner">
                     <div id="info-tab-arrow" class="info-tab-arrow"><i class="fa-solid fa-arrow-left"></i></div>
@@ -490,7 +487,6 @@
                 </div>
             </div>
 
-            <!-- HEADER (desktop header, portrait handle) -->
             <div id="info-header" class="info-header" title="Открыть / закрыть">
                 <div id="info-title" class="info-header-title">Информация</div>
                 <button id="toggle-info" class="toggle-btn" aria-label="toggle">
@@ -534,7 +530,6 @@
 
         const ANIM_MS = 900;
 
-        // "как в приложениях": плавно панорамируем, ЗУМ НЕ МЕНЯЕМ
         const PAN_MS = 900;
         const PAN_EASE = d3.easeCubicInOut;
 
@@ -850,7 +845,6 @@
             const k = lastTransform.k || 1;
             const avail = getAvailableViewportRect();
 
-            // target: center of tree bounds -> center of available screen, ONLY translate
             const tx = avail.cx - (b.cy * k);
             const ty = avail.cy - (b.cx * k);
 
@@ -948,7 +942,7 @@
               border:1px solid rgba(15,23,42,.08);
               box-shadow: 0 10px 22px rgba(0,0,0,.12);
               font-size:11px;color:rgba(15,23,42,.82);
-              font-weight:600;
+              font-weight:700;
             ">
               <i class="fa-solid ${escapeHtml(MARRIAGE_ICON)}" style="font-size:16px;color:${escapeHtml(MARRIAGE_ICON_COLOR)}"></i>
               ${marriage ? `<span>${escapeHtml(marriage)}</span>` : ``}
@@ -981,7 +975,7 @@
                 background:rgba(15,23,42,.06);
                 border:1px solid rgba(15,23,42,.10);
                 color:rgba(15,23,42,.78);
-                font-size:11px;font-weight:600;
+                font-size:11px;font-weight:700;
               ">
                 <i class="fa-solid fa-children" style="font-size:12px;"></i>
                 <span>${kidsCount}</span>
@@ -1009,7 +1003,7 @@
             const text = group.append('text')
                 .attr('text-anchor', 'middle')
                 .attr('y', -20)
-                .style('font-weight', '600')
+                .style('font-weight', '700')
                 .style('font-size', '12.5px')
                 .style('fill', getCssVar('--card-text'));
 
@@ -1026,7 +1020,7 @@
                     .attr('text-anchor', 'middle')
                     .attr('y', 34)
                     .style('font-size', '11px')
-                    .style('font-weight', '500')
+                    .style('font-weight', '600')
                     .style('fill', getCssVar('--card-muted'))
                     .text(life);
             }
@@ -1061,14 +1055,17 @@
 
         function updateInfoUI() {
             const panelTitle = document.getElementById('info-title');
-            // На мобильных (портрет) всегда "Информация"
-            panelTitle.textContent = isPortrait() ? 'Информация' : 'Информация';
 
-            // Desktop tab: имя буквами сверху вниз
+            const p = currentId ? data.people[currentId] : null;
+
+            // (1) Мобильный: заголовок панели = имя выбранного человека (если нет — "Информация")
+            // (2) Десктоп: в хедере тоже показываем имя (приятнее), а вертикальная вкладка — отдельно
+            panelTitle.textContent = p?.name ? p.name : 'Информация';
+
+            // Desktop tab: имя буквами сверху вниз (Имя + Фамилия)
             renderVerticalNameToTab();
 
             // content
-            const p = currentId ? data.people[currentId] : null;
             if (!p) {
                 document.getElementById('person-info').innerHTML = 'Выберите человека';
             } else {
@@ -1083,7 +1080,7 @@
                 const children = childIds.map(id => data.people[id]).filter(Boolean);
 
                 document.getElementById('person-info').innerHTML = `
-          <div style="font-weight:800;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
+          <div style="font-weight:900;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
 
           <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
           <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
@@ -1108,14 +1105,12 @@
           </div>
         `;
 
-                // клики по спискам — выбрать человека
                 document.querySelectorAll('[data-person-id]').forEach(el => {
                     el.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const id = el.getAttribute('data-person-id');
                         if (!id) return;
                         selectPerson(id, true);
-                        // и панель пусть остаётся как была
                     });
                 });
             }
@@ -1136,6 +1131,7 @@
       `;
         }
 
+        // Вкладка: Имя + Фамилия (первое и последнее слово)
         function renderVerticalNameToTab() {
             const el = document.getElementById('info-tab-label');
             if (!el) return;
@@ -1143,11 +1139,18 @@
             el.innerHTML = '';
             if (!currentId) return;
 
-            const name = String(data.people[currentId]?.name || '').trim();
+            const name = String(data.people[currentId]?.name || '').trim().replace(/\s+/g, ' ');
             if (!name) return;
 
-            const parts = name.split(/\s+/).filter(Boolean).slice(0, 2); // как в примере: Имя + Фамилия
-            for (const word of parts) {
+            const tokens = name.split(' ').filter(Boolean);
+            if (!tokens.length) return;
+
+            const first = tokens[0];
+            const last = tokens.length >= 2 ? tokens[tokens.length - 1] : '';
+
+            const words = last ? [first, last] : [first];
+
+            for (const word of words) {
                 const w = document.createElement('div');
                 w.className = 'vword';
                 for (const ch of word) {
@@ -1171,11 +1174,8 @@
                 : `<i class="fa-solid fa-arrow-left"></i>`;
 
             const icon = document.getElementById('toggle-info-icon');
-            if (isP) {
-                icon.className = open ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up';
-            } else {
-                icon.className = open ? 'fa-solid fa-arrow-right' : 'fa-solid fa-arrow-left';
-            }
+            if (isP) icon.className = open ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up';
+            else icon.className = open ? 'fa-solid fa-arrow-right' : 'fa-solid fa-arrow-left';
         }
 
         function togglePanel(force) {
@@ -1429,7 +1429,6 @@
                     target: getLinkTargetAnchor(l.target)
                 }));
 
-            nodes.forEach(d => prevPos.set(nodeKey(d), { x: d.x, y: d.y }));
             links.forEach(l => {
                 const k = linkKey(l);
                 const dStr = linkGen({ source: getLinkSourceAnchor(l.source), target: getLinkTargetAnchor(l.target) });
@@ -1484,6 +1483,27 @@
                 updateInfoUI();
                 if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
             });
+        }
+
+        /* ================= HELPERS ================= */
+        function onPersonClick(clickedId, fullRoot) {
+            selectPerson(clickedId, false);
+
+            const resolved = resolveFocusTarget(fullRoot, clickedId);
+
+            if (focusRawId === clickedId) {
+                focusRawId = null;
+                focusResolvedId = null;
+            } else {
+                focusRawId = clickedId;
+                focusResolvedId = resolved;
+            }
+
+            render(false);
+        }
+
+        function getCssVar(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         }
     </script>
 </body>
