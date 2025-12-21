@@ -224,29 +224,42 @@
             stroke-width: 2.1 !important;
         }
 
-        /* ===== INFO PANEL (Desktop/right) ===== */
+        /* ===== INFO PANEL =====
+       ВАЖНО: overflow: visible чтобы вкладка слева НЕ ОБРЕЗАЛАСЬ
+       Контент “режем” внутренней поверхностью.
+    */
         .info-panel {
             position: fixed;
             top: 76px;
             right: 0;
             width: 360px;
             height: calc(100vh - 132px);
-            background: rgba(255, 255, 255, .92);
-            color: #0f172a;
-            border-radius: 18px 0 0 18px;
             transform: translateX(calc(100% - 66px));
-            transition: .25s;
+            transition: transform .28s ease;
             z-index: 100;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            border: 1px solid rgba(15, 23, 42, .06);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            will-change: transform;
             pointer-events: auto;
+            overflow: visible;
+            /* <-- FIX */
         }
 
         .info-panel.open {
             transform: translateX(0)
+        }
+
+        /* Внутренняя “поверхность” с радиусом/фоном/скроллом */
+        .info-surface {
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, .92);
+            color: #0f172a;
+            border-radius: 18px 0 0 18px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(15, 23, 42, .06);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            overflow: hidden;
+            /* <-- контент внутри не вылазит */
         }
 
         /* Desktop: side tab */
@@ -297,7 +310,6 @@
             font-size: 15px;
         }
 
-        /* Имя + Фамилия, буквами сверху вниз */
         .info-tab-label {
             display: flex;
             flex-direction: column;
@@ -322,7 +334,6 @@
             font-size: 13px;
             line-height: 13px;
             color: rgba(255, 255, 255, .96);
-            text-transform: none;
             text-shadow: 0 1px 0 rgba(0, 0, 0, .18);
         }
 
@@ -442,6 +453,10 @@
                 transform: translateY(0);
             }
 
+            .info-surface {
+                border-radius: 18px 18px 0 0;
+            }
+
             .info-tab {
                 display: none;
             }
@@ -487,14 +502,16 @@
                 </div>
             </div>
 
-            <div id="info-header" class="info-header" title="Открыть / закрыть">
-                <div id="info-title" class="info-header-title">Информация</div>
-                <button id="toggle-info" class="toggle-btn" aria-label="toggle">
-                    <i id="toggle-info-icon" class="fa-solid fa-arrow-left"></i>
-                </button>
-            </div>
+            <div class="info-surface">
+                <div id="info-header" class="info-header" title="Открыть / закрыть">
+                    <div id="info-title" class="info-header-title">Информация</div>
+                    <button id="toggle-info" class="toggle-btn" aria-label="toggle">
+                        <i id="toggle-info-icon" class="fa-solid fa-arrow-left"></i>
+                    </button>
+                </div>
 
-            <div id="person-info" class="info-content">Выберите человека</div>
+                <div id="person-info" class="info-content">Выберите человека</div>
+            </div>
         </div>
 
     </div>
@@ -510,9 +527,6 @@
 
         let svg = null, g = null, zoom = null, layout = null;
         let w = 0, h = 0;
-
-        const prevPos = new Map();
-        const prevLinkD = new Map();
 
         let lastTransform = d3.zoomIdentity;
         let lastRenderedRoot = null;
@@ -534,7 +548,6 @@
         const PAN_EASE = d3.easeCubicInOut;
 
         const MARRIAGE_ICON = 'fa-heart';
-        const MARRIAGE_ICON_COLOR = getCssVar('--ring');
 
         /* ================= INIT ================= */
         fetch('./3.ged')
@@ -686,6 +699,23 @@
             return null;
         }
 
+        function resolveFocusTarget(rootH, clickedId) {
+            let found = null;
+            rootH.each(d => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                if (pid === clickedId) found = pid;
+            });
+            if (found) return found;
+
+            let couplePrimary = null;
+            rootH.each(d => {
+                if (d.data.type === 'couple' && d.data.spouseId === clickedId) {
+                    couplePrimary = d.data.primaryId;
+                }
+            });
+            return couplePrimary || clickedId;
+        }
+
         /* ================= BRANCH + SIBLINGS ================= */
         function computeBranchIds(rootH, targetPersonId) {
             let targetNode = null;
@@ -756,23 +786,6 @@
                 return copy;
             }
             return null;
-        }
-
-        function resolveFocusTarget(rootH, clickedId) {
-            let found = null;
-            rootH.each(d => {
-                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                if (pid === clickedId) found = pid;
-            });
-            if (found) return found;
-
-            let couplePrimary = null;
-            rootH.each(d => {
-                if (d.data.type === 'couple' && d.data.spouseId === clickedId) {
-                    couplePrimary = d.data.primaryId;
-                }
-            });
-            return couplePrimary || clickedId;
         }
 
         /* ================= COLORS ================= */
@@ -944,7 +957,7 @@
               font-size:11px;color:rgba(15,23,42,.82);
               font-weight:700;
             ">
-              <i class="fa-solid ${escapeHtml(MARRIAGE_ICON)}" style="font-size:16px;color:${escapeHtml(MARRIAGE_ICON_COLOR)}"></i>
+              <i class="fa-solid ${escapeHtml(MARRIAGE_ICON)}" style="font-size:16px;color:${escapeHtml(getCssVar('--ring'))}"></i>
               ${marriage ? `<span>${escapeHtml(marriage)}</span>` : ``}
             </div>
           `);
@@ -1029,93 +1042,11 @@
             else gNode.classed('selected', false);
         }
 
-        /* ================= CLICK LOGIC ================= */
-        function onPersonClick(clickedId, fullRoot) {
-            selectPerson(clickedId, false);
-
-            const resolved = resolveFocusTarget(fullRoot, clickedId);
-
-            if (focusRawId === clickedId) {
-                focusRawId = null;
-                focusResolvedId = null;
-            } else {
-                focusRawId = clickedId;
-                focusResolvedId = resolved;
-            }
-
-            render(false);
-        }
-
         /* ================= INFO PANEL ================= */
         function selectPerson(id, doRerender = true) {
             currentId = id;
             updateInfoUI();
             if (doRerender) render(false);
-        }
-
-        function updateInfoUI() {
-            const panelTitle = document.getElementById('info-title');
-
-            const p = currentId ? data.people[currentId] : null;
-
-            // (1) Мобильный: заголовок панели = имя выбранного человека (если нет — "Информация")
-            // (2) Десктоп: в хедере тоже показываем имя (приятнее), а вертикальная вкладка — отдельно
-            panelTitle.textContent = p?.name ? p.name : 'Информация';
-
-            // Desktop tab: имя буквами сверху вниз (Имя + Фамилия)
-            renderVerticalNameToTab();
-
-            // content
-            if (!p) {
-                document.getElementById('person-info').innerHTML = 'Выберите человека';
-            } else {
-                const b = formatGedcomDate(p?.birth || '');
-                const d = formatGedcomDate(p?.death || '');
-                const sex = (p?.sex === 'M') ? 'Мужчина' : (p?.sex === 'F') ? 'Женщина' : '—';
-
-                const sibIds = getSiblingIds(currentId);
-                const siblings = sibIds.map(id => data.people[id]).filter(Boolean);
-
-                const childIds = getChildrenIds(currentId);
-                const children = childIds.map(id => data.people[id]).filter(Boolean);
-
-                document.getElementById('person-info').innerHTML = `
-          <div style="font-weight:900;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
-
-          <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
-          <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
-          <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
-
-          <div class="section">
-            <div class="section-title">Братья и сёстры (${siblings.length})</div>
-            ${siblings.length ? `
-              <div class="list">
-                ${siblings.map(sp => renderMiniPerson(sp)).join('')}
-              </div>
-            ` : `<div style="color:rgba(15,23,42,.55);font-size:12px;">Нет данных</div>`}
-          </div>
-
-          <div class="section">
-            <div class="section-title">Дети (${children.length})</div>
-            ${children.length ? `
-              <div class="list">
-                ${children.map(ch => renderMiniPerson(ch)).join('')}
-              </div>
-            ` : `<div style="color:rgba(15,23,42,.55);font-size:12px;">Нет данных</div>`}
-          </div>
-        `;
-
-                document.querySelectorAll('[data-person-id]').forEach(el => {
-                    el.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const id = el.getAttribute('data-person-id');
-                        if (!id) return;
-                        selectPerson(id, true);
-                    });
-                });
-            }
-
-            updatePanelArrows();
         }
 
         function renderMiniPerson(p) {
@@ -1131,7 +1062,18 @@
       `;
         }
 
-        // Вкладка: Имя + Фамилия (первое и последнее слово)
+        function getChildrenIds(personId) {
+            const p = data.people[personId];
+            if (!p) return [];
+            const out = new Set();
+            (p.FAMS || []).forEach(fid => {
+                const fam = data.fams[fid];
+                if (!fam) return;
+                (fam.chil || []).forEach(cid => { if (cid) out.add(cid); });
+            });
+            return Array.from(out);
+        }
+
         function renderVerticalNameToTab() {
             const el = document.getElementById('info-tab-label');
             if (!el) return;
@@ -1166,15 +1108,13 @@
         function updatePanelArrows() {
             const panel = document.getElementById('info-panel');
             const open = panel.classList.contains('open');
-            const isP = isPortrait();
-
             const tabArrow = document.getElementById('info-tab-arrow');
             tabArrow.innerHTML = open
                 ? `<i class="fa-solid fa-arrow-right"></i>`
                 : `<i class="fa-solid fa-arrow-left"></i>`;
 
             const icon = document.getElementById('toggle-info-icon');
-            if (isP) icon.className = open ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up';
+            if (isPortrait()) icon.className = open ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up';
             else icon.className = open ? 'fa-solid fa-arrow-right' : 'fa-solid fa-arrow-left';
         }
 
@@ -1182,24 +1122,64 @@
             const panel = document.getElementById('info-panel');
             if (typeof force === 'boolean') panel.classList.toggle('open', force);
             else panel.classList.toggle('open');
-
             updatePanelArrows();
             if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
         }
 
-        function getChildrenIds(personId) {
-            const p = data.people[personId];
-            if (!p) return [];
-            const out = new Set();
-            (p.FAMS || []).forEach(fid => {
-                const fam = data.fams[fid];
-                if (!fam) return;
-                (fam.chil || []).forEach(cid => { if (cid) out.add(cid); });
-            });
-            return Array.from(out);
+        function updateInfoUI() {
+            const title = document.getElementById('info-title');
+            const p = currentId ? data.people[currentId] : null;
+
+            title.textContent = p?.name ? p.name : 'Информация';
+            renderVerticalNameToTab();
+
+            const info = document.getElementById('person-info');
+            if (!p) {
+                info.innerHTML = 'Выберите человека';
+            } else {
+                const b = formatGedcomDate(p?.birth || '');
+                const d = formatGedcomDate(p?.death || '');
+                const sex = (p?.sex === 'M') ? 'Мужчина' : (p?.sex === 'F') ? 'Женщина' : '—';
+
+                const siblings = getSiblingIds(currentId).map(id => data.people[id]).filter(Boolean);
+                const children = getChildrenIds(currentId).map(id => data.people[id]).filter(Boolean);
+
+                info.innerHTML = `
+          <div style="font-weight:900;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
+
+          <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
+          <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
+          <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
+
+          <div class="section">
+            <div class="section-title">Братья и сёстры (${siblings.length})</div>
+            ${siblings.length ? `
+              <div class="list">${siblings.map(sp => renderMiniPerson(sp)).join('')}</div>
+            ` : `<div style="color:rgba(15,23,42,.55);font-size:12px;">Нет данных</div>`}
+          </div>
+
+          <div class="section">
+            <div class="section-title">Дети (${children.length})</div>
+            ${children.length ? `
+              <div class="list">${children.map(ch => renderMiniPerson(ch)).join('')}</div>
+            ` : `<div style="color:rgba(15,23,42,.55);font-size:12px;">Нет данных</div>`}
+          </div>
+        `;
+
+                document.querySelectorAll('[data-person-id]').forEach(el => {
+                    el.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const id = el.getAttribute('data-person-id');
+                        if (!id) return;
+                        selectPerson(id, true);
+                    });
+                });
+            }
+
+            updatePanelArrows();
         }
 
-        /* ================= FORMATTING ================= */
+        /* ================= FORMAT ================= */
         function splitName3(full) {
             const s = String(full || '').trim().replace(/\s+/g, ' ');
             if (!s) return ['Без имени'];
@@ -1336,7 +1316,6 @@
 
             const root = d3.hierarchy(renderData);
             layout(root);
-
             lastRenderedRoot = root;
 
             const nodeKey = (d) => {
@@ -1360,14 +1339,10 @@
                 .append('path')
                 .attr('class', 'link')
                 .style('opacity', 0)
-                .attr('d', l => {
-                    const k = linkKey(l);
-                    const prev = prevLinkD.get(k);
-                    return prev || linkGen({
-                        source: getLinkSourceAnchor(l.source),
-                        target: getLinkTargetAnchor(l.target)
-                    });
-                });
+                .attr('d', l => linkGen({
+                    source: getLinkSourceAnchor(l.source),
+                    target: getLinkTargetAnchor(l.target)
+                }));
 
             const linkMerge = linkEnter.merge(linkSel);
 
@@ -1429,12 +1404,6 @@
                     target: getLinkTargetAnchor(l.target)
                 }));
 
-            links.forEach(l => {
-                const k = linkKey(l);
-                const dStr = linkGen({ source: getLinkSourceAnchor(l.source), target: getLinkTargetAnchor(l.target) });
-                prevLinkD.set(k, dStr);
-            });
-
             if (doFit) fitToContent();
             else d3.timeout(() => panTreeToAvailableCenter(root), 0);
         }
@@ -1467,6 +1436,7 @@
                 render(true);
             };
 
+            // ВАЖНО: теперь вкладка видна и кликабельна
             document.getElementById('info-tab').onclick = () => togglePanel();
             document.getElementById('toggle-info').onclick = (e) => { e.stopPropagation(); togglePanel(); };
 
@@ -1483,9 +1453,10 @@
                 updateInfoUI();
                 if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
             });
+
+            updatePanelArrows();
         }
 
-        /* ================= HELPERS ================= */
         function onPersonClick(clickedId, fullRoot) {
             selectPerson(clickedId, false);
 
@@ -1500,10 +1471,6 @@
             }
 
             render(false);
-        }
-
-        function getCssVar(name) {
-            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         }
     </script>
 </body>
