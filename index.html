@@ -8,10 +8,7 @@
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -45,7 +42,6 @@
             --dimLinks: 0.12;
 
             --branch-color: rgba(56, 189, 248, .85);
-            /* будет меняться из JS */
         }
 
         * {
@@ -171,7 +167,6 @@
             stroke: var(--link);
             stroke-width: 1.6;
             stroke-linecap: round;
-            transition: opacity .15s ease, stroke .15s ease;
         }
 
         .node {
@@ -358,24 +353,23 @@
 
     <script>
         /* ================= STATE ================= */
-        let data = null, zoom = null;
+        let data = null;
         let rootId = null;
 
         let currentId = null;
-
-        /**
-         * ✅ ВАЖНО:
-         * focusRawId — по кому реально кликнули (супруг/супруга тоже!)
-         * focusResolvedId — кого использовать как "опорного" для ветви (в текущей модели это primary узла пары)
-         */
         let focusRawId = null;
         let focusResolvedId = null;
 
         let didInitialFit = false;
 
+        let svg = null, g = null, zoom = null, layout = null;
+        let w = 0, h = 0;
+
+        /* store node positions for smooth transitions */
         const prevPos = new Map();
         const prevLinkD = new Map();
 
+        /* keep camera transform always */
         let lastTransform = d3.zoomIdentity;
 
         /* ================= CONFIG ================= */
@@ -389,9 +383,7 @@
         const SEP_SIBLINGS = 1.0;
         const SEP_OTHER = 1.12;
 
-        /* ещё мягче и медленнее */
-        const ANIM_MS = 1200;
-        const FIT_MS = 1400;
+        const ANIM_MS = 900;
 
         const MARRIAGE_ICON = 'fa-heart';
         const MARRIAGE_ICON_COLOR = getCssVar('--ring');
@@ -402,10 +394,39 @@
             .then(t => {
                 data = parseGedcom(t);
                 rootId = findRoot();
-                render(true);
+                initSvgOnce();
+                render(true);     // fit only once here
                 setupUI();
             })
             .catch(e => console.error('GED load error', e));
+
+        function initSvgOnce() {
+            const container = document.getElementById('tree');
+            w = container.clientWidth;
+            h = container.clientHeight;
+
+            svg = d3.select('#tree').append('svg')
+                .attr('width', w)
+                .attr('height', h);
+
+            g = svg.append('g');
+
+            zoom = d3.zoom()
+                .scaleExtent([0.15, 3])
+                .on('zoom', e => {
+                    lastTransform = e.transform;
+                    g.attr('transform', e.transform);
+                });
+
+            svg.call(zoom);
+
+            layout = d3.tree()
+                .nodeSize([NODE_X, NODE_Y])
+                .separation((a, b) => a.parent === b.parent ? SEP_SIBLINGS : SEP_OTHER);
+
+            // start at identity
+            svg.call(zoom.transform, lastTransform);
+        }
 
         /* ================= GEDCOM ================= */
         function parseGedcom(t) {
@@ -467,7 +488,7 @@
             return ids.find(id => !(data.people[id].FAMC || []).length) || ids[0];
         }
 
-        /* ================= BUILD DISPLAY TREE (plain objects) ================= */
+        /* ================= TREE BUILD ================= */
         function buildDisplayTree(personId, seen = new Set()) {
             if (!personId || seen.has(personId)) return null;
             seen.add(personId);
@@ -518,7 +539,7 @@
             return null;
         }
 
-        /* ================= Branch computation ================= */
+        /* ================= BRANCH + SIBLINGS ================= */
         function computeBranchIds(rootH, targetPersonId) {
             let targetNode = null;
             rootH.each(d => {
@@ -539,7 +560,6 @@
             return ids;
         }
 
-        /* siblings flat */
         function getSiblingIds(personId) {
             const p = data.people[personId];
             if (!p) return [];
@@ -550,6 +570,7 @@
             const kids = fam.chil || [];
             return kids.filter(id => id && id !== personId);
         }
+
         function expandIdsWithSiblingsFlat(baseIds, targetPersonId) {
             const out = new Set(baseIds);
             const sibs = getSiblingIds(targetPersonId);
@@ -557,7 +578,6 @@
             return out;
         }
 
-        /* prune + strip siblings to single-person */
         function pruneDataByIds(node, keepIds, siblingSet) {
             if (!node) return null;
 
@@ -591,13 +611,8 @@
             return null;
         }
 
-        /**
-         * ✅ Ключевой фикс:
-         * resolveFocusTarget возвращает "опорного" (primary) человека пары,
-         * но toggle делаем по focusRawId (реально кликнутому).
-         */
         function resolveFocusTarget(rootH, clickedId) {
-            // 1) если он где-то является primary/id — используем его
+            // 1) clicked is primary/id somewhere
             let found = null;
             rootH.each(d => {
                 const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
@@ -605,7 +620,7 @@
             });
             if (found) return found;
 
-            // 2) если он супруг в паре — фокусируемся по primary этой пары
+            // 2) clicked is spouse inside a couple => focus on that couple primary
             let couplePrimary = null;
             rootH.each(d => {
                 if (d.data.type === 'couple' && d.data.spouseId === clickedId) {
@@ -615,7 +630,7 @@
             return couplePrimary || clickedId;
         }
 
-        /* branch color */
+        /* ================= COLORS ================= */
         function setBranchColorFromId(personId) {
             const hue = hashHue(String(personId || 'x'));
             const css = `hsla(${hue}, 92%, 62%, .88)`;
@@ -627,158 +642,196 @@
             return h % 360;
         }
 
-        /* ================= RENDER ================= */
-        function render(forceFit = false) {
-            const baseData = buildDisplayTree(rootId);
-            drawTree(baseData, forceFit);
-        }
-
-        function drawTree(baseData, forceFit) {
-            d3.select('#tree').selectAll('*').remove();
-
+        /* ================= RENDER (NO CAMERA JUMP) ================= */
+        function render(doFit) {
+            // update size only on resize
             const container = document.getElementById('tree');
-            const w = container.clientWidth;
-            const h = container.clientHeight;
+            const nw = container.clientWidth;
+            const nh = container.clientHeight;
+            if (nw !== w || nh !== h) {
+                w = nw; h = nh;
+                svg.attr('width', w).attr('height', h);
+            }
 
-            const svg = d3.select('#tree').append('svg').attr('width', w).attr('height', h);
-            const g = svg.append('g');
+            // base data
+            const baseData = buildDisplayTree(rootId);
 
-            zoom = d3.zoom()
-                .scaleExtent([0.15, 3])
-                .on('zoom', e => {
-                    lastTransform = e.transform;
-                    g.attr('transform', e.transform);
-                });
-
-            svg.call(zoom);
-            svg.call(zoom.transform, lastTransform);
-
-            const layout = d3.tree()
-                .nodeSize([NODE_X, NODE_Y])
-                .separation((a, b) => a.parent === b.parent ? SEP_SIBLINGS : SEP_OTHER);
-
+            // full hierarchy (for branch computation)
             const fullRoot = d3.hierarchy(baseData);
             layout(fullRoot);
 
             const highlightCandidate = focusResolvedId || currentId;
+
             let branchIds = new Set();
             let siblingSet = new Set();
-            let resolved = null;
-
             if (highlightCandidate) {
-                resolved = resolveFocusTarget(fullRoot, highlightCandidate);
+                const resolved = resolveFocusTarget(fullRoot, highlightCandidate);
                 setBranchColorFromId(resolved);
-
                 branchIds = computeBranchIds(fullRoot, resolved);
 
-                const sibs = getSiblingIds(resolved);
-                siblingSet = new Set(sibs);
+                siblingSet = new Set(getSiblingIds(resolved));
                 branchIds = expandIdsWithSiblingsFlat(branchIds, resolved);
             }
 
+            // focus prune only in focus
             let renderData = baseData;
             if (focusResolvedId && branchIds.size) {
                 renderData = pruneDataByIds(baseData, branchIds, siblingSet) || baseData;
             }
 
-            const renderRoot = d3.hierarchy(renderData);
-            layout(renderRoot);
+            const root = d3.hierarchy(renderData);
+            layout(root);
 
+            // data keys
             const nodeKey = (d) => {
                 const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : '';
                 return `${d.data.type}:${pid}`;
             };
 
             const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
+            const links = root.links();
+
             function linkKey(l) {
                 const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
                 const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
                 return `${a}=>${b}`;
             }
 
-            const links = renderRoot.links();
+            // LINKS join
+            const linkSel = g.selectAll('path.link')
+                .data(links, linkKey);
 
-            const linkSel = g.selectAll('.link')
-                .data(links, linkKey)
-                .enter().append('path')
+            linkSel.exit()
+                .transition().duration(ANIM_MS).style('opacity', 0)
+                .remove();
+
+            const linkEnter = linkSel.enter()
+                .append('path')
                 .attr('class', 'link')
+                .style('opacity', 0)
                 .attr('d', l => {
                     const k = linkKey(l);
+                    // start from previous if any, otherwise current
                     const prev = prevLinkD.get(k);
-                    const cur = linkGen({
+                    return prev || linkGen({
                         source: getLinkSourceAnchor(l.source),
                         target: getLinkTargetAnchor(l.target)
                     });
-                    return prev || cur;
-                })
-                .style('opacity', 0);
+                });
 
-            const nodeSel = g.selectAll('.node')
-                .data(renderRoot.descendants(), nodeKey)
-                .enter().append('g')
+            const linkMerge = linkEnter.merge(linkSel);
+
+            // NODES join
+            const nodes = root.descendants();
+            const nodeSel = g.selectAll('g.node')
+                .data(nodes, nodeKey);
+
+            nodeSel.exit()
+                .transition().duration(ANIM_MS).style('opacity', 0)
+                .remove();
+
+            const nodeEnter = nodeSel.enter()
+                .append('g')
                 .attr('class', d => `node ${d.data.type}`)
+                .style('opacity', 0)
                 .attr('transform', d => {
                     const k = nodeKey(d);
                     const prev = prevPos.get(k);
                     if (prev) return `translate(${prev.y},${prev.x})`;
                     return `translate(${d.y},${d.x})`;
                 })
-                .style('opacity', 0)
-                .each(function (d) { drawNode(d3.select(this), d.data, fullRoot); });
+                .each(function (d) {
+                    // clear and draw
+                    drawNode(d3.select(this), d.data, fullRoot);
+                });
+
+            const nodeMerge = nodeEnter.merge(nodeSel);
+
+            // redraw updated nodes if selection changes (simple approach: clear group and redraw)
+            nodeMerge.each(function (d) {
+                // if it was existing, we need to ensure click handlers + selected styling update.
+                // easiest: clear and draw again (still fast for 50-200 nodes).
+                const sel = d3.select(this);
+                sel.selectAll('*').remove();
+                drawNode(sel, d.data, fullRoot);
+            });
+
+            // Apply dimming/highlight (full mode only)
+            nodeMerge.classed('dimmed', false).classed('in-branch', false);
+            linkMerge.classed('dimmed-link', false).classed('in-branch-link', false);
 
             if (!focusResolvedId && branchIds.size) {
-                nodeSel.each(function (d) {
+                nodeMerge.each(function (d) {
                     const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
                     if (pid && !branchIds.has(pid)) d3.select(this).classed('dimmed', true);
                     else d3.select(this).classed('in-branch', true);
                 });
 
-                linkSel.each(function (l) {
+                linkMerge.each(function (l) {
                     const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
                     const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
                     if (!(branchIds.has(a) && branchIds.has(b))) d3.select(this).classed('dimmed-link', true);
                     else d3.select(this).classed('in-branch-link', true);
                 });
             } else if (focusResolvedId) {
-                linkSel.classed('in-branch-link', true);
-                nodeSel.classed('in-branch', true);
+                nodeMerge.classed('in-branch', true);
+                linkMerge.classed('in-branch-link', true);
             }
 
-            nodeSel.transition()
+            // transitions for positions + opacity
+            nodeMerge.transition()
                 .duration(ANIM_MS)
-                .ease(d3.easeSinInOut)
-                .attr('transform', d => `translate(${d.y},${d.x})`)
-                .style('opacity', 1);
+                .ease(d3.easeCubicInOut)
+                .style('opacity', 1)
+                .attr('transform', d => `translate(${d.y},${d.x})`);
 
-            linkSel.transition()
+            linkMerge.transition()
                 .duration(ANIM_MS)
-                .ease(d3.easeSinInOut)
+                .ease(d3.easeCubicInOut)
+                .style('opacity', 1)
                 .attr('d', l => linkGen({
                     source: getLinkSourceAnchor(l.source),
                     target: getLinkTargetAnchor(l.target)
-                }))
-                .style('opacity', 1);
+                }));
 
-            renderRoot.descendants().forEach(d => {
+            // store positions for next transition
+            nodes.forEach(d => {
                 prevPos.set(nodeKey(d), { x: d.x, y: d.y });
             });
             links.forEach(l => {
                 const k = linkKey(l);
-                const cur = linkGen({
+                const dStr = linkGen({
                     source: getLinkSourceAnchor(l.source),
                     target: getLinkTargetAnchor(l.target)
                 });
-                prevLinkD.set(k, cur);
+                prevLinkD.set(k, dStr);
             });
 
-            const shouldFit = forceFit || !didInitialFit || !!focusResolvedId;
-            if (shouldFit) {
-                fitAnimated(svg, g, w, h, FIT_MS);
-                didInitialFit = true;
+            // ✅ Fit ONLY initial or reset (never on click)
+            if (doFit) {
+                fitToContent();
             }
         }
 
-        /* anchors */
+        /* ================= CAMERA FIT (ONLY initial/reset) ================= */
+        function fitToContent() {
+            const b = g.node().getBBox();
+            if (!b.width || !b.height) return;
+
+            const pad = 120;
+            const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
+            const tx = w / 2 - (b.x + b.width / 2) * s;
+            const ty = h / 2 - (b.y + b.height / 2) * s;
+
+            const target = d3.zoomIdentity.translate(tx, ty).scale(s);
+
+            svg.transition()
+                .duration(700)
+                .ease(d3.easeCubicInOut)
+                .call(zoom.transform, target);
+        }
+
+        /* ================= LINK ANCHORS ================= */
         function getLinkSourceAnchor(node) {
             if (!node) return { x: 0, y: 0 };
             const y = node.y + (CARD_W / 2);
@@ -797,11 +850,11 @@
             return { x: node.x, y };
         }
 
-        /* draw node */
-        function drawNode(g, n, fullRoot) {
+        /* ================= NODE DRAW ================= */
+        function drawNode(gNode, n, fullRoot) {
             if (n.type === 'person') {
                 const p = data.people[n.id] || { name: n.name, sex: n.sex, birth: n.b, death: n.d };
-                drawPersonCard(g, {
+                drawPersonCard(gNode, {
                     id: n.id,
                     name: p.name || n.name,
                     sex: p.sex || n.sex,
@@ -816,7 +869,7 @@
                 const spouse = n.spouseId ? data.people[n.spouseId] : null;
                 const half = (CARD_H + COUPLE_GAP) / 2;
 
-                drawPersonCard(g, {
+                drawPersonCard(gNode, {
                     id: n.primaryId,
                     name: primary?.name || 'Без имени',
                     sex: primary?.sex || '',
@@ -825,7 +878,7 @@
                 }, -half, fullRoot);
 
                 if (spouse) {
-                    drawPersonCard(g, {
+                    drawPersonCard(gNode, {
                         id: n.spouseId,
                         name: spouse?.name || 'Без имени',
                         sex: spouse?.sex || '',
@@ -834,17 +887,19 @@
                     }, +half, fullRoot);
                 }
 
-                g.append('path')
+                // connector between spouses
+                gNode.append('path')
                     .attr('d', `M 0 ${-half + CARD_H / 2} L 0 ${+half - CARD_H / 2}`)
                     .attr('fill', 'none')
                     .attr('stroke', getCssVar('--link-strong'))
                     .attr('stroke-width', 1.4);
 
+                // marriage badge
                 const marriage = formatGedcomDate(n.marriage);
                 const W = marriage ? 200 : 56;
                 const H = 32;
 
-                g.append('foreignObject')
+                gNode.append('foreignObject')
                     .attr('x', -W / 2).attr('y', -H / 2)
                     .attr('width', W).attr('height', H)
                     .style('pointer-events', 'none')
@@ -869,13 +924,14 @@
         </div>
       `);
 
+                // children chip (top card, left corner)
                 const kidsCount = (n.children && n.children.length) ? n.children.length : 0;
                 if (kidsCount > 0) {
                     const chipW = 70, chipH = 26;
                     const chipX = (-CARD_W / 2) + 10;
                     const chipY = (-half - CARD_H / 2) + 10;
 
-                    g.append('foreignObject')
+                    gNode.append('foreignObject')
                         .attr('x', chipX)
                         .attr('y', chipY)
                         .attr('width', chipW)
@@ -902,15 +958,13 @@
           </div>
         `);
                 }
-
-                return;
             }
         }
 
-        function drawPersonCard(g, p, yOffset, fullRoot) {
+        function drawPersonCard(gNode, p, yOffset, fullRoot) {
             const cls = p.sex === 'M' ? 'm' : p.sex === 'F' ? 'f' : 'u';
 
-            const group = g.append('g')
+            const group = gNode.append('g')
                 .attr('transform', `translate(0,${yOffset})`)
                 .style('cursor', 'pointer')
                 .on('click', (ev) => { ev.stopPropagation(); onPersonClick(p.id, fullRoot); });
@@ -948,25 +1002,26 @@
             }
 
             if (p.id === currentId) {
-                group.classed('selected', true);
+                gNode.classed('selected', true);
+            } else {
+                gNode.classed('selected', false);
             }
         }
 
-        /* ================= CLICK LOGIC (FIXED) ================= */
+        /* ================= CLICK LOGIC ================= */
         function onPersonClick(clickedId, fullRoot) {
             selectPerson(clickedId, false);
 
             const resolved = resolveFocusTarget(fullRoot, clickedId);
 
-            // ✅ toggle based on RAW click, not resolved
             if (focusRawId === clickedId) {
                 focusRawId = null;
                 focusResolvedId = null;
-                render(true);
+                render(false);  // ✅ no fit, no camera move
             } else {
                 focusRawId = clickedId;
                 focusResolvedId = resolved;
-                render(true);
+                render(false);  // ✅ no fit, no camera move
             }
         }
 
@@ -990,8 +1045,9 @@
     <div class="pill"><i class="fa-solid fa-people-group"></i> <span>Братья/сёстры: ${escapeHtml(sibText)}</span></div>
 
     <div class="hint">
-      <b>Клик</b> — фокус на ветвь + его братья/сёстры (без семей).<br/>
-      <b>Повторный клик по тому же человеку</b> — вернуть полное дерево.
+      <b>Клик</b> — фокус на ветвь + siblings (плоско).<br/>
+      <b>Повторный клик по тому же человеку</b> — полный вид.<br/>
+      Камера (зум/пан) не сбрасывается.
     </div>
   `;
 
@@ -1082,30 +1138,15 @@
             return '';
         }
 
-        /* ================= FIT / UI ================= */
-        function fitAnimated(svg, g, w, h, duration) {
-            const b = g.node().getBBox();
-            const pad = 120;
-            const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
-
-            const tx = w / 2 - (b.x + b.width / 2) * s;
-            const ty = h / 2 - (b.y + b.height / 2) * s;
-
-            const target = d3.zoomIdentity.translate(tx, ty).scale(s);
-
-            svg.transition()
-                .duration(duration)
-                .ease(d3.easeSinInOut)
-                .call(zoom.transform, target);
-        }
-
+        /* ================= UI ================= */
         function setupUI() {
-            document.getElementById('zoom-in').onclick = () => d3.select('svg').transition().duration(300).ease(d3.easeSinInOut).call(zoom.scaleBy, 1.2);
-            document.getElementById('zoom-out').onclick = () => d3.select('svg').transition().duration(300).ease(d3.easeSinInOut).call(zoom.scaleBy, 0.85);
+            document.getElementById('zoom-in').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1.2);
+            document.getElementById('zoom-out').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 0.85);
+
+            // Reset: возвращаем полное дерево + делаем fit (и это единственный раз, когда камера двигается)
             document.getElementById('reset-view').onclick = () => {
                 focusRawId = null;
                 focusResolvedId = null;
-                didInitialFit = false;
                 render(true);
             };
 
@@ -1113,8 +1154,8 @@
             document.getElementById('close-info').onclick = () => document.getElementById('info-panel').classList.remove('open');
 
             window.addEventListener('resize', () => {
-                didInitialFit = false;
-                render(true);
+                // при ресайзе сохраняем камеру, просто перерендерим, без fit
+                render(false);
             });
         }
 
