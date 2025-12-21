@@ -2,8 +2,8 @@
 <html lang="ru">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Семейное древо</title>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -38,7 +38,8 @@
             padding: 12px 20px;
             display: flex;
             justify-content: space-between;
-            align-items: center
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .15)
         }
 
         .logo {
@@ -58,8 +59,7 @@
 
         .controls {
             display: flex;
-            gap: 12px;
-            align-items: center
+            gap: 10px
         }
 
         .ctrl-btn {
@@ -89,7 +89,8 @@
         .link {
             fill: none;
             stroke: rgba(44, 62, 80, .28);
-            stroke-width: 2
+            stroke-width: 2;
+            stroke-linecap: round
         }
 
         .node {
@@ -98,6 +99,28 @@
 
         .card-shadow {
             filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, .15))
+        }
+
+        .node.selected .person-outer {
+            stroke: #f39c12 !important;
+            stroke-width: 4 !important
+        }
+
+        .person-outer {
+            fill: #fff;
+            stroke-width: 2
+        }
+
+        .person-outer.m {
+            stroke: #3498db
+        }
+
+        .person-outer.f {
+            stroke: #e74c3c
+        }
+
+        .person-outer.u {
+            stroke: #95a5a6
         }
 
         .info-panel {
@@ -110,7 +133,8 @@
             border-radius: 14px 0 0 14px;
             transform: translateX(calc(100% - 46px));
             transition: .25s;
-            z-index: 100
+            z-index: 100;
+            box-shadow: 0 12px 34px rgba(0, 0, 0, .25)
         }
 
         .info-panel.open {
@@ -134,7 +158,18 @@
         .info-header {
             background: #2c3e50;
             color: #fff;
-            padding: 14px
+            padding: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer
         }
 
         .info-content {
@@ -143,26 +178,12 @@
             height: calc(100% - 52px)
         }
 
-        .person-outer {
-            fill: #fff;
-            stroke-width: 2
-        }
-
-        .person-outer.m {
-            stroke: #3498db
-        }
-
-        .person-outer.f {
-            stroke: #e74c3c
-        }
-
-        .person-outer.u {
-            stroke: #95a5a6
-        }
-
         @media(max-width:768px) {
             .info-panel {
-                width: 90vw
+                width: 90vw;
+                top: auto;
+                bottom: 20px;
+                height: min(70vh, 520px)
             }
         }
     </style>
@@ -188,51 +209,45 @@
         </div>
 
         <div id="info-panel" class="info-panel">
-            <div class="info-tab" id="info-tab"><i class="fas fa-user"></i></div>
-            <div class="info-header">Информация</div>
+            <div id="info-tab" class="info-tab"><i class="fas fa-user"></i></div>
+            <div class="info-header">
+                <div>Информация</div>
+                <button id="close-info" class="close-btn">&times;</button>
+            </div>
             <div id="person-info" class="info-content">Выберите человека</div>
         </div>
 
     </div>
 
     <script>
-        /* =====================
-           STATE
-        ===================== */
+        /* ================= STATE ================= */
         let data = null, zoom = null;
         let rootId = null, currentId = null;
         let branchMode = false, branchFocus = null;
 
-        /* =====================
-           INIT
-        ===================== */
-        fetch('./3.ged').then(r => r.text()).then(t => {
-            data = parseGedcom(t);
-            rootId = findRoot(data);
-            renderFull();
-            setupUI();
-        });
+        /* ================= INIT ================= */
+        fetch('./3.ged')
+            .then(r => r.text())
+            .then(t => {
+                data = parseGedcom(t);
+                rootId = findRoot();
+                renderFull();
+                setupUI();
+            });
 
-        /* =====================
-           GEDCOM
-        ===================== */
+        /* ================= GEDCOM ================= */
         function parseGedcom(t) {
             const people = {}, fams = {};
             let cur = null, evt = null;
             t.split(/\r?\n/).forEach(l => {
-                if (!l.trim()) return;
                 const m = l.match(/^(\d+)\s+(@?[^ ]+@?)\s*(.*)$/);
                 if (!m) return;
                 const lvl = +m[1], tag = m[2].replace(/@/g, ''), val = m[3];
                 if (lvl === 0) {
-                    if (val.includes('INDI')) {
-                        cur = { t: 'I', id: tag };
-                        people[tag] = { id: tag, name: '', sex: '', birth: '', death: '', FAMS: [], FAMC: [] };
-                    } else if (val.includes('FAM')) {
-                        cur = { t: 'F', id: tag };
-                        fams[tag] = { id: tag, husb: null, wife: null, chil: [], marriage: '' };
-                    } else cur = null;
-                    evt = null; return;
+                    evt = null;
+                    if (val.includes('INDI')) { cur = { t: 'P', id: tag }; people[tag] = { id: tag, name: '', sex: '', birth: '', death: '', FAMS: [], FAMC: [] } }
+                    if (val.includes('FAM')) { cur = { t: 'F', id: tag }; fams[tag] = { id: tag, husb: null, wife: null, chil: [], marriage: '' } }
+                    return;
                 }
                 if (!cur) return;
                 if (lvl === 1) {
@@ -241,77 +256,69 @@
                     if (tag === 'DEAT') evt = 'death';
                     if (tag === 'MARR') evt = 'marriage';
                 }
-                if (cur.t === 'I') {
+                if (cur.t === 'P') {
                     const p = people[cur.id];
                     if (tag === 'NAME') p.name = val.replace(/\//g, '');
                     if (tag === 'SEX') p.sex = val;
                     if (tag === 'FAMS') p.FAMS.push(val.replace(/@/g, ''));
                     if (tag === 'FAMC') p.FAMC.push(val.replace(/@/g, ''));
-                    if (lvl === 2 && evt) p[evt] = val;
+                    if (lvl === 2 && evt && tag === 'DATE') p[evt] = val;
                 }
                 if (cur.t === 'F') {
                     const f = fams[cur.id];
                     if (tag === 'HUSB') f.husb = val.replace(/@/g, '');
                     if (tag === 'WIFE') f.wife = val.replace(/@/g, '');
                     if (tag === 'CHIL') f.chil.push(val.replace(/@/g, ''));
-                    if (lvl === 2 && evt) f[evt] = val;
+                    if (lvl === 2 && evt && tag === 'DATE') f[evt] = val;
                 }
             });
             return { people, fams };
         }
 
-        function findRoot(d) {
-            return Object.values(d.people).find(p => !p.FAMC.length)?.id
-                || Object.keys(d.people)[0];
+        function findRoot() {
+            return Object.keys(data.people).find(id => !data.people[id].FAMC.length);
         }
 
-        /* =====================
-           TREE MODEL
-        ===================== */
-        function buildDesc(pId, seen = new Set()) {
-            if (!pId || seen.has(pId)) return null;
-            seen.add(pId);
-            const p = data.people[pId];
-            const node = { type: 'person', id: pId, name: p.name, sex: p.sex, b: p.birth, d: p.death, children: [] };
+        /* ================= TREE MODEL ================= */
+        function buildDesc(id, seen = new Set()) {
+            if (!id || seen.has(id)) return null;
+            seen.add(id);
+            const p = data.people[id];
+            const n = { type: 'person', id, name: p.name, sex: p.sex, b: p.birth, d: p.death, children: [] };
             p.FAMS.forEach(fid => {
-                const f = data.fams[fid];
-                const spouse = (f.husb === pId) ? f.wife : f.husb;
-                const u = { type: 'union', spouse, marriage: f.marriage, children: [] };
-                f.chil.forEach(c => {
-                    const ch = buildDesc(c, new Set(seen));
-                    if (ch) u.children.push(ch);
-                });
-                if (u.children.length) node.children.push(u);
+                const f = data.fams[fid]; if (!f) return;
+                const u = { type: 'union', spouse: (f.husb === id ? f.wife : f.husb), marriage: f.marriage, children: [] };
+                f.chil.forEach(c => { const ch = buildDesc(c, new Set(seen)); if (ch) u.children.push(ch); });
+                if (u.spouse || u.children.length) n.children.push(u);
             });
-            if (!node.children.length) delete node.children;
-            return node;
+            if (!n.children.length) delete n.children;
+            return n;
         }
 
-        /* =====================
-           POSITION FIX
-        ===================== */
-        function rx(d) { return d._x ?? d.x }
-        function ry(d) { return d._y ?? d.y }
-
-        function inlineUnions(root, dir) {
-            root.descendants().forEach(d => {
-                d._x = d.x; d._y = d.y;
-                if (d.data.type === 'union' && d.parent) {
-                    const old = d.y;
-                    d._x = d.parent.x;
-                    d._y = d.parent.y + dir * 160;
-                    const delta = d._y - old;
-                    d.descendants().forEach((c, i) => { if (i) c._y = (c._y ?? c.y) + delta });
-                }
-            });
+        function buildAncestors(id) {
+            const p = data.people[id]; if (!p || !p.FAMC.length) return null;
+            const f = data.fams[p.FAMC[0]]; if (!f) return null;
+            const n = { type: 'anc_union', father: f.husb, mother: f.wife, children: [] };
+            const fa = f.husb ? buildAncestors(f.husb) : null;
+            const mo = f.wife ? buildAncestors(f.wife) : null;
+            if (fa) n.children.push(fa);
+            if (mo) n.children.push(mo);
+            if (!n.children.length) delete n.children;
+            return n;
         }
 
-        /* =====================
-           RENDER
-        ===================== */
+        /* ================= RENDER ================= */
         function renderFull() {
+            branchMode = false;
             const tree = buildDesc(rootId);
             drawTree(tree);
+        }
+
+        function renderBranch(id) {
+            branchMode = true; branchFocus = id;
+            const center = buildDesc(id);
+            const anc = buildAncestors(id);
+            drawBranch(center, anc);
         }
 
         function drawTree(tree) {
@@ -325,54 +332,67 @@
             const layout = d3.tree().nodeSize([140, 380]);
             const root = d3.hierarchy(tree);
             layout(root);
-            inlineUnions(root, 1);
 
-            const link = d3.linkHorizontal().x(d => ry(d)).y(d => rx(d));
-
-            g.selectAll('.link')
-                .data(root.links())
-                .enter().append('path')
+            const link = d3.linkHorizontal().x(d => d.y).y(d => d.x);
+            g.selectAll('.link').data(root.links()).enter().append('path')
                 .attr('class', 'link')
-                .attr('d', d => link({
-                    source: { x: rx(d.source), y: ry(d.source) },
-                    target: { x: rx(d.target), y: ry(d.target) }
-                }));
+                .attr('d', d => link(d));
 
-            const node = g.selectAll('.node')
-                .data(root.descendants())
-                .enter().append('g')
+            g.selectAll('.node').data(root.descendants()).enter().append('g')
                 .attr('class', 'node')
-                .attr('transform', d => `translate(${ry(d)},${rx(d)})`)
+                .attr('transform', d => `translate(${d.y},${d.x})`)
                 .each(function (d) { drawNode(d3.select(this), d.data) });
 
             fit(svg, g, w, h);
         }
 
+        function drawBranch(center, anc) {
+            d3.select('#tree').selectAll('*').remove();
+            const w = window.innerWidth, h = window.innerHeight;
+            const svg = d3.select('#tree').append('svg').attr('width', w).attr('height', h);
+            const g = svg.append('g');
+            zoom = d3.zoom().scaleExtent([.1, 3]).on('zoom', e => g.attr('transform', e.transform));
+            svg.call(zoom);
+
+            const cx = w / 2, cy = h / 2;
+            const draw = (node, dx) => {
+                const layout = d3.tree().nodeSize([140, 380]);
+                const r = d3.hierarchy(node);
+                layout(r);
+                const link = d3.linkHorizontal().x(p => cx + dx + p.y).y(p => cy + p.x);
+                g.selectAll(null).data(r.links()).enter().append('path').attr('class', 'link').attr('d', d => link(d));
+                g.selectAll(null).data(r.descendants()).enter().append('g')
+                    .attr('class', 'node')
+                    .attr('transform', d => `translate(${cx + dx + d.y},${cy + d.x})`)
+                    .each(function (d) { drawNode(d3.select(this), d.data) });
+            };
+            draw(center, 0);
+            if (anc) draw(anc, -400);
+            fit(svg, g, w, h);
+        }
+
         function drawNode(g, d) {
             if (d.type === 'person') {
-                const cls = d.sex === 'M' ? 'm' : d.sex === 'F' ? 'f' : 'u';
-                g.append('rect').attr('x', -110).attr('y', -40).attr('width', 220).attr('height', 80)
-                    .attr('rx', 14).attr('class', 'person-outer ' + cls);
-                g.append('text').attr('text-anchor', 'middle').attr('y', -8)
-                    .text(d.name).style('font-weight', '700');
-                if (d.b || d.d)
-                    g.append('text').attr('text-anchor', 'middle').attr('y', 14)
-                        .style('font-size', '11px').text(`${d.b || ''}${d.d ? ' – ' + d.d : ''}`);
-                g.on('click', () => selectPerson(d.id));
+                const c = d.sex === 'M' ? 'm' : d.sex === 'F' ? 'f' : 'u';
+                g.append('rect').attr('x', -110).attr('y', -40).attr('width', 220).attr('height', 80).attr('rx', 14).attr('class', 'person-outer ' + c);
+                g.append('text').attr('text-anchor', 'middle').attr('y', -6).text(d.name).style('font-weight', '700');
+                if (d.b || d.d) g.append('text').attr('text-anchor', 'middle').attr('y', 14).style('font-size', '11px').text(`${d.b || ''}${d.d ? ' – ' + d.d : ''}`);
+                g.on('click', e => {
+                    e.stopPropagation();
+                    if (!branchMode) renderBranch(d.id);
+                    else if (branchFocus === d.id) renderFull();
+                    else renderBranch(d.id);
+                    selectPerson(d.id);
+                });
             }
             if (d.type === 'union') {
                 g.append('circle').attr('r', 6).attr('fill', '#bbb');
-                if (d.marriage)
-                    g.append('text').attr('y', 18).attr('text-anchor', 'middle')
-                        .style('font-size', '10px').text(d.marriage);
+                if (d.marriage) g.append('text').attr('y', 18).attr('text-anchor', 'middle').style('font-size', '10px').text(d.marriage);
                 if (d.spouse) {
-                    const sp = data.people[d.spouse];
-                    const x = 200;
-                    g.append('line').attr('x1', 10).attr('x2', x - 90).attr('stroke', '#999');
-                    const sg = g.append('g').attr('transform', `translate(${x},0)`)
-                        .on('click', () => selectPerson(d.spouse));
-                    sg.append('rect').attr('x', -90).attr('y', -28).attr('width', 180).attr('height', 56)
-                        .attr('rx', 12).attr('class', 'person-outer ' + (sp.sex === 'M' ? 'm' : sp.sex === 'F' ? 'f' : 'u'));
+                    const sp = data.people[d.spouse], x = 200;
+                    g.append('path').attr('d', `M 10 0 C 45 0, 90 0, ${x - 90} 0`).attr('stroke', '#999').attr('fill', 'none');
+                    const sg = g.append('g').attr('transform', `translate(${x},0)`).on('click', e => { e.stopPropagation(); renderBranch(d.spouse); });
+                    sg.append('rect').attr('x', -90).attr('y', -28).attr('width', 180).attr('height', 56).attr('rx', 12).attr('class', 'person-outer ' + (sp.sex === 'M' ? 'm' : sp.sex === 'F' ? 'f' : 'u'));
                     sg.append('text').attr('text-anchor', 'middle').attr('y', 5).text(sp.name);
                 }
             }
@@ -381,32 +401,22 @@
         function fit(svg, g, w, h) {
             const b = g.node().getBBox();
             const s = Math.min(.9, w / b.width, h / b.height);
-            svg.call(zoom.transform, d3.zoomIdentity
-                .translate(w / 2 - b.x * s - b.width * s / 2, h / 2 - b.y * s - b.height * s / 2).scale(s));
+            const t = [w / 2 - (b.x + b.width / 2) * s, h / 2 - (b.y + b.height / 2) * s];
+            svg.call(zoom.transform, d3.zoomIdentity.translate(t[0], t[1]).scale(s));
         }
 
-        /* =====================
-           UI
-        ===================== */
-        function selectPerson(id) {
-            currentId = id;
-            showInfo(id);
-        }
-
-        function showInfo(id) {
-            const p = data.people[id];
-            document.getElementById('person-info').innerHTML =
-                `<b>${p.name}</b><br>
-   ${p.birth ? ('Род: ' + p.birth + '<br>') : ''}
-   ${p.death ? ('Умер: ' + p.death) : ''}`;
-        }
-
+        /* ================= UI ================= */
         function setupUI() {
             document.getElementById('zoom-in').onclick = () => d3.select('svg').transition().call(zoom.scaleBy, 1.2);
             document.getElementById('zoom-out').onclick = () => d3.select('svg').transition().call(zoom.scaleBy, .8);
-            document.getElementById('reset-view').onclick = () => renderFull();
-            document.getElementById('info-tab').onclick = () =>
-                document.getElementById('info-panel').classList.toggle('open');
+            document.getElementById('reset-view').onclick = () => branchMode ? renderBranch(branchFocus) : renderFull();
+            document.getElementById('info-tab').onclick = () => document.getElementById('info-panel').classList.toggle('open');
+            document.getElementById('close-info').onclick = () => document.getElementById('info-panel').classList.remove('open');
+        }
+
+        function selectPerson(id) {
+            currentId = id;
+            document.getElementById('person-info').innerText = data.people[id]?.name || '';
         }
     </script>
 </body>
