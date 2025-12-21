@@ -7,9 +7,55 @@
     <title>Семейное древо</title>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <!-- Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
     <style>
+        :root {
+            /* Neutral + modern palette */
+            --bg-0: #0b1020;
+            --bg-1: #101a3a;
+            --bg-2: #0f2148;
+
+            --panel: #0f172a;
+            --panel-2: #111c33;
+            --panel-border: rgba(255, 255, 255, .10);
+
+            --text: #e7eaf3;
+            --muted: rgba(231, 234, 243, .72);
+
+            --card: #ffffff;
+            --card-text: #0f172a;
+            --card-muted: #64748b;
+
+            /* Softer accents */
+            --male: #2563eb;
+            /* blue */
+            --female: #ef4444;
+            /* red */
+            --unknown: #94a3b8;
+            /* slate */
+
+            --link: rgba(226, 232, 240, .26);
+            --link-strong: rgba(226, 232, 240, .38);
+
+            --shadow: 0 14px 30px rgba(0, 0, 0, .22);
+            --shadow-soft: 0 10px 24px rgba(0, 0, 0, .16);
+            --shadow-card: 0 10px 24px rgba(15, 23, 42, .14);
+
+            --radius: 18px;
+            --radius-sm: 14px;
+
+            --ring: #fb7185;
+            /* rose */
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -21,8 +67,13 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            font-family: Segoe UI, Tahoma, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            background:
+                radial-gradient(1200px 700px at 20% 20%, rgba(99, 102, 241, .20), transparent 60%),
+                radial-gradient(1000px 700px at 80% 30%, rgba(34, 211, 238, .16), transparent 55%),
+                radial-gradient(900px 700px at 60% 90%, rgba(244, 63, 94, .10), transparent 55%),
+                linear-gradient(160deg, var(--bg-1), var(--bg-0));
+            color: var(--text);
         }
 
         .app-container {
@@ -33,14 +84,15 @@
         }
 
         .app-header {
-            background: #2c3e50;
-            color: #fff;
-            padding: 12px 20px;
+            padding: 12px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
-            z-index: 10
+            background: rgba(15, 23, 42, .55);
+            border-bottom: 1px solid var(--panel-border);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 10;
         }
 
         .logo {
@@ -50,31 +102,63 @@
         }
 
         .logo i {
-            font-size: 26px;
-            color: #3498db
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .10);
+            color: #a5b4fc;
+            font-size: 16px;
         }
 
         .logo h1 {
-            font-size: 20px
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: .2px;
+        }
+
+        .logo .sub {
+            margin-left: 10px;
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 500;
+            display: none;
+        }
+
+        @media(min-width:980px) {
+            .logo .sub {
+                display: inline
+            }
         }
 
         .controls {
             display: flex;
-            gap: 10px
+            gap: 8px
         }
 
         .ctrl-btn {
             width: 40px;
             height: 40px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, .15);
-            border: none;
-            color: #fff;
-            cursor: pointer
+            border-radius: 14px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .10);
+            color: var(--text);
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, .12);
+            transition: transform .12s ease, background .12s ease, border-color .12s ease;
         }
 
         .ctrl-btn:hover {
-            background: #3498db
+            background: rgba(255, 255, 255, .12);
+            border-color: rgba(255, 255, 255, .16);
+            transform: translateY(-1px);
+        }
+
+        .ctrl-btn:active {
+            transform: translateY(0px) scale(.98);
         }
 
         .main-content {
@@ -87,11 +171,12 @@
             height: 100%
         }
 
+        /* Links */
         .link {
             fill: none;
-            stroke: rgba(44, 62, 80, .28);
-            stroke-width: 2;
-            stroke-linecap: round
+            stroke: var(--link);
+            stroke-width: 1.6;
+            stroke-linecap: round;
         }
 
         .node {
@@ -99,44 +184,49 @@
         }
 
         .card-shadow {
-            filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, .15))
+            filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .18));
         }
 
         .person-outer {
-            fill: #fff;
-            stroke-width: 2
+            fill: var(--card);
+            stroke-width: 1.6;
         }
 
         .person-outer.m {
-            stroke: #3498db
+            stroke: color-mix(in srgb, var(--male) 65%, white)
         }
 
         .person-outer.f {
-            stroke: #e74c3c
+            stroke: color-mix(in srgb, var(--female) 65%, white)
         }
 
         .person-outer.u {
-            stroke: #95a5a6
+            stroke: rgba(148, 163, 184, .9)
         }
 
         .node.selected .person-outer {
-            stroke: #f39c12 !important;
-            stroke-width: 4 !important
+            stroke: #f59e0b !important;
+            stroke-width: 3 !important;
         }
 
+        /* Right panel */
         .info-panel {
             position: fixed;
-            top: 80px;
+            top: 76px;
             right: 0;
             width: 360px;
-            height: calc(100vh - 140px);
-            background: #fff;
-            border-radius: 14px 0 0 14px;
-            transform: translateX(calc(100% - 46px));
+            height: calc(100vh - 132px);
+            background: rgba(255, 255, 255, .92);
+            color: #0f172a;
+            border-radius: 18px 0 0 18px;
+            transform: translateX(calc(100% - 54px));
             transition: .25s;
             z-index: 100;
-            box-shadow: 0 12px 34px rgba(0, 0, 0, .25);
-            overflow: hidden
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            border: 1px solid rgba(15, 23, 42, .06);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
         }
 
         .info-panel.open {
@@ -145,48 +235,66 @@
 
         .info-tab {
             position: absolute;
-            left: -46px;
-            top: 120px;
-            width: 46px;
-            height: 140px;
-            background: #2c3e50;
+            left: -54px;
+            top: 110px;
+            width: 54px;
+            height: 150px;
+            background: rgba(15, 23, 42, .88);
+            border: 1px solid rgba(255, 255, 255, .10);
+            border-right: none;
             color: #fff;
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer
+            cursor: pointer;
+            border-radius: 16px 0 0 16px;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, .22);
         }
 
         .info-header {
-            background: #2c3e50;
+            background: rgba(15, 23, 42, .92);
             color: #fff;
-            padding: 14px;
+            padding: 12px 14px;
             display: flex;
             justify-content: space-between;
-            align-items: center
+            align-items: center;
         }
 
         .close-btn {
             background: none;
             border: none;
             color: #fff;
-            font-size: 24px;
+            font-size: 22px;
             cursor: pointer;
             line-height: 1
         }
 
         .info-content {
-            padding: 16px;
+            padding: 14px 14px 18px;
             overflow: auto;
-            height: calc(100% - 52px);
-            font-size: 14px
+            height: calc(100% - 48px);
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, .05);
+            border: 1px solid rgba(15, 23, 42, .08);
+            font-size: 12px;
+            color: rgba(15, 23, 42, .78);
+            margin-top: 10px;
         }
 
         @media(max-width:768px) {
             .info-panel {
                 width: 92vw;
                 top: auto;
-                bottom: 20px;
+                bottom: 16px;
                 height: min(70vh, 520px)
             }
         }
@@ -198,13 +306,14 @@
 
         <header class="app-header">
             <div class="logo">
-                <i class="fas fa-tree"></i>
-                <h1>Семейное древо</h1>
+                <i class="fa-solid fa-tree"></i>
+                <h1>Семейное древо <span class="sub">— интерактивная генеалогия</span></h1>
             </div>
             <div class="controls">
-                <button id="zoom-in" class="ctrl-btn" title="Увеличить"><i class="fas fa-search-plus"></i></button>
-                <button id="zoom-out" class="ctrl-btn" title="Уменьшить"><i class="fas fa-search-minus"></i></button>
-                <button id="reset-view" class="ctrl-btn" title="Сброс"><i class="fas fa-expand"></i></button>
+                <button id="zoom-in" class="ctrl-btn" title="Увеличить"><i class="fa-solid fa-plus"></i></button>
+                <button id="zoom-out" class="ctrl-btn" title="Уменьшить"><i class="fa-solid fa-minus"></i></button>
+                <button id="reset-view" class="ctrl-btn" title="Сброс"><i
+                        class="fa-solid fa-arrows-rotate"></i></button>
             </div>
         </header>
 
@@ -213,9 +322,9 @@
         </div>
 
         <div id="info-panel" class="info-panel">
-            <div id="info-tab" class="info-tab" title="Информация"><i class="fas fa-user"></i></div>
+            <div id="info-tab" class="info-tab" title="Информация"><i class="fa-solid fa-id-card"></i></div>
             <div class="info-header">
-                <div>Информация</div>
+                <div style="font-weight:600">Карточка</div>
                 <button id="close-info" class="close-btn" title="Свернуть">&times;</button>
             </div>
             <div id="person-info" class="info-content">Выберите человека</div>
@@ -229,8 +338,8 @@
         let rootId = null, currentId = null;
 
         /* ================= CONFIG ================= */
-        const CARD_W = 220;
-        const CARD_H = 86;                 // чуть выше, чтобы 3 строки ФИО читались
+        const CARD_W = 230;
+        const CARD_H = 90;
         const COUPLE_GAP = 8;
         const COUPLE_TOTAL_H = CARD_H * 2 + COUPLE_GAP;
 
@@ -238,6 +347,10 @@
         const NODE_Y = 250;
         const SEP_SIBLINGS = 1.0;
         const SEP_OTHER = 1.12;
+
+        // ✅ Вы выбрали:
+        const MARRIAGE_ICON = 'fa-heart';
+        const MARRIAGE_ICON_COLOR = getCssVar('--ring');
 
         /* ================= INIT ================= */
         fetch('./3.ged')
@@ -271,9 +384,7 @@
                     } else if (val.includes('FAM')) {
                         cur = { t: 'F', id: tag };
                         fams[tag] = { id: tag, husb: null, wife: null, chil: [], marriage: '' };
-                    } else {
-                        cur = null;
-                    }
+                    } else cur = null;
                     return;
                 }
 
@@ -329,7 +440,6 @@
 
             if (mainFam) {
                 const spouseId = (mainFam.husb === personId) ? mainFam.wife : mainFam.husb;
-
                 const node = {
                     type: 'couple',
                     primaryId: personId,
@@ -416,12 +526,10 @@
             const y = node.y - (CARD_W / 2);
 
             if (d.type === 'couple') {
-                // входящая линия в ребёнка (верхняя карточка)
                 const half = (CARD_H + COUPLE_GAP) / 2;
-                const topCardCenterX = node.x - half;
+                const topCardCenterX = node.x - half; // вход в потомка
                 return { x: topCardCenterX, y };
             }
-
             return { x: node.x, y };
         }
 
@@ -442,10 +550,8 @@
             if (n.type === 'couple') {
                 const primary = data.people[n.primaryId];
                 const spouse = n.spouseId ? data.people[n.spouseId] : null;
-
                 const half = (CARD_H + COUPLE_GAP) / 2;
 
-                // верхняя карточка (потомок)
                 drawPersonCard(g, {
                     id: n.primaryId,
                     name: primary?.name || 'Без имени',
@@ -454,7 +560,6 @@
                     d: primary?.death || ''
                 }, -half);
 
-                // нижняя карточка (супруг/супруга)
                 if (spouse) {
                     drawPersonCard(g, {
                         id: n.spouseId,
@@ -465,58 +570,42 @@
                     }, +half);
                 }
 
-                // вертикальный коннектор между супругами
+                // Couple connector (subtle)
                 g.append('path')
                     .attr('d', `M 0 ${-half + CARD_H / 2} L 0 ${+half - CARD_H / 2}`)
                     .attr('fill', 'none')
-                    .attr('stroke', 'rgba(44,62,80,.22)')
-                    .attr('stroke-width', 2);
+                    .attr('stroke', getCssVar('--link-strong'))
+                    .attr('stroke-width', 1.4);
 
-                // ===== Центр пары: 💍 + дата строго ПО ЦЕНТРУ между карточками =====
+                // Marriage badge (always consistent)
                 const marriage = formatGedcomDate(n.marriage);
+                const W = marriage ? 200 : 56;
+                const H = 32;
 
-                // красивый бейдж (HTML внутри foreignObject), выровнен по центру
-                if (marriage) {
-                    const W = 190, H = 30;
-                    g.append('foreignObject')
-                        .attr('x', -W / 2).attr('y', -H / 2)
-                        .attr('width', W).attr('height', H)
-                        .style('pointer-events', 'none')
-                        .append('xhtml:div')
-                        .style('width', '100%')
-                        .style('height', '100%')
-                        .style('display', 'flex')
-                        .style('align-items', 'center')
-                        .style('justify-content', 'center')
-                        .html(`
-          <div style="
-            display:inline-flex;align-items:center;gap:8px;
-            padding:4px 12px;border-radius:999px;
-            background:rgba(255,255,255,.92);
-            box-shadow:0 8px 18px rgba(0,0,0,.10);
-            font-size:11px;color:#2c3e50;font-weight:600;
-          ">
-            <i class="fa-solid fa-ring" style="font-size:16px;color:#e74c3c"></i>
-            <span>${escapeHtml(marriage)}</span>
-          </div>
-        `);
-                } else {
-                    // даже если даты нет — оставим маленькую точку союза
-                    g.append('circle')
-                        .attr('r', 7)
-                        .attr('cx', 0).attr('cy', 0)
-                        .attr('fill', 'rgba(255,255,255,.92)')
-                        .attr('stroke', 'rgba(44,62,80,.35)')
-                        .attr('stroke-width', 2);
-
-                    g.append('text')
-                        .attr('text-anchor', 'middle')
-                        .attr('x', 0)
-                        .attr('y', 4)
-                        .style('font-size', '12px')
-                        .style('fill', '#e74c3c')
-                        .text('💍');
-                }
+                g.append('foreignObject')
+                    .attr('x', -W / 2).attr('y', -H / 2)
+                    .attr('width', W).attr('height', H)
+                    .style('pointer-events', 'none')
+                    .append('xhtml:div')
+                    .style('width', '100%')
+                    .style('height', '100%')
+                    .style('display', 'flex')
+                    .style('align-items', 'center')
+                    .style('justify-content', 'center')
+                    .html(`
+        <div style="
+          display:inline-flex;align-items:center;gap:${marriage ? 8 : 0}px;
+          padding:5px 12px;border-radius:999px;
+          background:rgba(255,255,255,.92);
+          border:1px solid rgba(15,23,42,.08);
+          box-shadow: 0 10px 22px rgba(0,0,0,.12);
+          font-size:11px;color:rgba(15,23,42,.82);
+          font-weight:600;
+        ">
+          <i class="fa-solid ${escapeHtml(MARRIAGE_ICON)}" style="font-size:16px;color:${escapeHtml(MARRIAGE_ICON_COLOR)}"></i>
+          ${marriage ? `<span>${escapeHtml(marriage)}</span>` : ``}
+        </div>
+      `);
 
                 return;
             }
@@ -534,31 +623,33 @@
                 .attr('class', 'person-outer card-shadow ' + cls)
                 .attr('x', -CARD_W / 2).attr('y', -CARD_H / 2)
                 .attr('width', CARD_W).attr('height', CARD_H)
-                .attr('rx', 14);
+                .attr('rx', 18);
 
-            // ФИО в 3 строки
+            // Name 3 lines, calmer typography
             const lines = splitName3(p.name);
             const text = group.append('text')
                 .attr('text-anchor', 'middle')
-                .attr('y', -14)
-                .style('font-weight', '800')
-                .style('font-size', '12.5px');
+                .attr('y', -20)
+                .style('font-weight', '600')
+                .style('font-size', '12.5px')
+                .style('fill', getCssVar('--card-text'));
 
             lines.forEach((ln, idx) => {
                 text.append('tspan')
                     .attr('x', 0)
                     .attr('dy', idx === 0 ? 0 : 14)
-                    .text(shorten(ln, 28));
+                    .text(shorten(ln, 30));
             });
 
-            // дата рождения / жизнь
+            // Dates line
             const life = formatLifeLine(p);
             if (life) {
                 group.append('text')
                     .attr('text-anchor', 'middle')
-                    .attr('y', 30)
+                    .attr('y', 34)
                     .style('font-size', '11px')
-                    .style('fill', '#667')
+                    .style('font-weight', '500')
+                    .style('fill', getCssVar('--card-muted'))
                     .text(life);
             }
 
@@ -576,40 +667,36 @@
             const d = formatGedcomDate(p?.death || '');
 
             document.getElementById('person-info').innerHTML = `
-    <div style="font-weight:800;font-size:16px;margin-bottom:10px;color:#2c3e50">${escapeHtml(p?.name || '')}</div>
-    ${b ? `<div><b>Рождение:</b> ${escapeHtml(b)}</div>` : ''}
-    ${d ? `<div><b>Смерть:</b> ${escapeHtml(d)}</div>` : ''}
+    <div style="font-weight:700;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
+    <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
+    <div class="pill"><i class="fa-solid fa-cross"></i> <span>${escapeHtml(d || '—')}</span></div>
+    <div style="margin-top:14px;color:rgba(15,23,42,.70);font-size:12px">
+      Нажмите на вкладку справа, чтобы свернуть/развернуть карточку.
+    </div>
   `;
 
             render();
         }
 
         /* ================= FORMATTING ================= */
-
-        // 1) Имя/Отчество/Фамилия на разных строках
         function splitName3(full) {
             const s = String(full || '').trim().replace(/\s+/g, ' ');
             if (!s) return ['Без имени'];
             const t = s.split(' ');
-
             if (t.length >= 3) {
                 const first = t[0];
                 const patronymic = t[1];
                 const last = t.slice(2).join(' ');
                 return [first, patronymic, last];
             }
-            if (t.length === 2) {
-                return [t[0], '', t[1]].filter(Boolean);
-            }
+            if (t.length === 2) return [t[0], t[1]];
             return [t[0]];
         }
 
-        // 2) GEDCOM "27 MAR 2013" => "27.03.2013", "ABT 2010" => "≈2010"
         function formatGedcomDate(raw) {
             const s = String(raw || '').trim().toUpperCase();
             if (!s) return '';
 
-            // часто встречается ABT/EST/BEF/AFT
             const approx = s.startsWith('ABT ') || s.startsWith('EST ') || s.startsWith('CAL ');
             const before = s.startsWith('BEF ');
             const after = s.startsWith('AFT ');
@@ -621,7 +708,6 @@
                 .replace(/^AFT\s+/, '')
                 .trim();
 
-            // если только год
             if (/^\d{4}$/.test(x)) {
                 if (approx) return `≈${x}`;
                 if (before) return `<${x}`;
@@ -634,9 +720,7 @@
                 JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
             };
 
-            // форматы: "9 SEP 1983", "03 DEC 1985", иногда "SEP 1983"
             const parts = x.split(/\s+/);
-
             if (parts.length === 3) {
                 const dd = pad2(parts[0]);
                 const mm = months[parts[1]] || '';
@@ -649,9 +733,7 @@
                     return out;
                 }
             }
-
             if (parts.length === 2) {
-                // "SEP 1983" -> "09.1983" (но вы просили dd.mm.yyyy; дня нет => оставим "09.1983")
                 const mm = months[parts[0]] || '';
                 const yyyy = parts[1];
                 if (mm && /^\d{4}$/.test(yyyy)) {
@@ -662,8 +744,6 @@
                     return out;
                 }
             }
-
-            // fallback: возвращаем как есть (но без англ. мусора обычно сюда не попадём)
             return raw.trim();
         }
 
@@ -682,7 +762,7 @@
             return '';
         }
 
-        /* ================= FIT/HELPERS/UI ================= */
+        /* ================= UI / FIT / HELPERS ================= */
         function fit(svg, g, w, h) {
             const b = g.node().getBBox();
             const pad = 120;
@@ -715,6 +795,10 @@
         function shorten(s, n) {
             s = String(s || '');
             return s.length > n ? s.slice(0, n - 1) + '…' : s;
+        }
+
+        function getCssVar(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         }
     </script>
 </body>
