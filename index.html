@@ -229,8 +229,9 @@
         let rootId = null, currentId = null;
 
         /* ================= CONFIG ================= */
-        // насколько близко стоят супруги
-        const SPOUSE_OFFSET_Y = 240; // уменьшай (200/180) если хочешь плотнее
+        // В ГОРИЗОНТАЛЬНОМ ДЕРЕВЕ: X=вертикаль, Y=горизонталь.
+        // Поэтому супруг(а) должен быть "рядом" ПО ВЕРТИКАЛИ (разница по X), а не по Y.
+        const SPOUSE_OFFSET_X = 140;   // расстояние между супругами по вертикали (уменьшай до 120/110 для плотности)
         const CARD_W = 220;
         const CARD_H = 80;
         const MINI_W = 196;
@@ -311,7 +312,7 @@
 
         /* ================= TREE MODEL =================
            person -> union -> children
-           union used for grouping kids, BUT we DO NOT draw person->union link.
+           union is for children grouping, but we DON'T draw person->union link.
         ================================================ */
         function buildDesc(id, seen = new Set()) {
             if (!id || seen.has(id)) return null;
@@ -348,11 +349,12 @@
             return n;
         }
 
-        /* ================= INLINE COUPLE LAYOUT =================
-           D3 positions union as "next generation". We reposition union BETWEEN spouses:
-           person at parent position, spouse drawn to the right, union in the middle.
-           We also shift union subtree so children stay near and links don't stretch.
-        ========================================================== */
+        /* ================= COUPLE LAYOUT (VERTICAL SPOUSE) =================
+           We reposition union to be between spouses vertically at same generation:
+           - union at (parent.x + offset/2, parent.y)
+           - spouse card drawn below union anchor
+           - children links start at union (no person->union link)
+        =================================================================== */
         function rx(d) { return (d._rx ?? d.x); }
         function ry(d) { return (d._ry ?? d.y); }
 
@@ -365,14 +367,14 @@
                     const oldX = d.x;
                     const oldY = d.y;
 
-                    // union "center" between spouses on the same row as the person
-                    d._rx = d.parent.x;
-                    d._ry = d.parent.y + (SPOUSE_OFFSET_Y / 2);
+                    // union center between spouses VERTICALLY, same Y (generation)
+                    d._rx = d.parent.x + (SPOUSE_OFFSET_X / 2);
+                    d._ry = d.parent.y;
 
                     const dx = d._rx - oldX;
                     const dy = d._ry - oldY;
 
-                    // shift entire union subtree to keep children close (avoid huge stretched links)
+                    // shift union subtree so kids don't stretch
                     d.descendants().forEach((sub, idx) => {
                         if (idx === 0) return;
                         sub._rx = (sub._rx ?? sub.x) + dx;
@@ -385,7 +387,6 @@
         /* ================= UI ACTIONS ================= */
         function onPersonClick(id) {
             selectPerson(id);
-            // Панель не открываем автоматически — только по вкладке
         }
 
         function selectPerson(id) {
@@ -418,21 +419,16 @@
             zoom = d3.zoom().scaleExtent([0.15, 3]).on('zoom', e => g.attr('transform', e.transform));
             svg.call(zoom);
 
-            // компактнее дерево
             const layout = d3.tree()
-                .nodeSize([130, 280])     // можно ещё меньше: 120, 260
+                .nodeSize([125, 260])
                 .separation((a, b) => a.parent === b.parent ? 1.05 : 1.2);
 
             const root = d3.hierarchy(tree);
             layout(root);
 
-            // ключ: позиционируем union между супругами и сдвигаем детей
             applyCoupleLayout(root);
 
-            // links: НЕ рисуем person->union (чтобы не было "муж->жена->дети")
-            // рисуем:
-            //  - person->child (если child не union)
-            //  - union->children (дети идут от союза)
+            // IMPORTANT: don't draw person->union link
             const links = root.links().filter(l => l.target.data.type !== 'union');
 
             const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
@@ -446,7 +442,7 @@
                     target: { x: rx(d.target), y: ry(d.target) }
                 }));
 
-            const node = g.selectAll('.node')
+            g.selectAll('.node')
                 .data(root.descendants())
                 .enter().append('g')
                 .attr('class', d => `node ${d.data.type}${(d.data.type === 'person' && d.data.id === currentId) ? ' selected' : ''}`)
@@ -457,10 +453,10 @@
         }
 
         function drawNode(g, d) {
-            const dataNode = d.data;
+            const n = d.data;
 
-            if (dataNode.type === 'person') {
-                const cls = dataNode.sex === 'M' ? 'm' : dataNode.sex === 'F' ? 'f' : 'u';
+            if (n.type === 'person') {
+                const cls = n.sex === 'M' ? 'm' : n.sex === 'F' ? 'f' : 'u';
 
                 g.append('rect')
                     .attr('class', 'person-outer card-shadow ' + cls)
@@ -473,9 +469,9 @@
                     .attr('y', -6)
                     .style('font-weight', '800')
                     .style('font-size', '13px')
-                    .text(shorten(dataNode.name, 26));
+                    .text(shorten(n.name, 26));
 
-                const line = formatLifeLine(dataNode);
+                const line = formatLifeLine(n);
                 if (line) {
                     g.append('text')
                         .attr('text-anchor', 'middle')
@@ -485,78 +481,67 @@
                         .text(shorten(line, 26));
                 }
 
-                g.on('click', (ev) => { ev.stopPropagation(); onPersonClick(dataNode.id); });
+                g.on('click', (ev) => { ev.stopPropagation(); onPersonClick(n.id); });
                 return;
             }
 
-            if (dataNode.type === 'union') {
-                // союз существует как "опорная точка" для детей, но НЕ как ступень от мужа
-                // (мы уже убрали person->union link)
+            if (n.type === 'union') {
+                const half = SPOUSE_OFFSET_X / 2;
 
-                // 1) рисуем линию между супругами коротко (центр в union)
-                // relative coords in this union group:
-                const half = SPOUSE_OFFSET_Y / 2;
-
-                // линия "муж — союз — жена"
+                // vertical couple line: top spouse (the descendant person card already drawn elsewhere)
+                // union is centered between spouses, draw short vertical stroke
                 g.append('path')
-                    .attr('d', `M ${-half} 0 L ${half} 0`)
+                    .attr('d', `M 0 ${-half} L 0 ${half}`)
                     .attr('fill', 'none')
                     .attr('stroke', 'rgba(44,62,80,.22)')
                     .attr('stroke-width', 2);
 
-                // 2) точка союза по центру
+                // union dot
                 g.append('circle')
                     .attr('r', 7)
                     .attr('fill', 'rgba(44,62,80,.18)')
                     .attr('stroke', 'rgba(44,62,80,.35)')
                     .attr('stroke-width', 2);
 
-                // 3) дата союза под точкой
-                if (dataNode.marriage) {
+                // marriage date badge (to the right of union dot, compact)
+                if (n.marriage) {
                     g.append('foreignObject')
-                        .attr('x', -78).attr('y', 14).attr('width', 156).attr('height', 26)
+                        .attr('x', 12).attr('y', -13).attr('width', 170).attr('height', 26)
                         .style('pointer-events', 'none')
                         .append('xhtml:div')
                         .style('width', '100%')
                         .style('height', '100%')
                         .style('display', 'flex')
                         .style('align-items', 'center')
-                        .style('justify-content', 'center')
+                        .style('justify-content', 'flex-start')
                         .html(`
           <div style="padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.85);font-size:10px;color:#2c3e50;box-shadow:0 6px 14px rgba(0,0,0,.08)">
-            <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(dataNode.marriage)}
+            <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(n.marriage)}
           </div>
         `);
                 }
 
-                // 4) супруг(а) как карточка справа от союза (рядом!)
-                // ВАЖНО: предки приходят к "потомку" (левому человеку), а дети — от союза вниз (через links union->children)
-                if (dataNode.spouse && data.people[dataNode.spouse]) {
-                    const sp = data.people[dataNode.spouse];
+                // spouse card BELOW the union (vertical adjacency)
+                if (n.spouse && data.people[n.spouse]) {
+                    const sp = data.people[n.spouse];
                     const sg = g.append('g')
-                        .attr('transform', `translate(${half},0)`)
+                        .attr('transform', `translate(0, ${half})`)
                         .style('cursor', 'pointer')
-                        .on('click', (ev) => { ev.stopPropagation(); onPersonClick(dataNode.spouse); });
+                        .on('click', (ev) => { ev.stopPropagation(); onPersonClick(n.spouse); });
 
-                    drawMiniPersonCard(sg, sp, +1);
+                    drawMiniPersonCardBelow(sg, sp);
                 }
-
-                // 5) левый партнёр (потомок) визуально уже нарисован как person-узел слева.
-                // но чтобы пара выглядела "рядом", мы рисуем мини-карточку левого партнёра в union (опционально).
-                // Чтобы НЕ дублировать карточку, мы НЕ рисуем её здесь.
 
                 return;
             }
         }
 
-        function drawMiniPersonCard(g, person, dir) {
-            // мини-карточка закрепляется с "якорем" в центре на точке связи
-            // поэтому смещаем её вправо, чтобы точка связи была у края карточки
+        function drawMiniPersonCardBelow(g, person) {
             const cls = person.sex === 'M' ? 'm' : person.sex === 'F' ? 'f' : 'u';
 
-            // сдвигаем карточку так, чтобы она была справа от точки союза
-            const xShift = (MINI_W / 2) + 18;
-            g.attr('transform', `translate(${xShift},0)`);
+            // move card downward so the union anchor touches its top edge
+            const yShift = (MINI_H / 2) + 16;
+            g.attr('transform', `translate(0, ${yShift})`);
 
             g.append('rect')
                 .attr('class', 'card-shadow person-outer ' + cls)
