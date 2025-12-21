@@ -360,6 +360,9 @@
         let focusRawId = null;
         let focusResolvedId = null;
 
+        // ✅ кого нужно центрировать после render()
+        let pendingCenterId = null;
+
         let didInitialFit = false;
 
         let svg = null, g = null, zoom = null, layout = null;
@@ -642,6 +645,42 @@
             return h % 360;
         }
 
+        /* ================= CENTER ON PERSON ================= */
+        function panCenterOnPerson(renderRoot, personId) {
+            if (!renderRoot || !personId) return;
+
+            const half = (CARD_H + COUPLE_GAP) / 2;
+
+            let found = null;
+            renderRoot.each(d => {
+                if (d.data?.type === 'person' && d.data.id === personId) {
+                    found = { node: d, yOffset: 0 };
+                } else if (d.data?.type === 'couple') {
+                    if (d.data.primaryId === personId) found = { node: d, yOffset: -half };
+                    if (d.data.spouseId === personId) found = { node: d, yOffset: +half };
+                }
+            });
+
+            if (!found) return;
+
+            const k = lastTransform.k || 1;
+
+            // координаты цели в координатах дерева
+            const targetX = found.node.x + found.yOffset; // вертикаль
+            const targetY = found.node.y;                 // горизонталь
+
+            // хотим, чтобы target оказался по центру экрана при текущем масштабе k
+            const tx = (w / 2) - targetY * k;
+            const ty = (h / 2) - targetX * k;
+
+            const next = d3.zoomIdentity.translate(tx, ty).scale(k);
+
+            svg.transition()
+                .duration(650)
+                .ease(d3.easeCubicInOut)
+                .call(zoom.transform, next);
+        }
+
         /* ================= RENDER (NO CAMERA JUMP) ================= */
         function render(doFit) {
             // update size only on resize
@@ -711,7 +750,6 @@
                 .style('opacity', 0)
                 .attr('d', l => {
                     const k = linkKey(l);
-                    // start from previous if any, otherwise current
                     const prev = prevLinkD.get(k);
                     return prev || linkGen({
                         source: getLinkSourceAnchor(l.source),
@@ -741,16 +779,13 @@
                     return `translate(${d.y},${d.x})`;
                 })
                 .each(function (d) {
-                    // clear and draw
                     drawNode(d3.select(this), d.data, fullRoot);
                 });
 
             const nodeMerge = nodeEnter.merge(nodeSel);
 
-            // redraw updated nodes if selection changes (simple approach: clear group and redraw)
+            // redraw nodes (fast enough for your size)
             nodeMerge.each(function (d) {
-                // if it was existing, we need to ensure click handlers + selected styling update.
-                // easiest: clear and draw again (still fast for 50-200 nodes).
                 const sel = d3.select(this);
                 sel.selectAll('*').remove();
                 drawNode(sel, d.data, fullRoot);
@@ -807,9 +842,14 @@
                 prevLinkD.set(k, dStr);
             });
 
-            // ✅ Fit ONLY initial or reset (never on click)
+            // ✅ Fit ONLY initial or reset
             if (doFit) {
                 fitToContent();
+            } else if (pendingCenterId) {
+                // ✅ центрируем по выбранной карточке, сохраняя текущий zoom
+                const idToCenter = pendingCenterId;
+                pendingCenterId = null;
+                d3.timeout(() => panCenterOnPerson(root, idToCenter), 0);
             }
         }
 
@@ -1014,14 +1054,17 @@
 
             const resolved = resolveFocusTarget(fullRoot, clickedId);
 
+            // ✅ всегда центрируемся по кликнутому человеку
+            pendingCenterId = clickedId;
+
             if (focusRawId === clickedId) {
                 focusRawId = null;
                 focusResolvedId = null;
-                render(false);  // ✅ no fit, no camera move
+                render(false);
             } else {
                 focusRawId = clickedId;
                 focusResolvedId = resolved;
-                render(false);  // ✅ no fit, no camera move
+                render(false);
             }
         }
 
@@ -1047,7 +1090,7 @@
     <div class="hint">
       <b>Клик</b> — фокус на ветвь + siblings (плоско).<br/>
       <b>Повторный клик по тому же человеку</b> — полный вид.<br/>
-      Камера (зум/пан) не сбрасывается.
+      Камера центрируется на выбранной карточке (масштаб не меняется).
     </div>
   `;
 
@@ -1143,10 +1186,10 @@
             document.getElementById('zoom-in').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1.2);
             document.getElementById('zoom-out').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 0.85);
 
-            // Reset: возвращаем полное дерево + делаем fit (и это единственный раз, когда камера двигается)
             document.getElementById('reset-view').onclick = () => {
                 focusRawId = null;
                 focusResolvedId = null;
+                pendingCenterId = null;
                 render(true);
             };
 
@@ -1154,7 +1197,6 @@
             document.getElementById('close-info').onclick = () => document.getElementById('info-panel').classList.remove('open');
 
             window.addEventListener('resize', () => {
-                // при ресайзе сохраняем камеру, просто перерендерим, без fit
                 render(false);
             });
         }
