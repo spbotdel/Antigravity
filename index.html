@@ -228,21 +228,14 @@
         let data = null, zoom = null;
         let rootId = null, currentId = null;
 
-        /* ================= CONFIG =================
-           Горизонтальное дерево: X=вертикаль, Y=горизонталь.
-           Пара = 2 одинаковые карточки вертикально + "сердце/кольцо" между ними.
-        =========================================== */
+        /* ================= CONFIG ================= */
         const CARD_W = 220;
-        const CARD_H = 80;
-
-        // сделали плотнее, чтобы дерево не "ввысь"
-        const COUPLE_GAP = 8;                 // было 12
-        const COUPLE_ICON_R = 8;
+        const CARD_H = 86;                 // чуть выше, чтобы 3 строки ФИО читались
+        const COUPLE_GAP = 8;
         const COUPLE_TOTAL_H = CARD_H * 2 + COUPLE_GAP;
 
-        // Компактность дерева (ключевое):
-        const NODE_X = COUPLE_TOTAL_H + 18;   // расстояние между строками (вертикально)
-        const NODE_Y = 250;                   // расстояние между поколениями (горизонтально)
+        const NODE_X = COUPLE_TOTAL_H + 14;
+        const NODE_Y = 250;
         const SEP_SIBLINGS = 1.0;
         const SEP_OTHER = 1.12;
 
@@ -295,11 +288,11 @@
 
                 if (cur.t === 'P') {
                     const p = people[cur.id];
-                    if (tag === 'NAME') p.name = val.replace(/\//g, '');
+                    if (tag === 'NAME') p.name = val.replace(/\//g, '').trim();
                     if (tag === 'SEX') p.sex = val;
                     if (tag === 'FAMS') p.FAMS.push(val.replace(/@/g, ''));
                     if (tag === 'FAMC') p.FAMC.push(val.replace(/@/g, ''));
-                    if (lvl === 2 && evt && tag === 'DATE') p[evt] = val;
+                    if (lvl === 2 && evt && tag === 'DATE') p[evt] = val.trim();
                 }
 
                 if (cur.t === 'F') {
@@ -307,7 +300,7 @@
                     if (tag === 'HUSB') f.husb = val.replace(/@/g, '');
                     if (tag === 'WIFE') f.wife = val.replace(/@/g, '');
                     if (tag === 'CHIL') f.chil.push(val.replace(/@/g, ''));
-                    if (lvl === 2 && evt && tag === 'DATE') f[evt] = val;
+                    if (lvl === 2 && evt && tag === 'DATE') f[evt] = val.trim();
                 }
             });
 
@@ -319,10 +312,7 @@
             return ids.find(id => !(data.people[id].FAMC || []).length) || ids[0];
         }
 
-        /* ================= BUILD DISPLAY TREE =================
-           ВАЖНО: узел "couple" представляет ребёнка (primaryId) + супруг(а).
-           Но входящая линия должна приходить В primaryId (верхнюю карточку), а не в центр брака.
-        ======================================================= */
+        /* ================= BUILD DISPLAY TREE ================= */
         function buildDisplayTree(personId, seen = new Set()) {
             if (!personId || seen.has(personId)) return null;
             seen.add(personId);
@@ -393,7 +383,6 @@
             const root = d3.hierarchy(tree);
             layout(root);
 
-            // Рисуем линии с "якорями", а не в центр узла!
             const links = root.links();
             const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
 
@@ -401,11 +390,10 @@
                 .data(links)
                 .enter().append('path')
                 .attr('class', 'link')
-                .attr('d', l => {
-                    const s = getLinkSourceAnchor(l.source);
-                    const t = getLinkTargetAnchor(l.target);
-                    return linkGen({ source: s, target: t });
-                });
+                .attr('d', l => linkGen({
+                    source: getLinkSourceAnchor(l.source),
+                    target: getLinkTargetAnchor(l.target)
+                }));
 
             g.selectAll('.node')
                 .data(root.descendants())
@@ -417,53 +405,36 @@
             fit(svg, g, w, h);
         }
 
-        /* ================= LINK ANCHORS =================
-           - source:
-             * couple => из центра союза (между супругами)
-             * person => из середины правого края карточки
-           - target:
-             * couple => в верхнюю карточку (primary person) по левому краю
-             * person => в левый край карточки
-           Это решает ваш кейс:
-           Родители(пара) -> приходит к Вячеславу (верхняя карточка), а НЕ к его браку.
-        =============================================== */
+        /* ================= LINK ANCHORS ================= */
         function getLinkSourceAnchor(node) {
-            const d = node.data;
-
-            // "правый край" по горизонтали (Y)
             const y = node.y + (CARD_W / 2);
-
-            if (d.type === 'couple') {
-                // дети должны выходить из центра союза (между карточками)
-                return { x: node.x, y: y };
-            }
-
-            // обычный человек
-            return { x: node.x, y: y };
+            return { x: node.x, y };
         }
 
         function getLinkTargetAnchor(node) {
             const d = node.data;
-
-            // "левый край" по горизонтали (Y)
             const y = node.y - (CARD_W / 2);
 
             if (d.type === 'couple') {
-                // ВХОД В РЕБЁНКА: верхняя карточка = primaryId
+                // входящая линия в ребёнка (верхняя карточка)
                 const half = (CARD_H + COUPLE_GAP) / 2;
-                const topCardCenterX = node.x - half; // верхняя карточка выше центра пары
-                return { x: topCardCenterX, y: y };
+                const topCardCenterX = node.x - half;
+                return { x: topCardCenterX, y };
             }
 
-            // обычный человек
-            return { x: node.x, y: y };
+            return { x: node.x, y };
         }
 
         /* ================= NODE DRAW ================= */
         function drawNode(g, n) {
             if (n.type === 'person') {
+                const p = data.people[n.id] || { name: n.name, sex: n.sex, birth: n.b, death: n.d };
                 drawPersonCard(g, {
-                    id: n.id, name: n.name, sex: n.sex, b: n.b, d: n.d
+                    id: n.id,
+                    name: p.name || n.name,
+                    sex: p.sex || n.sex,
+                    b: p.birth || n.b,
+                    d: p.death || n.d
                 }, 0);
                 return;
             }
@@ -474,7 +445,7 @@
 
                 const half = (CARD_H + COUPLE_GAP) / 2;
 
-                // верхняя карточка: ребёнок/потомок (в него должны приходить линии)
+                // верхняя карточка (потомок)
                 drawPersonCard(g, {
                     id: n.primaryId,
                     name: primary?.name || 'Без имени',
@@ -483,7 +454,7 @@
                     d: primary?.death || ''
                 }, -half);
 
-                // нижняя карточка: супруг(а)
+                // нижняя карточка (супруг/супруга)
                 if (spouse) {
                     drawPersonCard(g, {
                         id: n.spouseId,
@@ -494,48 +465,57 @@
                     }, +half);
                 }
 
-                // соединитель между супругами
+                // вертикальный коннектор между супругами
                 g.append('path')
                     .attr('d', `M 0 ${-half + CARD_H / 2} L 0 ${+half - CARD_H / 2}`)
                     .attr('fill', 'none')
                     .attr('stroke', 'rgba(44,62,80,.22)')
                     .attr('stroke-width', 2);
 
-                // точка союза по центру
-                g.append('circle')
-                    .attr('r', COUPLE_ICON_R)
-                    .attr('cx', 0).attr('cy', 0)
-                    .attr('fill', 'rgba(255,255,255,.92)')
-                    .attr('stroke', 'rgba(44,62,80,.35)')
-                    .attr('stroke-width', 2);
+                // ===== Центр пары: 💍 + дата строго ПО ЦЕНТРУ между карточками =====
+                const marriage = formatGedcomDate(n.marriage);
 
-                // сердечко (можно заменить на 💍)
-                g.append('text')
-                    .attr('text-anchor', 'middle')
-                    .attr('x', 0)
-                    .attr('y', 4)
-                    .style('font-size', '11px')
-                    .style('fill', '#e74c3c')
-                    .text('♥');
-
-                // дата союза справа
-                const dateLabel = (n.marriage || '').trim();
-                if (dateLabel) {
+                // красивый бейдж (HTML внутри foreignObject), выровнен по центру
+                if (marriage) {
+                    const W = 190, H = 30;
                     g.append('foreignObject')
-                        .attr('x', 14).attr('y', -13)
-                        .attr('width', 180).attr('height', 26)
+                        .attr('x', -W / 2).attr('y', -H / 2)
+                        .attr('width', W).attr('height', H)
                         .style('pointer-events', 'none')
                         .append('xhtml:div')
                         .style('width', '100%')
                         .style('height', '100%')
                         .style('display', 'flex')
                         .style('align-items', 'center')
-                        .style('justify-content', 'flex-start')
+                        .style('justify-content', 'center')
                         .html(`
-          <div style="padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.88);font-size:10px;color:#2c3e50;box-shadow:0 6px 14px rgba(0,0,0,.08)">
-            <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(dateLabel)}
+          <div style="
+            display:inline-flex;align-items:center;gap:8px;
+            padding:4px 12px;border-radius:999px;
+            background:rgba(255,255,255,.92);
+            box-shadow:0 8px 18px rgba(0,0,0,.10);
+            font-size:11px;color:#2c3e50;font-weight:600;
+          ">
+            <i class="fa-solid fa-ring" style="font-size:16px;color:#e74c3c"></i>
+            <span>${escapeHtml(marriage)}</span>
           </div>
         `);
+                } else {
+                    // даже если даты нет — оставим маленькую точку союза
+                    g.append('circle')
+                        .attr('r', 7)
+                        .attr('cx', 0).attr('cy', 0)
+                        .attr('fill', 'rgba(255,255,255,.92)')
+                        .attr('stroke', 'rgba(44,62,80,.35)')
+                        .attr('stroke-width', 2);
+
+                    g.append('text')
+                        .attr('text-anchor', 'middle')
+                        .attr('x', 0)
+                        .attr('y', 4)
+                        .style('font-size', '12px')
+                        .style('fill', '#e74c3c')
+                        .text('💍');
                 }
 
                 return;
@@ -556,21 +536,30 @@
                 .attr('width', CARD_W).attr('height', CARD_H)
                 .attr('rx', 14);
 
-            group.append('text')
+            // ФИО в 3 строки
+            const lines = splitName3(p.name);
+            const text = group.append('text')
                 .attr('text-anchor', 'middle')
-                .attr('y', -6)
+                .attr('y', -14)
                 .style('font-weight', '800')
-                .style('font-size', '13px')
-                .text(shorten(p.name, 26));
+                .style('font-size', '12.5px');
 
-            const line = formatLifeLine(p);
-            if (line) {
+            lines.forEach((ln, idx) => {
+                text.append('tspan')
+                    .attr('x', 0)
+                    .attr('dy', idx === 0 ? 0 : 14)
+                    .text(shorten(ln, 28));
+            });
+
+            // дата рождения / жизнь
+            const life = formatLifeLine(p);
+            if (life) {
                 group.append('text')
                     .attr('text-anchor', 'middle')
-                    .attr('y', 16)
+                    .attr('y', 30)
                     .style('font-size', '11px')
                     .style('fill', '#667')
-                    .text(shorten(line, 26));
+                    .text(life);
             }
 
             if (p.id === currentId) {
@@ -583,14 +572,114 @@
             currentId = id;
             const p = data.people[id];
 
+            const b = formatGedcomDate(p?.birth || '');
+            const d = formatGedcomDate(p?.death || '');
+
             document.getElementById('person-info').innerHTML = `
     <div style="font-weight:800;font-size:16px;margin-bottom:10px;color:#2c3e50">${escapeHtml(p?.name || '')}</div>
-    ${p?.birth ? `<div><b>Рождение:</b> ${escapeHtml(p.birth)}</div>` : ''}
-    ${p?.death ? `<div><b>Смерть:</b> ${escapeHtml(p.death)}</div>` : ''}
+    ${b ? `<div><b>Рождение:</b> ${escapeHtml(b)}</div>` : ''}
+    ${d ? `<div><b>Смерть:</b> ${escapeHtml(d)}</div>` : ''}
   `;
 
-            // чтобы подсветка обновилась
             render();
+        }
+
+        /* ================= FORMATTING ================= */
+
+        // 1) Имя/Отчество/Фамилия на разных строках
+        function splitName3(full) {
+            const s = String(full || '').trim().replace(/\s+/g, ' ');
+            if (!s) return ['Без имени'];
+            const t = s.split(' ');
+
+            if (t.length >= 3) {
+                const first = t[0];
+                const patronymic = t[1];
+                const last = t.slice(2).join(' ');
+                return [first, patronymic, last];
+            }
+            if (t.length === 2) {
+                return [t[0], '', t[1]].filter(Boolean);
+            }
+            return [t[0]];
+        }
+
+        // 2) GEDCOM "27 MAR 2013" => "27.03.2013", "ABT 2010" => "≈2010"
+        function formatGedcomDate(raw) {
+            const s = String(raw || '').trim().toUpperCase();
+            if (!s) return '';
+
+            // часто встречается ABT/EST/BEF/AFT
+            const approx = s.startsWith('ABT ') || s.startsWith('EST ') || s.startsWith('CAL ');
+            const before = s.startsWith('BEF ');
+            const after = s.startsWith('AFT ');
+
+            let x = s.replace(/^ABT\s+/, '')
+                .replace(/^EST\s+/, '')
+                .replace(/^CAL\s+/, '')
+                .replace(/^BEF\s+/, '')
+                .replace(/^AFT\s+/, '')
+                .trim();
+
+            // если только год
+            if (/^\d{4}$/.test(x)) {
+                if (approx) return `≈${x}`;
+                if (before) return `<${x}`;
+                if (after) return `>${x}`;
+                return x;
+            }
+
+            const months = {
+                JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
+                JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
+            };
+
+            // форматы: "9 SEP 1983", "03 DEC 1985", иногда "SEP 1983"
+            const parts = x.split(/\s+/);
+
+            if (parts.length === 3) {
+                const dd = pad2(parts[0]);
+                const mm = months[parts[1]] || '';
+                const yyyy = parts[2];
+                if (mm && /^\d{4}$/.test(yyyy)) {
+                    const out = `${dd}.${mm}.${yyyy}`;
+                    if (approx) return `≈${out}`;
+                    if (before) return `<${out}`;
+                    if (after) return `>${out}`;
+                    return out;
+                }
+            }
+
+            if (parts.length === 2) {
+                // "SEP 1983" -> "09.1983" (но вы просили dd.mm.yyyy; дня нет => оставим "09.1983")
+                const mm = months[parts[0]] || '';
+                const yyyy = parts[1];
+                if (mm && /^\d{4}$/.test(yyyy)) {
+                    const out = `${mm}.${yyyy}`;
+                    if (approx) return `≈${out}`;
+                    if (before) return `<${out}`;
+                    if (after) return `>${out}`;
+                    return out;
+                }
+            }
+
+            // fallback: возвращаем как есть (но без англ. мусора обычно сюда не попадём)
+            return raw.trim();
+        }
+
+        function pad2(v) {
+            const n = String(v || '').replace(/\D/g, '');
+            if (!n) return '00';
+            return n.length === 1 ? `0${n}` : n.slice(0, 2);
+        }
+
+        function formatLifeLine(p) {
+            const b = formatGedcomDate(p?.b || '');
+            const d = formatGedcomDate(p?.d || '');
+            if (b && d) return `${b} — ${d}`;
+            if (b) return b;
+            if (d) return d;
+            return '';
         }
 
         /* ================= FIT/HELPERS/UI ================= */
@@ -626,15 +715,6 @@
         function shorten(s, n) {
             s = String(s || '');
             return s.length > n ? s.slice(0, n - 1) + '…' : s;
-        }
-
-        function formatLifeLine(p) {
-            const b = (p?.b || '').trim();
-            const d = (p?.d || '').trim();
-            if (b && d) return `${b} — ${d}`;
-            if (b) return b;
-            if (d) return d;
-            return '';
         }
     </script>
 </body>
