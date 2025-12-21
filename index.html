@@ -368,9 +368,12 @@
 
         let didInitialFit = false;
 
-        /* animation state */
+        /* animation state (positions remembered across renders) */
         const prevPos = new Map();   // key -> {x,y}
         const prevLinkD = new Map(); // key -> d string
+
+        /* keep last zoom transform so zoom transitions feel continuous */
+        let lastTransform = d3.zoomIdentity;
 
         /* ================= CONFIG ================= */
         const CARD_W = 230;
@@ -383,7 +386,9 @@
         const SEP_SIBLINGS = 1.0;
         const SEP_OTHER = 1.12;
 
-        const ANIM_MS = 420; // morph duration
+        /* animation slower/smoother */
+        const ANIM_MS = 750;
+        const FIT_MS = 850;
 
         // ❤️ icon + color
         const MARRIAGE_ICON = 'fa-heart';
@@ -533,11 +538,11 @@
             return ids;
         }
 
-        /* --- SIBLINGS: add brothers/sisters of selected person + their descendants --- */
+        /* --- SIBLINGS: ONLY brothers/sisters of selected person (NO spouses, NO children) --- */
         function getSiblingIds(personId) {
             const p = data.people[personId];
             if (!p) return [];
-            const famc = (p.FAMC || [])[0]; // берем первую родительскую семью
+            const famc = (p.FAMC || [])[0]; // одна родительская семья
             if (!famc) return [];
             const fam = data.fams[famc];
             if (!fam) return [];
@@ -545,39 +550,40 @@
             return kids.filter(id => id && id !== personId);
         }
 
-        function expandIdsWithSiblings(fullRoot, baseIds, targetPersonId) {
+        function expandIdsWithSiblingsFlat(baseIds, targetPersonId) {
             const out = new Set(baseIds);
             const sibs = getSiblingIds(targetPersonId);
-
-            if (!sibs.length) return out;
-
-            // для каждого sibling добавим его и всех его потомков в дереве
-            for (const sid of sibs) {
-                out.add(sid);
-                let sibNode = null;
-                fullRoot.each(d => {
-                    const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                    if (pid === sid) sibNode = d;
-                });
-                if (sibNode) {
-                    sibNode.descendants().forEach(d => {
-                        const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                        if (pid) out.add(pid);
-                    });
-                }
-            }
+            for (const sid of sibs) out.add(sid);
             return out;
         }
 
-        /* ================= Prune plain data by ids ================= */
-        function pruneDataByIds(node, keepIds) {
+        /* ================= Prune plain data by ids (and strip siblings) =================
+           - keep only nodes whose primaryId/id in keepIds OR have kept children
+           - for siblings (in siblingSet): render ONLY single person node, no spouse, no children
+        ========================================================================== */
+        function pruneDataByIds(node, keepIds, siblingSet) {
             if (!node) return null;
 
             const selfId = dataPrimaryId(node);
+            const isSibling = selfId && siblingSet && siblingSet.has(selfId);
+
+            // If sibling node => keep only as single person (no spouse/no children)
+            if (isSibling) {
+                const p = data.people[selfId];
+                return {
+                    type: 'person',
+                    id: selfId,
+                    name: p?.name || 'Без имени',
+                    sex: p?.sex || '',
+                    b: p?.birth || '',
+                    d: p?.death || ''
+                };
+            }
+
             const selfKept = selfId ? keepIds.has(selfId) : false;
 
             const kids = (node.children || [])
-                .map(ch => pruneDataByIds(ch, keepIds))
+                .map(ch => pruneDataByIds(ch, keepIds, siblingSet))
                 .filter(Boolean);
 
             if (selfKept || kids.length) {
@@ -612,7 +618,6 @@
         /* ================= Branch color ================= */
         function setBranchColorFromId(personId) {
             const hue = hashHue(String(personId || 'x'));
-            // nice neon-ish but classy: use HSL
             const css = `hsla(${hue}, 92%, 62%, .88)`;
             document.documentElement.style.setProperty('--branch-color', css);
         }
@@ -638,8 +643,17 @@
             const svg = d3.select('#tree').append('svg').attr('width', w).attr('height', h);
             const g = svg.append('g');
 
-            zoom = d3.zoom().scaleExtent([0.15, 3]).on('zoom', e => g.attr('transform', e.transform));
+            zoom = d3.zoom()
+                .scaleExtent([0.15, 3])
+                .on('zoom', e => {
+                    lastTransform = e.transform;
+                    g.attr('transform', e.transform);
+                });
+
             svg.call(zoom);
+
+            // restore last camera transform so transitions feel continuous
+            svg.call(zoom.transform, lastTransform);
 
             const layout = d3.tree()
                 .nodeSize([NODE_X, NODE_Y])
@@ -651,46 +665,46 @@
 
             const highlightCandidate = focusId || currentId;
             let branchIds = new Set();
+            let siblingSet = new Set();
+            let resolved = null;
 
             if (highlightCandidate) {
-                const resolved = resolveFocusTarget(fullRoot, highlightCandidate);
-
-                // set branch color from resolved target
+                resolved = resolveFocusTarget(fullRoot, highlightCandidate);
                 setBranchColorFromId(resolved);
 
                 // base branch: ancestors + descendants
                 branchIds = computeBranchIds(fullRoot, resolved);
 
-                // add siblings of resolved person (and their descendants)
-                branchIds = expandIdsWithSiblings(fullRoot, branchIds, resolved);
+                // siblings (flat)
+                const sibs = getSiblingIds(resolved);
+                siblingSet = new Set(sibs);
+                branchIds = expandIdsWithSiblingsFlat(branchIds, resolved);
             }
 
             // render data (prune only in focus)
             let renderData = baseData;
             if (focusId && branchIds.size) {
-                renderData = pruneDataByIds(baseData, branchIds) || baseData;
+                renderData = pruneDataByIds(baseData, branchIds, siblingSet) || baseData;
             }
 
             // Layout on render hierarchy
             const renderRoot = d3.hierarchy(renderData);
             layout(renderRoot);
 
-            // prepare animations: build current position map and keys
+            // Keys for animations
             const nodeKey = (d) => {
                 const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : '';
-                // distinguish couple vs single if ever needed:
                 return `${d.data.type}:${pid}`;
             };
 
-            // Links
-            const links = renderRoot.links();
             const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
-
             function linkKey(l) {
                 const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
                 const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
                 return `${a}=>${b}`;
             }
+
+            const links = renderRoot.links();
 
             const linkSel = g.selectAll('.link')
                 .data(links, linkKey)
@@ -707,7 +721,6 @@
                 })
                 .style('opacity', 0);
 
-            // Nodes
             const nodeSel = g.selectAll('.node')
                 .data(renderRoot.descendants(), nodeKey)
                 .enter().append('g')
@@ -719,51 +732,44 @@
                     return `translate(${d.y},${d.x})`;
                 })
                 .style('opacity', 0)
-                .each(function (d) { drawNode(d3.select(this), d.data, fullRoot, branchIds); });
+                .each(function (d) { drawNode(d3.select(this), d.data, fullRoot); });
 
-            // Apply dimming/highlight only in full mode
+            // Dimming/highlight in full mode
             if (!focusId && branchIds.size) {
                 nodeSel.each(function (d) {
                     const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                    if (pid && !branchIds.has(pid)) {
-                        d3.select(this).classed('dimmed', true);
-                    } else {
-                        d3.select(this).classed('in-branch', true);
-                    }
+                    if (pid && !branchIds.has(pid)) d3.select(this).classed('dimmed', true);
+                    else d3.select(this).classed('in-branch', true);
                 });
 
                 linkSel.each(function (l) {
                     const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
                     const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
-                    if (!(branchIds.has(a) && branchIds.has(b))) {
-                        d3.select(this).classed('dimmed-link', true);
-                    } else {
-                        d3.select(this).classed('in-branch-link', true);
-                    }
+                    if (!(branchIds.has(a) && branchIds.has(b))) d3.select(this).classed('dimmed-link', true);
+                    else d3.select(this).classed('in-branch-link', true);
                 });
-            } else if (focusId && branchIds.size) {
-                // In focus mode everything is "branch" by definition: emphasize links a bit
+            } else if (focusId) {
                 linkSel.classed('in-branch-link', true);
                 nodeSel.classed('in-branch', true);
             }
 
-            // Animate to new positions
+            // Animate nodes & links (slower)
             nodeSel.transition()
                 .duration(ANIM_MS)
-                .ease(d3.easeCubicOut)
+                .ease(d3.easeCubicInOut)
                 .attr('transform', d => `translate(${d.y},${d.x})`)
                 .style('opacity', 1);
 
             linkSel.transition()
                 .duration(ANIM_MS)
-                .ease(d3.easeCubicOut)
+                .ease(d3.easeCubicInOut)
                 .attr('d', l => linkGen({
                     source: getLinkSourceAnchor(l.source),
                     target: getLinkTargetAnchor(l.target)
                 }))
                 .style('opacity', 1);
 
-            // Store current positions for next morph
+            // Save current positions for next morph
             renderRoot.descendants().forEach(d => {
                 prevPos.set(nodeKey(d), { x: d.x, y: d.y });
             });
@@ -776,10 +782,10 @@
                 prevLinkD.set(k, cur);
             });
 
-            // Fit behavior:
-            if (forceFit || !didInitialFit || focusId) {
-                // slightly delay fit so animation feels nice
-                setTimeout(() => fit(svg, g, w, h), 0);
+            // Smooth camera fit (instead of snapping)
+            const shouldFit = forceFit || !didInitialFit || focusId;
+            if (shouldFit) {
+                fitAnimated(svg, g, w, h, FIT_MS);
                 didInitialFit = true;
             }
         }
@@ -804,7 +810,7 @@
         }
 
         /* ================= NODE DRAW ================= */
-        function drawNode(g, n, fullRoot, branchIds) {
+        function drawNode(g, n, fullRoot) {
             if (n.type === 'person') {
                 const p = data.people[n.id] || { name: n.name, sex: n.sex, birth: n.b, death: n.d };
                 drawPersonCard(g, {
@@ -877,12 +883,12 @@
         </div>
       `);
 
-                // ✅ CHILDREN CHIP (кол-во детей)
+                // ✅ CHILDREN CHIP (кол-во детей) — СМЕЩЕНО ВЛЕВО (чтобы цифра не выезжала)
                 const kidsCount = (n.children && n.children.length) ? n.children.length : 0;
                 if (kidsCount > 0) {
-                    const chipW = 62, chipH = 26;
-                    // разместим в правом верхнем углу "потомка" (верхняя карточка)
-                    const chipX = (CARD_W / 2) - (chipW / 2) - 10;
+                    const chipW = 70, chipH = 26;
+                    // левый верхний угол верхней карточки (потомка)
+                    const chipX = (-CARD_W / 2) + 10;
                     const chipY = (-half - CARD_H / 2) + 10;
 
                     g.append('foreignObject')
@@ -964,18 +970,16 @@
 
         /* ================= CLICK LOGIC ================= */
         function onPersonClick(clickedId, fullRoot) {
-            // update info always
             selectPerson(clickedId, false);
 
-            // toggle focus
             const resolved = resolveFocusTarget(fullRoot, clickedId);
 
             if (focusId === resolved) {
                 focusId = null;
-                render(true);
+                render(true);     // вернёмся в полное дерево + плавный fit
             } else {
                 focusId = resolved;
-                render(true);
+                render(true);     // фокус + плавный fit
             }
         }
 
@@ -999,7 +1003,7 @@
     <div class="pill"><i class="fa-solid fa-people-group"></i> <span>Братья/сёстры: ${escapeHtml(sibText)}</span></div>
 
     <div class="hint">
-      <b>Клик по человеку</b> — фокус на ветвь + братья/сёстры.<br/>
+      <b>Клик по человеку</b> — фокус на ветвь + его братья/сёстры (без семей).<br/>
       <b>Повторный клик</b> — вернуть полное дерево.
     </div>
   `;
@@ -1092,18 +1096,25 @@
         }
 
         /* ================= UI / FIT / HELPERS ================= */
-        function fit(svg, g, w, h) {
+        function fitAnimated(svg, g, w, h, duration) {
             const b = g.node().getBBox();
             const pad = 120;
             const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
+
             const tx = w / 2 - (b.x + b.width / 2) * s;
             const ty = h / 2 - (b.y + b.height / 2) * s;
-            svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
+
+            const target = d3.zoomIdentity.translate(tx, ty).scale(s);
+
+            svg.transition()
+                .duration(duration)
+                .ease(d3.easeCubicInOut)
+                .call(zoom.transform, target);
         }
 
         function setupUI() {
-            document.getElementById('zoom-in').onclick = () => d3.select('svg').transition().call(zoom.scaleBy, 1.2);
-            document.getElementById('zoom-out').onclick = () => d3.select('svg').transition().call(zoom.scaleBy, 0.85);
+            document.getElementById('zoom-in').onclick = () => d3.select('svg').transition().duration(250).call(zoom.scaleBy, 1.2);
+            document.getElementById('zoom-out').onclick = () => d3.select('svg').transition().duration(250).call(zoom.scaleBy, 0.85);
             document.getElementById('reset-view').onclick = () => {
                 focusId = null;
                 didInitialFit = false;
