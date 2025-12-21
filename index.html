@@ -38,16 +38,10 @@
             --link-strong: rgba(226, 232, 240, .38);
 
             --shadow: 0 14px 30px rgba(0, 0, 0, .22);
-            --shadow-soft: 0 10px 24px rgba(0, 0, 0, .16);
-            --shadow-card: 0 10px 24px rgba(15, 23, 42, .14);
-
-            --radius: 18px;
-            --radius-sm: 14px;
 
             --ring: #fb7185;
 
             --dim: 0.18;
-            /* насколько гасим "не ветвь" */
             --dimLinks: 0.12;
         }
 
@@ -112,7 +106,7 @@
         .logo h1 {
             font-size: 16px;
             font-weight: 600;
-            letter-spacing: .2px;
+            letter-spacing: .2px
         }
 
         .logo .sub {
@@ -354,10 +348,11 @@
         /* ================= STATE ================= */
         let data = null, zoom = null;
         let rootId = null;
-        let currentId = null;     // выбранный человек (для карточки справа)
-        let focusId = null;       // фокус-режим ветви (клик -> включить/выключить)
 
-        let lastFit = null;
+        let currentId = null;   // выбранный человек для панели справа
+        let focusId = null;     // фокус-ветвь (toggle)
+
+        let didInitialFit = false;
 
         /* ================= CONFIG ================= */
         const CARD_W = 230;
@@ -370,7 +365,7 @@
         const SEP_SIBLINGS = 1.0;
         const SEP_OTHER = 1.12;
 
-        // ✅ как вы указали
+        // ✅ как вы просили
         const MARRIAGE_ICON = 'fa-heart';
         const MARRIAGE_ICON_COLOR = getCssVar('--ring');
 
@@ -380,7 +375,7 @@
             .then(t => {
                 data = parseGedcom(t);
                 rootId = findRoot();
-                render();
+                render(true);
                 setupUI();
             })
             .catch(e => console.error('GED load error', e));
@@ -445,9 +440,7 @@
             return ids.find(id => !(data.people[id].FAMC || []).length) || ids[0];
         }
 
-        /* ================= BUILD DISPLAY TREE =================
-           Узел "couple" представляет потомка(primaryId) + супруг(а).
-        ======================================================= */
+        /* ================= BUILD DISPLAY TREE (plain objects) ================= */
         function buildDisplayTree(personId, seen = new Set()) {
             if (!personId || seen.has(personId)) return null;
             seen.add(personId);
@@ -491,78 +484,86 @@
             };
         }
 
-        /* ================= FOCUS / HIGHLIGHT ================= */
-        function nodePrimaryPersonId(d) {
+        /* ================= Helpers for person identity ================= */
+        function nodePersonId(d) {
             if (!d) return null;
-            if (d.data?.type === 'couple') return d.data.primaryId;
-            if (d.data?.type === 'person') return d.data.id;
+            if (d.type === 'couple') return d.primaryId;
+            if (d.type === 'person') return d.id;
             return null;
         }
 
-        function nodeHasSpouse(d, personId) {
-            return d?.data?.type === 'couple' && d.data.spouseId === personId;
+        /* ================= Compute branch person-ids set (on hierarchy) ================= */
+        function computeBranchIds(rootH, targetPersonId) {
+            let targetNode = null;
+            rootH.each(d => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                if (pid === targetPersonId) targetNode = d;
+            });
+            if (!targetNode) return new Set();
+
+            const ids = new Set();
+            // ancestors path + descendants
+            targetNode.ancestors().forEach(d => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                if (pid) ids.add(pid);
+            });
+            targetNode.descendants().forEach(d => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                if (pid) ids.add(pid);
+            });
+            return ids;
         }
 
-        function findFocusTarget(rootH, clickedPersonId) {
-            // 1) если человек есть как primaryId/id — фокус на него
-            let found = null;
-            rootH.each(d => {
-                const pid = nodePrimaryPersonId(d);
-                if (pid === clickedPersonId) found = d;
-            });
-            if (found) return nodePrimaryPersonId(found);
-
-            // 2) иначе если он "супруг(а)" где-то — фокус на пару (на primaryId этой пары)
-            let couple = null;
-            rootH.each(d => {
-                if (nodeHasSpouse(d, clickedPersonId)) couple = d;
-            });
-            if (couple) return couple.data.primaryId;
-
-            // 3) fallback — не меняем фокус
-            return null;
-        }
-
-        function computeBranchSets(rootH, targetPersonId) {
-            // Находим узел в дереве по primaryId/id
-            let target = null;
-            rootH.each(d => {
-                if (nodePrimaryPersonId(d) === targetPersonId) target = d;
-            });
-            if (!target) return { keep: new Set(), target: null };
-
-            const keep = new Set();
-
-            // A) путь от корня до target (предки по дереву)
-            target.ancestors().forEach(d => keep.add(d));
-
-            // B) всё поддерево target (потомки)
-            target.descendants().forEach(d => keep.add(d));
-
-            return { keep, target };
-        }
-
-        function pruneToKeep(node, keepSet) {
+        /* ================= Prune plain tree data by personIds set =================
+           ВАЖНО: мы больше НЕ режем hierarchy-ноды => parent всегда корректный
+        ========================================================================== */
+        function pruneDataByIds(node, keepIds) {
             if (!node) return null;
 
-            const selfKept = keepSet.has(node);
-            const children = (node.children || []).map(ch => pruneToKeep(ch, keepSet)).filter(Boolean);
+            const selfId = nodePersonId(node);
+            const selfKept = selfId ? keepIds.has(selfId) : false;
 
-            if (selfKept || children.length) {
-                const copy = node.copy();
-                copy.children = children.length ? children : null;
+            const kids = (node.children || [])
+                .map(ch => pruneDataByIds(ch, keepIds))
+                .filter(Boolean);
+
+            if (selfKept || kids.length) {
+                const copy = { ...node };
+                if (kids.length) copy.children = kids;
+                else delete copy.children;
                 return copy;
             }
             return null;
         }
 
-        /* ================= RENDER ================= */
-        function render() {
-            const tree = buildDisplayTree(rootId);
-            drawTree(tree);
+        /* ================= Resolve focus target (если кликнули по супругу) ================= */
+        function resolveFocusTarget(rootH, clickedId) {
+            // 1) есть как primary/id
+            let found = null;
+            rootH.each(d => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                if (pid === clickedId) found = pid;
+            });
+            if (found) return found;
+
+            // 2) есть как spouseId => фокус на couple.primaryId
+            let couplePrimary = null;
+            rootH.each(d => {
+                if (d.data.type === 'couple' && d.data.spouseId === clickedId) {
+                    couplePrimary = d.data.primaryId;
+                }
+            });
+            return couplePrimary || clickedId;
         }
 
-        function drawTree(tree) {
+        /* ================= RENDER ================= */
+        function render(forceFit = false) {
+            const baseData = buildDisplayTree(rootId);
+
+            drawTree(baseData, forceFit);
+        }
+
+        function drawTree(baseData, forceFit) {
             d3.select('#tree').selectAll('*').remove();
 
             const container = document.getElementById('tree');
@@ -579,31 +580,28 @@
                 .nodeSize([NODE_X, NODE_Y])
                 .separation((a, b) => a.parent === b.parent ? SEP_SIBLINGS : SEP_OTHER);
 
-            // full hierarchy
-            const fullRoot = d3.hierarchy(tree);
+            // full hierarchy for computing branch sets (always from baseData)
+            const fullRoot = d3.hierarchy(baseData);
             layout(fullRoot);
 
-            // decide branch highlight target (for dimming) and pruning
-            const highlightTarget = (focusId || currentId);
+            const highlightCandidate = focusId || currentId;
+            let branchIds = new Set();
 
-            let branchKeepSet = new Set();
-            let renderRoot = fullRoot;
-
-            if (highlightTarget) {
-                const resolved = findFocusTarget(fullRoot, highlightTarget) || highlightTarget;
-                const { keep } = computeBranchSets(fullRoot, resolved);
-                branchKeepSet = keep;
-
-                // Focus mode: prune everything outside branch
-                if (focusId) {
-                    const pruned = pruneToKeep(fullRoot, branchKeepSet);
-                    if (pruned) {
-                        renderRoot = pruned;
-                        // layout needs recalculation on pruned root
-                        layout(renderRoot);
-                    }
-                }
+            if (highlightCandidate) {
+                const resolved = resolveFocusTarget(fullRoot, highlightCandidate);
+                branchIds = computeBranchIds(fullRoot, resolved);
             }
+
+            // decide render data: full or pruned (focus mode)
+            let renderData = baseData;
+
+            if (focusId && branchIds.size) {
+                renderData = pruneDataByIds(baseData, branchIds) || baseData;
+            }
+
+            // layout for render hierarchy
+            const renderRoot = d3.hierarchy(renderData);
+            layout(renderRoot);
 
             // Links
             const links = renderRoot.links();
@@ -626,48 +624,47 @@
                 .attr('transform', d => `translate(${d.y},${d.x})`)
                 .each(function (d) { drawNode(d3.select(this), d.data, fullRoot); });
 
-            // Dimming / highlight (только если не focusId; в focus-режиме лишних узлов просто нет)
-            if (!focusId && branchKeepSet.size) {
+            // Dimming only in full mode
+            if (!focusId && branchIds.size) {
                 nodeSel.each(function (d) {
-                    // branchKeepSet computed on fullRoot; for safety compare by personId
-                    const pid = nodePrimaryPersonId(d);
-                    let inBranch = false;
-                    // Determine if this node (in renderRoot=fullRoot) is in keep by object identity (works in fullRoot)
-                    inBranch = branchKeepSet.has(d);
-                    if (!inBranch) {
+                    const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                    if (pid && !branchIds.has(pid)) {
                         d3.select(this).classed('dimmed', true);
                     }
                 });
 
                 linkSel.each(function (l) {
-                    const a = branchKeepSet.has(l.source);
-                    const b = branchKeepSet.has(l.target);
-                    if (!(a && b)) {
+                    const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
+                    const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
+                    if (!(branchIds.has(a) && branchIds.has(b))) {
                         d3.select(this).classed('dimmed-link', true);
                     }
                 });
             }
 
-            // Fit view: in focus mode fit to branch; in full mode fit only on first render, then keep camera stable
-            if (focusId || !lastFit) {
+            // Fit behavior:
+            // - first load => fit
+            // - focus on/off => fit to new content
+            if (forceFit || !didInitialFit || focusId) {
                 fit(svg, g, w, h);
-                lastFit = true;
+                didInitialFit = true;
             }
         }
 
         /* ================= LINK ANCHORS ================= */
         function getLinkSourceAnchor(node) {
-            // выход справа от центра узла
+            // node всегда должен быть non-null; но на всякий случай:
+            if (!node) return { x: 0, y: 0 };
             const y = node.y + (CARD_W / 2);
             return { x: node.x, y };
         }
 
         function getLinkTargetAnchor(node) {
+            if (!node) return { x: 0, y: 0 };
             const d = node.data;
             const y = node.y - (CARD_W / 2);
 
             if (d.type === 'couple') {
-                // входящая линия приходит в "потомка" (верхняя карточка)
                 const half = (CARD_H + COUPLE_GAP) / 2;
                 const topCardCenterX = node.x - half;
                 return { x: topCardCenterX, y };
@@ -712,14 +709,14 @@
                     }, +half, fullRoot);
                 }
 
-                // subtle couple connector
+                // connector between spouses
                 g.append('path')
                     .attr('d', `M 0 ${-half + CARD_H / 2} L 0 ${+half - CARD_H / 2}`)
                     .attr('fill', 'none')
                     .attr('stroke', getCssVar('--link-strong'))
                     .attr('stroke-width', 1.4);
 
-                // marriage badge (always consistent)
+                // marriage badge
                 const marriage = formatGedcomDate(n.marriage);
                 const W = marriage ? 200 : 56;
                 const H = 32;
@@ -798,29 +795,21 @@
             }
         }
 
-        /* ================= CLICK LOGIC =================
-           1 клик: включить фокус на ветвь выбранного
-           2 клик по тому же человеку: выключить фокус (полное дерево)
-           Всегда обновляем карточку справа.
-        =============================================== */
+        /* ================= CLICK LOGIC ================= */
         function onPersonClick(clickedId, fullRoot) {
-            // update info panel data always
+            // update info
             selectPerson(clickedId, false);
 
             // toggle focus
-            // resolve focus target only for people present in tree; otherwise keep focus unchanged
-            const resolved = findFocusTarget(fullRoot, clickedId);
+            const resolved = resolveFocusTarget(fullRoot, clickedId);
 
-            const focusCandidate = resolved || clickedId;
-
-            if (focusId === focusCandidate) {
-                focusId = null; // back to full
+            if (focusId === resolved) {
+                focusId = null;
+                render(true); // fit back to full
             } else {
-                focusId = focusCandidate;
+                focusId = resolved;
+                render(true); // fit to branch
             }
-
-            // in focus mode we re-fit; in full mode keep camera unless reset
-            render();
         }
 
         /* ================= INFO PANEL ================= */
@@ -830,7 +819,6 @@
 
             const b = formatGedcomDate(p?.birth || '');
             const d = formatGedcomDate(p?.death || '');
-
             const sex = (p?.sex === 'M') ? 'Мужчина' : (p?.sex === 'F') ? 'Женщина' : '—';
 
             document.getElementById('person-info').innerHTML = `
@@ -840,12 +828,12 @@
     <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
 
     <div class="hint">
-      <b>Клик по человеку</b> — фокус на ветвь. <br/>
+      <b>Клик по человеку</b> — фокус на ветвь.<br/>
       <b>Повторный клик</b> — вернуть полное дерево.
     </div>
   `;
 
-            if (doRerender) render();
+            if (doRerender) render(false);
         }
 
         /* ================= FORMATTING ================= */
@@ -863,7 +851,6 @@
             return [t[0]];
         }
 
-        // GEDCOM "27 MAR 2013" => "27.03.2013", "ABT 2010" => "≈2010"
         function formatGedcomDate(raw) {
             const s = String(raw || '').trim().toUpperCase();
             if (!s) return '';
@@ -948,19 +935,17 @@
             document.getElementById('zoom-out').onclick = () => d3.select('svg').transition().call(zoom.scaleBy, 0.85);
             document.getElementById('reset-view').onclick = () => {
                 focusId = null;
-                lastFit = null; // allow re-fit
-                render();
+                didInitialFit = false;
+                render(true);
             };
 
             document.getElementById('info-tab').onclick = () => document.getElementById('info-panel').classList.toggle('open');
             document.getElementById('close-info').onclick = () => document.getElementById('info-panel').classList.remove('open');
 
             window.addEventListener('resize', () => {
-                lastFit = null;
-                render();
+                didInitialFit = false;
+                render(true);
             });
-
-            // click on empty space: just close focus? (не трогаем по умолчанию)
         }
 
         function escapeHtml(s) {
