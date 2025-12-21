@@ -124,7 +124,8 @@
 
         .controls {
             display: flex;
-            gap: 8px
+            gap: 8px;
+            align-items: center;
         }
 
         .ctrl-btn {
@@ -150,6 +151,59 @@
 
         .ctrl-btn:active {
             transform: translateY(0px) scale(.98);
+        }
+
+        /* Toggle pill button */
+        .mode-btn {
+            height: 40px;
+            padding: 0 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .10);
+            color: var(--text);
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, .12);
+            transition: transform .12s ease, background .12s ease, border-color .12s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            user-select: none;
+            white-space: nowrap;
+            font-weight: 600;
+            letter-spacing: .1px;
+        }
+
+        .mode-btn:hover {
+            background: rgba(255, 255, 255, .12);
+            border-color: rgba(255, 255, 255, .16);
+            transform: translateY(-1px);
+        }
+
+        .mode-btn:active {
+            transform: translateY(0px) scale(.99);
+        }
+
+        .mode-btn .tag {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .10);
+            border: 1px solid rgba(255, 255, 255, .10);
+            color: rgba(231, 234, 243, .92);
+        }
+
+        .mode-btn .label {
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(231, 234, 243, .82);
+            display: none;
+        }
+
+        @media(min-width:920px) {
+            .mode-btn .label {
+                display: inline;
+            }
         }
 
         .main-content {
@@ -316,6 +370,14 @@
                 bottom: 16px;
                 height: min(70vh, 520px)
             }
+
+            .mode-btn {
+                padding: 0 10px;
+            }
+
+            .mode-btn .label {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -328,7 +390,15 @@
                 <i class="fa-solid fa-tree"></i>
                 <h1>Семейное древо <span class="sub">— интерактивная генеалогия</span></h1>
             </div>
+
             <div class="controls">
+                <!-- ✅ Переключатель режима центрирования -->
+                <button id="center-mode" class="mode-btn" title="Центрирование: умно / всегда">
+                    <i class="fa-solid fa-crosshairs"></i>
+                    <span class="label">Центр</span>
+                    <span id="center-mode-tag" class="tag">умно</span>
+                </button>
+
                 <button id="zoom-in" class="ctrl-btn" title="Увеличить"><i class="fa-solid fa-plus"></i></button>
                 <button id="zoom-out" class="ctrl-btn" title="Уменьшить"><i class="fa-solid fa-minus"></i></button>
                 <button id="reset-view" class="ctrl-btn" title="Сброс"><i
@@ -360,10 +430,8 @@
         let focusRawId = null;
         let focusResolvedId = null;
 
-        // ✅ кого нужно центрировать после render()
+        // кого нужно попробовать центрировать после render()
         let pendingCenterId = null;
-
-        let didInitialFit = false;
 
         let svg = null, g = null, zoom = null, layout = null;
         let w = 0, h = 0;
@@ -388,6 +456,15 @@
 
         const ANIM_MS = 900;
 
+        // центрирование
+        const SMART_CENTER_MARGIN = 140; // safe area от краёв
+        const CENTER_MS_SMART = 650;
+        const CENTER_MS_ALWAYS = 650;
+
+        // режимы: 'smart' | 'always'
+        const LS_CENTER_MODE = 'familyTree.centerMode';
+        let centerMode = (localStorage.getItem(LS_CENTER_MODE) || 'smart');
+
         const MARRIAGE_ICON = 'fa-heart';
         const MARRIAGE_ICON_COLOR = getCssVar('--ring');
 
@@ -398,8 +475,9 @@
                 data = parseGedcom(t);
                 rootId = findRoot();
                 initSvgOnce();
-                render(true);     // fit only once here
+                render(true); // fit only once (initial)
                 setupUI();
+                syncCenterModeUI();
             })
             .catch(e => console.error('GED load error', e));
 
@@ -427,7 +505,6 @@
                 .nodeSize([NODE_X, NODE_Y])
                 .separation((a, b) => a.parent === b.parent ? SEP_SIBLINGS : SEP_OTHER);
 
-            // start at identity
             svg.call(zoom.transform, lastTransform);
         }
 
@@ -615,7 +692,6 @@
         }
 
         function resolveFocusTarget(rootH, clickedId) {
-            // 1) clicked is primary/id somewhere
             let found = null;
             rootH.each(d => {
                 const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
@@ -623,7 +699,6 @@
             });
             if (found) return found;
 
-            // 2) clicked is spouse inside a couple => focus on that couple primary
             let couplePrimary = null;
             rootH.each(d => {
                 if (d.data.type === 'couple' && d.data.spouseId === clickedId) {
@@ -645,13 +720,11 @@
             return h % 360;
         }
 
-        /* ================= CENTER ON PERSON ================= */
-        function panCenterOnPerson(renderRoot, personId) {
-            if (!renderRoot || !personId) return;
-
+        /* ================= CENTERING ================= */
+        function getNodeAndOffset(renderRoot, personId) {
             const half = (CARD_H + COUPLE_GAP) / 2;
-
             let found = null;
+
             renderRoot.each(d => {
                 if (d.data?.type === 'person' && d.data.id === personId) {
                     found = { node: d, yOffset: 0 };
@@ -661,29 +734,86 @@
                 }
             });
 
+            return found;
+        }
+
+        function panCenterAlways(renderRoot, personId) {
+            const found = getNodeAndOffset(renderRoot, personId);
             if (!found) return;
 
             const k = lastTransform.k || 1;
 
-            // координаты цели в координатах дерева
-            const targetX = found.node.x + found.yOffset; // вертикаль
-            const targetY = found.node.y;                 // горизонталь
+            const targetTreeX = found.node.x + found.yOffset; // vertical
+            const targetTreeY = found.node.y;                 // horizontal
 
-            // хотим, чтобы target оказался по центру экрана при текущем масштабе k
-            const tx = (w / 2) - targetY * k;
-            const ty = (h / 2) - targetX * k;
-
+            const tx = (w / 2) - targetTreeY * k;
+            const ty = (h / 2) - targetTreeX * k;
             const next = d3.zoomIdentity.translate(tx, ty).scale(k);
 
             svg.transition()
-                .duration(650)
+                .duration(CENTER_MS_ALWAYS)
                 .ease(d3.easeCubicInOut)
                 .call(zoom.transform, next);
         }
 
+        function isPointInSafeViewport(screenX, screenY, margin) {
+            return (
+                screenX >= margin &&
+                screenX <= (w - margin) &&
+                screenY >= margin &&
+                screenY <= (h - margin)
+            );
+        }
+
+        function smartCenter(renderRoot, personId, margin = SMART_CENTER_MARGIN) {
+            const found = getNodeAndOffset(renderRoot, personId);
+            if (!found) return;
+
+            const k = lastTransform.k || 1;
+
+            const targetTreeX = found.node.x + found.yOffset;
+            const targetTreeY = found.node.y;
+
+            const screenX = targetTreeY * k + lastTransform.x;
+            const screenY = targetTreeX * k + lastTransform.y;
+
+            if (isPointInSafeViewport(screenX, screenY, margin)) return;
+
+            const tx = (w / 2) - targetTreeY * k;
+            const ty = (h / 2) - targetTreeX * k;
+            const next = d3.zoomIdentity.translate(tx, ty).scale(k);
+
+            svg.transition()
+                .duration(CENTER_MS_SMART)
+                .ease(d3.easeCubicInOut)
+                .call(zoom.transform, next);
+        }
+
+        function applyCentering(renderRoot, personId) {
+            if (!renderRoot || !personId) return;
+            if (centerMode === 'always') panCenterAlways(renderRoot, personId);
+            else smartCenter(renderRoot, personId);
+        }
+
+        function syncCenterModeUI() {
+            const tag = document.getElementById('center-mode-tag');
+            if (!tag) return;
+
+            if (centerMode === 'always') {
+                tag.textContent = 'всегда';
+            } else {
+                tag.textContent = 'умно';
+            }
+            localStorage.setItem(LS_CENTER_MODE, centerMode);
+        }
+
+        function toggleCenterMode() {
+            centerMode = (centerMode === 'smart') ? 'always' : 'smart';
+            syncCenterModeUI();
+        }
+
         /* ================= RENDER (NO CAMERA JUMP) ================= */
         function render(doFit) {
-            // update size only on resize
             const container = document.getElementById('tree');
             const nw = container.clientWidth;
             const nh = container.clientHeight;
@@ -692,10 +822,8 @@
                 svg.attr('width', w).attr('height', h);
             }
 
-            // base data
             const baseData = buildDisplayTree(rootId);
 
-            // full hierarchy (for branch computation)
             const fullRoot = d3.hierarchy(baseData);
             layout(fullRoot);
 
@@ -712,7 +840,6 @@
                 branchIds = expandIdsWithSiblingsFlat(branchIds, resolved);
             }
 
-            // focus prune only in focus
             let renderData = baseData;
             if (focusResolvedId && branchIds.size) {
                 renderData = pruneDataByIds(baseData, branchIds, siblingSet) || baseData;
@@ -721,7 +848,6 @@
             const root = d3.hierarchy(renderData);
             layout(root);
 
-            // data keys
             const nodeKey = (d) => {
                 const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : '';
                 return `${d.data.type}:${pid}`;
@@ -784,14 +910,14 @@
 
             const nodeMerge = nodeEnter.merge(nodeSel);
 
-            // redraw nodes (fast enough for your size)
+            // redraw nodes
             nodeMerge.each(function (d) {
                 const sel = d3.select(this);
                 sel.selectAll('*').remove();
                 drawNode(sel, d.data, fullRoot);
             });
 
-            // Apply dimming/highlight (full mode only)
+            // Apply dimming/highlight
             nodeMerge.classed('dimmed', false).classed('in-branch', false);
             linkMerge.classed('dimmed-link', false).classed('in-branch-link', false);
 
@@ -813,7 +939,7 @@
                 linkMerge.classed('in-branch-link', true);
             }
 
-            // transitions for positions + opacity
+            // transitions
             nodeMerge.transition()
                 .duration(ANIM_MS)
                 .ease(d3.easeCubicInOut)
@@ -829,7 +955,7 @@
                     target: getLinkTargetAnchor(l.target)
                 }));
 
-            // store positions for next transition
+            // store positions
             nodes.forEach(d => {
                 prevPos.set(nodeKey(d), { x: d.x, y: d.y });
             });
@@ -842,14 +968,13 @@
                 prevLinkD.set(k, dStr);
             });
 
-            // ✅ Fit ONLY initial or reset
+            // Fit only on initial/reset. Otherwise: optional centering.
             if (doFit) {
                 fitToContent();
             } else if (pendingCenterId) {
-                // ✅ центрируем по выбранной карточке, сохраняя текущий zoom
                 const idToCenter = pendingCenterId;
                 pendingCenterId = null;
-                d3.timeout(() => panCenterOnPerson(root, idToCenter), 0);
+                d3.timeout(() => applyCentering(root, idToCenter), 0);
             }
         }
 
@@ -877,6 +1002,7 @@
             const y = node.y + (CARD_W / 2);
             return { x: node.x, y };
         }
+
         function getLinkTargetAnchor(node) {
             if (!node) return { x: 0, y: 0 };
             const d = node.data;
@@ -927,14 +1053,12 @@
                     }, +half, fullRoot);
                 }
 
-                // connector between spouses
                 gNode.append('path')
                     .attr('d', `M 0 ${-half + CARD_H / 2} L 0 ${+half - CARD_H / 2}`)
                     .attr('fill', 'none')
                     .attr('stroke', getCssVar('--link-strong'))
                     .attr('stroke-width', 1.4);
 
-                // marriage badge
                 const marriage = formatGedcomDate(n.marriage);
                 const W = marriage ? 200 : 56;
                 const H = 32;
@@ -950,21 +1074,20 @@
                     .style('align-items', 'center')
                     .style('justify-content', 'center')
                     .html(`
-        <div style="
-          display:inline-flex;align-items:center;gap:${marriage ? 8 : 0}px;
-          padding:5px 12px;border-radius:999px;
-          background:rgba(255,255,255,.92);
-          border:1px solid rgba(15,23,42,.08);
-          box-shadow: 0 10px 22px rgba(0,0,0,.12);
-          font-size:11px;color:rgba(15,23,42,.82);
-          font-weight:600;
-        ">
-          <i class="fa-solid ${escapeHtml(MARRIAGE_ICON)}" style="font-size:16px;color:${escapeHtml(MARRIAGE_ICON_COLOR)}"></i>
-          ${marriage ? `<span>${escapeHtml(marriage)}</span>` : ``}
-        </div>
-      `);
+            <div style="
+              display:inline-flex;align-items:center;gap:${marriage ? 8 : 0}px;
+              padding:5px 12px;border-radius:999px;
+              background:rgba(255,255,255,.92);
+              border:1px solid rgba(15,23,42,.08);
+              box-shadow: 0 10px 22px rgba(0,0,0,.12);
+              font-size:11px;color:rgba(15,23,42,.82);
+              font-weight:600;
+            ">
+              <i class="fa-solid ${escapeHtml(MARRIAGE_ICON)}" style="font-size:16px;color:${escapeHtml(MARRIAGE_ICON_COLOR)}"></i>
+              ${marriage ? `<span>${escapeHtml(marriage)}</span>` : ``}
+            </div>
+          `);
 
-                // children chip (top card, left corner)
                 const kidsCount = (n.children && n.children.length) ? n.children.length : 0;
                 if (kidsCount > 0) {
                     const chipW = 70, chipH = 26;
@@ -984,19 +1107,19 @@
                         .style('align-items', 'center')
                         .style('justify-content', 'center')
                         .html(`
-          <div style="
-            width:100%;height:100%;
-            display:flex;align-items:center;justify-content:center;gap:7px;
-            border-radius:999px;
-            background:rgba(15,23,42,.06);
-            border:1px solid rgba(15,23,42,.10);
-            color:rgba(15,23,42,.78);
-            font-size:11px;font-weight:600;
-          ">
-            <i class="fa-solid fa-children" style="font-size:12px;"></i>
-            <span>${kidsCount}</span>
-          </div>
-        `);
+              <div style="
+                width:100%;height:100%;
+                display:flex;align-items:center;justify-content:center;gap:7px;
+                border-radius:999px;
+                background:rgba(15,23,42,.06);
+                border:1px solid rgba(15,23,42,.10);
+                color:rgba(15,23,42,.78);
+                font-size:11px;font-weight:600;
+              ">
+                <i class="fa-solid fa-children" style="font-size:12px;"></i>
+                <span>${kidsCount}</span>
+              </div>
+            `);
                 }
             }
         }
@@ -1041,11 +1164,8 @@
                     .text(life);
             }
 
-            if (p.id === currentId) {
-                gNode.classed('selected', true);
-            } else {
-                gNode.classed('selected', false);
-            }
+            if (p.id === currentId) gNode.classed('selected', true);
+            else gNode.classed('selected', false);
         }
 
         /* ================= CLICK LOGIC ================= */
@@ -1054,7 +1174,7 @@
 
             const resolved = resolveFocusTarget(fullRoot, clickedId);
 
-            // ✅ всегда центрируемся по кликнутому человеку
+            // после render попробуем центрировать (по режиму)
             pendingCenterId = clickedId;
 
             if (focusRawId === clickedId) {
@@ -1080,19 +1200,21 @@
             const sibs = getSiblingIds(id);
             const sibText = sibs.length ? `${sibs.length}` : '0';
 
-            document.getElementById('person-info').innerHTML = `
-    <div style="font-weight:700;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
-    <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
-    <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
-    <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
-    <div class="pill"><i class="fa-solid fa-people-group"></i> <span>Братья/сёстры: ${escapeHtml(sibText)}</span></div>
+            const modeHuman = (centerMode === 'always') ? 'всегда' : 'умно';
 
-    <div class="hint">
-      <b>Клик</b> — фокус на ветвь + siblings (плоско).<br/>
-      <b>Повторный клик по тому же человеку</b> — полный вид.<br/>
-      Камера центрируется на выбранной карточке (масштаб не меняется).
-    </div>
-  `;
+            document.getElementById('person-info').innerHTML = `
+        <div style="font-weight:700;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
+        <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
+        <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
+        <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
+        <div class="pill"><i class="fa-solid fa-people-group"></i> <span>Братья/сёстры: ${escapeHtml(sibText)}</span></div>
+
+        <div class="hint">
+          <b>Клик</b> — фокус на ветвь + siblings (плоско).<br/>
+          <b>Повторный клик</b> — полный вид.<br/>
+          <b>Центрирование:</b> ${escapeHtml(modeHuman)} (переключатель вверху).
+        </div>
+      `;
 
             if (doRerender) render(false);
         }
@@ -1183,6 +1305,13 @@
 
         /* ================= UI ================= */
         function setupUI() {
+            // toggle mode
+            document.getElementById('center-mode').onclick = () => {
+                toggleCenterMode();
+                // обновим подсказку в карточке если она открыта
+                if (currentId) selectPerson(currentId, false);
+            };
+
             document.getElementById('zoom-in').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1.2);
             document.getElementById('zoom-out').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 0.85);
 
