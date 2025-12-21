@@ -229,14 +229,22 @@
         let rootId = null, currentId = null;
 
         /* ================= CONFIG =================
-           Дерево горизонтальное: X = вертикаль, Y = горизонталь
-           Пара = 2 одинаковых карточки, "прилипают" вертикально, между ними иконка+дата
+           Горизонтальное дерево: X=вертикаль, Y=горизонталь.
+           Пара = 2 одинаковые карточки вертикально + "сердце/кольцо" между ними.
         =========================================== */
         const CARD_W = 220;
         const CARD_H = 80;
-        const COUPLE_GAP = 12;            // зазор между супругами (прилипание)
-        const COUPLE_ICON_R = 8;          // радиус точки союза
-        const COUPLE_TOTAL_H = CARD_H * 2 + COUPLE_GAP;  // общая высота пары (для layout)
+
+        // сделали плотнее, чтобы дерево не "ввысь"
+        const COUPLE_GAP = 8;                 // было 12
+        const COUPLE_ICON_R = 8;
+        const COUPLE_TOTAL_H = CARD_H * 2 + COUPLE_GAP;
+
+        // Компактность дерева (ключевое):
+        const NODE_X = COUPLE_TOTAL_H + 18;   // расстояние между строками (вертикально)
+        const NODE_Y = 250;                   // расстояние между поколениями (горизонтально)
+        const SEP_SIBLINGS = 1.0;
+        const SEP_OTHER = 1.12;
 
         /* ================= INIT ================= */
         fetch('./3.ged')
@@ -312,14 +320,8 @@
         }
 
         /* ================= BUILD DISPLAY TREE =================
-           Главное изменение: вместо person->union->children мы строим:
-           - если у человека есть супруг(а) (первая семья): node.type = 'couple'
-             внутри: primaryId + spouseId + date, дети = дети семьи
-           - если супруг(а) нет: обычный person
-           Это гарантирует:
-           - одинаковые карточки
-           - "прилипание"
-           - дети выходят из центра пары
+           ВАЖНО: узел "couple" представляет ребёнка (primaryId) + супруг(а).
+           Но входящая линия должна приходить В primaryId (верхнюю карточку), а не в центр брака.
         ======================================================= */
         function buildDisplayTree(personId, seen = new Set()) {
             if (!personId || seen.has(personId)) return null;
@@ -330,7 +332,6 @@
 
             const fams = (p.FAMS || []).map(fid => data.fams[fid]).filter(Boolean);
 
-            // берём "основную" семью: первую, где есть супруг или дети
             const mainFam = fams.find(f => {
                 const spouse = (f.husb === personId) ? f.wife : f.husb;
                 return !!spouse || (f.chil && f.chil.length);
@@ -338,6 +339,7 @@
 
             if (mainFam) {
                 const spouseId = (mainFam.husb === personId) ? mainFam.wife : mainFam.husb;
+
                 const node = {
                     type: 'couple',
                     primaryId: personId,
@@ -355,8 +357,7 @@
                 return node;
             }
 
-            // одиночный человек
-            const node = {
+            return {
                 type: 'person',
                 id: personId,
                 name: p.name || 'Без имени',
@@ -364,7 +365,6 @@
                 b: p.birth || '',
                 d: p.death || '',
             };
-            return node;
         }
 
         /* ================= RENDER ================= */
@@ -386,21 +386,26 @@
             zoom = d3.zoom().scaleExtent([0.15, 3]).on('zoom', e => g.attr('transform', e.transform));
             svg.call(zoom);
 
-            // nodeSize по X учитывает "пару" (высокий узел) => больше нет налезаний
             const layout = d3.tree()
-                .nodeSize([COUPLE_TOTAL_H + 70, 270])
-                .separation((a, b) => a.parent === b.parent ? 1.1 : 1.25);
+                .nodeSize([NODE_X, NODE_Y])
+                .separation((a, b) => a.parent === b.parent ? SEP_SIBLINGS : SEP_OTHER);
 
             const root = d3.hierarchy(tree);
             layout(root);
 
+            // Рисуем линии с "якорями", а не в центр узла!
+            const links = root.links();
             const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
 
             g.selectAll('.link')
-                .data(root.links())
+                .data(links)
                 .enter().append('path')
                 .attr('class', 'link')
-                .attr('d', d => linkGen(d));
+                .attr('d', l => {
+                    const s = getLinkSourceAnchor(l.source);
+                    const t = getLinkTargetAnchor(l.target);
+                    return linkGen({ source: s, target: t });
+                });
 
             g.selectAll('.node')
                 .data(root.descendants())
@@ -410,6 +415,48 @@
                 .each(function (d) { drawNode(d3.select(this), d.data); });
 
             fit(svg, g, w, h);
+        }
+
+        /* ================= LINK ANCHORS =================
+           - source:
+             * couple => из центра союза (между супругами)
+             * person => из середины правого края карточки
+           - target:
+             * couple => в верхнюю карточку (primary person) по левому краю
+             * person => в левый край карточки
+           Это решает ваш кейс:
+           Родители(пара) -> приходит к Вячеславу (верхняя карточка), а НЕ к его браку.
+        =============================================== */
+        function getLinkSourceAnchor(node) {
+            const d = node.data;
+
+            // "правый край" по горизонтали (Y)
+            const y = node.y + (CARD_W / 2);
+
+            if (d.type === 'couple') {
+                // дети должны выходить из центра союза (между карточками)
+                return { x: node.x, y: y };
+            }
+
+            // обычный человек
+            return { x: node.x, y: y };
+        }
+
+        function getLinkTargetAnchor(node) {
+            const d = node.data;
+
+            // "левый край" по горизонтали (Y)
+            const y = node.y - (CARD_W / 2);
+
+            if (d.type === 'couple') {
+                // ВХОД В РЕБЁНКА: верхняя карточка = primaryId
+                const half = (CARD_H + COUPLE_GAP) / 2;
+                const topCardCenterX = node.x - half; // верхняя карточка выше центра пары
+                return { x: topCardCenterX, y: y };
+            }
+
+            // обычный человек
+            return { x: node.x, y: y };
         }
 
         /* ================= NODE DRAW ================= */
@@ -427,7 +474,7 @@
 
                 const half = (CARD_H + COUPLE_GAP) / 2;
 
-                // верхняя карточка = "потомок" (к нему приходят предки)
+                // верхняя карточка: ребёнок/потомок (в него должны приходить линии)
                 drawPersonCard(g, {
                     id: n.primaryId,
                     name: primary?.name || 'Без имени',
@@ -436,7 +483,7 @@
                     d: primary?.death || ''
                 }, -half);
 
-                // нижняя карточка = супруг(а)
+                // нижняя карточка: супруг(а)
                 if (spouse) {
                     drawPersonCard(g, {
                         id: n.spouseId,
@@ -445,27 +492,24 @@
                         b: spouse?.birth || '',
                         d: spouse?.death || ''
                     }, +half);
-                } else {
-                    // если супруга нет, всё равно оставим нижнее место пустым, чтобы узел был одинаковый
                 }
 
-                // соединитель между супругами (вертикальный)
+                // соединитель между супругами
                 g.append('path')
                     .attr('d', `M 0 ${-half + CARD_H / 2} L 0 ${+half - CARD_H / 2}`)
                     .attr('fill', 'none')
                     .attr('stroke', 'rgba(44,62,80,.22)')
                     .attr('stroke-width', 2);
 
-                // точка союза в центре
+                // точка союза по центру
                 g.append('circle')
                     .attr('r', COUPLE_ICON_R)
-                    .attr('cx', 0)
-                    .attr('cy', 0)
-                    .attr('fill', 'rgba(255,255,255,.9)')
+                    .attr('cx', 0).attr('cy', 0)
+                    .attr('fill', 'rgba(255,255,255,.92)')
                     .attr('stroke', 'rgba(44,62,80,.35)')
                     .attr('stroke-width', 2);
 
-                // иконка (сердце/кольцо)
+                // сердечко (можно заменить на 💍)
                 g.append('text')
                     .attr('text-anchor', 'middle')
                     .attr('x', 0)
@@ -474,7 +518,7 @@
                     .style('fill', '#e74c3c')
                     .text('♥');
 
-                // дата союза справа от центра (не мешает линиям)
+                // дата союза справа
                 const dateLabel = (n.marriage || '').trim();
                 if (dateLabel) {
                     g.append('foreignObject')
@@ -529,7 +573,6 @@
                     .text(shorten(line, 26));
             }
 
-            // подсветка выбранного
             if (p.id === currentId) {
                 group.classed('selected', true);
             }
@@ -546,14 +589,14 @@
     ${p?.death ? `<div><b>Смерть:</b> ${escapeHtml(p.death)}</div>` : ''}
   `;
 
-            // перерисуем, чтобы подсветка обновилась
+            // чтобы подсветка обновилась
             render();
         }
 
         /* ================= FIT/HELPERS/UI ================= */
         function fit(svg, g, w, h) {
             const b = g.node().getBBox();
-            const pad = 140;
+            const pad = 120;
             const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
             const tx = w / 2 - (b.x + b.width / 2) * s;
             const ty = h / 2 - (b.y + b.height / 2) * s;
