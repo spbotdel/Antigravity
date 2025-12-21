@@ -42,6 +42,8 @@
             --dimLinks: 0.12;
 
             --branch-color: rgba(56, 189, 248, .85);
+
+            --panel-w: 360px;
         }
 
         * {
@@ -224,30 +226,27 @@
             stroke-width: 2.1 !important;
         }
 
-        /* ===== INFO PANEL =====
-       ВАЖНО: overflow: visible чтобы вкладка слева НЕ ОБРЕЗАЛАСЬ
-       Контент “режем” внутренней поверхностью.
-    */
+        /* ===== INFO PANEL (desktop: right) ===== */
         .info-panel {
             position: fixed;
             top: 76px;
             right: 0;
-            width: 360px;
+            width: var(--panel-w);
             height: calc(100vh - 132px);
-            transform: translateX(calc(100% - 66px));
+            transform: translateX(100%);
+            /* <-- теперь скрывается полностью */
             transition: transform .28s ease;
             z-index: 100;
             will-change: transform;
             pointer-events: auto;
             overflow: visible;
-            /* <-- FIX */
         }
 
         .info-panel.open {
             transform: translateX(0)
         }
 
-        /* Внутренняя “поверхность” с радиусом/фоном/скроллом */
+        /* Внутренняя “поверхность” */
         .info-surface {
             width: 100%;
             height: 100%;
@@ -259,82 +258,6 @@
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             overflow: hidden;
-            /* <-- контент внутри не вылазит */
-        }
-
-        /* Desktop: side tab */
-        .info-tab {
-            position: absolute;
-            left: -66px;
-            top: 110px;
-            width: 66px;
-            height: 280px;
-            background: rgba(15, 23, 42, .90);
-            border: 1px solid rgba(255, 255, 255, .10);
-            border-right: none;
-            color: #fff;
-            cursor: pointer;
-            border-radius: 18px 0 0 18px;
-            box-shadow: 0 12px 24px rgba(0, 0, 0, .22);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 10px 8px;
-            user-select: none;
-        }
-
-        .info-tab-inner {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            position: relative;
-            padding-top: 46px;
-        }
-
-        .info-tab-arrow {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 34px;
-            height: 34px;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, .10);
-            border: 1px solid rgba(255, 255, 255, .12);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 15px;
-        }
-
-        .info-tab-label {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 18px;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            padding: 0 4px;
-        }
-
-        .vword {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 3px;
-        }
-
-        .vchar {
-            font-weight: 800;
-            letter-spacing: .6px;
-            font-size: 13px;
-            line-height: 13px;
-            color: rgba(255, 255, 255, .96);
-            text-shadow: 0 1px 0 rgba(0, 0, 0, .18);
         }
 
         .info-header {
@@ -436,8 +359,119 @@
             margin-top: 4px;
         }
 
+        /* ===== DESKTOP TAB (отдельно от панели!) ===== */
+        .info-tab {
+            position: fixed;
+            right: 0;
+            top: 190px;
+            width: 58px;
+            height: 320px;
+            z-index: 101;
+            /* чуть выше панели */
+            cursor: pointer;
+            user-select: none;
+
+            border-radius: 18px 0 0 18px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-right: none;
+
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04)),
+                rgba(15, 23, 42, .70);
+
+            box-shadow: 0 16px 34px rgba(0, 0, 0, .22);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            transition: transform .28s ease, background .18s ease;
+        }
+
+        .info-tab.open {
+            transform: translateX(calc(-1 * var(--panel-w)));
+        }
+
+        .info-tab:hover {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .06)),
+                rgba(15, 23, 42, .72);
+        }
+
+        .info-tab-inner {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            padding: 10px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-tab-arrow {
+            width: 36px;
+            height: 36px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, .10);
+            border: 1px solid rgba(255, 255, 255, .12);
+            color: #fff;
+            font-size: 15px;
+            flex: 0 0 auto;
+            box-shadow: 0 10px 18px rgba(0, 0, 0, .16);
+        }
+
+        /* аккуратная вертикальная подпись */
+        .info-tab-label {
+            width: 100%;
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            overflow: hidden;
+            padding: 4px 2px;
+        }
+
+        .vword {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .vchar {
+            font-weight: 800;
+            letter-spacing: .2px;
+            font-size: 12px;
+            line-height: 12px;
+            color: rgba(255, 255, 255, .94);
+            text-shadow: 0 1px 0 rgba(0, 0, 0, .22);
+        }
+
+        .vchar.muted {
+            font-weight: 700;
+            opacity: .82;
+        }
+
         /* ===== Portrait/bottom-sheet ===== */
         @media (max-aspect-ratio: 1/1) {
+            :root {
+                --panel-w: 100vw;
+            }
+
+            .info-tab {
+                display: none;
+            }
+
+            /* на мобиле таб не нужен */
+
             .info-panel {
                 top: auto;
                 right: auto;
@@ -455,10 +489,6 @@
 
             .info-surface {
                 border-radius: 18px 18px 0 0;
-            }
-
-            .info-tab {
-                display: none;
             }
 
             .info-header {
@@ -494,14 +524,15 @@
             <div id="tree"></div>
         </div>
 
-        <div id="info-panel" class="info-panel">
-            <div id="info-tab" class="info-tab" title="Информация">
-                <div class="info-tab-inner">
-                    <div id="info-tab-arrow" class="info-tab-arrow"><i class="fa-solid fa-arrow-left"></i></div>
-                    <div id="info-tab-label" class="info-tab-label"></div>
-                </div>
+        <!-- TAB ВНЕ панели (важно!) -->
+        <div id="info-tab" class="info-tab" title="Информация">
+            <div class="info-tab-inner">
+                <div id="info-tab-arrow" class="info-tab-arrow"><i class="fa-solid fa-arrow-left"></i></div>
+                <div id="info-tab-label" class="info-tab-label"></div>
             </div>
+        </div>
 
+        <div id="info-panel" class="info-panel">
             <div class="info-surface">
                 <div id="info-header" class="info-header" title="Открыть / закрыть">
                     <div id="info-title" class="info-header-title">Информация</div>
@@ -1074,6 +1105,7 @@
             return Array.from(out);
         }
 
+        // ✅ Таб: Фамилия вертикально + инициалы
         function renderVerticalNameToTab() {
             const el = document.getElementById('info-tab-label');
             if (!el) return;
@@ -1081,35 +1113,45 @@
             el.innerHTML = '';
             if (!currentId) return;
 
-            const name = String(data.people[currentId]?.name || '').trim().replace(/\s+/g, ' ');
-            if (!name) return;
+            const full = String(data.people[currentId]?.name || '').trim().replace(/\s+/g, ' ');
+            if (!full) return;
 
-            const tokens = name.split(' ').filter(Boolean);
-            if (!tokens.length) return;
+            const parts = full.split(' ').filter(Boolean);
+            const first = parts[0] || '';
+            const patronymic = parts.length >= 3 ? parts[1] : '';
+            const last = parts.length >= 2 ? parts[parts.length - 1] : '';
 
-            const first = tokens[0];
-            const last = tokens.length >= 2 ? tokens[tokens.length - 1] : '';
+            const initials = [
+                first ? (first[0].toUpperCase() + '.') : '',
+                patronymic ? (patronymic[0].toUpperCase() + '.') : ''
+            ].filter(Boolean).join('');
 
-            const words = last ? [first, last] : [first];
+            // Сначала фамилия (главное), ниже инициалы
+            const words = [];
+            if (last) words.push({ text: last, muted: false });
+            if (initials) words.push({ text: initials, muted: true });
 
-            for (const word of words) {
-                const w = document.createElement('div');
-                w.className = 'vword';
-                for (const ch of word) {
+            for (const w of words) {
+                const ww = document.createElement('div');
+                ww.className = 'vword';
+                for (const ch of String(w.text)) {
                     const c = document.createElement('div');
-                    c.className = 'vchar';
+                    c.className = 'vchar' + (w.muted ? ' muted' : '');
                     c.textContent = ch;
-                    w.appendChild(c);
+                    ww.appendChild(c);
                 }
-                el.appendChild(w);
+                el.appendChild(ww);
             }
         }
 
         function updatePanelArrows() {
             const panel = document.getElementById('info-panel');
+            const tab = document.getElementById('info-tab');
             const open = panel.classList.contains('open');
-            const tabArrow = document.getElementById('info-tab-arrow');
-            tabArrow.innerHTML = open
+
+            tab.classList.toggle('open', open);
+
+            document.getElementById('info-tab-arrow').innerHTML = open
                 ? `<i class="fa-solid fa-arrow-right"></i>`
                 : `<i class="fa-solid fa-arrow-left"></i>`;
 
@@ -1122,6 +1164,7 @@
             const panel = document.getElementById('info-panel');
             if (typeof force === 'boolean') panel.classList.toggle('open', force);
             else panel.classList.toggle('open');
+
             updatePanelArrows();
             if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
         }
@@ -1436,7 +1479,6 @@
                 render(true);
             };
 
-            // ВАЖНО: теперь вкладка видна и кликабельна
             document.getElementById('info-tab').onclick = () => togglePanel();
             document.getElementById('toggle-info').onclick = (e) => { e.stopPropagation(); togglePanel(); };
 
