@@ -153,7 +153,6 @@
             transform: translateY(0px) scale(.98);
         }
 
-        /* Toggle pill button */
         .mode-btn {
             height: 40px;
             padding: 0 12px;
@@ -277,6 +276,7 @@
             stroke-width: 2.1 !important;
         }
 
+        /* ===== INFO PANEL (Desktop/right) ===== */
         .info-panel {
             position: fixed;
             top: 76px;
@@ -286,7 +286,7 @@
             background: rgba(255, 255, 255, .92);
             color: #0f172a;
             border-radius: 18px 0 0 18px;
-            transform: translateX(calc(100% - 54px));
+            transform: translateX(calc(100% - 66px));
             transition: .25s;
             z-index: 100;
             box-shadow: var(--shadow);
@@ -302,20 +302,64 @@
 
         .info-tab {
             position: absolute;
-            left: -54px;
+            left: -66px;
             top: 110px;
-            width: 54px;
-            height: 150px;
+            width: 66px;
+            height: 190px;
             background: rgba(15, 23, 42, .88);
             border: 1px solid rgba(255, 255, 255, .10);
             border-right: none;
             color: #fff;
+            cursor: pointer;
+            border-radius: 18px 0 0 18px;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, .22);
+
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            border-radius: 16px 0 0 16px;
-            box-shadow: 0 12px 24px rgba(0, 0, 0, .22);
+            padding: 10px 8px;
+        }
+
+        .info-tab-inner {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            position: relative;
+        }
+
+        .info-tab-arrow {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .10);
+            border: 1px solid rgba(255, 255, 255, .12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 15px;
+        }
+
+        .info-tab-label {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            transform: rotate(180deg);
+            font-weight: 700;
+            letter-spacing: .5px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, .92);
+            user-select: none;
+            white-space: nowrap;
+            max-height: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .info-header {
@@ -363,14 +407,57 @@
             color: rgba(15, 23, 42, .60);
         }
 
-        @media(max-width:768px) {
+        /* ===== Portrait/bottom-sheet ===== */
+        @media (max-aspect-ratio: 1/1) {
             .info-panel {
-                width: 92vw;
                 top: auto;
-                bottom: 16px;
-                height: min(70vh, 520px)
+                right: auto;
+                left: 0;
+                bottom: 0;
+                width: 100%;
+                height: min(70vh, 560px);
+                border-radius: 18px 18px 0 0;
+                transform: translateY(calc(100% - 66px));
             }
 
+            .info-panel.open {
+                transform: translateY(0);
+            }
+
+            .info-tab {
+                left: 50%;
+                top: -66px;
+                transform: translateX(-50%);
+                width: 220px;
+                height: 66px;
+                border-radius: 18px 18px 0 0;
+                border-right: 1px solid rgba(255, 255, 255, .10);
+                border-bottom: none;
+                padding: 10px 14px;
+            }
+
+            .info-tab-inner {
+                flex-direction: row;
+                gap: 12px;
+            }
+
+            .info-tab-arrow {
+                position: static;
+                transform: none;
+            }
+
+            .info-tab-label {
+                writing-mode: horizontal-tb;
+                transform: none;
+                font-size: 13px;
+                font-weight: 700;
+                max-width: 170px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+        }
+
+        @media(max-width:768px) {
             .mode-btn {
                 padding: 0 10px;
             }
@@ -392,8 +479,8 @@
             </div>
 
             <div class="controls">
-                <!-- ✅ Переключатель режима центрирования -->
-                <button id="center-mode" class="mode-btn" title="Центрирование: умно / всегда">
+                <button id="center-mode" class="mode-btn"
+                    title="Центрирование: умно / всегда (центр свободной области)">
                     <i class="fa-solid fa-crosshairs"></i>
                     <span class="label">Центр</span>
                     <span id="center-mode-tag" class="tag">умно</span>
@@ -411,7 +498,13 @@
         </div>
 
         <div id="info-panel" class="info-panel">
-            <div id="info-tab" class="info-tab" title="Информация"><i class="fa-solid fa-id-card"></i></div>
+            <div id="info-tab" class="info-tab" title="Информация">
+                <div class="info-tab-inner">
+                    <div id="info-tab-arrow" class="info-tab-arrow"><i class="fa-solid fa-arrow-left"></i></div>
+                    <div id="info-tab-label" class="info-tab-label">Карточка</div>
+                </div>
+            </div>
+
             <div class="info-header">
                 <div style="font-weight:600">Карточка</div>
                 <button id="close-info" class="close-btn" title="Свернуть">&times;</button>
@@ -430,17 +523,12 @@
         let focusRawId = null;
         let focusResolvedId = null;
 
-        // кого нужно попробовать центрировать после render()
-        let pendingCenterId = null;
-
         let svg = null, g = null, zoom = null, layout = null;
         let w = 0, h = 0;
 
-        /* store node positions for smooth transitions */
         const prevPos = new Map();
         const prevLinkD = new Map();
 
-        /* keep camera transform always */
         let lastTransform = d3.zoomIdentity;
 
         /* ================= CONFIG ================= */
@@ -456,10 +544,10 @@
 
         const ANIM_MS = 900;
 
-        // центрирование
-        const SMART_CENTER_MARGIN = 140; // safe area от краёв
-        const CENTER_MS_SMART = 650;
-        const CENTER_MS_ALWAYS = 650;
+        // центрирование (дерева)
+        const SMART_CENTER_MARGIN = 140;
+        const CENTER_MS_SMART = 700;
+        const CENTER_MS_ALWAYS = 700;
 
         // режимы: 'smart' | 'always'
         const LS_CENTER_MODE = 'familyTree.centerMode';
@@ -468,6 +556,8 @@
         const MARRIAGE_ICON = 'fa-heart';
         const MARRIAGE_ICON_COLOR = getCssVar('--ring');
 
+        let lastRenderedRoot = null;
+
         /* ================= INIT ================= */
         fetch('./3.ged')
             .then(r => r.text())
@@ -475,9 +565,10 @@
                 data = parseGedcom(t);
                 rootId = findRoot();
                 initSvgOnce();
-                render(true); // fit only once (initial)
+                render(true);
                 setupUI();
                 syncCenterModeUI();
+                updateInfoTabUI();
             })
             .catch(e => console.error('GED load error', e));
 
@@ -720,280 +811,106 @@
             return h % 360;
         }
 
-        /* ================= CENTERING ================= */
-        function getNodeAndOffset(renderRoot, personId) {
-            const half = (CARD_H + COUPLE_GAP) / 2;
-            let found = null;
-
-            renderRoot.each(d => {
-                if (d.data?.type === 'person' && d.data.id === personId) {
-                    found = { node: d, yOffset: 0 };
-                } else if (d.data?.type === 'couple') {
-                    if (d.data.primaryId === personId) found = { node: d, yOffset: -half };
-                    if (d.data.spouseId === personId) found = { node: d, yOffset: +half };
-                }
-            });
-
-            return found;
+        /* ================== OCCUPIED AREA AWARE CENTERING ================== */
+        function isPortrait() {
+            return window.matchMedia('(max-aspect-ratio: 1/1)').matches;
         }
 
-        function panCenterAlways(renderRoot, personId) {
-            const found = getNodeAndOffset(renderRoot, personId);
-            if (!found) return;
+        function getAvailableViewportRect() {
+            const panel = document.getElementById('info-panel');
+            const open = panel?.classList.contains('open');
 
-            const k = lastTransform.k || 1;
+            // по умолчанию доступен весь экран
+            let left = 0, top = 0, right = w, bottom = h;
 
-            const targetTreeX = found.node.x + found.yOffset; // vertical
-            const targetTreeY = found.node.y;                 // horizontal
+            if (!panel || !open) {
+                return { left, top, right, bottom, cx: (left + right) / 2, cy: (top + bottom) / 2 };
+            }
 
-            const tx = (w / 2) - targetTreeY * k;
-            const ty = (h / 2) - targetTreeX * k;
-            const next = d3.zoomIdentity.translate(tx, ty).scale(k);
+            const r = panel.getBoundingClientRect();
 
-            svg.transition()
-                .duration(CENTER_MS_ALWAYS)
-                .ease(d3.easeCubicInOut)
-                .call(zoom.transform, next);
+            if (isPortrait()) {
+                // панель снизу занимает низ: доступная область сверху до r.top
+                bottom = Math.max(0, Math.min(h, r.top));
+            } else {
+                // панель справа занимает правую часть: доступная область слева до r.left
+                right = Math.max(0, Math.min(w, r.left));
+            }
+
+            // если панель "съела" почти всё — fallback на центр экрана
+            if (right - left < 120 || bottom - top < 120) {
+                left = 0; top = 0; right = w; bottom = h;
+            }
+
+            return { left, top, right, bottom, cx: (left + right) / 2, cy: (top + bottom) / 2 };
         }
 
-        function isPointInSafeViewport(screenX, screenY, margin) {
+        function computeTreeBounds(renderRoot) {
+            const nodes = renderRoot.descendants();
+            if (!nodes.length) return null;
+
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+            for (const n of nodes) {
+                const vHalf = (n.data.type === 'couple') ? (COUPLE_TOTAL_H / 2) : (CARD_H / 2);
+                const hHalf = (CARD_W / 2);
+
+                minX = Math.min(minX, n.x - vHalf);
+                maxX = Math.max(maxX, n.x + vHalf);
+
+                minY = Math.min(minY, n.y - hHalf);
+                maxY = Math.max(maxY, n.y + hHalf);
+            }
+
+            return { minX, maxX, minY, maxY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+        }
+
+        function isPointInSafeRect(screenX, screenY, rect, margin) {
             return (
-                screenX >= margin &&
-                screenX <= (w - margin) &&
-                screenY >= margin &&
-                screenY <= (h - margin)
+                screenX >= (rect.left + margin) &&
+                screenX <= (rect.right - margin) &&
+                screenY >= (rect.top + margin) &&
+                screenY <= (rect.bottom - margin)
             );
         }
 
-        function smartCenter(renderRoot, personId, margin = SMART_CENTER_MARGIN) {
-            const found = getNodeAndOffset(renderRoot, personId);
-            if (!found) return;
+        function panToTreeCenterAlways(renderRoot) {
+            const b = computeTreeBounds(renderRoot);
+            if (!b) return;
 
             const k = lastTransform.k || 1;
+            const avail = getAvailableViewportRect();
 
-            const targetTreeX = found.node.x + found.yOffset;
-            const targetTreeY = found.node.y;
-
-            const screenX = targetTreeY * k + lastTransform.x;
-            const screenY = targetTreeX * k + lastTransform.y;
-
-            if (isPointInSafeViewport(screenX, screenY, margin)) return;
-
-            const tx = (w / 2) - targetTreeY * k;
-            const ty = (h / 2) - targetTreeX * k;
+            const tx = avail.cx - b.cy * k; // cy (tree y) -> screenX
+            const ty = avail.cy - b.cx * k; // cx (tree x) -> screenY
             const next = d3.zoomIdentity.translate(tx, ty).scale(k);
 
-            svg.transition()
-                .duration(CENTER_MS_SMART)
-                .ease(d3.easeCubicInOut)
-                .call(zoom.transform, next);
+            svg.transition().duration(CENTER_MS_ALWAYS).ease(d3.easeCubicInOut).call(zoom.transform, next);
         }
 
-        function applyCentering(renderRoot, personId) {
-            if (!renderRoot || !personId) return;
-            if (centerMode === 'always') panCenterAlways(renderRoot, personId);
-            else smartCenter(renderRoot, personId);
+        function panToTreeCenterSmart(renderRoot, margin = SMART_CENTER_MARGIN) {
+            const b = computeTreeBounds(renderRoot);
+            if (!b) return;
+
+            const k = lastTransform.k || 1;
+            const avail = getAvailableViewportRect();
+
+            const screenX = b.cy * k + lastTransform.x;
+            const screenY = b.cx * k + lastTransform.y;
+
+            if (isPointInSafeRect(screenX, screenY, avail, margin)) return;
+
+            const tx = avail.cx - b.cy * k;
+            const ty = avail.cy - b.cx * k;
+            const next = d3.zoomIdentity.translate(tx, ty).scale(k);
+
+            svg.transition().duration(CENTER_MS_SMART).ease(d3.easeCubicInOut).call(zoom.transform, next);
         }
 
-        function syncCenterModeUI() {
-            const tag = document.getElementById('center-mode-tag');
-            if (!tag) return;
-
-            if (centerMode === 'always') {
-                tag.textContent = 'всегда';
-            } else {
-                tag.textContent = 'умно';
-            }
-            localStorage.setItem(LS_CENTER_MODE, centerMode);
-        }
-
-        function toggleCenterMode() {
-            centerMode = (centerMode === 'smart') ? 'always' : 'smart';
-            syncCenterModeUI();
-        }
-
-        /* ================= RENDER (NO CAMERA JUMP) ================= */
-        function render(doFit) {
-            const container = document.getElementById('tree');
-            const nw = container.clientWidth;
-            const nh = container.clientHeight;
-            if (nw !== w || nh !== h) {
-                w = nw; h = nh;
-                svg.attr('width', w).attr('height', h);
-            }
-
-            const baseData = buildDisplayTree(rootId);
-
-            const fullRoot = d3.hierarchy(baseData);
-            layout(fullRoot);
-
-            const highlightCandidate = focusResolvedId || currentId;
-
-            let branchIds = new Set();
-            let siblingSet = new Set();
-            if (highlightCandidate) {
-                const resolved = resolveFocusTarget(fullRoot, highlightCandidate);
-                setBranchColorFromId(resolved);
-                branchIds = computeBranchIds(fullRoot, resolved);
-
-                siblingSet = new Set(getSiblingIds(resolved));
-                branchIds = expandIdsWithSiblingsFlat(branchIds, resolved);
-            }
-
-            let renderData = baseData;
-            if (focusResolvedId && branchIds.size) {
-                renderData = pruneDataByIds(baseData, branchIds, siblingSet) || baseData;
-            }
-
-            const root = d3.hierarchy(renderData);
-            layout(root);
-
-            const nodeKey = (d) => {
-                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : '';
-                return `${d.data.type}:${pid}`;
-            };
-
-            const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
-            const links = root.links();
-
-            function linkKey(l) {
-                const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
-                const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
-                return `${a}=>${b}`;
-            }
-
-            // LINKS join
-            const linkSel = g.selectAll('path.link')
-                .data(links, linkKey);
-
-            linkSel.exit()
-                .transition().duration(ANIM_MS).style('opacity', 0)
-                .remove();
-
-            const linkEnter = linkSel.enter()
-                .append('path')
-                .attr('class', 'link')
-                .style('opacity', 0)
-                .attr('d', l => {
-                    const k = linkKey(l);
-                    const prev = prevLinkD.get(k);
-                    return prev || linkGen({
-                        source: getLinkSourceAnchor(l.source),
-                        target: getLinkTargetAnchor(l.target)
-                    });
-                });
-
-            const linkMerge = linkEnter.merge(linkSel);
-
-            // NODES join
-            const nodes = root.descendants();
-            const nodeSel = g.selectAll('g.node')
-                .data(nodes, nodeKey);
-
-            nodeSel.exit()
-                .transition().duration(ANIM_MS).style('opacity', 0)
-                .remove();
-
-            const nodeEnter = nodeSel.enter()
-                .append('g')
-                .attr('class', d => `node ${d.data.type}`)
-                .style('opacity', 0)
-                .attr('transform', d => {
-                    const k = nodeKey(d);
-                    const prev = prevPos.get(k);
-                    if (prev) return `translate(${prev.y},${prev.x})`;
-                    return `translate(${d.y},${d.x})`;
-                })
-                .each(function (d) {
-                    drawNode(d3.select(this), d.data, fullRoot);
-                });
-
-            const nodeMerge = nodeEnter.merge(nodeSel);
-
-            // redraw nodes
-            nodeMerge.each(function (d) {
-                const sel = d3.select(this);
-                sel.selectAll('*').remove();
-                drawNode(sel, d.data, fullRoot);
-            });
-
-            // Apply dimming/highlight
-            nodeMerge.classed('dimmed', false).classed('in-branch', false);
-            linkMerge.classed('dimmed-link', false).classed('in-branch-link', false);
-
-            if (!focusResolvedId && branchIds.size) {
-                nodeMerge.each(function (d) {
-                    const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                    if (pid && !branchIds.has(pid)) d3.select(this).classed('dimmed', true);
-                    else d3.select(this).classed('in-branch', true);
-                });
-
-                linkMerge.each(function (l) {
-                    const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
-                    const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
-                    if (!(branchIds.has(a) && branchIds.has(b))) d3.select(this).classed('dimmed-link', true);
-                    else d3.select(this).classed('in-branch-link', true);
-                });
-            } else if (focusResolvedId) {
-                nodeMerge.classed('in-branch', true);
-                linkMerge.classed('in-branch-link', true);
-            }
-
-            // transitions
-            nodeMerge.transition()
-                .duration(ANIM_MS)
-                .ease(d3.easeCubicInOut)
-                .style('opacity', 1)
-                .attr('transform', d => `translate(${d.y},${d.x})`);
-
-            linkMerge.transition()
-                .duration(ANIM_MS)
-                .ease(d3.easeCubicInOut)
-                .style('opacity', 1)
-                .attr('d', l => linkGen({
-                    source: getLinkSourceAnchor(l.source),
-                    target: getLinkTargetAnchor(l.target)
-                }));
-
-            // store positions
-            nodes.forEach(d => {
-                prevPos.set(nodeKey(d), { x: d.x, y: d.y });
-            });
-            links.forEach(l => {
-                const k = linkKey(l);
-                const dStr = linkGen({
-                    source: getLinkSourceAnchor(l.source),
-                    target: getLinkTargetAnchor(l.target)
-                });
-                prevLinkD.set(k, dStr);
-            });
-
-            // Fit only on initial/reset. Otherwise: optional centering.
-            if (doFit) {
-                fitToContent();
-            } else if (pendingCenterId) {
-                const idToCenter = pendingCenterId;
-                pendingCenterId = null;
-                d3.timeout(() => applyCentering(root, idToCenter), 0);
-            }
-        }
-
-        /* ================= CAMERA FIT (ONLY initial/reset) ================= */
-        function fitToContent() {
-            const b = g.node().getBBox();
-            if (!b.width || !b.height) return;
-
-            const pad = 120;
-            const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
-            const tx = w / 2 - (b.x + b.width / 2) * s;
-            const ty = h / 2 - (b.y + b.height / 2) * s;
-
-            const target = d3.zoomIdentity.translate(tx, ty).scale(s);
-
-            svg.transition()
-                .duration(700)
-                .ease(d3.easeCubicInOut)
-                .call(zoom.transform, target);
+        function applyTreeCentering(renderRoot) {
+            if (!renderRoot) return;
+            if (centerMode === 'always') panToTreeCenterAlways(renderRoot);
+            else panToTreeCenterSmart(renderRoot);
         }
 
         /* ================= LINK ANCHORS ================= */
@@ -1174,18 +1091,15 @@
 
             const resolved = resolveFocusTarget(fullRoot, clickedId);
 
-            // после render попробуем центрировать (по режиму)
-            pendingCenterId = clickedId;
-
             if (focusRawId === clickedId) {
                 focusRawId = null;
                 focusResolvedId = null;
-                render(false);
             } else {
                 focusRawId = clickedId;
                 focusResolvedId = resolved;
-                render(false);
             }
+
+            render(false);
         }
 
         /* ================= INFO PANEL ================= */
@@ -1212,11 +1126,39 @@
         <div class="hint">
           <b>Клик</b> — фокус на ветвь + siblings (плоско).<br/>
           <b>Повторный клик</b> — полный вид.<br/>
-          <b>Центрирование:</b> ${escapeHtml(modeHuman)} (переключатель вверху).
+          <b>Центрирование:</b> ${escapeHtml(modeHuman)} (в свободной области).
         </div>
       `;
 
+            updateInfoTabUI();
+
             if (doRerender) render(false);
+        }
+
+        /* ================= PANEL TAB UI ================= */
+        function getShortTabName() {
+            if (!currentId) return 'Карточка';
+            const nm = (data.people[currentId]?.name || '').trim();
+            if (!nm) return 'Карточка';
+            return nm.split(/\s+/)[0] || 'Карточка';
+        }
+
+        function updateInfoTabUI() {
+            const panel = document.getElementById('info-panel');
+            const isOpen = panel.classList.contains('open');
+
+            document.getElementById('info-tab-label').textContent = getShortTabName();
+
+            const arrow = document.getElementById('info-tab-arrow');
+            if (isPortrait()) {
+                arrow.innerHTML = isOpen
+                    ? `<i class="fa-solid fa-arrow-down"></i>`
+                    : `<i class="fa-solid fa-arrow-up"></i>`;
+            } else {
+                arrow.innerHTML = isOpen
+                    ? `<i class="fa-solid fa-arrow-right"></i>`
+                    : `<i class="fa-solid fa-arrow-left"></i>`;
+            }
         }
 
         /* ================= FORMATTING ================= */
@@ -1303,13 +1245,182 @@
             return '';
         }
 
+        /* ================= RENDER ================= */
+        function render(doFit) {
+            const container = document.getElementById('tree');
+            const nw = container.clientWidth;
+            const nh = container.clientHeight;
+            if (nw !== w || nh !== h) {
+                w = nw; h = nh;
+                svg.attr('width', w).attr('height', h);
+            }
+
+            const baseData = buildDisplayTree(rootId);
+
+            const fullRoot = d3.hierarchy(baseData);
+            layout(fullRoot);
+
+            const highlightCandidate = focusResolvedId || currentId;
+
+            let branchIds = new Set();
+            let siblingSet = new Set();
+            if (highlightCandidate) {
+                const resolved = resolveFocusTarget(fullRoot, highlightCandidate);
+                setBranchColorFromId(resolved);
+                branchIds = computeBranchIds(fullRoot, resolved);
+
+                siblingSet = new Set(getSiblingIds(resolved));
+                branchIds = expandIdsWithSiblingsFlat(branchIds, resolved);
+            }
+
+            let renderData = baseData;
+            if (focusResolvedId && branchIds.size) {
+                renderData = pruneDataByIds(baseData, branchIds, siblingSet) || baseData;
+            }
+
+            const root = d3.hierarchy(renderData);
+            layout(root);
+
+            lastRenderedRoot = root;
+
+            const nodeKey = (d) => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : '';
+                return `${d.data.type}:${pid}`;
+            };
+
+            const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
+            const links = root.links();
+
+            function linkKey(l) {
+                const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
+                const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
+                return `${a}=>${b}`;
+            }
+
+            const linkSel = g.selectAll('path.link').data(links, linkKey);
+            linkSel.exit().transition().duration(ANIM_MS).style('opacity', 0).remove();
+
+            const linkEnter = linkSel.enter()
+                .append('path')
+                .attr('class', 'link')
+                .style('opacity', 0)
+                .attr('d', l => {
+                    const k = linkKey(l);
+                    const prev = prevLinkD.get(k);
+                    return prev || linkGen({
+                        source: getLinkSourceAnchor(l.source),
+                        target: getLinkTargetAnchor(l.target)
+                    });
+                });
+
+            const linkMerge = linkEnter.merge(linkSel);
+
+            const nodes = root.descendants();
+            const nodeSel = g.selectAll('g.node').data(nodes, nodeKey);
+
+            nodeSel.exit().transition().duration(ANIM_MS).style('opacity', 0).remove();
+
+            const nodeEnter = nodeSel.enter()
+                .append('g')
+                .attr('class', d => `node ${d.data.type}`)
+                .style('opacity', 0)
+                .attr('transform', d => {
+                    const k = nodeKey(d);
+                    const prev = prevPos.get(k);
+                    if (prev) return `translate(${prev.y},${prev.x})`;
+                    return `translate(${d.y},${d.x})`;
+                })
+                .each(function (d) {
+                    drawNode(d3.select(this), d.data, fullRoot);
+                });
+
+            const nodeMerge = nodeEnter.merge(nodeSel);
+
+            nodeMerge.each(function (d) {
+                const sel = d3.select(this);
+                sel.selectAll('*').remove();
+                drawNode(sel, d.data, fullRoot);
+            });
+
+            nodeMerge.classed('dimmed', false).classed('in-branch', false);
+            linkMerge.classed('dimmed-link', false).classed('in-branch-link', false);
+
+            if (!focusResolvedId && branchIds.size) {
+                nodeMerge.each(function (d) {
+                    const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                    if (pid && !branchIds.has(pid)) d3.select(this).classed('dimmed', true);
+                    else d3.select(this).classed('in-branch', true);
+                });
+
+                linkMerge.each(function (l) {
+                    const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
+                    const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
+                    if (!(branchIds.has(a) && branchIds.has(b))) d3.select(this).classed('dimmed-link', true);
+                    else d3.select(this).classed('in-branch-link', true);
+                });
+            } else if (focusResolvedId) {
+                nodeMerge.classed('in-branch', true);
+                linkMerge.classed('in-branch-link', true);
+            }
+
+            nodeMerge.transition()
+                .duration(ANIM_MS)
+                .ease(d3.easeCubicInOut)
+                .style('opacity', 1)
+                .attr('transform', d => `translate(${d.y},${d.x})`);
+
+            linkMerge.transition()
+                .duration(ANIM_MS)
+                .ease(d3.easeCubicInOut)
+                .style('opacity', 1)
+                .attr('d', l => linkGen({
+                    source: getLinkSourceAnchor(l.source),
+                    target: getLinkTargetAnchor(l.target)
+                }));
+
+            nodes.forEach(d => {
+                prevPos.set(nodeKey(d), { x: d.x, y: d.y });
+            });
+            links.forEach(l => {
+                const k = linkKey(l);
+                const dStr = linkGen({
+                    source: getLinkSourceAnchor(l.source),
+                    target: getLinkTargetAnchor(l.target)
+                });
+                prevLinkD.set(k, dStr);
+            });
+
+            if (doFit) {
+                fitToContent();
+            } else {
+                d3.timeout(() => applyTreeCentering(root), 0);
+            }
+        }
+
+        function fitToContent() {
+            const b = g.node().getBBox();
+            if (!b.width || !b.height) return;
+
+            const pad = 120;
+            const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
+            const tx = w / 2 - (b.x + b.width / 2) * s;
+            const ty = h / 2 - (b.y + b.height / 2) * s;
+
+            const target = d3.zoomIdentity.translate(tx, ty).scale(s);
+
+            svg.transition()
+                .duration(700)
+                .ease(d3.easeCubicInOut)
+                .call(zoom.transform, target);
+        }
+
         /* ================= UI ================= */
         function setupUI() {
-            // toggle mode
             document.getElementById('center-mode').onclick = () => {
-                toggleCenterMode();
-                // обновим подсказку в карточке если она открыта
+                centerMode = (centerMode === 'smart') ? 'always' : 'smart';
+                syncCenterModeUI();
                 if (currentId) selectPerson(currentId, false);
+                if (lastRenderedRoot) d3.timeout(() => applyTreeCentering(lastRenderedRoot), 0);
             };
 
             document.getElementById('zoom-in').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1.2);
@@ -1318,16 +1429,36 @@
             document.getElementById('reset-view').onclick = () => {
                 focusRawId = null;
                 focusResolvedId = null;
-                pendingCenterId = null;
                 render(true);
             };
 
-            document.getElementById('info-tab').onclick = () => document.getElementById('info-panel').classList.toggle('open');
-            document.getElementById('close-info').onclick = () => document.getElementById('info-panel').classList.remove('open');
+            document.getElementById('info-tab').onclick = () => {
+                document.getElementById('info-panel').classList.toggle('open');
+                updateInfoTabUI();
+                if (lastRenderedRoot) d3.timeout(() => applyTreeCentering(lastRenderedRoot), 0);
+            };
+            document.getElementById('close-info').onclick = () => {
+                document.getElementById('info-panel').classList.remove('open');
+                updateInfoTabUI();
+                if (lastRenderedRoot) d3.timeout(() => applyTreeCentering(lastRenderedRoot), 0);
+            };
 
             window.addEventListener('resize', () => {
                 render(false);
+                updateInfoTabUI();
             });
+
+            window.matchMedia('(max-aspect-ratio: 1/1)').addEventListener('change', () => {
+                updateInfoTabUI();
+                if (lastRenderedRoot) d3.timeout(() => applyTreeCentering(lastRenderedRoot), 0);
+            });
+        }
+
+        function syncCenterModeUI() {
+            const tag = document.getElementById('center-mode-tag');
+            if (!tag) return;
+            tag.textContent = (centerMode === 'always') ? 'всегда' : 'умно';
+            localStorage.setItem(LS_CENTER_MODE, centerMode);
         }
 
         function escapeHtml(s) {
