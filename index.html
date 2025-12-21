@@ -95,16 +95,11 @@
         }
 
         .node {
-            cursor: pointer
+            cursor: default
         }
 
         .card-shadow {
             filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, .15))
-        }
-
-        .node.selected .person-outer {
-            stroke: #f39c12 !important;
-            stroke-width: 4 !important
         }
 
         .person-outer {
@@ -122,6 +117,11 @@
 
         .person-outer.u {
             stroke: #95a5a6
+        }
+
+        .node.selected .person-outer {
+            stroke: #f39c12 !important;
+            stroke-width: 4 !important
         }
 
         .info-panel {
@@ -228,14 +228,15 @@
         let data = null, zoom = null;
         let rootId = null, currentId = null;
 
-        /* ================= CONFIG ================= */
-        // В ГОРИЗОНТАЛЬНОМ ДЕРЕВЕ: X=вертикаль, Y=горизонталь.
-        // Поэтому супруг(а) должен быть "рядом" ПО ВЕРТИКАЛИ (разница по X), а не по Y.
-        const SPOUSE_OFFSET_X = 140;   // расстояние между супругами по вертикали (уменьшай до 120/110 для плотности)
+        /* ================= CONFIG =================
+           Дерево горизонтальное: X = вертикаль, Y = горизонталь
+           Пара = 2 одинаковых карточки, "прилипают" вертикально, между ними иконка+дата
+        =========================================== */
         const CARD_W = 220;
         const CARD_H = 80;
-        const MINI_W = 196;
-        const MINI_H = 60;
+        const COUPLE_GAP = 12;            // зазор между супругами (прилипание)
+        const COUPLE_ICON_R = 8;          // радиус точки союза
+        const COUPLE_TOTAL_H = CARD_H * 2 + COUPLE_GAP;  // общая высота пары (для layout)
 
         /* ================= INIT ================= */
         fetch('./3.ged')
@@ -243,7 +244,7 @@
             .then(t => {
                 data = parseGedcom(t);
                 rootId = findRoot();
-                renderFull();
+                render();
                 setupUI();
             })
             .catch(e => console.error('GED load error', e));
@@ -310,99 +311,65 @@
             return ids.find(id => !(data.people[id].FAMC || []).length) || ids[0];
         }
 
-        /* ================= TREE MODEL =================
-           person -> union -> children
-           union is for children grouping, but we DON'T draw person->union link.
-        ================================================ */
-        function buildDesc(id, seen = new Set()) {
-            if (!id || seen.has(id)) return null;
-            seen.add(id);
+        /* ================= BUILD DISPLAY TREE =================
+           Главное изменение: вместо person->union->children мы строим:
+           - если у человека есть супруг(а) (первая семья): node.type = 'couple'
+             внутри: primaryId + spouseId + date, дети = дети семьи
+           - если супруг(а) нет: обычный person
+           Это гарантирует:
+           - одинаковые карточки
+           - "прилипание"
+           - дети выходят из центра пары
+        ======================================================= */
+        function buildDisplayTree(personId, seen = new Set()) {
+            if (!personId || seen.has(personId)) return null;
+            seen.add(personId);
 
-            const p = data.people[id];
+            const p = data.people[personId];
             if (!p) return null;
 
-            const n = { type: 'person', id, name: p.name || 'Без имени', sex: p.sex || '', b: p.birth || '', d: p.death || '', children: [] };
+            const fams = (p.FAMS || []).map(fid => data.fams[fid]).filter(Boolean);
 
-            (p.FAMS || []).forEach(fid => {
-                const f = data.fams[fid]; if (!f) return;
-                const spouse = (f.husb === id) ? f.wife : f.husb;
+            // берём "основную" семью: первую, где есть супруг или дети
+            const mainFam = fams.find(f => {
+                const spouse = (f.husb === personId) ? f.wife : f.husb;
+                return !!spouse || (f.chil && f.chil.length);
+            });
 
-                const u = {
-                    type: 'union',
-                    fid,
-                    primary: id,
-                    spouse: spouse || null,
-                    marriage: f.marriage || '',
+            if (mainFam) {
+                const spouseId = (mainFam.husb === personId) ? mainFam.wife : mainFam.husb;
+                const node = {
+                    type: 'couple',
+                    primaryId: personId,
+                    spouseId: spouseId || null,
+                    marriage: mainFam.marriage || '',
                     children: []
                 };
 
-                (f.chil || []).forEach(c => {
-                    const ch = buildDesc(c, new Set(seen));
-                    if (ch) u.children.push(ch);
+                (mainFam.chil || []).forEach(cid => {
+                    const ch = buildDisplayTree(cid, new Set(seen));
+                    if (ch) node.children.push(ch);
                 });
 
-                if (!u.children.length) delete u.children;
-                if (u.spouse || u.children) n.children.push(u);
-            });
+                if (!node.children.length) delete node.children;
+                return node;
+            }
 
-            if (!n.children.length) delete n.children;
-            return n;
-        }
-
-        /* ================= COUPLE LAYOUT (VERTICAL SPOUSE) =================
-           We reposition union to be between spouses vertically at same generation:
-           - union at (parent.x + offset/2, parent.y)
-           - spouse card drawn below union anchor
-           - children links start at union (no person->union link)
-        =================================================================== */
-        function rx(d) { return (d._rx ?? d.x); }
-        function ry(d) { return (d._ry ?? d.y); }
-
-        function applyCoupleLayout(root) {
-            root.descendants().forEach(d => {
-                d._rx = d.x;
-                d._ry = d.y;
-
-                if (d.data.type === 'union' && d.parent) {
-                    const oldX = d.x;
-                    const oldY = d.y;
-
-                    // union center between spouses VERTICALLY, same Y (generation)
-                    d._rx = d.parent.x + (SPOUSE_OFFSET_X / 2);
-                    d._ry = d.parent.y;
-
-                    const dx = d._rx - oldX;
-                    const dy = d._ry - oldY;
-
-                    // shift union subtree so kids don't stretch
-                    d.descendants().forEach((sub, idx) => {
-                        if (idx === 0) return;
-                        sub._rx = (sub._rx ?? sub.x) + dx;
-                        sub._ry = (sub._ry ?? sub.y) + dy;
-                    });
-                }
-            });
-        }
-
-        /* ================= UI ACTIONS ================= */
-        function onPersonClick(id) {
-            selectPerson(id);
-        }
-
-        function selectPerson(id) {
-            currentId = id;
-            const p = data.people[id];
-
-            document.getElementById('person-info').innerHTML = `
-    <div style="font-weight:800;font-size:16px;margin-bottom:10px;color:#2c3e50">${escapeHtml(p?.name || '')}</div>
-    ${p?.birth ? `<div><b>Рождение:</b> ${escapeHtml(p.birth)}</div>` : ''}
-    ${p?.death ? `<div><b>Смерть:</b> ${escapeHtml(p.death)}</div>` : ''}
-  `;
+            // одиночный человек
+            const node = {
+                type: 'person',
+                id: personId,
+                name: p.name || 'Без имени',
+                sex: p.sex || '',
+                b: p.birth || '',
+                d: p.death || '',
+            };
+            return node;
         }
 
         /* ================= RENDER ================= */
-        function renderFull() {
-            const tree = buildDesc(rootId);
+        function render() {
+            const tree = buildDisplayTree(rootId);
             drawTree(tree);
         }
 
@@ -419,94 +386,100 @@
             zoom = d3.zoom().scaleExtent([0.15, 3]).on('zoom', e => g.attr('transform', e.transform));
             svg.call(zoom);
 
+            // nodeSize по X учитывает "пару" (высокий узел) => больше нет налезаний
             const layout = d3.tree()
-                .nodeSize([125, 260])
-                .separation((a, b) => a.parent === b.parent ? 1.05 : 1.2);
+                .nodeSize([COUPLE_TOTAL_H + 70, 270])
+                .separation((a, b) => a.parent === b.parent ? 1.1 : 1.25);
 
             const root = d3.hierarchy(tree);
             layout(root);
 
-            applyCoupleLayout(root);
-
-            // IMPORTANT: don't draw person->union link
-            const links = root.links().filter(l => l.target.data.type !== 'union');
-
             const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
 
             g.selectAll('.link')
-                .data(links)
+                .data(root.links())
                 .enter().append('path')
                 .attr('class', 'link')
-                .attr('d', d => linkGen({
-                    source: { x: rx(d.source), y: ry(d.source) },
-                    target: { x: rx(d.target), y: ry(d.target) }
-                }));
+                .attr('d', d => linkGen(d));
 
             g.selectAll('.node')
                 .data(root.descendants())
                 .enter().append('g')
-                .attr('class', d => `node ${d.data.type}${(d.data.type === 'person' && d.data.id === currentId) ? ' selected' : ''}`)
-                .attr('transform', d => `translate(${ry(d)},${rx(d)})`)
-                .each(function (d) { drawNode(d3.select(this), d); });
+                .attr('class', d => `node ${d.data.type}`)
+                .attr('transform', d => `translate(${d.y},${d.x})`)
+                .each(function (d) { drawNode(d3.select(this), d.data); });
 
             fit(svg, g, w, h);
         }
 
-        function drawNode(g, d) {
-            const n = d.data;
-
+        /* ================= NODE DRAW ================= */
+        function drawNode(g, n) {
             if (n.type === 'person') {
-                const cls = n.sex === 'M' ? 'm' : n.sex === 'F' ? 'f' : 'u';
-
-                g.append('rect')
-                    .attr('class', 'person-outer card-shadow ' + cls)
-                    .attr('x', -CARD_W / 2).attr('y', -CARD_H / 2)
-                    .attr('width', CARD_W).attr('height', CARD_H)
-                    .attr('rx', 14);
-
-                g.append('text')
-                    .attr('text-anchor', 'middle')
-                    .attr('y', -6)
-                    .style('font-weight', '800')
-                    .style('font-size', '13px')
-                    .text(shorten(n.name, 26));
-
-                const line = formatLifeLine(n);
-                if (line) {
-                    g.append('text')
-                        .attr('text-anchor', 'middle')
-                        .attr('y', 16)
-                        .style('font-size', '11px')
-                        .style('fill', '#667')
-                        .text(shorten(line, 26));
-                }
-
-                g.on('click', (ev) => { ev.stopPropagation(); onPersonClick(n.id); });
+                drawPersonCard(g, {
+                    id: n.id, name: n.name, sex: n.sex, b: n.b, d: n.d
+                }, 0);
                 return;
             }
 
-            if (n.type === 'union') {
-                const half = SPOUSE_OFFSET_X / 2;
+            if (n.type === 'couple') {
+                const primary = data.people[n.primaryId];
+                const spouse = n.spouseId ? data.people[n.spouseId] : null;
 
-                // vertical couple line: top spouse (the descendant person card already drawn elsewhere)
-                // union is centered between spouses, draw short vertical stroke
+                const half = (CARD_H + COUPLE_GAP) / 2;
+
+                // верхняя карточка = "потомок" (к нему приходят предки)
+                drawPersonCard(g, {
+                    id: n.primaryId,
+                    name: primary?.name || 'Без имени',
+                    sex: primary?.sex || '',
+                    b: primary?.birth || '',
+                    d: primary?.death || ''
+                }, -half);
+
+                // нижняя карточка = супруг(а)
+                if (spouse) {
+                    drawPersonCard(g, {
+                        id: n.spouseId,
+                        name: spouse?.name || 'Без имени',
+                        sex: spouse?.sex || '',
+                        b: spouse?.birth || '',
+                        d: spouse?.death || ''
+                    }, +half);
+                } else {
+                    // если супруга нет, всё равно оставим нижнее место пустым, чтобы узел был одинаковый
+                }
+
+                // соединитель между супругами (вертикальный)
                 g.append('path')
-                    .attr('d', `M 0 ${-half} L 0 ${half}`)
+                    .attr('d', `M 0 ${-half + CARD_H / 2} L 0 ${+half - CARD_H / 2}`)
                     .attr('fill', 'none')
                     .attr('stroke', 'rgba(44,62,80,.22)')
                     .attr('stroke-width', 2);
 
-                // union dot
+                // точка союза в центре
                 g.append('circle')
-                    .attr('r', 7)
-                    .attr('fill', 'rgba(44,62,80,.18)')
+                    .attr('r', COUPLE_ICON_R)
+                    .attr('cx', 0)
+                    .attr('cy', 0)
+                    .attr('fill', 'rgba(255,255,255,.9)')
                     .attr('stroke', 'rgba(44,62,80,.35)')
                     .attr('stroke-width', 2);
 
-                // marriage date badge (to the right of union dot, compact)
-                if (n.marriage) {
+                // иконка (сердце/кольцо)
+                g.append('text')
+                    .attr('text-anchor', 'middle')
+                    .attr('x', 0)
+                    .attr('y', 4)
+                    .style('font-size', '11px')
+                    .style('fill', '#e74c3c')
+                    .text('♥');
+
+                // дата союза справа от центра (не мешает линиям)
+                const dateLabel = (n.marriage || '').trim();
+                if (dateLabel) {
                     g.append('foreignObject')
-                        .attr('x', 12).attr('y', -13).attr('width', 170).attr('height', 26)
+                        .attr('x', 14).attr('y', -13)
+                        .attr('width', 180).attr('height', 26)
                         .style('pointer-events', 'none')
                         .append('xhtml:div')
                         .style('width', '100%')
@@ -515,80 +488,89 @@
                         .style('align-items', 'center')
                         .style('justify-content', 'flex-start')
                         .html(`
-          <div style="padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.85);font-size:10px;color:#2c3e50;box-shadow:0 6px 14px rgba(0,0,0,.08)">
-            <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(n.marriage)}
+          <div style="padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.88);font-size:10px;color:#2c3e50;box-shadow:0 6px 14px rgba(0,0,0,.08)">
+            <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(dateLabel)}
           </div>
         `);
-                }
-
-                // spouse card BELOW the union (vertical adjacency)
-                if (n.spouse && data.people[n.spouse]) {
-                    const sp = data.people[n.spouse];
-                    const sg = g.append('g')
-                        .attr('transform', `translate(0, ${half})`)
-                        .style('cursor', 'pointer')
-                        .on('click', (ev) => { ev.stopPropagation(); onPersonClick(n.spouse); });
-
-                    drawMiniPersonCardBelow(sg, sp);
                 }
 
                 return;
             }
         }
 
-        function drawMiniPersonCardBelow(g, person) {
-            const cls = person.sex === 'M' ? 'm' : person.sex === 'F' ? 'f' : 'u';
+        function drawPersonCard(g, p, yOffset) {
+            const cls = p.sex === 'M' ? 'm' : p.sex === 'F' ? 'f' : 'u';
 
-            // move card downward so the union anchor touches its top edge
-            const yShift = (MINI_H / 2) + 16;
-            g.attr('transform', `translate(0, ${yShift})`);
+            const group = g.append('g')
+                .attr('transform', `translate(0,${yOffset})`)
+                .style('cursor', 'pointer')
+                .on('click', (ev) => { ev.stopPropagation(); selectPerson(p.id); });
 
-            g.append('rect')
-                .attr('class', 'card-shadow person-outer ' + cls)
-                .attr('x', -MINI_W / 2).attr('y', -MINI_H / 2)
-                .attr('width', MINI_W).attr('height', MINI_H)
+            group.append('rect')
+                .attr('class', 'person-outer card-shadow ' + cls)
+                .attr('x', -CARD_W / 2).attr('y', -CARD_H / 2)
+                .attr('width', CARD_W).attr('height', CARD_H)
                 .attr('rx', 14);
 
-            g.append('text')
+            group.append('text')
                 .attr('text-anchor', 'middle')
-                .attr('y', -4)
+                .attr('y', -6)
                 .style('font-weight', '800')
-                .style('font-size', '12px')
-                .text(shorten(person.name || 'Без имени', 24));
+                .style('font-size', '13px')
+                .text(shorten(p.name, 26));
 
-            const line = formatLifeLine({ b: person.birth || '', d: person.death || '' });
+            const line = formatLifeLine(p);
             if (line) {
-                g.append('text')
+                group.append('text')
                     .attr('text-anchor', 'middle')
                     .attr('y', 16)
-                    .style('font-size', '10px')
+                    .style('font-size', '11px')
                     .style('fill', '#667')
                     .text(shorten(line, 26));
             }
+
+            // подсветка выбранного
+            if (p.id === currentId) {
+                group.classed('selected', true);
+            }
         }
 
+        /* ================= INFO PANEL ================= */
+        function selectPerson(id) {
+            currentId = id;
+            const p = data.people[id];
+
+            document.getElementById('person-info').innerHTML = `
+    <div style="font-weight:800;font-size:16px;margin-bottom:10px;color:#2c3e50">${escapeHtml(p?.name || '')}</div>
+    ${p?.birth ? `<div><b>Рождение:</b> ${escapeHtml(p.birth)}</div>` : ''}
+    ${p?.death ? `<div><b>Смерть:</b> ${escapeHtml(p.death)}</div>` : ''}
+  `;
+
+            // перерисуем, чтобы подсветка обновилась
+            render();
+        }
+
+        /* ================= FIT/HELPERS/UI ================= */
         function fit(svg, g, w, h) {
             const b = g.node().getBBox();
-            const pad = 120;
+            const pad = 140;
             const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
             const tx = w / 2 - (b.x + b.width / 2) * s;
             const ty = h / 2 - (b.y + b.height / 2) * s;
             svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
         }
 
-        /* ================= UI ================= */
         function setupUI() {
             document.getElementById('zoom-in').onclick = () => d3.select('svg').transition().call(zoom.scaleBy, 1.2);
             document.getElementById('zoom-out').onclick = () => d3.select('svg').transition().call(zoom.scaleBy, 0.85);
-            document.getElementById('reset-view').onclick = () => renderFull();
+            document.getElementById('reset-view').onclick = () => render();
 
             document.getElementById('info-tab').onclick = () => document.getElementById('info-panel').classList.toggle('open');
             document.getElementById('close-info').onclick = () => document.getElementById('info-panel').classList.remove('open');
 
-            window.addEventListener('resize', () => renderFull());
+            window.addEventListener('resize', () => render());
         }
 
-        /* ================= HELPERS ================= */
         function escapeHtml(s) {
             return String(s || '')
                 .replaceAll('&', '&amp;')
