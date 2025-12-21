@@ -294,18 +294,20 @@
             border: 1px solid rgba(15, 23, 42, .06);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
+            pointer-events: auto;
         }
 
         .info-panel.open {
             transform: translateX(0)
         }
 
+        /* Desktop: side tab only */
         .info-tab {
             position: absolute;
             left: -66px;
             top: 110px;
             width: 66px;
-            height: 190px;
+            height: 240px;
             background: rgba(15, 23, 42, .88);
             border: 1px solid rgba(255, 255, 255, .10);
             border-right: none;
@@ -313,11 +315,11 @@
             cursor: pointer;
             border-radius: 18px 0 0 18px;
             box-shadow: 0 12px 24px rgba(0, 0, 0, .22);
-
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 10px 8px;
+            user-select: none;
         }
 
         .info-tab-inner {
@@ -347,19 +349,20 @@
             font-size: 15px;
         }
 
+        /* вертикальное имя (сверху вниз вдоль экрана) */
         .info-tab-label {
             writing-mode: vertical-rl;
             text-orientation: mixed;
             transform: rotate(180deg);
             font-weight: 700;
-            letter-spacing: .5px;
+            letter-spacing: .4px;
             font-size: 12px;
             color: rgba(255, 255, 255, .92);
             user-select: none;
-            white-space: nowrap;
-            max-height: 150px;
+            max-height: 180px;
             overflow: hidden;
             text-overflow: ellipsis;
+            padding: 0 4px;
         }
 
         .info-header {
@@ -369,21 +372,36 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
         }
 
-        .close-btn {
-            background: none;
-            border: none;
+        .info-header-title {
+            font-weight: 700;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* кнопка-стрелка вместо X */
+        .toggle-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .10);
+            border: 1px solid rgba(255, 255, 255, .12);
             color: #fff;
-            font-size: 22px;
             cursor: pointer;
-            line-height: 1
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
         }
 
         .info-content {
             padding: 14px 14px 18px;
             overflow: auto;
-            height: calc(100% - 48px);
+            height: calc(100% - 52px);
             font-size: 13px;
             line-height: 1.45;
         }
@@ -417,43 +435,26 @@
                 width: 100%;
                 height: min(70vh, 560px);
                 border-radius: 18px 18px 0 0;
-                transform: translateY(calc(100% - 66px));
+                transform: translateY(calc(100% - 56px));
             }
 
             .info-panel.open {
                 transform: translateY(0);
             }
 
+            /* side tab hide on portrait */
             .info-tab {
-                left: 50%;
-                top: -66px;
-                transform: translateX(-50%);
-                width: 220px;
-                height: 66px;
-                border-radius: 18px 18px 0 0;
-                border-right: 1px solid rgba(255, 255, 255, .10);
-                border-bottom: none;
-                padding: 10px 14px;
+                display: none;
             }
 
-            .info-tab-inner {
-                flex-direction: row;
-                gap: 12px;
+            /* header becomes the handle: clickable */
+            .info-header {
+                cursor: pointer;
+                padding: 12px 14px;
             }
 
-            .info-tab-arrow {
-                position: static;
-                transform: none;
-            }
-
-            .info-tab-label {
-                writing-mode: horizontal-tb;
-                transform: none;
-                font-size: 13px;
-                font-weight: 700;
-                max-width: 170px;
-                overflow: hidden;
-                text-overflow: ellipsis;
+            .info-header-title {
+                font-size: 15px;
             }
         }
 
@@ -498,6 +499,7 @@
         </div>
 
         <div id="info-panel" class="info-panel">
+            <!-- DESKTOP TAB -->
             <div id="info-tab" class="info-tab" title="Информация">
                 <div class="info-tab-inner">
                     <div id="info-tab-arrow" class="info-tab-arrow"><i class="fa-solid fa-arrow-left"></i></div>
@@ -505,10 +507,14 @@
                 </div>
             </div>
 
-            <div class="info-header">
-                <div style="font-weight:600">Карточка</div>
-                <button id="close-info" class="close-btn" title="Свернуть">&times;</button>
+            <!-- HEADER (desktop header, portrait handle) -->
+            <div id="info-header" class="info-header" title="Открыть / закрыть">
+                <div id="info-title" class="info-header-title">Карточка</div>
+                <button id="toggle-info" class="toggle-btn" aria-label="toggle">
+                    <i id="toggle-info-icon" class="fa-solid fa-arrow-left"></i>
+                </button>
             </div>
+
             <div id="person-info" class="info-content">Выберите человека</div>
         </div>
 
@@ -568,7 +574,7 @@
                 render(true);
                 setupUI();
                 syncCenterModeUI();
-                updateInfoTabUI();
+                updateInfoUI(); // init
             })
             .catch(e => console.error('GED load error', e));
 
@@ -820,7 +826,6 @@
             const panel = document.getElementById('info-panel');
             const open = panel?.classList.contains('open');
 
-            // по умолчанию доступен весь экран
             let left = 0, top = 0, right = w, bottom = h;
 
             if (!panel || !open) {
@@ -830,14 +835,11 @@
             const r = panel.getBoundingClientRect();
 
             if (isPortrait()) {
-                // панель снизу занимает низ: доступная область сверху до r.top
                 bottom = Math.max(0, Math.min(h, r.top));
             } else {
-                // панель справа занимает правую часть: доступная область слева до r.left
                 right = Math.max(0, Math.min(w, r.left));
             }
 
-            // если панель "съела" почти всё — fallback на центр экрана
             if (right - left < 120 || bottom - top < 120) {
                 left = 0; top = 0; right = w; bottom = h;
             }
@@ -881,8 +883,8 @@
             const k = lastTransform.k || 1;
             const avail = getAvailableViewportRect();
 
-            const tx = avail.cx - b.cy * k; // cy (tree y) -> screenX
-            const ty = avail.cy - b.cx * k; // cx (tree x) -> screenY
+            const tx = avail.cx - b.cy * k;
+            const ty = avail.cy - b.cx * k;
             const next = d3.zoomIdentity.translate(tx, ty).scale(k);
 
             svg.transition().duration(CENTER_MS_ALWAYS).ease(d3.easeCubicInOut).call(zoom.transform, next);
@@ -1105,60 +1107,87 @@
         /* ================= INFO PANEL ================= */
         function selectPerson(id, doRerender = true) {
             currentId = id;
-            const p = data.people[id];
-
-            const b = formatGedcomDate(p?.birth || '');
-            const d = formatGedcomDate(p?.death || '');
-            const sex = (p?.sex === 'M') ? 'Мужчина' : (p?.sex === 'F') ? 'Женщина' : '—';
-
-            const sibs = getSiblingIds(id);
-            const sibText = sibs.length ? `${sibs.length}` : '0';
-
-            const modeHuman = (centerMode === 'always') ? 'всегда' : 'умно';
-
-            document.getElementById('person-info').innerHTML = `
-        <div style="font-weight:700;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
-        <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
-        <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
-        <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
-        <div class="pill"><i class="fa-solid fa-people-group"></i> <span>Братья/сёстры: ${escapeHtml(sibText)}</span></div>
-
-        <div class="hint">
-          <b>Клик</b> — фокус на ветвь + siblings (плоско).<br/>
-          <b>Повторный клик</b> — полный вид.<br/>
-          <b>Центрирование:</b> ${escapeHtml(modeHuman)} (в свободной области).
-        </div>
-      `;
-
-            updateInfoTabUI();
-
+            updateInfoUI();
             if (doRerender) render(false);
         }
 
-        /* ================= PANEL TAB UI ================= */
-        function getShortTabName() {
+        function getFullTabName() {
             if (!currentId) return 'Карточка';
             const nm = (data.people[currentId]?.name || '').trim();
-            if (!nm) return 'Карточка';
-            return nm.split(/\s+/)[0] || 'Карточка';
+            return nm || 'Карточка';
         }
 
-        function updateInfoTabUI() {
+        function updateInfoUI() {
+            const name = getFullTabName();
             const panel = document.getElementById('info-panel');
-            const isOpen = panel.classList.contains('open');
+            const p = currentId ? data.people[currentId] : null;
 
-            document.getElementById('info-tab-label').textContent = getShortTabName();
+            // title in header (desktop & portrait)
+            document.getElementById('info-title').textContent = name;
 
-            const arrow = document.getElementById('info-tab-arrow');
-            if (isPortrait()) {
-                arrow.innerHTML = isOpen
-                    ? `<i class="fa-solid fa-arrow-down"></i>`
-                    : `<i class="fa-solid fa-arrow-up"></i>`;
+            // vertical label in desktop tab
+            document.getElementById('info-tab-label').textContent = name;
+
+            // content
+            if (!p) {
+                document.getElementById('person-info').innerHTML = 'Выберите человека';
             } else {
-                arrow.innerHTML = isOpen
-                    ? `<i class="fa-solid fa-arrow-right"></i>`
-                    : `<i class="fa-solid fa-arrow-left"></i>`;
+                const b = formatGedcomDate(p?.birth || '');
+                const d = formatGedcomDate(p?.death || '');
+                const sex = (p?.sex === 'M') ? 'Мужчина' : (p?.sex === 'F') ? 'Женщина' : '—';
+
+                const sibs = getSiblingIds(currentId);
+                const sibText = sibs.length ? `${sibs.length}` : '0';
+
+                const modeHuman = (centerMode === 'always') ? 'всегда' : 'умно';
+
+                document.getElementById('person-info').innerHTML = `
+          <div style="font-weight:700;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
+          <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
+          <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
+          <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
+          <div class="pill"><i class="fa-solid fa-people-group"></i> <span>Братья/сёстры: ${escapeHtml(sibText)}</span></div>
+
+          <div class="hint">
+            <b>Клик</b> — фокус на ветвь + siblings (плоско).<br/>
+            <b>Повторный клик</b> — полный вид.<br/>
+            <b>Центрирование:</b> ${escapeHtml(modeHuman)} (в свободной области).
+          </div>
+        `;
             }
+
+            updatePanelArrows();
+        }
+
+        function updatePanelArrows() {
+            const panel = document.getElementById('info-panel');
+            const open = panel.classList.contains('open');
+            const isP = isPortrait();
+
+            // desktop side tab arrow
+            const tabArrow = document.getElementById('info-tab-arrow');
+            tabArrow.innerHTML = open
+                ? `<i class="fa-solid fa-arrow-right"></i>`
+                : `<i class="fa-solid fa-arrow-left"></i>`;
+
+            // header button arrow (portrait up/down, desktop left/right)
+            const icon = document.getElementById('toggle-info-icon');
+            if (isP) {
+                icon.className = open ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up';
+            } else {
+                icon.className = open ? 'fa-solid fa-arrow-right' : 'fa-solid fa-arrow-left';
+            }
+        }
+
+        function togglePanel(force) {
+            const panel = document.getElementById('info-panel');
+            if (typeof force === 'boolean') {
+                panel.classList.toggle('open', force);
+            } else {
+                panel.classList.toggle('open');
+            }
+            updatePanelArrows();
+            if (lastRenderedRoot) d3.timeout(() => applyTreeCentering(lastRenderedRoot), 0);
         }
 
         /* ================= FORMATTING ================= */
@@ -1245,6 +1274,24 @@
             return '';
         }
 
+        function escapeHtml(s) {
+            return String(s || '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", "&#039;");
+        }
+
+        function shorten(s, n) {
+            s = String(s || '');
+            return s.length > n ? s.slice(0, n - 1) + '…' : s;
+        }
+
+        function getCssVar(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
         /* ================= RENDER ================= */
         function render(doFit) {
             const container = document.getElementById('tree');
@@ -1324,12 +1371,7 @@
                 .append('g')
                 .attr('class', d => `node ${d.data.type}`)
                 .style('opacity', 0)
-                .attr('transform', d => {
-                    const k = nodeKey(d);
-                    const prev = prevPos.get(k);
-                    if (prev) return `translate(${prev.y},${prev.x})`;
-                    return `translate(${d.y},${d.x})`;
-                })
+                .attr('transform', d => `translate(${d.y},${d.x})`)
                 .each(function (d) {
                     drawNode(d3.select(this), d.data, fullRoot);
                 });
@@ -1419,7 +1461,7 @@
             document.getElementById('center-mode').onclick = () => {
                 centerMode = (centerMode === 'smart') ? 'always' : 'smart';
                 syncCenterModeUI();
-                if (currentId) selectPerson(currentId, false);
+                updateInfoUI();
                 if (lastRenderedRoot) d3.timeout(() => applyTreeCentering(lastRenderedRoot), 0);
             };
 
@@ -1432,24 +1474,24 @@
                 render(true);
             };
 
-            document.getElementById('info-tab').onclick = () => {
-                document.getElementById('info-panel').classList.toggle('open');
-                updateInfoTabUI();
-                if (lastRenderedRoot) d3.timeout(() => applyTreeCentering(lastRenderedRoot), 0);
-            };
-            document.getElementById('close-info').onclick = () => {
-                document.getElementById('info-panel').classList.remove('open');
-                updateInfoTabUI();
-                if (lastRenderedRoot) d3.timeout(() => applyTreeCentering(lastRenderedRoot), 0);
+            // Desktop: click on side tab toggles panel
+            document.getElementById('info-tab').onclick = () => togglePanel();
+
+            // Header toggle button
+            document.getElementById('toggle-info').onclick = (e) => { e.stopPropagation(); togglePanel(); };
+
+            // Portrait: click header strip toggles like bottom-sheet handle
+            document.getElementById('info-header').onclick = () => {
+                if (isPortrait()) togglePanel();
             };
 
             window.addEventListener('resize', () => {
                 render(false);
-                updateInfoTabUI();
+                updatePanelArrows();
             });
 
             window.matchMedia('(max-aspect-ratio: 1/1)').addEventListener('change', () => {
-                updateInfoTabUI();
+                updatePanelArrows();
                 if (lastRenderedRoot) d3.timeout(() => applyTreeCentering(lastRenderedRoot), 0);
             });
         }
@@ -1459,24 +1501,6 @@
             if (!tag) return;
             tag.textContent = (centerMode === 'always') ? 'всегда' : 'умно';
             localStorage.setItem(LS_CENTER_MODE, centerMode);
-        }
-
-        function escapeHtml(s) {
-            return String(s || '')
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;')
-                .replaceAll("'", "&#039;");
-        }
-
-        function shorten(s, n) {
-            s = String(s || '');
-            return s.length > n ? s.slice(0, n - 1) + '…' : s;
-        }
-
-        function getCssVar(name) {
-            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
         }
     </script>
 </body>
