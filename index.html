@@ -227,7 +227,14 @@
         /* ================= STATE ================= */
         let data = null, zoom = null;
         let rootId = null, currentId = null;
-        let branchMode = false, branchFocus = null;
+
+        /* ================= CONFIG ================= */
+        // насколько близко стоят супруги
+        const SPOUSE_OFFSET_Y = 240; // уменьшай (200/180) если хочешь плотнее
+        const CARD_W = 220;
+        const CARD_H = 80;
+        const MINI_W = 196;
+        const MINI_H = 60;
 
         /* ================= INIT ================= */
         fetch('./3.ged')
@@ -244,23 +251,29 @@
         function parseGedcom(t) {
             const people = {}, fams = {};
             let cur = null, evt = null;
+
             t.split(/\r?\n/).forEach(l => {
                 const m = l.match(/^(\d+)\s+(@?[^ ]+@?)\s*(.*)$/);
                 if (!m) return;
-                const lvl = +m[1], tag = m[2].replace(/@/g, ''), val = m[3];
+
+                const lvl = +m[1];
+                const tag = m[2].replace(/@/g, '');
+                const val = m[3];
 
                 if (lvl === 0) {
                     evt = null;
                     if (val.includes('INDI')) {
                         cur = { t: 'P', id: tag };
                         people[tag] = { id: tag, name: '', sex: '', birth: '', death: '', FAMS: [], FAMC: [] };
-                    }
-                    if (val.includes('FAM')) {
+                    } else if (val.includes('FAM')) {
                         cur = { t: 'F', id: tag };
                         fams[tag] = { id: tag, husb: null, wife: null, chil: [], marriage: '' };
+                    } else {
+                        cur = null;
                     }
                     return;
                 }
+
                 if (!cur) return;
 
                 if (lvl === 1) {
@@ -287,6 +300,7 @@
                     if (lvl === 2 && evt && tag === 'DATE') f[evt] = val;
                 }
             });
+
             return { people, fams };
         }
 
@@ -297,12 +311,12 @@
 
         /* ================= TREE MODEL =================
            person -> union -> children
-           union is rendered INLINE with person (same generation),
-           spouse is rendered to the side of union, so spouse looks attached to partner, not child.
-        =============================================== */
+           union used for grouping kids, BUT we DO NOT draw person->union link.
+        ================================================ */
         function buildDesc(id, seen = new Set()) {
             if (!id || seen.has(id)) return null;
             seen.add(id);
+
             const p = data.people[id];
             if (!p) return null;
 
@@ -327,7 +341,6 @@
                 });
 
                 if (!u.children.length) delete u.children;
-                // показываем союз всегда, если есть супруг или дети
                 if (u.spouse || u.children) n.children.push(u);
             });
 
@@ -335,32 +348,35 @@
             return n;
         }
 
-        /* ================= INLINE UNION LAYOUT FIX =================
-           D3-tree places union BETWEEN generations => spouse seems attached to child.
-           We keep union in hierarchy, but render it at parent's row and shift subtree accordingly.
-        =========================================================== */
+        /* ================= INLINE COUPLE LAYOUT =================
+           D3 positions union as "next generation". We reposition union BETWEEN spouses:
+           person at parent position, spouse drawn to the right, union in the middle.
+           We also shift union subtree so children stay near and links don't stretch.
+        ========================================================== */
         function rx(d) { return (d._rx ?? d.x); }
         function ry(d) { return (d._ry ?? d.y); }
 
-        function applyInlineUnionPositions(root, dir = +1) {
-            // компактные расстояния (как на вашем правильном примере)
-            const UNION_DY = 120 * dir; // союз рядом с человеком
+        function applyCoupleLayout(root) {
             root.descendants().forEach(d => {
                 d._rx = d.x;
                 d._ry = d.y;
 
                 if (d.data.type === 'union' && d.parent) {
+                    const oldX = d.x;
                     const oldY = d.y;
 
-                    // ставим союз на одной линии с партнером
+                    // union "center" between spouses on the same row as the person
                     d._rx = d.parent.x;
-                    d._ry = d.parent.y + UNION_DY;
+                    d._ry = d.parent.y + (SPOUSE_OFFSET_Y / 2);
 
-                    // компенсируем всё поддерево союза, чтобы дети оставались "на следующем шаге"
-                    const delta = d._ry - oldY;
+                    const dx = d._rx - oldX;
+                    const dy = d._ry - oldY;
+
+                    // shift entire union subtree to keep children close (avoid huge stretched links)
                     d.descendants().forEach((sub, idx) => {
                         if (idx === 0) return;
-                        sub._ry = (sub._ry ?? sub.y) + delta;
+                        sub._rx = (sub._rx ?? sub.x) + dx;
+                        sub._ry = (sub._ry ?? sub.y) + dy;
                     });
                 }
             });
@@ -369,28 +385,13 @@
         /* ================= UI ACTIONS ================= */
         function onPersonClick(id) {
             selectPerson(id);
-
-            if (!branchMode) {
-                branchMode = true;
-                branchFocus = id;
-                renderBranch(id);
-                return;
-            }
-
-            if (branchFocus === id) {
-                branchMode = false;
-                branchFocus = null;
-                renderFull();
-                return;
-            }
-
-            branchFocus = id;
-            renderBranch(id);
+            // Панель не открываем автоматически — только по вкладке
         }
 
         function selectPerson(id) {
             currentId = id;
             const p = data.people[id];
+
             document.getElementById('person-info').innerHTML = `
     <div style="font-weight:800;font-size:16px;margin-bottom:10px;color:#2c3e50">${escapeHtml(p?.name || '')}</div>
     ${p?.birth ? `<div><b>Рождение:</b> ${escapeHtml(p.birth)}</div>` : ''}
@@ -404,14 +405,7 @@
             drawTree(tree);
         }
 
-        function renderBranch(id) {
-            // минимально: в веточном режиме показываем только потомков выбранного
-            // (предков можно добавить дальше, сейчас ключевой фокус — супруг рядом + компактность)
-            const tree = buildDesc(id);
-            drawTree(tree, true);
-        }
-
-        function drawTree(tree, centerOnRoot = false) {
+        function drawTree(tree) {
             d3.select('#tree').selectAll('*').remove();
 
             const container = document.getElementById('tree');
@@ -424,22 +418,27 @@
             zoom = d3.zoom().scaleExtent([0.15, 3]).on('zoom', e => g.attr('transform', e.transform));
             svg.call(zoom);
 
-            // МЕНЬШЕ nodeSize => дерево компактнее (не растягивается в 2 раза)
+            // компактнее дерево
             const layout = d3.tree()
-                .nodeSize([130, 300])
+                .nodeSize([130, 280])     // можно ещё меньше: 120, 260
                 .separation((a, b) => a.parent === b.parent ? 1.05 : 1.2);
 
             const root = d3.hierarchy(tree);
             layout(root);
 
-            // ключ: прижимаем союзы к человеку
-            applyInlineUnionPositions(root, +1);
+            // ключ: позиционируем union между супругами и сдвигаем детей
+            applyCoupleLayout(root);
 
-            // links по "рендер-координатам"
+            // links: НЕ рисуем person->union (чтобы не было "муж->жена->дети")
+            // рисуем:
+            //  - person->child (если child не union)
+            //  - union->children (дети идут от союза)
+            const links = root.links().filter(l => l.target.data.type !== 'union');
+
             const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
 
             g.selectAll('.link')
-                .data(root.links())
+                .data(links)
                 .enter().append('path')
                 .attr('class', 'link')
                 .attr('d', d => linkGen({
@@ -452,18 +451,21 @@
                 .enter().append('g')
                 .attr('class', d => `node ${d.data.type}${(d.data.type === 'person' && d.data.id === currentId) ? ' selected' : ''}`)
                 .attr('transform', d => `translate(${ry(d)},${rx(d)})`)
-                .each(function (d) { drawNode(d3.select(this), d.data); });
+                .each(function (d) { drawNode(d3.select(this), d); });
 
-            fit(svg, g, w, h, centerOnRoot);
+            fit(svg, g, w, h);
         }
 
         function drawNode(g, d) {
-            if (d.type === 'person') {
-                const cls = d.sex === 'M' ? 'm' : d.sex === 'F' ? 'f' : 'u';
+            const dataNode = d.data;
+
+            if (dataNode.type === 'person') {
+                const cls = dataNode.sex === 'M' ? 'm' : dataNode.sex === 'F' ? 'f' : 'u';
 
                 g.append('rect')
                     .attr('class', 'person-outer card-shadow ' + cls)
-                    .attr('x', -110).attr('y', -40).attr('width', 220).attr('height', 80)
+                    .attr('x', -CARD_W / 2).attr('y', -CARD_H / 2)
+                    .attr('width', CARD_W).attr('height', CARD_H)
                     .attr('rx', 14);
 
                 g.append('text')
@@ -471,34 +473,48 @@
                     .attr('y', -6)
                     .style('font-weight', '800')
                     .style('font-size', '13px')
-                    .text(shorten(d.name, 26));
+                    .text(shorten(dataNode.name, 26));
 
-                const line = formatLifeLine(d);
+                const line = formatLifeLine(dataNode);
                 if (line) {
                     g.append('text')
                         .attr('text-anchor', 'middle')
                         .attr('y', 16)
                         .style('font-size', '11px')
                         .style('fill', '#667')
-                        .text(line);
+                        .text(shorten(line, 26));
                 }
 
-                g.on('click', (ev) => { ev.stopPropagation(); onPersonClick(d.id); });
+                g.on('click', (ev) => { ev.stopPropagation(); onPersonClick(dataNode.id); });
                 return;
             }
 
-            if (d.type === 'union') {
-                // точка союза
+            if (dataNode.type === 'union') {
+                // союз существует как "опорная точка" для детей, но НЕ как ступень от мужа
+                // (мы уже убрали person->union link)
+
+                // 1) рисуем линию между супругами коротко (центр в union)
+                // relative coords in this union group:
+                const half = SPOUSE_OFFSET_Y / 2;
+
+                // линия "муж — союз — жена"
+                g.append('path')
+                    .attr('d', `M ${-half} 0 L ${half} 0`)
+                    .attr('fill', 'none')
+                    .attr('stroke', 'rgba(44,62,80,.22)')
+                    .attr('stroke-width', 2);
+
+                // 2) точка союза по центру
                 g.append('circle')
                     .attr('r', 7)
                     .attr('fill', 'rgba(44,62,80,.18)')
                     .attr('stroke', 'rgba(44,62,80,.35)')
                     .attr('stroke-width', 2);
 
-                // дата брака под точкой (как в Topola)
-                if (d.marriage) {
+                // 3) дата союза под точкой
+                if (dataNode.marriage) {
                     g.append('foreignObject')
-                        .attr('x', -70).attr('y', 14).attr('width', 140).attr('height', 26)
+                        .attr('x', -78).attr('y', 14).attr('width', 156).attr('height', 26)
                         .style('pointer-events', 'none')
                         .append('xhtml:div')
                         .style('width', '100%')
@@ -508,43 +524,44 @@
                         .style('justify-content', 'center')
                         .html(`
           <div style="padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.85);font-size:10px;color:#2c3e50;box-shadow:0 6px 14px rgba(0,0,0,.08)">
-            <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(d.marriage)}
+            <i class="fa-solid fa-ring" style="margin-right:6px"></i>${escapeHtml(dataNode.marriage)}
           </div>
         `);
                 }
 
-                // супруг рядом (на той же линии)
-                if (d.spouse && data.people[d.spouse]) {
-                    const sp = data.people[d.spouse];
-
-                    // расстояние "супруг рядом" — компактное
-                    const x = 170; // <-- если хотите ещё ближе: 150
-                    const y = 0;
-
-                    g.append('path')
-                        .attr('d', `M 10 0 C 40 0, 80 0, ${x - 98} ${y}`)
-                        .attr('fill', 'none')
-                        .attr('stroke', 'rgba(44,62,80,.22)')
-                        .attr('stroke-width', 2);
-
+                // 4) супруг(а) как карточка справа от союза (рядом!)
+                // ВАЖНО: предки приходят к "потомку" (левому человеку), а дети — от союза вниз (через links union->children)
+                if (dataNode.spouse && data.people[dataNode.spouse]) {
+                    const sp = data.people[dataNode.spouse];
                     const sg = g.append('g')
-                        .attr('transform', `translate(${x},${y})`)
+                        .attr('transform', `translate(${half},0)`)
                         .style('cursor', 'pointer')
-                        .on('click', (ev) => { ev.stopPropagation(); onPersonClick(d.spouse); });
+                        .on('click', (ev) => { ev.stopPropagation(); onPersonClick(dataNode.spouse); });
 
-                    drawMiniPersonCard(sg, sp);
+                    drawMiniPersonCard(sg, sp, +1);
                 }
+
+                // 5) левый партнёр (потомок) визуально уже нарисован как person-узел слева.
+                // но чтобы пара выглядела "рядом", мы рисуем мини-карточку левого партнёра в union (опционально).
+                // Чтобы НЕ дублировать карточку, мы НЕ рисуем её здесь.
 
                 return;
             }
         }
 
-        function drawMiniPersonCard(g, person) {
+        function drawMiniPersonCard(g, person, dir) {
+            // мини-карточка закрепляется с "якорем" в центре на точке связи
+            // поэтому смещаем её вправо, чтобы точка связи была у края карточки
             const cls = person.sex === 'M' ? 'm' : person.sex === 'F' ? 'f' : 'u';
+
+            // сдвигаем карточку так, чтобы она была справа от точки союза
+            const xShift = (MINI_W / 2) + 18;
+            g.attr('transform', `translate(${xShift},0)`);
 
             g.append('rect')
                 .attr('class', 'card-shadow person-outer ' + cls)
-                .attr('x', -98).attr('y', -30).attr('width', 196).attr('height', 60)
+                .attr('x', -MINI_W / 2).attr('y', -MINI_H / 2)
+                .attr('width', MINI_W).attr('height', MINI_H)
                 .attr('rx', 14);
 
             g.append('text')
@@ -565,13 +582,12 @@
             }
         }
 
-        function fit(svg, g, w, h, centerOnRoot) {
+        function fit(svg, g, w, h) {
             const b = g.node().getBBox();
             const pad = 120;
             const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
             const tx = w / 2 - (b.x + b.width / 2) * s;
             const ty = h / 2 - (b.y + b.height / 2) * s;
-
             svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
         }
 
@@ -579,18 +595,12 @@
         function setupUI() {
             document.getElementById('zoom-in').onclick = () => d3.select('svg').transition().call(zoom.scaleBy, 1.2);
             document.getElementById('zoom-out').onclick = () => d3.select('svg').transition().call(zoom.scaleBy, 0.85);
-            document.getElementById('reset-view').onclick = () => {
-                if (branchMode && branchFocus) renderBranch(branchFocus);
-                else renderFull();
-            };
+            document.getElementById('reset-view').onclick = () => renderFull();
 
             document.getElementById('info-tab').onclick = () => document.getElementById('info-panel').classList.toggle('open');
             document.getElementById('close-info').onclick = () => document.getElementById('info-panel').classList.remove('open');
 
-            window.addEventListener('resize', () => {
-                if (branchMode && branchFocus) renderBranch(branchFocus);
-                else renderFull();
-            });
+            window.addEventListener('resize', () => renderFull());
         }
 
         /* ================= HELPERS ================= */
