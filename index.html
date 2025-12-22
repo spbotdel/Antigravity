@@ -511,8 +511,14 @@
                 transform: translateY(calc(100% - var(--sheet-half)));
             }
 
-            .info-panel[data-state="full"] {
-                transform: translateY(0);
+            /* drag support */
+            .info-panel.dragging {
+                transition: none !important;
+            }
+
+            .info-header {
+                touch-action: none;
+                /* allow vertical drag */
             }
 
             /* В collapsed показываем только header (убираем белую полоску) */
@@ -643,6 +649,9 @@
                 render(true);
                 setupUI();
                 updateInfoUI();
+                syncSheetMetricsLater();
+                // стартуем на мобиле в collapsed
+                if (isPortrait()) setSheetState('collapsed');
             })
             .catch(e => console.error('GED load error', e));
 
@@ -1134,7 +1143,7 @@
 
             // Mobile: при выборе человека держим карточку в свернутом состоянии (peek)
             if (isPortrait()) {
-                syncSheetMetrics();
+                syncSheetMetricsLater();
                 setSheetState('collapsed', { keepTitle: true });
             }
 
@@ -1249,11 +1258,17 @@
             // Keep legacy 'open' class for calculations (occupied viewport)
             if (isPortrait()) {
                 panel.classList.toggle('open', state !== 'collapsed');
-                if (scrim) scrim.classList.toggle('show', state === 'half' || state === 'full');
+                if (scrim) scrim.classList.toggle('show', state === 'half');
             }
 
             updatePanelArrows();
-            if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
+            // Не панорамируем дерево автоматически при смене состояния панели
+        }
+
+        function syncSheetMetricsLater() {
+            if (!isPortrait()) return;
+            // два rAF чтобы дождаться раскладки/шрифтов
+            requestAnimationFrame(() => requestAnimationFrame(() => syncSheetMetrics()));
         }
 
         function syncSheetMetrics() {
@@ -1279,21 +1294,19 @@
                 if (typeof force === 'boolean') panel.classList.toggle('open', force);
                 else panel.classList.toggle('open');
                 updatePanelArrows();
-                if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
+                // Не панорамируем дерево автоматически при смене состояния панели
                 return;
             }
 
-            // Mobile: state machine (collapsed -> half -> full -> collapsed)
-            syncSheetMetrics();
+            // Mobile: state machine (collapsed <-> half)
+            syncSheetMetricsLater();
 
             let next;
             if (typeof force === 'boolean') {
                 next = force ? 'half' : 'collapsed';
             } else {
                 const cur = getSheetState();
-                next = (cur === 'collapsed') ? 'half'
-                    : (cur === 'half') ? 'full'
-                        : 'collapsed';
+                next = (cur === 'collapsed') ? 'half' : 'collapsed';
             }
             setSheetState(next);
         }
@@ -1349,7 +1362,7 @@
             }
 
             updatePanelArrows();
-            syncSheetMetrics();
+            syncSheetMetricsLater();
             if (isPortrait()) setSheetState('collapsed');
         }
 
@@ -1579,7 +1592,7 @@
                 }));
 
             if (doFit) fitToContent();
-            else d3.timeout(() => panTreeToAvailableCenter(root), 0);
+            // иначе сохраняем текущий zoom/позицию (не центрируем автоматически)
         }
 
         function fitToContent() {
@@ -1620,21 +1633,98 @@
                 if (isPortrait()) togglePanel();
             };
 
+            // Mobile: drag the sheet by grabbing the header
+            (() => {
+                const header = document.getElementById('info-header');
+                const panel = document.getElementById('info-panel');
+                if (!header || !panel) return;
+
+                let dragging = false;
+                let startY = 0;
+                let startTranslate = 0;
+
+                const getPanelTranslateY = () => {
+                    const tr = getComputedStyle(panel).transform;
+                    if (!tr || tr === 'none') return 0;
+                    const m = tr.match(/matrix\(([^)]+)\)/);
+                    if (!m) return 0;
+                    const parts = m[1].split(',').map(s => parseFloat(s.trim()));
+                    // matrix(a,b,c,d,tx,ty)
+                    return parts.length >= 6 ? parts[5] : 0;
+                };
+
+                const snapToNearest = (currentY) => {
+                    syncSheetMetrics(); // use computed vars
+                    const peek = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-peek')) || 56;
+                    const half = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-half')) || (window.innerHeight * 0.55);
+                    const panelH = panel.getBoundingClientRect().height;
+
+                    const yCollapsed = panelH - peek;
+                    const yHalf = panelH - half;
+
+                    // mid-point decision
+                    const mid = (yCollapsed + yHalf) / 2;
+                    const target = (currentY > mid) ? 'collapsed' : 'half';
+                    panel.style.transform = '';
+                    panel.classList.remove('dragging');
+                    setSheetState(target);
+                };
+
+                header.addEventListener('pointerdown', (e) => {
+                    if (!isPortrait()) return;
+                    dragging = true;
+                    header.setPointerCapture(e.pointerId);
+                    startY = e.clientY;
+                    startTranslate = getPanelTranslateY();
+                    panel.classList.add('dragging');
+                });
+
+                header.addEventListener('pointermove', (e) => {
+                    if (!dragging || !isPortrait()) return;
+
+                    const dy = e.clientY - startY;
+                    syncSheetMetrics(); // ensure vars are fresh
+                    const peek = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-peek')) || 56;
+                    const half = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-half')) || (window.innerHeight * 0.55);
+                    const panelH = panel.getBoundingClientRect().height;
+
+                    const yCollapsed = panelH - peek;
+                    const yHalf = panelH - half;
+
+                    let nextY = startTranslate + dy;
+                    nextY = Math.max(yHalf, Math.min(yCollapsed, nextY));
+
+                    panel.style.transform = `translateY(${nextY}px)`;
+                });
+
+                const endDrag = (e) => {
+                    if (!dragging) return;
+                    dragging = false;
+                    try { header.releasePointerCapture(e.pointerId); } catch { }
+                    const curY = getPanelTranslateY();
+                    snapToNearest(curY);
+                };
+
+                header.addEventListener('pointerup', endDrag);
+                header.addEventListener('pointercancel', endDrag);
+            })();
+
+
             window.addEventListener('resize', () => {
                 render(false);
                 updateInfoUI();
-                syncSheetMetrics();
+                syncSheetMetricsLater();
             });
 
             window.matchMedia('(max-aspect-ratio: 1/1)').addEventListener('change', () => {
                 updateInfoUI();
-                syncSheetMetrics();
+                syncSheetMetricsLater();
                 if (isPortrait()) setSheetState('collapsed');
-                if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
+                // Не панорамируем дерево автоматически при смене состояния панели
             });
 
             updatePanelArrows();
-            syncSheetMetrics();
+            syncSheetMetricsLater();
             if (isPortrait()) setSheetState('collapsed');
         }
 
