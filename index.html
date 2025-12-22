@@ -4,500 +4,610 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Семейное древо</title>
+    <title>Семейное древо Русяйкиных</title>
 
+    <!-- D3 -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
     <style>
-        :root {
-            --bg-0: #0b1020;
-            --bg-1: #101a3a;
-
-            --panel-border: rgba(255, 255, 255, .10);
-
-            --text: #e7eaf3;
-            --muted: rgba(231, 234, 243, .72);
-
-            --card: #ffffff;
-            --card-text: #0f172a;
-            --card-muted: #64748b;
-
-            --male: #2563eb;
-            --female: #ef4444;
-            --unknown: #94a3b8;
-
-            --link: rgba(226, 232, 240, .26);
-            --link-strong: rgba(226, 232, 240, .38);
-
-            --shadow: 0 14px 30px rgba(0, 0, 0, .22);
-
-            --ring: #fb7185;
-
-            --dim: 0.18;
-            --dimLinks: 0.12;
-
-            --branch-color: rgba(56, 189, 248, .85);
-
-            --panel-w: 360px;
-        }
-
+        /* ===== RESET ===== */
         * {
             margin: 0;
             padding: 0;
-            box-sizing: border-box
+            box-sizing: border-box;
         }
 
         html,
         body {
             width: 100%;
             height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             overflow: hidden;
-            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-            background:
-                radial-gradient(1200px 700px at 20% 20%, rgba(99, 102, 241, .20), transparent 60%),
-                radial-gradient(1000px 700px at 80% 30%, rgba(34, 211, 238, .16), transparent 55%),
-                radial-gradient(900px 700px at 60% 90%, rgba(244, 63, 94, .10), transparent 55%),
-                linear-gradient(160deg, var(--bg-1), var(--bg-0));
-            color: var(--text);
         }
 
         .app-container {
             width: 100%;
             height: 100vh;
             display: flex;
-            flex-direction: column
+            flex-direction: column;
+            position: relative;
         }
 
+        /* ===== HEADER ===== */
         .app-header {
-            padding: 12px 16px;
+            background: rgba(44, 62, 80, 0.95);
+            color: white;
+            padding: 12px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(15, 23, 42, .55);
-            border-bottom: 1px solid var(--panel-border);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 100;
+            flex-shrink: 0;
         }
 
         .logo {
             display: flex;
             align-items: center;
-            gap: 12px
+            gap: 12px;
         }
 
         .logo i {
-            width: 34px;
-            height: 34px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255, 255, 255, .08);
-            border: 1px solid rgba(255, 255, 255, .10);
-            color: #a5b4fc;
-            font-size: 16px;
+            font-size: 28px;
+            color: #3498db;
         }
 
         .logo h1 {
-            font-size: 16px;
-            font-weight: 700;
-            letter-spacing: .2px
-        }
-
-        .logo .sub {
-            margin-left: 10px;
-            font-size: 12px;
-            color: var(--muted);
-            font-weight: 500;
-            display: none;
-        }
-
-        @media(min-width:980px) {
-            .logo .sub {
-                display: inline
-            }
+            font-size: 20px;
+            font-weight: 600;
         }
 
         .controls {
             display: flex;
-            gap: 8px;
             align-items: center;
+            gap: 20px;
+        }
+
+        .search-container {
+            position: relative;
+            min-width: 250px;
+        }
+
+        .search-container i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #95a5a6;
+        }
+
+        #search-input {
+            width: 100%;
+            padding: 10px 15px 10px 40px;
+            border: 2px solid #34495e;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        #search-input:focus {
+            outline: none;
+            border-color: #3498db;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        #search-input::placeholder {
+            color: #95a5a6;
+        }
+
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
+            max-height: 320px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1000;
+        }
+
+        .search-result-item {
+            padding: 12px 14px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.15s;
+        }
+
+        .search-result-item:hover {
+            background: #f5f5f5;
+        }
+
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .control-buttons {
+            display: flex;
+            gap: 8px;
         }
 
         .ctrl-btn {
             width: 40px;
             height: 40px;
-            border-radius: 14px;
-            background: rgba(255, 255, 255, .08);
-            border: 1px solid rgba(255, 255, 255, .10);
-            color: var(--text);
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
             cursor: pointer;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, .12);
-            transition: transform .12s ease, background .12s ease, border-color .12s ease;
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
         }
 
         .ctrl-btn:hover {
-            background: rgba(255, 255, 255, .12);
-            border-color: rgba(255, 255, 255, .16);
-            transform: translateY(-1px);
+            background: #3498db;
+            transform: translateY(-2px);
         }
 
-        .ctrl-btn:active {
-            transform: translateY(0px) scale(.98);
-        }
-
+        /* ===== MAIN ===== */
         .main-content {
             flex: 1;
-            position: relative
+            overflow: hidden;
+            position: relative;
+        }
+
+        #tree-container {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
         }
 
         #tree {
             width: 100%;
-            height: 100%
+            height: 100%;
+        }
+
+        /* ===== FOOTER ===== */
+        .app-footer {
+            background: rgba(44, 62, 80, 0.9);
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            flex-shrink: 0;
+            z-index: 90;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .color-box {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        .color-box.male {
+            background: #3498db;
+        }
+
+        .color-box.female {
+            background: #e74c3c;
+        }
+
+        /* ===== TREE NODES ===== */
+        .node {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .node rect {
+            fill: white;
+            stroke-width: 2;
+            rx: 8;
+            ry: 8;
+            filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.15));
+            transition: all 0.2s;
+        }
+
+        .node.male rect {
+            stroke: #3498db;
+        }
+
+        .node.female rect {
+            stroke: #e74c3c;
+        }
+
+        .node:hover rect {
+            stroke-width: 3;
+            filter: drop-shadow(2px 2px 10px rgba(0, 0, 0, 0.22));
+            transform: scale(1.05);
+        }
+
+        .node.selected rect {
+            stroke-width: 4;
+            stroke: #f39c12;
+            fill: #fff9e6;
         }
 
         .link {
             fill: none;
-            stroke: var(--link);
-            stroke-width: 1.6;
-            stroke-linecap: round;
+            stroke: #95a5a6;
+            stroke-width: 2;
+            stroke-opacity: 0.6;
+            transition: all 0.2s;
         }
 
-        .node {
-            cursor: default
+        .link:hover {
+            stroke-opacity: 1;
+            stroke-width: 3;
         }
 
-        .card-shadow {
-            filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .18));
-        }
-
-        .person-outer {
-            fill: var(--card);
-            stroke-width: 1.6;
-            transition: transform .12s ease, filter .12s ease, stroke-width .12s ease, opacity .15s ease;
-        }
-
-        .person-outer.m {
-            stroke: color-mix(in srgb, var(--male) 65%, white)
-        }
-
-        .person-outer.f {
-            stroke: color-mix(in srgb, var(--female) 65%, white)
-        }
-
-        .person-outer.u {
-            stroke: rgba(148, 163, 184, .9)
-        }
-
-        .node:hover .person-outer {
-            filter: drop-shadow(0 14px 22px rgba(0, 0, 0, .22));
-            transform: translateY(-1px);
-        }
-
-        .node.selected .person-outer {
-            stroke: #f59e0b !important;
-            stroke-width: 3 !important;
-        }
-
-        .dimmed {
-            opacity: var(--dim);
-        }
-
-        .dimmed-link {
-            opacity: var(--dimLinks);
-        }
-
-        .in-branch .person-outer {
-            filter: drop-shadow(0 18px 26px color-mix(in srgb, var(--branch-color) 35%, transparent));
-        }
-
-        .in-branch-link {
-            stroke: var(--branch-color) !important;
-            opacity: .78 !important;
-            stroke-width: 2.1 !important;
-        }
-
-        /* ===== INFO PANEL (desktop: right) ===== */
-        .info-panel {
-            position: fixed;
-            top: 76px;
-            right: 0;
-            width: var(--panel-w);
-            height: calc(100vh - 132px);
-            transform: translateX(100%);
-            /* <-- теперь скрывается полностью */
-            transition: transform .28s ease;
-            z-index: 100;
-            will-change: transform;
-            pointer-events: auto;
-            overflow: visible;
-        }
-
-        .info-panel.open {
-            transform: translateX(0)
-        }
-
-        /* Внутренняя “поверхность” */
-        .info-surface {
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, .92);
-            color: #0f172a;
-            border-radius: 18px 0 0 18px;
-            box-shadow: var(--shadow);
-            border: 1px solid rgba(15, 23, 42, .06);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            overflow: hidden;
-        }
-
-        .info-header {
-            background: rgba(15, 23, 42, .92);
-            color: #fff;
-            padding: 12px 14px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .info-header-title {
-            font-weight: 800;
-            font-size: 14px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .toggle-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, .10);
-            border: 1px solid rgba(255, 255, 255, .12);
-            color: #fff;
+        .node .toggle-btn {
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex: 0 0 auto;
+            transition: all 0.2s;
         }
 
-        .info-content {
-            padding: 14px 14px 18px;
-            overflow: auto;
-            height: calc(100% - 52px);
-            font-size: 13px;
-            line-height: 1.45;
+        .node .toggle-btn circle {
+            fill: #27ae60;
+            stroke: #219653;
+            stroke-width: 1;
         }
 
-        .pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 7px 10px;
-            border-radius: 999px;
-            background: rgba(15, 23, 42, .05);
-            border: 1px solid rgba(15, 23, 42, .08);
+        .node.collapsed .toggle-btn circle {
+            fill: #e74c3c;
+            stroke: #c0392b;
+        }
+
+        .node .toggle-btn text {
+            fill: white;
             font-size: 12px;
-            color: rgba(15, 23, 42, .78);
-            margin-top: 10px;
-        }
-
-        .section {
-            margin-top: 14px;
-        }
-
-        .section-title {
-            font-size: 12px;
-            font-weight: 900;
-            color: rgba(15, 23, 42, .72);
-            text-transform: uppercase;
-            letter-spacing: .6px;
-            margin-bottom: 8px;
-        }
-
-        .list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .list-item {
-            padding: 10px 10px;
-            border-radius: 14px;
-            background: rgba(15, 23, 42, .045);
-            border: 1px solid rgba(15, 23, 42, .08);
-            cursor: pointer;
-            transition: transform .12s ease, background .12s ease, border-color .12s ease;
-        }
-
-        .list-item:hover {
-            background: rgba(15, 23, 42, .06);
-            border-color: rgba(15, 23, 42, .10);
-            transform: translateY(-1px);
-        }
-
-        .li-name {
-            font-weight: 800;
-            font-size: 13px;
-            color: rgba(15, 23, 42, .90);
-        }
-
-        .li-meta {
-            font-size: 12px;
-            color: rgba(15, 23, 42, .60);
-            margin-top: 4px;
-        }
-
-        /* ===== DESKTOP TAB (отдельно от панели!) ===== */
-        .info-tab {
-            position: fixed;
-            right: 0;
-            top: 190px;
-            width: 58px;
-            height: 320px;
-            z-index: 101;
-            /* чуть выше панели */
-            cursor: pointer;
+            font-weight: bold;
+            pointer-events: none;
             user-select: none;
-
-            border-radius: 18px 0 0 18px;
-            border: 1px solid rgba(255, 255, 255, .12);
-            border-right: none;
-
-            background:
-                linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04)),
-                rgba(15, 23, 42, .70);
-
-            box-shadow: 0 16px 34px rgba(0, 0, 0, .22);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            transition: transform .28s ease, background .18s ease;
         }
 
-        .info-tab.open {
-            transform: translateX(calc(-1 * var(--panel-w)));
+        /* ===== DRAWER OVERLAY + PANEL ===== */
+        .drawer-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 180;
         }
 
-        .info-tab:hover {
-            background:
-                linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .06)),
-                rgba(15, 23, 42, .72);
+        .drawer-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
         }
 
-        .info-tab-inner {
-            width: 100%;
-            height: 100%;
-            position: relative;
-            padding: 10px 8px;
+        /* Панель полностью прячется за экраном (ничего не торчит) */
+        .person-drawer {
+            position: fixed;
+            top: 70px;
+            right: 16px;
+            width: 360px;
+            max-width: calc(100vw - 24px);
+            height: calc(100vh - 70px - 56px);
+            background: #ffffff;
+            border-radius: 14px;
+            box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+            overflow: hidden;
+            z-index: 200;
+
+            transform: translateX(calc(100% + 24px));
+            transition: transform 0.22s ease;
+            display: grid;
+            grid-template-columns: 1fr 56px;
+            /* контент + вертикальная полоса */
+        }
+
+        .person-drawer.open {
+            transform: translateX(0);
+        }
+
+        /* Контент карточки */
+        .drawer-main {
             display: flex;
             flex-direction: column;
+            min-width: 0;
+        }
+
+        .drawer-header {
+            background: #2c3e50;
+            color: #fff;
+            padding: 12px 12px;
+            display: flex;
             align-items: center;
             gap: 10px;
         }
 
-        .info-tab-arrow {
-            width: 36px;
-            height: 36px;
-            border-radius: 14px;
-            display: flex;
+        /* ОДНА стрелка (кнопка назад/закрыть) */
+        .drawer-back {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            border: none;
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+            cursor: pointer;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255, 255, 255, .10);
-            border: 1px solid rgba(255, 255, 255, .12);
-            color: #fff;
-            font-size: 15px;
+            transition: transform 0.15s, background 0.15s;
             flex: 0 0 auto;
-            box-shadow: 0 10px 18px rgba(0, 0, 0, .16);
         }
 
-        /* аккуратная вертикальная подпись */
-        .info-tab-label {
-            width: 100%;
-            flex: 1 1 auto;
+        .drawer-back:hover {
+            background: rgba(255, 255, 255, 0.18);
+            transform: translateX(-1px);
+        }
+
+        .drawer-title {
+            font-weight: 600;
+            font-size: 14px;
+            opacity: 0.95;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+
+        .drawer-body {
+            padding: 16px 16px 14px;
+            overflow: auto;
+        }
+
+        .detail-row {
+            margin-bottom: 14px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid #eef1f4;
+        }
+
+        .detail-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 6px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .detail-value {
+            color: #34495e;
+            font-size: 15px;
+            word-break: break-word;
+        }
+
+        .family-member {
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px dashed #eef1f4;
+        }
+
+        .family-member:last-child {
+            border-bottom: none;
+        }
+
+        .family-member i {
+            color: #3498db;
+            width: 20px;
+        }
+
+        /* Вертикальная полоса-имя (интегрирована, на всю высоту карточки) */
+        .name-strip {
+            background: linear-gradient(180deg, #1f2d3a 0%, #2c3e50 100%);
+            display: flex;
             align-items: center;
             justify-content: center;
-            gap: 16px;
-            overflow: hidden;
-            padding: 4px 2px;
+            position: relative;
+            user-select: none;
         }
 
-        .vword {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 3px;
+        .name-strip::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: rgba(255, 255, 255, 0.14);
         }
 
-        .vchar {
+        .name-strip-text {
+            color: rgba(255, 255, 255, 0.95);
             font-weight: 800;
-            letter-spacing: .2px;
-            font-size: 12px;
-            line-height: 12px;
-            color: rgba(255, 255, 255, .94);
-            text-shadow: 0 1px 0 rgba(0, 0, 0, .22);
+            font-size: 14px;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+
+            /* Поворот, но читаемо */
+            transform: rotate(-90deg);
+            transform-origin: center;
+
+            /* Обрезка длинного имени */
+            max-width: calc(100vh - 160px);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 10px;
         }
 
-        .vchar.muted {
-            font-weight: 700;
-            opacity: .82;
+        /* Цветовой акцент по полу */
+        .person-drawer.male .name-strip {
+            background: linear-gradient(180deg, #184a75 0%, #2c3e50 100%);
         }
 
-        /* ===== Portrait/bottom-sheet ===== */
-        @media (max-aspect-ratio: 1/1) {
-            :root {
-                --panel-w: 100vw;
+        .person-drawer.female .name-strip {
+            background: linear-gradient(180deg, #7a1f1f 0%, #2c3e50 100%);
+        }
+
+        /* ===== HELP MODAL (оставил как было, можно потом выкинуть) ===== */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: hidden;
+            animation: modalAppear 0.25s ease;
+        }
+
+        @keyframes modalAppear {
+            from {
+                transform: scale(0.95);
+                opacity: 0;
             }
 
-            .info-tab {
-                display: none;
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            background: #2c3e50;
+            color: white;
+            padding: 18px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .modal-body {
+            padding: 22px;
+            overflow-y: auto;
+            max-height: calc(80vh - 70px);
+        }
+
+        .modal-body h3 {
+            color: #2c3e50;
+            margin: 18px 0 10px 0;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-body ul {
+            list-style: none;
+            padding-left: 16px;
+        }
+
+        .modal-body li {
+            margin-bottom: 8px;
+            padding-left: 14px;
+            position: relative;
+        }
+
+        .modal-body li:before {
+            content: "•";
+            color: #3498db;
+            font-weight: bold;
+            position: absolute;
+            left: 0;
+        }
+
+        @media (max-width: 768px) {
+            .app-header {
+                flex-direction: column;
+                gap: 15px;
+                padding: 15px;
             }
 
-            /* на мобиле таб не нужен */
-
-            .info-panel {
-                top: auto;
-                right: auto;
-                left: 0;
-                bottom: 0;
+            .controls {
                 width: 100%;
-                height: min(70vh, 560px);
-                border-radius: 18px 18px 0 0;
-                transform: translateY(calc(100% - 56px));
+                flex-direction: column;
+                gap: 15px;
             }
 
-            .info-panel.open {
-                transform: translateY(0);
+            .search-container {
+                width: 100%;
             }
 
-            .info-surface {
-                border-radius: 18px 18px 0 0;
+            .app-footer {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+                padding: 14px;
             }
 
-            .info-header {
-                cursor: pointer;
-                padding: 12px 14px;
+            .legend {
+                justify-content: center;
             }
 
-            .info-header-title {
-                font-size: 15px;
+            .person-drawer {
+                right: 12px;
+                top: 140px;
+                height: calc(100vh - 140px - 86px);
+                width: min(420px, calc(100vw - 24px));
             }
         }
     </style>
@@ -505,1015 +615,825 @@
 
 <body>
     <div class="app-container">
-
         <header class="app-header">
             <div class="logo">
-                <i class="fa-solid fa-tree"></i>
-                <h1>Семейное древо <span class="sub">— интерактивная генеалогия</span></h1>
+                <i class="fas fa-tree"></i>
+                <h1>Семейное древо Русяйкиных</h1>
             </div>
 
             <div class="controls">
-                <button id="zoom-in" class="ctrl-btn" title="Увеличить"><i class="fa-solid fa-plus"></i></button>
-                <button id="zoom-out" class="ctrl-btn" title="Уменьшить"><i class="fa-solid fa-minus"></i></button>
-                <button id="reset-view" class="ctrl-btn" title="Сброс"><i
-                        class="fa-solid fa-arrows-rotate"></i></button>
+                <div class="search-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="search-input" placeholder="Найти человека..." />
+                    <div id="search-results" class="search-results"></div>
+                </div>
+
+                <div class="control-buttons">
+                    <button id="zoom-in" class="ctrl-btn" title="Увеличить">
+                        <i class="fas fa-search-plus"></i>
+                    </button>
+                    <button id="zoom-out" class="ctrl-btn" title="Уменьшить">
+                        <i class="fas fa-search-minus"></i>
+                    </button>
+                    <button id="reset-view" class="ctrl-btn" title="Сбросить вид">
+                        <i class="fas fa-expand-arrows-alt"></i>
+                    </button>
+                    <button id="export-btn" class="ctrl-btn" title="Сохранить как PNG">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button id="help-btn" class="ctrl-btn" title="Помощь">
+                        <i class="fas fa-question-circle"></i>
+                    </button>
+                </div>
             </div>
         </header>
 
-        <div class="main-content">
-            <div id="tree"></div>
-        </div>
-
-        <!-- TAB ВНЕ панели (важно!) -->
-        <div id="info-tab" class="info-tab" title="Информация">
-            <div class="info-tab-inner">
-                <div id="info-tab-arrow" class="info-tab-arrow"><i class="fa-solid fa-arrow-left"></i></div>
-                <div id="info-tab-label" class="info-tab-label"></div>
+        <main class="main-content">
+            <div id="tree-container">
+                <div id="tree"></div>
             </div>
-        </div>
+        </main>
 
-        <div id="info-panel" class="info-panel">
-            <div class="info-surface">
-                <div id="info-header" class="info-header" title="Открыть / закрыть">
-                    <div id="info-title" class="info-header-title">Информация</div>
-                    <button id="toggle-info" class="toggle-btn" aria-label="toggle">
-                        <i id="toggle-info-icon" class="fa-solid fa-arrow-left"></i>
-                    </button>
+        <footer class="app-footer">
+            <div class="status-info">
+                <span id="person-count">0</span> человек в дереве |
+                Выбрано: <span id="selected-person">никто</span> |
+                <span id="tree-stats">Загрузка...</span>
+            </div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="color-box male"></div>
+                    <span>Мужчина</span>
                 </div>
+                <div class="legend-item">
+                    <div class="color-box female"></div>
+                    <span>Женщина</span>
+                </div>
+            </div>
+        </footer>
 
-                <div id="person-info" class="info-content">Выберите человека</div>
+        <!-- Overlay (чтобы закрывать кликом по фону) -->
+        <div id="drawer-overlay" class="drawer-overlay"></div>
+
+        <!-- ВЫЕЗЖАЮЩАЯ ПАНЕЛЬ: контент + интегрированная полоса с повернутым именем -->
+        <aside id="person-drawer" class="person-drawer">
+            <div class="drawer-main">
+                <div class="drawer-header">
+                    <button id="drawer-back" class="drawer-back" title="Закрыть">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <div id="drawer-title" class="drawer-title">Выберите человека</div>
+                </div>
+                <div id="drawer-body" class="drawer-body">
+                    <div style="text-align:center;color:#7f8c8d;padding:20px;">
+                        <i class="fas fa-mouse-pointer" style="font-size:42px;opacity:0.45;margin-bottom:12px;"></i>
+                        <div>Кликните на человека в дереве, чтобы увидеть информацию</div>
+                    </div>
+                </div>
+            </div>
+            <div class="name-strip" aria-hidden="true">
+                <div id="name-strip-text" class="name-strip-text" title="Выберите человека">—</div>
+            </div>
+        </aside>
+
+        <!-- Help modal -->
+        <div id="help-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-question-circle"></i> Как пользоваться</h2>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <h3><i class="fas fa-mouse-pointer"></i> Управление деревом:</h3>
+                    <ul>
+                        <li><strong>Клик на человека</strong> — показать информацию</li>
+                        <li><strong>Двойной клик на человека</strong> — развернуть/свернуть его ветку</li>
+                        <li><strong>На телефоне: долгое нажатие</strong> — развернуть/свернуть ветку</li>
+                        <li><strong>Перетаскивание</strong> — перемещение по дереву</li>
+                        <li><strong>Колесико мыши</strong> — масштабирование</li>
+                    </ul>
+
+                    <h3><i class="fas fa-search"></i> Поиск:</h3>
+                    <p>Введите имя в поисковую строку для быстрого перехода к человеку</p>
+                </div>
             </div>
         </div>
-
     </div>
 
     <script>
-        /* ================= STATE ================= */
-        let data = null;
-        let rootId = null;
+        // ===== GLOBALS =====
+        let allData = null;
+        let treeData = null;
+        let currentPersonId = null;
+        let zoom = null;
+        let currentScale = 1;
+        let collapsedNodes = new Set();
 
-        let currentId = null;
-        let focusRawId = null;
-        let focusResolvedId = null;
+        // Drawer elements
+        const drawer = () => document.getElementById('person-drawer');
+        const overlay = () => document.getElementById('drawer-overlay');
+        const drawerTitle = () => document.getElementById('drawer-title');
+        const drawerBody = () => document.getElementById('drawer-body');
+        const nameStripText = () => document.getElementById('name-strip-text');
 
-        let svg = null, g = null, zoom = null, layout = null;
-        let w = 0, h = 0;
+        // ===== INIT =====
+        async function initApp() {
+            try {
+                const response = await fetch('./3.ged');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const text = await response.text();
 
-        let lastTransform = d3.zoomIdentity;
-        let lastRenderedRoot = null;
+                allData = parseGedcom(text);
 
-        /* ================= CONFIG ================= */
-        const CARD_W = 230;
-        const CARD_H = 90;
-        const COUPLE_GAP = 8;
-        const COUPLE_TOTAL_H = CARD_H * 2 + COUPLE_GAP;
+                let rootId = findRootPerson(allData);
+                treeData = buildDescendantsTree(rootId, allData);
 
-        const NODE_X = COUPLE_TOTAL_H + 14;
-        const NODE_Y = 250;
-        const SEP_SIBLINGS = 1.0;
-        const SEP_OTHER = 1.12;
+                renderTree();
+                setupControls();
+                updateStats();
 
-        const ANIM_MS = 900;
-
-        const PAN_MS = 900;
-        const PAN_EASE = d3.easeCubicInOut;
-
-        const MARRIAGE_ICON = 'fa-heart';
-
-        /* ================= INIT ================= */
-        fetch('./3.ged')
-            .then(r => r.text())
-            .then(t => {
-                data = parseGedcom(t);
-                rootId = findRoot();
-                initSvgOnce();
-                render(true);
-                setupUI();
-                updateInfoUI();
-            })
-            .catch(e => console.error('GED load error', e));
-
-        function initSvgOnce() {
-            const container = document.getElementById('tree');
-            w = container.clientWidth;
-            h = container.clientHeight;
-
-            svg = d3.select('#tree').append('svg')
-                .attr('width', w)
-                .attr('height', h);
-
-            g = svg.append('g');
-
-            zoom = d3.zoom()
-                .scaleExtent([0.15, 3])
-                .on('zoom', e => {
-                    lastTransform = e.transform;
-                    g.attr('transform', e.transform);
-                });
-
-            svg.call(zoom);
-            svg.call(zoom.transform, lastTransform);
-
-            layout = d3.tree()
-                .nodeSize([NODE_X, NODE_Y])
-                .separation((a, b) => a.parent === b.parent ? SEP_SIBLINGS : SEP_OTHER);
+            } catch (error) {
+                console.error('❌ Ошибка загрузки:', error);
+                showError('Не удалось загрузить данные. Проверьте файл 3.ged');
+            }
         }
 
-        /* ================= GEDCOM ================= */
-        function parseGedcom(t) {
-            const people = {}, fams = {};
-            let cur = null, evt = null;
+        // ===== GEDCOM PARSER =====
+        function parseGedcom(text) {
+            const people = {};
+            const families = {};
+            let current = null;
+            let inEvent = false;
+            let currentEvent = null;
 
-            t.split(/\r?\n/).forEach(l => {
-                const m = l.match(/^(\d+)\s+(@?[^ ]+@?)\s*(.*)$/);
-                if (!m) return;
+            const lines = text.split(/\r?\n/);
 
-                const lvl = +m[1];
-                const tag = m[2].replace(/@/g, '');
-                const val = m[3];
+            for (let line of lines) {
+                if (!line.trim()) continue;
 
-                if (lvl === 0) {
-                    evt = null;
-                    if (val.includes('INDI')) {
-                        cur = { t: 'P', id: tag };
-                        people[tag] = { id: tag, name: '', sex: '', birth: '', death: '', FAMS: [], FAMC: [] };
-                    } else if (val.includes('FAM')) {
-                        cur = { t: 'F', id: tag };
-                        fams[tag] = { id: tag, husb: null, wife: null, chil: [], marriage: '' };
-                    } else cur = null;
-                    return;
+                const match = line.match(/^\s*(\d+)\s+(@?[A-Za-z0-9_]+@?)(?:\s+(.+))?$/);
+                if (!match) continue;
+
+                const level = parseInt(match[1], 10);
+                let tag = match[2];
+                const value = match[3] || '';
+
+                if (tag.startsWith('@') && tag.endsWith('@')) tag = tag.slice(1, -1);
+                const cleanValue = value.replace(/@/g, '');
+
+                if (level === 0) {
+                    inEvent = false;
+                    currentEvent = null;
+
+                    if (tag.startsWith('I')) {
+                        current = { type: 'INDI', id: tag };
+                        people[tag] = {
+                            id: tag,
+                            name: '',
+                            gender: '',
+                            birth: '',
+                            death: '',
+                            familiesAsSpouse: [],
+                            familiesAsChild: []
+                        };
+                        continue;
+                    } else if (tag.startsWith('F')) {
+                        current = { type: 'FAM', id: tag };
+                        families[tag] = {
+                            id: tag,
+                            husband: null,
+                            wife: null,
+                            children: []
+                        };
+                        continue;
+                    } else {
+                        current = null;
+                        continue;
+                    }
                 }
 
-                if (!cur) return;
+                if (!current) continue;
 
-                if (lvl === 1) {
-                    evt = null;
-                    if (tag === 'BIRT') evt = 'birth';
-                    if (tag === 'DEAT') evt = 'death';
-                    if (tag === 'MARR') evt = 'marriage';
+                if (current.type === 'INDI') {
+                    const p = people[current.id];
+
+                    if (tag === 'NAME') p.name = cleanValue.replace(/\//g, ' ').trim();
+                    else if (tag === 'SEX') p.gender = cleanValue;
+                    else if (tag === 'BIRT' || tag === 'DEAT') {
+                        inEvent = true;
+                        currentEvent = tag;
+                    } else if (tag === 'DATE' && inEvent && currentEvent) {
+                        if (currentEvent === 'BIRT') p.birth = cleanValue;
+                        if (currentEvent === 'DEAT') p.death = cleanValue;
+                        inEvent = false;
+                        currentEvent = null;
+                    } else if (tag === 'FAMS') {
+                        if (cleanValue) p.familiesAsSpouse.push(cleanValue);
+                    } else if (tag === 'FAMC') {
+                        if (cleanValue) p.familiesAsChild.push(cleanValue);
+                    }
+                } else if (current.type === 'FAM') {
+                    const f = families[current.id];
+                    if (tag === 'HUSB') f.husband = cleanValue;
+                    else if (tag === 'WIFE') f.wife = cleanValue;
+                    else if (tag === 'CHIL') f.children.push(cleanValue);
                 }
-
-                if (cur.t === 'P') {
-                    const p = people[cur.id];
-                    if (tag === 'NAME') p.name = val.replace(/\//g, '').trim();
-                    if (tag === 'SEX') p.sex = val;
-                    if (tag === 'FAMS') p.FAMS.push(val.replace(/@/g, ''));
-                    if (tag === 'FAMC') p.FAMC.push(val.replace(/@/g, ''));
-                    if (lvl === 2 && evt && tag === 'DATE') p[evt] = val.trim();
-                }
-
-                if (cur.t === 'F') {
-                    const f = fams[cur.id];
-                    if (tag === 'HUSB') f.husb = val.replace(/@/g, '');
-                    if (tag === 'WIFE') f.wife = val.replace(/@/g, '');
-                    if (tag === 'CHIL') f.chil.push(val.replace(/@/g, ''));
-                    if (lvl === 2 && evt && tag === 'DATE') f[evt] = val.trim();
-                }
-            });
-
-            return { people, fams };
-        }
-
-        function findRoot() {
-            const ids = Object.keys(data.people);
-            return ids.find(id => !(data.people[id].FAMC || []).length) || ids[0];
-        }
-
-        /* ================= TREE BUILD ================= */
-        function buildDisplayTree(personId, seen = new Set()) {
-            if (!personId || seen.has(personId)) return null;
-            seen.add(personId);
-
-            const p = data.people[personId];
-            if (!p) return null;
-
-            const fams = (p.FAMS || []).map(fid => data.fams[fid]).filter(Boolean);
-
-            const mainFam = fams.find(f => {
-                const spouse = (f.husb === personId) ? f.wife : f.husb;
-                return !!spouse || (f.chil && f.chil.length);
-            });
-
-            if (mainFam) {
-                const spouseId = (mainFam.husb === personId) ? mainFam.wife : mainFam.husb;
-                const node = {
-                    type: 'couple',
-                    primaryId: personId,
-                    spouseId: spouseId || null,
-                    marriage: mainFam.marriage || '',
-                    children: []
-                };
-
-                (mainFam.chil || []).forEach(cid => {
-                    const ch = buildDisplayTree(cid, new Set(seen));
-                    if (ch) node.children.push(ch);
-                });
-
-                if (!node.children.length) delete node.children;
-                return node;
             }
 
-            return {
-                type: 'person',
-                id: personId,
-                name: p.name || 'Без имени',
-                sex: p.sex || '',
-                b: p.birth || '',
-                d: p.death || '',
+            return { people, families };
+        }
+
+        // ===== TREE BUILDING =====
+        function findRootPerson(data) {
+            // сначала ищем "Егор"
+            for (const [id, person] of Object.entries(data.people)) {
+                if (person.name && person.name.includes('Егор')) return id;
+            }
+
+            // затем человека с детьми
+            for (const [id, person] of Object.entries(data.people)) {
+                if (person.familiesAsSpouse && person.familiesAsSpouse.length > 0) {
+                    for (const famId of person.familiesAsSpouse) {
+                        const family = data.families[famId];
+                        if (family && family.children && family.children.length > 0) return id;
+                    }
+                }
+            }
+
+            return Object.keys(data.people)[0];
+        }
+
+        function buildDescendantsTree(personId, data, visited = new Set()) {
+            if (visited.has(personId)) return null;
+            visited.add(personId);
+
+            const person = data.people[personId];
+            if (!person) return null;
+
+            const node = {
+                id: person.id,
+                name: person.name || 'Без имени',
+                birth: person.birth || '',
+                death: person.death || '',
+                gender: person.gender || '',
+                children: [],
+                _children: []
             };
-        }
 
-        function dataPrimaryId(node) {
-            if (!node) return null;
-            if (node.type === 'couple') return node.primaryId;
-            if (node.type === 'person') return node.id;
-            return null;
-        }
-
-        function resolveFocusTarget(rootH, clickedId) {
-            let found = null;
-            rootH.each(d => {
-                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                if (pid === clickedId) found = pid;
-            });
-            if (found) return found;
-
-            let couplePrimary = null;
-            rootH.each(d => {
-                if (d.data.type === 'couple' && d.data.spouseId === clickedId) {
-                    couplePrimary = d.data.primaryId;
+            if (person.familiesAsSpouse && person.familiesAsSpouse.length > 0) {
+                for (const famId of person.familiesAsSpouse) {
+                    const family = data.families[famId];
+                    if (family && family.children) {
+                        for (const childId of family.children) {
+                            const childNode = buildDescendantsTree(childId, data, new Set(visited));
+                            if (childNode) {
+                                node.children.push(childNode);
+                                node._children.push(childNode);
+                            }
+                        }
+                    }
                 }
-            });
-            return couplePrimary || clickedId;
-        }
-
-        /* ================= BRANCH + SIBLINGS ================= */
-        function computeBranchIds(rootH, targetPersonId) {
-            let targetNode = null;
-            rootH.each(d => {
-                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                if (pid === targetPersonId) targetNode = d;
-            });
-            if (!targetNode) return new Set();
-
-            const ids = new Set();
-            targetNode.ancestors().forEach(d => {
-                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                if (pid) ids.add(pid);
-            });
-            targetNode.descendants().forEach(d => {
-                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                if (pid) ids.add(pid);
-            });
-            return ids;
-        }
-
-        function getSiblingIds(personId) {
-            const p = data.people[personId];
-            if (!p) return [];
-            const famc = (p.FAMC || [])[0];
-            if (!famc) return [];
-            const fam = data.fams[famc];
-            if (!fam) return [];
-            const kids = fam.chil || [];
-            return kids.filter(id => id && id !== personId);
-        }
-
-        function expandIdsWithSiblingsFlat(baseIds, targetPersonId) {
-            const out = new Set(baseIds);
-            const sibs = getSiblingIds(targetPersonId);
-            for (const sid of sibs) out.add(sid);
-            return out;
-        }
-
-        function pruneDataByIds(node, keepIds, siblingSet) {
-            if (!node) return null;
-
-            const selfId = dataPrimaryId(node);
-            const isSibling = selfId && siblingSet && siblingSet.has(selfId);
-
-            if (isSibling) {
-                const p = data.people[selfId];
-                return {
-                    type: 'person',
-                    id: selfId,
-                    name: p?.name || 'Без имени',
-                    sex: p?.sex || '',
-                    b: p?.birth || '',
-                    d: p?.death || ''
-                };
             }
 
-            const selfKept = selfId ? keepIds.has(selfId) : false;
-
-            const kids = (node.children || [])
-                .map(ch => pruneDataByIds(ch, keepIds, siblingSet))
-                .filter(Boolean);
-
-            if (selfKept || kids.length) {
-                const copy = { ...node };
-                if (kids.length) copy.children = kids;
-                else delete copy.children;
-                return copy;
-            }
-            return null;
+            return node;
         }
 
-        /* ================= COLORS ================= */
-        function setBranchColorFromId(personId) {
-            const hue = hashHue(String(personId || 'x'));
-            const css = `hsla(${hue}, 92%, 62%, .88)`;
-            document.documentElement.style.setProperty('--branch-color', css);
-        }
-        function hashHue(s) {
-            let h = 0;
-            for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-            return h % 360;
-        }
+        // ===== RENDER TREE =====
+        function renderTree() {
+            const container = d3.select("#tree");
+            container.selectAll("*").remove();
 
-        /* ================= APP-LIKE CENTERING (PAN ONLY) ================= */
-        function isPortrait() {
-            return window.matchMedia('(max-aspect-ratio: 1/1)').matches;
-        }
-
-        function getAvailableViewportRect() {
-            const panel = document.getElementById('info-panel');
-            const open = panel?.classList.contains('open');
-
-            let left = 0, top = 0, right = w, bottom = h;
-
-            if (!panel || !open) {
-                return { left, top, right, bottom, cx: (left + right) / 2, cy: (top + bottom) / 2 };
-            }
-
-            const r = panel.getBoundingClientRect();
-
-            if (isPortrait()) {
-                bottom = Math.max(0, Math.min(h, r.top));
-            } else {
-                right = Math.max(0, Math.min(w, r.left));
-            }
-
-            if (right - left < 120 || bottom - top < 120) {
-                left = 0; top = 0; right = w; bottom = h;
-            }
-
-            return { left, top, right, bottom, cx: (left + right) / 2, cy: (top + bottom) / 2 };
-        }
-
-        function computeTreeBounds(renderRoot) {
-            const nodes = renderRoot.descendants();
-            if (!nodes.length) return null;
-
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
-            for (const n of nodes) {
-                const vHalf = (n.data.type === 'couple') ? (COUPLE_TOTAL_H / 2) : (CARD_H / 2);
-                const hHalf = (CARD_W / 2);
-
-                minX = Math.min(minX, n.x - vHalf);
-                maxX = Math.max(maxX, n.x + vHalf);
-
-                minY = Math.min(minY, n.y - hHalf);
-                maxY = Math.max(maxY, n.y + hHalf);
-            }
-
-            return { minX, maxX, minY, maxY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
-        }
-
-        function panTreeToAvailableCenter(renderRoot) {
-            if (!renderRoot) return;
-            const b = computeTreeBounds(renderRoot);
-            if (!b) return;
-
-            const k = lastTransform.k || 1;
-            const avail = getAvailableViewportRect();
-
-            const tx = avail.cx - (b.cy * k);
-            const ty = avail.cy - (b.cx * k);
-
-            const next = d3.zoomIdentity.translate(tx, ty).scale(k);
-
-            svg.interrupt();
-            svg.transition()
-                .duration(PAN_MS)
-                .ease(PAN_EASE)
-                .call(zoom.transform, next);
-        }
-
-        /* ================= LINK ANCHORS ================= */
-        function getLinkSourceAnchor(node) {
-            if (!node) return { x: 0, y: 0 };
-            const y = node.y + (CARD_W / 2);
-            return { x: node.x, y };
-        }
-
-        function getLinkTargetAnchor(node) {
-            if (!node) return { x: 0, y: 0 };
-            const d = node.data;
-            const y = node.y - (CARD_W / 2);
-
-            if (d.type === 'couple') {
-                const half = (CARD_H + COUPLE_GAP) / 2;
-                const topCardCenterX = node.x - half;
-                return { x: topCardCenterX, y };
-            }
-            return { x: node.x, y };
-        }
-
-        /* ================= NODE DRAW ================= */
-        function drawNode(gNode, n, fullRoot) {
-            if (n.type === 'person') {
-                const p = data.people[n.id] || { name: n.name, sex: n.sex, birth: n.b, death: n.d };
-                drawPersonCard(gNode, {
-                    id: n.id,
-                    name: p.name || n.name,
-                    sex: p.sex || n.sex,
-                    b: p.birth || n.b,
-                    d: p.death || n.d
-                }, 0, fullRoot);
+            if (!treeData) {
+                container.html('<div style="padding: 40px; text-align: center; color: white;"><h3>Дерево не загружено</h3><p>Проверьте данные</p></div>');
                 return;
             }
 
-            if (n.type === 'couple') {
-                const primary = data.people[n.primaryId];
-                const spouse = n.spouseId ? data.people[n.spouseId] : null;
-                const half = (CARD_H + COUPLE_GAP) / 2;
+            const width = container.node().clientWidth;
+            const height = container.node().clientHeight;
 
-                drawPersonCard(gNode, {
-                    id: n.primaryId,
-                    name: primary?.name || 'Без имени',
-                    sex: primary?.sex || '',
-                    b: primary?.birth || '',
-                    d: primary?.death || ''
-                }, -half, fullRoot);
+            const svg = container.append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("viewBox", `0 0 ${width} ${height}`);
 
-                if (spouse) {
-                    drawPersonCard(gNode, {
-                        id: n.spouseId,
-                        name: spouse?.name || 'Без имени',
-                        sex: spouse?.sex || '',
-                        b: spouse?.birth || '',
-                        d: spouse?.death || ''
-                    }, +half, fullRoot);
-                }
+            const g = svg.append("g");
 
-                gNode.append('path')
-                    .attr('d', `M 0 ${-half + CARD_H / 2} L 0 ${+half - CARD_H / 2}`)
-                    .attr('fill', 'none')
-                    .attr('stroke', getCssVar('--link-strong'))
-                    .attr('stroke-width', 1.4);
+            const root = d3.hierarchy(treeData);
 
-                const marriage = formatGedcomDate(n.marriage);
-                const W = marriage ? 200 : 56;
-                const H = 32;
+            const treeLayout = d3.tree()
+                .nodeSize([120, 300])
+                .separation((a, b) => a.parent === b.parent ? 1.2 : 1.5);
 
-                gNode.append('foreignObject')
-                    .attr('x', -W / 2).attr('y', -H / 2)
-                    .attr('width', W).attr('height', H)
-                    .style('pointer-events', 'none')
-                    .append('xhtml:div')
-                    .style('width', '100%')
-                    .style('height', '100%')
-                    .style('display', 'flex')
-                    .style('align-items', 'center')
-                    .style('justify-content', 'center')
-                    .html(`
-            <div style="
-              display:inline-flex;align-items:center;gap:${marriage ? 8 : 0}px;
-              padding:5px 12px;border-radius:999px;
-              background:rgba(255,255,255,.92);
-              border:1px solid rgba(15,23,42,.08);
-              box-shadow: 0 10px 22px rgba(0,0,0,.12);
-              font-size:11px;color:rgba(15,23,42,.82);
-              font-weight:700;
-            ">
-              <i class="fa-solid ${escapeHtml(MARRIAGE_ICON)}" style="font-size:16px;color:${escapeHtml(getCssVar('--ring'))}"></i>
-              ${marriage ? `<span>${escapeHtml(marriage)}</span>` : ``}
-            </div>
-          `);
+            zoom = d3.zoom()
+                .scaleExtent([0.1, 3])
+                .on("zoom", (event) => {
+                    currentScale = event.transform.k;
+                    g.attr("transform", event.transform);
+                });
 
-                const kidsCount = (n.children && n.children.length) ? n.children.length : 0;
-                if (kidsCount > 0) {
-                    const chipW = 70, chipH = 26;
-                    const chipX = (-CARD_W / 2) + 10;
-                    const chipY = (-half - CARD_H / 2) + 10;
+            svg.call(zoom);
 
-                    gNode.append('foreignObject')
-                        .attr('x', chipX)
-                        .attr('y', chipY)
-                        .attr('width', chipW)
-                        .attr('height', chipH)
-                        .style('pointer-events', 'none')
-                        .append('xhtml:div')
-                        .style('width', '100%')
-                        .style('height', '100%')
-                        .style('display', 'flex')
-                        .style('align-items', 'center')
-                        .style('justify-content', 'center')
-                        .html(`
-              <div style="
-                width:100%;height:100%;
-                display:flex;align-items:center;justify-content:center;gap:7px;
-                border-radius:999px;
-                background:rgba(15,23,42,.06);
-                border:1px solid rgba(15,23,42,.10);
-                color:rgba(15,23,42,.78);
-                font-size:11px;font-weight:700;
-              ">
-                <i class="fa-solid fa-children" style="font-size:12px;"></i>
-                <span>${kidsCount}</span>
-              </div>
-            `);
-                }
-            }
+            update(root, g, treeLayout);
+            centerView(svg, root, width, height);
         }
 
-        function drawPersonCard(gNode, p, yOffset, fullRoot) {
-            const cls = p.sex === 'M' ? 'm' : p.sex === 'F' ? 'f' : 'u';
+        function update(source, g, treeLayout) {
+            treeLayout(source);
 
-            const group = gNode.append('g')
-                .attr('transform', `translate(0,${yOffset})`)
-                .style('cursor', 'pointer')
-                .on('click', (ev) => { ev.stopPropagation(); onPersonClick(p.id, fullRoot); });
+            const links = source.links();
+            const link = g.selectAll(".link")
+                .data(links, d => `${d.source.data.id}-${d.target.data.id}`);
 
-            group.append('rect')
-                .attr('class', 'person-outer card-shadow ' + cls)
-                .attr('x', -CARD_W / 2).attr('y', -CARD_H / 2)
-                .attr('width', CARD_W).attr('height', CARD_H)
-                .attr('rx', 18);
+            link.enter()
+                .append("path")
+                .attr("class", "link")
+                .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
 
-            const lines = splitName3(p.name);
-            const text = group.append('text')
-                .attr('text-anchor', 'middle')
-                .attr('y', -20)
-                .style('font-weight', '700')
-                .style('font-size', '12.5px')
-                .style('fill', getCssVar('--card-text'));
+            link.attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
+            link.exit().remove();
 
-            lines.forEach((ln, idx) => {
-                text.append('tspan')
-                    .attr('x', 0)
-                    .attr('dy', idx === 0 ? 0 : 14)
-                    .text(shorten(ln, 30));
+            const nodes = source.descendants();
+            const node = g.selectAll(".node").data(nodes, d => d.data.id);
+
+            const nodeEnter = node.enter()
+                .append("g")
+                .attr("class", d => `node ${d.data.gender === 'M' ? 'male' : d.data.gender === 'F' ? 'female' : 'unknown'}`)
+                .attr("data-id", d => d.data.id)
+                .attr("transform", d => `translate(${d.y},${d.x})`)
+                .on("click", function (event, d) {
+                    event.stopPropagation();
+                    selectPerson(d.data.id);
+                })
+                .on("dblclick", function (event, d) {
+                    event.stopPropagation();
+                    toggleBranch(d, g, treeLayout);
+                });
+
+            nodeEnter.append("rect")
+                .attr("x", -100)
+                .attr("y", -40)
+                .attr("width", 200)
+                .attr("height", 80)
+                .attr("rx", 10)
+                .attr("ry", 10)
+                .attr("fill", "white")
+                .attr("stroke", d => d.data.gender === 'M' ? '#3498db' : d.data.gender === 'F' ? '#e74c3c' : '#95a5a6')
+                .attr("stroke-width", 2);
+
+            nodeEnter.append("foreignObject")
+                .attr("x", -95)
+                .attr("y", -35)
+                .attr("width", 190)
+                .attr("height", 75)
+                .append("xhtml:div")
+                .style("width", "100%")
+                .style("height", "100%")
+                .style("display", "flex")
+                .style("flex-direction", "column")
+                .style("justify-content", "center")
+                .style("align-items", "center")
+                .style("padding", "6px 6px")
+                .style("line-height", "1.2")
+                .html(d => {
+                    const name = `<div style="
+              font-weight: 700;
+              font-size: 14px;
+              text-align: center;
+              line-height: 1.25;
+              margin-bottom: 4px;
+              word-break: break-word;
+              overflow: hidden;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              -webkit-box-orient: vertical;
+            ">${escapeHtml(d.data.name)}</div>`;
+
+                    const dates = [];
+                    if (d.data.birth) dates.push(`род. ${formatDate(d.data.birth)}`);
+                    if (d.data.death) dates.push(`ум. ${formatDate(d.data.death)}`);
+
+                    const datesHtml = dates.length
+                        ? `<div style="font-size: 11px; color: #7f8c8d; text-align:center;">${escapeHtml(dates.join(' / '))}</div>`
+                        : '';
+
+                    return name + datesHtml;
+                });
+
+            nodeEnter.filter(d => d.children || d._children)
+                .append("g")
+                .attr("class", "toggle-btn")
+                .attr("transform", "translate(85, 0)")
+                .on("click", function (event, d) {
+                    event.stopPropagation();
+                    toggleBranch(d, g, treeLayout);
+                })
+                .append("circle")
+                .attr("r", 12);
+
+            nodeEnter.filter(d => d.children || d._children)
+                .select(".toggle-btn")
+                .append("text")
+                .attr("y", 4)
+                .attr("text-anchor", "middle")
+                .text(d => d.children ? "−" : "+");
+
+            // update toggle colors/text
+            nodeEnter.filter(d => d.children || d._children)
+                .select(".toggle-btn circle")
+                .attr("fill", d => d.children ? "#e74c3c" : "#27ae60")
+                .attr("stroke", d => d.children ? "#c0392b" : "#219653");
+
+            nodeEnter.filter(d => d.children || d._children)
+                .select(".toggle-btn text")
+                .attr("fill", "white")
+                .attr("font-size", "12px")
+                .attr("font-weight", "bold")
+                .text(d => d.children ? "−" : "+");
+
+            node.merge(nodeEnter)
+                .transition()
+                .duration(250)
+                .attr("transform", d => `translate(${d.y},${d.x})`);
+
+            node.exit().remove();
+        }
+
+        function toggleBranch(d, g, treeLayout) {
+            if (d.children) {
+                d._children = d.children;
+                d.children = null;
+                collapsedNodes.add(d.data.id);
+            } else {
+                d.children = d._children;
+                d._children = null;
+                collapsedNodes.delete(d.data.id);
+            }
+            update(d.parent || d, g, treeLayout);
+        }
+
+        function centerView(svg, root, width, height) {
+            const nodes = root.descendants();
+            if (!nodes.length) return;
+
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+
+            nodes.forEach(d => {
+                if (d.x < minX) minX = d.x;
+                if (d.x > maxX) maxX = d.x;
+                if (d.y < minY) minY = d.y;
+                if (d.y > maxY) maxY = d.y;
             });
 
-            const life = formatLifeLine(p);
-            if (life) {
-                group.append('text')
-                    .attr('text-anchor', 'middle')
-                    .attr('y', 34)
-                    .style('font-size', '11px')
-                    .style('font-weight', '600')
-                    .style('fill', getCssVar('--card-muted'))
-                    .text(life);
-            }
+            minX -= 100; maxX += 100;
+            minY -= 100; maxY += 100;
 
-            if (p.id === currentId) gNode.classed('selected', true);
-            else gNode.classed('selected', false);
+            const treeWidth = maxY - minY;
+            const treeHeight = maxX - minX;
+
+            const scale = Math.min(
+                0.9,
+                (width - 200) / treeWidth,
+                (height - 200) / treeHeight
+            );
+
+            const translateX = (width - treeWidth * scale) / 2 - minY * scale;
+            const translateY = (height - treeHeight * scale) / 2 - minX * scale;
+
+            svg.call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
         }
 
-        /* ================= INFO PANEL ================= */
-        function selectPerson(id, doRerender = true) {
-            currentId = id;
-            updateInfoUI();
-            if (doRerender) render(false);
+        // ===== CONTROLS =====
+        function setupControls() {
+            document.getElementById('zoom-in').addEventListener('click', () => {
+                const svg = d3.select("#tree svg");
+                svg.transition().duration(250).call(zoom.scaleBy, 1.2);
+            });
+
+            document.getElementById('zoom-out').addEventListener('click', () => {
+                const svg = d3.select("#tree svg");
+                svg.transition().duration(250).call(zoom.scaleBy, 0.8);
+            });
+
+            document.getElementById('reset-view').addEventListener('click', () => {
+                const svg = d3.select("#tree svg");
+                const container = d3.select("#tree");
+                const width = container.node().clientWidth;
+                const height = container.node().clientHeight;
+                const root = d3.hierarchy(treeData);
+                centerView(svg, root, width, height);
+            });
+
+            document.getElementById('export-btn').addEventListener('click', exportPNG);
+
+            document.getElementById('help-btn').addEventListener('click', () => {
+                document.getElementById('help-modal').classList.add('active');
+            });
+
+            document.querySelector('.close-modal').addEventListener('click', () => {
+                document.getElementById('help-modal').classList.remove('active');
+            });
+
+            // search
+            const searchInput = document.getElementById('search-input');
+            searchInput.addEventListener('input', handleSearch);
+
+            // close modal on outside click
+            window.addEventListener('click', (event) => {
+                const modal = document.getElementById('help-modal');
+                if (event.target === modal) modal.classList.remove('active');
+            });
+
+            // drawer close
+            document.getElementById('drawer-back').addEventListener('click', closeDrawer);
+            overlay().addEventListener('click', closeDrawer);
+
+            // ESC closes drawer
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeDrawer();
+            });
+
+            // mobile: long press => toggle
+            let touchTimer;
+            document.addEventListener('touchstart', (e) => {
+                if (e.target.closest('.node')) {
+                    touchTimer = setTimeout(() => {
+                        const nodeEl = e.target.closest('.node');
+                        const nodeId = nodeEl.getAttribute('data-id');
+                        const nodeSel = d3.select(`[data-id="${nodeId}"]`);
+                        const d = nodeSel.datum();
+                        if (d) {
+                            const g = d3.select("#tree g");
+                            const treeLayout = d3.tree().nodeSize([120, 300]).separation((a, b) => a.parent === b.parent ? 1.2 : 1.5);
+                            toggleBranch(d, g, treeLayout);
+                        }
+                    }, 520);
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', () => clearTimeout(touchTimer));
         }
 
-        function renderMiniPerson(p) {
-            const name = escapeHtml(p?.name || 'Без имени');
-            const b = formatGedcomDate(p?.birth || '');
-            const d = formatGedcomDate(p?.death || '');
-            const life = (b && d) ? `${b} — ${d}` : (b || d || '');
-            return `
-        <div class="list-item" data-person-id="${escapeHtml(p.id)}">
-          <div class="li-name">${name}</div>
-          ${life ? `<div class="li-meta">${escapeHtml(life)}</div>` : ``}
+        // ===== DRAWER =====
+        function openDrawer() {
+            overlay().classList.add('open');
+            drawer().classList.add('open');
+        }
+
+        function closeDrawer() {
+            overlay().classList.remove('open');
+            drawer().classList.remove('open');
+        }
+
+        function selectPerson(personId) {
+            currentPersonId = personId;
+
+            d3.selectAll('.node').classed('selected', false);
+            d3.select(`[data-id="${personId}"]`).classed('selected', true);
+
+            const person = allData.people[personId];
+            const fullName = person?.name || 'Без имени';
+
+            // Title (header)
+            drawerTitle().textContent = fullName;
+
+            // Name strip (rotated)
+            nameStripText().textContent = fullName;
+            nameStripText().title = fullName;
+
+            // Accent by gender
+            drawer().classList.remove('male', 'female');
+            if (person?.gender === 'M') drawer().classList.add('male');
+            if (person?.gender === 'F') drawer().classList.add('female');
+
+            // Body
+            drawerBody().innerHTML = buildPersonHtml(personId);
+
+            // Status bar
+            document.getElementById('selected-person').textContent = fullName;
+
+            openDrawer();
+        }
+
+        function buildPersonHtml(personId) {
+            const person = allData.people[personId];
+            if (!person) return '';
+
+            let html = `<div class="person-details">`;
+
+            html += `
+        <div class="detail-row">
+          <div class="detail-label">ФИО</div>
+          <div class="detail-value">${escapeHtml(person.name || 'Без имени')}</div>
         </div>
       `;
-        }
 
-        function getChildrenIds(personId) {
-            const p = data.people[personId];
-            if (!p) return [];
-            const out = new Set();
-            (p.FAMS || []).forEach(fid => {
-                const fam = data.fams[fid];
-                if (!fam) return;
-                (fam.chil || []).forEach(cid => { if (cid) out.add(cid); });
-            });
-            return Array.from(out);
-        }
-
-        // ✅ Таб: Фамилия вертикально + инициалы
-        function renderVerticalNameToTab() {
-            const el = document.getElementById('info-tab-label');
-            if (!el) return;
-
-            el.innerHTML = '';
-            if (!currentId) return;
-
-            const full = String(data.people[currentId]?.name || '').trim().replace(/\s+/g, ' ');
-            if (!full) return;
-
-            const parts = full.split(' ').filter(Boolean);
-            const first = parts[0] || '';
-            const patronymic = parts.length >= 3 ? parts[1] : '';
-            const last = parts.length >= 2 ? parts[parts.length - 1] : '';
-
-            const initials = [
-                first ? (first[0].toUpperCase() + '.') : '',
-                patronymic ? (patronymic[0].toUpperCase() + '.') : ''
-            ].filter(Boolean).join('');
-
-            // Сначала фамилия (главное), ниже инициалы
-            const words = [];
-            if (last) words.push({ text: last, muted: false });
-            if (initials) words.push({ text: initials, muted: true });
-
-            for (const w of words) {
-                const ww = document.createElement('div');
-                ww.className = 'vword';
-                for (const ch of String(w.text)) {
-                    const c = document.createElement('div');
-                    c.className = 'vchar' + (w.muted ? ' muted' : '');
-                    c.textContent = ch;
-                    ww.appendChild(c);
-                }
-                el.appendChild(ww);
-            }
-        }
-
-        function updatePanelArrows() {
-            const panel = document.getElementById('info-panel');
-            const tab = document.getElementById('info-tab');
-            const open = panel.classList.contains('open');
-
-            tab.classList.toggle('open', open);
-
-            document.getElementById('info-tab-arrow').innerHTML = open
-                ? `<i class="fa-solid fa-arrow-right"></i>`
-                : `<i class="fa-solid fa-arrow-left"></i>`;
-
-            const icon = document.getElementById('toggle-info-icon');
-            if (isPortrait()) icon.className = open ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up';
-            else icon.className = open ? 'fa-solid fa-arrow-right' : 'fa-solid fa-arrow-left';
-        }
-
-        function togglePanel(force) {
-            const panel = document.getElementById('info-panel');
-            if (typeof force === 'boolean') panel.classList.toggle('open', force);
-            else panel.classList.toggle('open');
-
-            updatePanelArrows();
-            if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
-        }
-
-        function updateInfoUI() {
-            const title = document.getElementById('info-title');
-            const p = currentId ? data.people[currentId] : null;
-
-            title.textContent = p?.name ? p.name : 'Информация';
-            renderVerticalNameToTab();
-
-            const info = document.getElementById('person-info');
-            if (!p) {
-                info.innerHTML = 'Выберите человека';
-            } else {
-                const b = formatGedcomDate(p?.birth || '');
-                const d = formatGedcomDate(p?.death || '');
-                const sex = (p?.sex === 'M') ? 'Мужчина' : (p?.sex === 'F') ? 'Женщина' : '—';
-
-                const siblings = getSiblingIds(currentId).map(id => data.people[id]).filter(Boolean);
-                const children = getChildrenIds(currentId).map(id => data.people[id]).filter(Boolean);
-
-                info.innerHTML = `
-          <div style="font-weight:900;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
-
-          <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
-          <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
-          <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
-
-          <div class="section">
-            <div class="section-title">Братья и сёстры (${siblings.length})</div>
-            ${siblings.length ? `
-              <div class="list">${siblings.map(sp => renderMiniPerson(sp)).join('')}</div>
-            ` : `<div style="color:rgba(15,23,42,.55);font-size:12px;">Нет данных</div>`}
-          </div>
-
-          <div class="section">
-            <div class="section-title">Дети (${children.length})</div>
-            ${children.length ? `
-              <div class="list">${children.map(ch => renderMiniPerson(ch)).join('')}</div>
-            ` : `<div style="color:rgba(15,23,42,.55);font-size:12px;">Нет данных</div>`}
+            if (person.birth) {
+                html += `
+          <div class="detail-row">
+            <div class="detail-label">Дата рождения</div>
+            <div class="detail-value">${escapeHtml(formatDate(person.birth))}</div>
           </div>
         `;
+            }
 
-                document.querySelectorAll('[data-person-id]').forEach(el => {
-                    el.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const id = el.getAttribute('data-person-id');
-                        if (!id) return;
-                        selectPerson(id, true);
-                    });
+            if (person.death) {
+                html += `
+          <div class="detail-row">
+            <div class="detail-label">Дата смерти</div>
+            <div class="detail-value">${escapeHtml(formatDate(person.death))}</div>
+          </div>
+        `;
+            }
+
+            if (person.gender) {
+                html += `
+          <div class="detail-row">
+            <div class="detail-label">Пол</div>
+            <div class="detail-value">${person.gender === 'M' ? 'Мужской' : 'Женский'}</div>
+          </div>
+        `;
+            }
+
+            // family (first spouse family)
+            if (person.familiesAsSpouse && person.familiesAsSpouse.length > 0) {
+                const family = allData.families[person.familiesAsSpouse[0]];
+                if (family) {
+                    const spouseId = person.gender === 'M' ? family.wife : family.husband;
+                    if (spouseId) {
+                        const spouse = allData.people[spouseId];
+                        html += `
+              <div class="detail-row">
+                <div class="detail-label">Супруг(а)</div>
+                <div class="detail-value">
+                  <a href="#" onclick="selectPerson('${spouseId}'); return false;" style="color:#3498db;">
+                    ${escapeHtml(spouse?.name || 'Неизвестно')}
+                  </a>
+                </div>
+              </div>
+            `;
+                    }
+
+                    if (family.children && family.children.length > 0) {
+                        html += `
+              <div class="detail-row">
+                <div class="detail-label">Дети (${family.children.length})</div>
+                <div class="detail-value">
+            `;
+
+                        family.children.forEach(childId => {
+                            const child = allData.people[childId];
+                            html += `
+                <div class="family-member">
+                  <i class="fas fa-child"></i>
+                  <a href="#" onclick="selectPerson('${childId}'); return false;" style="color:#3498db;">
+                    ${escapeHtml(child?.name || 'Неизвестно')}
+                  </a>
+                </div>
+              `;
+                        });
+
+                        html += `</div></div>`;
+                    }
+                }
+            }
+
+            html += `</div>`;
+            return html;
+        }
+
+        // ===== SEARCH =====
+        function handleSearch() {
+            const searchTerm = this.value.toLowerCase().trim();
+            const resultsContainer = document.getElementById('search-results');
+
+            if (!allData || searchTerm.length < 2) {
+                resultsContainer.style.display = 'none';
+                return;
+            }
+
+            const results = [];
+            Object.entries(allData.people).forEach(([id, person]) => {
+                if (person.name && person.name.toLowerCase().includes(searchTerm)) {
+                    results.push({ id, name: person.name, birth: person.birth });
+                }
+            });
+
+            if (results.length > 0) {
+                let html = '';
+                results.slice(0, 10).forEach(result => {
+                    html += `
+            <div class="search-result-item" onclick="selectPerson('${result.id}'); this.parentElement.style.display='none';">
+              <span>${escapeHtml(result.name)}</span>
+              ${result.birth ? `<small>${escapeHtml(formatDate(result.birth))}</small>` : ''}
+            </div>
+          `;
                 });
-            }
 
-            updatePanelArrows();
+                resultsContainer.innerHTML = html;
+                resultsContainer.style.display = 'block';
+            } else {
+                resultsContainer.style.display = 'none';
+            }
         }
 
-        /* ================= FORMAT ================= */
-        function splitName3(full) {
-            const s = String(full || '').trim().replace(/\s+/g, ' ');
-            if (!s) return ['Без имени'];
-            const t = s.split(' ');
-            if (t.length >= 3) {
-                const first = t[0];
-                const patronymic = t[1];
-                const last = t.slice(2).join(' ');
-                return [first, patronymic, last];
-            }
-            if (t.length === 2) return [t[0], t[1]];
-            return [t[0]];
+        // ===== STATS =====
+        function updateStats() {
+            if (!allData) return;
+            const personCount = Object.keys(allData.people).length;
+            document.getElementById('person-count').textContent = personCount;
+            document.getElementById('tree-stats').textContent =
+                `${personCount} человек, ${Object.keys(allData.families).length} семей`;
         }
 
-        function formatGedcomDate(raw) {
-            const s = String(raw || '').trim().toUpperCase();
-            if (!s) return '';
-
-            const approx = s.startsWith('ABT ') || s.startsWith('EST ') || s.startsWith('CAL ');
-            const before = s.startsWith('BEF ');
-            const after = s.startsWith('AFT ');
-
-            let x = s.replace(/^ABT\s+/, '')
-                .replace(/^EST\s+/, '')
-                .replace(/^CAL\s+/, '')
-                .replace(/^BEF\s+/, '')
-                .replace(/^AFT\s+/, '')
-                .trim();
-
-            if (/^\d{4}$/.test(x)) {
-                if (approx) return `≈${x}`;
-                if (before) return `<${x}`;
-                if (after) return `>${x}`;
-                return x;
-            }
-
+        // ===== UTILS =====
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
             const months = {
-                JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
-                JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
+                'JAN': 'янв', 'FEB': 'фев', 'MAR': 'мар',
+                'APR': 'апр', 'MAY': 'май', 'JUN': 'июн',
+                'JUL': 'июл', 'AUG': 'авг', 'SEP': 'сен',
+                'OCT': 'окт', 'NOV': 'ноя', 'DEC': 'дек'
             };
 
-            const parts = x.split(/\s+/);
-            if (parts.length === 3) {
-                const dd = pad2(parts[0]);
-                const mm = months[parts[1]] || '';
-                const yyyy = parts[2];
-                if (mm && /^\d{4}$/.test(yyyy)) {
-                    const out = `${dd}.${mm}.${yyyy}`;
-                    if (approx) return `≈${out}`;
-                    if (before) return `<${out}`;
-                    if (after) return `>${out}`;
-                    return out;
-                }
+            const match = dateStr.match(/(\d{1,2})\s+([A-Z]{3})\s+(\d{4})/);
+            if (match) {
+                const [, day, month, year] = match;
+                return `${day} ${months[month] || month} ${year}`;
             }
-            if (parts.length === 2) {
-                const mm = months[parts[0]] || '';
-                const yyyy = parts[1];
-                if (mm && /^\d{4}$/.test(yyyy)) {
-                    const out = `${mm}.${yyyy}`;
-                    if (approx) return `≈${out}`;
-                    if (before) return `<${out}`;
-                    if (after) return `>${out}`;
-                    return out;
-                }
-            }
-            return raw.trim();
+            return dateStr;
         }
 
-        function pad2(v) {
-            const n = String(v || '').replace(/\D/g, '');
-            if (!n) return '00';
-            return n.length === 1 ? `0${n}` : n.slice(0, 2);
-        }
-
-        function formatLifeLine(p) {
-            const b = formatGedcomDate(p?.b || '');
-            const d = formatGedcomDate(p?.d || '');
-            if (b && d) return `${b} — ${d}`;
-            if (b) return b;
-            if (d) return d;
-            return '';
-        }
-
-        function escapeHtml(s) {
-            return String(s || '')
+        function escapeHtml(str) {
+            return String(str ?? '')
                 .replaceAll('&', '&amp;')
                 .replaceAll('<', '&lt;')
                 .replaceAll('>', '&gt;')
                 .replaceAll('"', '&quot;')
-                .replaceAll("'", "&#039;");
+                .replaceAll("'", '&#039;');
         }
 
-        function shorten(s, n) {
-            s = String(s || '');
-            return s.length > n ? s.slice(0, n - 1) + '…' : s;
+        function exportPNG() {
+            try {
+                const svgElement = document.querySelector('#tree svg');
+                if (!svgElement) {
+                    alert('SVG элемент не найден!');
+                    return;
+                }
+
+                const serializer = new XMLSerializer();
+                const svgString = serializer.serializeToString(svgElement);
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+
+                const scale = 2;
+                canvas.width = svgElement.clientWidth * scale;
+                canvas.height = svgElement.clientHeight * scale;
+
+                img.onload = function () {
+                    ctx.scale(scale, scale);
+                    ctx.drawImage(img, 0, 0);
+
+                    const link = document.createElement('a');
+                    const timestamp = new Date().toISOString().slice(0, 10);
+                    link.download = `семейное-древо-${timestamp}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                };
+
+                img.src = 'data:image/svg+xml;base64,' + btoa(
+                    '<?xml version="1.0" encoding="UTF-8" standalone="no"?>' +
+                    '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' +
+                    svgString
+                );
+
+            } catch (error) {
+                console.error('Ошибка экспорта PNG:', error);
+                alert('Ошибка при сохранении: ' + error.message);
+            }
         }
 
-        function getCssVar(name) {
-            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-        }
-
-        /* ================= RENDER ================= */
-        function render(doFit) {
+        function showError(message) {
             const container = document.getElementById('tree');
-            const nw = container.clientWidth;
-            const nh = container.clientHeight;
-            if (nw !== w || nh !== h) {
-                w = nw; h = nh;
-                svg.attr('width', w).attr('height', h);
-            }
-
-            const baseData = buildDisplayTree(rootId);
-
-            const fullRoot = d3.hierarchy(baseData);
-            layout(fullRoot);
-
-            const highlightCandidate = focusResolvedId || currentId;
-
-            let branchIds = new Set();
-            let siblingSet = new Set();
-            if (highlightCandidate) {
-                const resolved = resolveFocusTarget(fullRoot, highlightCandidate);
-                setBranchColorFromId(resolved);
-                branchIds = computeBranchIds(fullRoot, resolved);
-
-                siblingSet = new Set(getSiblingIds(resolved));
-                branchIds = expandIdsWithSiblingsFlat(branchIds, resolved);
-            }
-
-            let renderData = baseData;
-            if (focusResolvedId && branchIds.size) {
-                renderData = pruneDataByIds(baseData, branchIds, siblingSet) || baseData;
-            }
-
-            const root = d3.hierarchy(renderData);
-            layout(root);
-            lastRenderedRoot = root;
-
-            const nodeKey = (d) => {
-                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : '';
-                return `${d.data.type}:${pid}`;
-            };
-
-            const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
-            const links = root.links();
-
-            function linkKey(l) {
-                const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
-                const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
-                return `${a}=>${b}`;
-            }
-
-            const linkSel = g.selectAll('path.link').data(links, linkKey);
-            linkSel.exit().transition().duration(ANIM_MS).style('opacity', 0).remove();
-
-            const linkEnter = linkSel.enter()
-                .append('path')
-                .attr('class', 'link')
-                .style('opacity', 0)
-                .attr('d', l => linkGen({
-                    source: getLinkSourceAnchor(l.source),
-                    target: getLinkTargetAnchor(l.target)
-                }));
-
-            const linkMerge = linkEnter.merge(linkSel);
-
-            const nodes = root.descendants();
-            const nodeSel = g.selectAll('g.node').data(nodes, nodeKey);
-
-            nodeSel.exit().transition().duration(ANIM_MS).style('opacity', 0).remove();
-
-            const nodeEnter = nodeSel.enter()
-                .append('g')
-                .attr('class', d => `node ${d.data.type}`)
-                .style('opacity', 0)
-                .attr('transform', d => `translate(${d.y},${d.x})`)
-                .each(function (d) {
-                    drawNode(d3.select(this), d.data, fullRoot);
-                });
-
-            const nodeMerge = nodeEnter.merge(nodeSel);
-
-            nodeMerge.each(function (d) {
-                const sel = d3.select(this);
-                sel.selectAll('*').remove();
-                drawNode(sel, d.data, fullRoot);
-            });
-
-            nodeMerge.classed('dimmed', false).classed('in-branch', false);
-            linkMerge.classed('dimmed-link', false).classed('in-branch-link', false);
-
-            if (!focusResolvedId && branchIds.size) {
-                nodeMerge.each(function (d) {
-                    const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
-                    if (pid && !branchIds.has(pid)) d3.select(this).classed('dimmed', true);
-                    else d3.select(this).classed('in-branch', true);
-                });
-
-                linkMerge.each(function (l) {
-                    const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
-                    const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
-                    if (!(branchIds.has(a) && branchIds.has(b))) d3.select(this).classed('dimmed-link', true);
-                    else d3.select(this).classed('in-branch-link', true);
-                });
-            } else if (focusResolvedId) {
-                nodeMerge.classed('in-branch', true);
-                linkMerge.classed('in-branch-link', true);
-            }
-
-            nodeMerge.transition()
-                .duration(ANIM_MS)
-                .ease(d3.easeCubicInOut)
-                .style('opacity', 1)
-                .attr('transform', d => `translate(${d.y},${d.x})`);
-
-            linkMerge.transition()
-                .duration(ANIM_MS)
-                .ease(d3.easeCubicInOut)
-                .style('opacity', 1)
-                .attr('d', l => linkGen({
-                    source: getLinkSourceAnchor(l.source),
-                    target: getLinkTargetAnchor(l.target)
-                }));
-
-            if (doFit) fitToContent();
-            else d3.timeout(() => panTreeToAvailableCenter(root), 0);
+            container.innerHTML = `
+        <div style="padding:40px;text-align:center;color:white;">
+          <h3>Ошибка загрузки</h3>
+          <p>${escapeHtml(message)}</p>
+          <button onclick="location.reload()" style="
+            padding:10px 20px;background:#3498db;color:white;border:none;border-radius:6px;
+            cursor:pointer;margin-top:18px;">Обновить страницу</button>
+        </div>
+      `;
         }
 
-        function fitToContent() {
-            const b = g.node().getBBox();
-            if (!b.width || !b.height) return;
+        // ===== START =====
+        document.addEventListener('DOMContentLoaded', () => initApp());
 
-            const pad = 120;
-            const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
-            const tx = w / 2 - (b.x + b.width / 2) * s;
-            const ty = h / 2 - (b.y + b.height / 2) * s;
-
-            const target = d3.zoomIdentity.translate(tx, ty).scale(s);
-
-            svg.transition()
-                .duration(700)
-                .ease(d3.easeCubicInOut)
-                .call(zoom.transform, target);
-        }
-
-        /* ================= UI ================= */
-        function setupUI() {
-            document.getElementById('zoom-in').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1.2);
-            document.getElementById('zoom-out').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 0.85);
-
-            document.getElementById('reset-view').onclick = () => {
-                focusRawId = null;
-                focusResolvedId = null;
-                render(true);
-            };
-
-            document.getElementById('info-tab').onclick = () => togglePanel();
-            document.getElementById('toggle-info').onclick = (e) => { e.stopPropagation(); togglePanel(); };
-
-            document.getElementById('info-header').onclick = () => {
-                if (isPortrait()) togglePanel();
-            };
-
-            window.addEventListener('resize', () => {
-                render(false);
-                updateInfoUI();
-            });
-
-            window.matchMedia('(max-aspect-ratio: 1/1)').addEventListener('change', () => {
-                updateInfoUI();
-                if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
-            });
-
-            updatePanelArrows();
-        }
-
-        function onPersonClick(clickedId, fullRoot) {
-            selectPerson(clickedId, false);
-
-            const resolved = resolveFocusTarget(fullRoot, clickedId);
-
-            if (focusRawId === clickedId) {
-                focusRawId = null;
-                focusResolvedId = null;
-            } else {
-                focusRawId = clickedId;
-                focusResolvedId = resolved;
-            }
-
-            render(false);
-        }
+        // expose for inline links
+        window.selectPerson = selectPerson;
+        window.formatDate = formatDate;
     </script>
 </body>
 
