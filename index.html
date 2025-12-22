@@ -542,6 +542,11 @@
                 transform: translateY(calc(100% - var(--sheet-peek)));
             }
 
+            /* In collapsed state show ONLY header (prevents white strip peeking) */
+            .info-panel[data-state="collapsed"] .info-content {
+                display: none;
+            }
+
             .info-panel[data-state="half"] {
                 transform: translateY(calc(100% - var(--sheet-half)));
             }
@@ -1194,10 +1199,14 @@
         function selectPerson(id, doRerender = true) {
             currentId = id;
             updateInfoUI();
-            // Mobile UX: при выборе человека показываем bottom-sheet (half)
+
+            // Mobile UX: on selecting a person keep sheet COLLAPSED (peek only).
+            // User expands it intentionally by tapping the sheet/header.
             if (isPortrait()) {
-                setSheetState('half');
+                syncSheetPeek();
+                setSheetState('collapsed');
             }
+
             if (doRerender) render(false);
         }
 
@@ -1375,6 +1384,8 @@
                     });
                 });
             }
+
+            if (isPortrait()) syncSheetPeek();
 
             updatePanelArrows();
         }
@@ -1654,12 +1665,14 @@
             window.addEventListener('resize', () => {
                 render(false);
                 updateInfoUI();
+                syncSheetPeek();
             });
 
             window.matchMedia('(max-aspect-ratio: 1/1)').addEventListener('change', () => {
                 updateInfoUI();
                 // при смене ориентации фиксируем корректный режим панели
                 if (isPortrait()) {
+                    syncSheetPeek();
                     setSheetState('collapsed');
                 } else {
                     document.getElementById('info-panel').removeAttribute('data-state');
@@ -1667,7 +1680,7 @@
                 if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
             });
 
-            if (isPortrait()) setSheetState('collapsed');
+            if (isPortrait()) { syncSheetPeek(); setSheetState('collapsed'); }
             updatePanelArrows();
 
             attachSheetGestures();
@@ -1679,6 +1692,17 @@
             if (v.endsWith('px')) return parseFloat(v);
             if (v.endsWith('vh')) return window.innerHeight * (parseFloat(v) / 100);
             return fallbackPx;
+
+            function syncSheetPeek() {
+                if (!isPortrait()) return;
+                const header = document.getElementById('info-header');
+                if (!header) return;
+
+                // +2px for borders/anti-aliasing so content never peeks
+                const h = Math.ceil(header.getBoundingClientRect().height) + 2;
+                document.documentElement.style.setProperty('--sheet-peek', `${h}px`);
+            }
+
         }
 
         function attachSheetGestures() {
