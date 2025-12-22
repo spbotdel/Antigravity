@@ -271,13 +271,17 @@
         }
 
         .info-header-title {
-            font-weight: 800;
-            font-size: 14px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            font-weight: 900;
+            font-size: 18px;
+            line-height: 1.15;
             text-align: center;
             width: 100%;
+
+            /* Две строки для ультра-длинных ФИО */
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
         }
 
         .toggle-btn {
@@ -302,7 +306,8 @@
         .info-content {
             padding: 14px 14px 18px;
             overflow: auto;
-            height: calc(100% - 52px);
+            /* Шапка стала выше из-за 2 строк */
+            height: calc(100% - 64px);
             font-size: 13px;
             line-height: 1.45;
         }
@@ -458,7 +463,7 @@
         .info-tab-text {
             font-weight: 900;
             letter-spacing: .3px;
-            font-size: 12px;
+            font-size: 14px;
             color: rgba(255, 255, 255, .94);
             text-shadow: 0 1px 0 rgba(0, 0, 0, .22);
 
@@ -469,6 +474,7 @@
             display: block;
             width: 100%;
             padding: 0 6px;
+            text-align: center;
         }
 
         /* ===== Portrait/bottom-sheet ===== */
@@ -1195,8 +1201,6 @@
                 const children = getChildrenIds(currentId).map(id => data.people[id]).filter(Boolean);
 
                 info.innerHTML = `
-          <div style="font-weight:900;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
-
           <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
           <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
           <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
