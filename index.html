@@ -160,6 +160,22 @@
             position: relative
         }
 
+        /* ===== MOBILE SCRIM (dim background when sheet is open) ===== */
+        .sheet-scrim {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .18s ease;
+            z-index: 50;
+        }
+
+        .sheet-scrim.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
         #tree {
             width: 100%;
             height: 100%
@@ -271,6 +287,13 @@
             justify-content: center;
             align-items: center;
             gap: 12px;
+        }
+
+        /* Sticky header for long scroll */
+        .info-header {
+            position: sticky;
+            top: 0;
+            z-index: 2;
         }
 
         .info-header-title {
@@ -491,6 +514,9 @@
         @media (max-aspect-ratio: 1/1) {
             :root {
                 --panel-w: 100vw;
+                --sheet-peek: 64px;
+                --sheet-half: 56vh;
+                --sheet-full: 92vh;
             }
 
             .info-tab {
@@ -505,12 +531,22 @@
                 left: 0;
                 bottom: 0;
                 width: 100%;
-                height: min(70vh, 560px);
+                height: var(--sheet-full);
                 border-radius: 18px 18px 0 0;
-                transform: translateY(calc(100% - 56px));
+                /* default: collapsed */
+                transform: translateY(calc(100% - var(--sheet-peek)));
             }
 
-            .info-panel.open {
+            /* Sheet states */
+            .info-panel[data-state="collapsed"] {
+                transform: translateY(calc(100% - var(--sheet-peek)));
+            }
+
+            .info-panel[data-state="half"] {
+                transform: translateY(calc(100% - var(--sheet-half)));
+            }
+
+            .info-panel[data-state="full"] {
                 transform: translateY(0);
             }
 
@@ -523,8 +559,32 @@
                 padding: 12px 14px;
             }
 
+            /* Grab handle */
+            .info-header::before {
+                content: "";
+                position: absolute;
+                top: 8px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 44px;
+                height: 4px;
+                border-radius: 6px;
+                background: rgba(255, 255, 255, 0.35);
+            }
+
+            .info-header {
+                position: sticky;
+                top: 0;
+            }
+
             .info-header-title {
                 font-size: 15px;
+            }
+
+            .info-content {
+                /* Header is a bit taller on mobile because of the handle */
+                height: calc(100% - 72px);
+                -webkit-overflow-scrolling: touch;
             }
         }
     </style>
@@ -549,6 +609,8 @@
 
         <div class="main-content">
             <div id="tree"></div>
+            <!-- затемнение фона для мобильного bottom-sheet -->
+            <div id="sheet-scrim" class="sheet-scrim" aria-hidden="true"></div>
         </div>
 
         <!-- TAB ВНЕ панели (важно!) -->
@@ -865,7 +927,9 @@
 
         function getAvailableViewportRect() {
             const panel = document.getElementById('info-panel');
-            const open = panel?.classList.contains('open');
+            const open = isPortrait()
+                ? ((panel?.getAttribute('data-state') || 'collapsed') !== 'collapsed')
+                : panel?.classList.contains('open');
 
             let left = 0, top = 0, right = w, bottom = h;
 
@@ -1104,6 +1168,11 @@
         function selectPerson(id, doRerender = true) {
             currentId = id;
             updateInfoUI();
+            // Mobile UX: при выборе человека показываем bottom-sheet (half)
+            if (isPortrait()) {
+                const st = getSheetState();
+                if (st === 'collapsed') setSheetState('half');
+            }
             if (doRerender) render(false);
         }
 
@@ -1166,27 +1235,69 @@
             el.appendChild(label);
         }
 
+        function getSheetState() {
+            const panel = document.getElementById('info-panel');
+            return panel.getAttribute('data-state') || 'collapsed';
+        }
+
+        function setSheetState(state) {
+            const panel = document.getElementById('info-panel');
+            panel.setAttribute('data-state', state);
+            // на мобиле НЕ используем класс open (он был для десктопа и может конфликтовать)
+            panel.classList.remove('open');
+
+            const scrim = document.getElementById('sheet-scrim');
+            const scrimOn = (state === 'half' || state === 'full');
+            if (scrim) scrim.classList.toggle('open', scrimOn);
+        }
+
+        function isPanelOpenDesktop() {
+            return document.getElementById('info-panel').classList.contains('open');
+        }
+
         function updatePanelArrows() {
             const panel = document.getElementById('info-panel');
             const tab = document.getElementById('info-tab');
-            const open = panel.classList.contains('open');
 
+            if (isPortrait()) {
+                // Mobile: TAB hidden; state controlled by data-state
+                const st = getSheetState();
+                const scrim = document.getElementById('sheet-scrim');
+                const scrimOn = (st === 'half' || st === 'full');
+                if (scrim) scrim.classList.toggle('open', scrimOn);
+                return;
+            }
+
+            // Desktop: TAB + panel open/close
+            const open = isPanelOpenDesktop();
             tab.classList.toggle('open', open);
-
             document.getElementById('info-tab-arrow').innerHTML = open
                 ? `<i class="fa-solid fa-arrow-right"></i>`
                 : `<i class="fa-solid fa-arrow-left"></i>`;
-
-            const icon = document.getElementById('toggle-info-icon');
-            if (isPortrait()) icon.className = open ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up';
-            else icon.className = open ? 'fa-solid fa-arrow-right' : 'fa-solid fa-arrow-left';
         }
 
         function togglePanel(force) {
             const panel = document.getElementById('info-panel');
+
+            if (isPortrait()) {
+                // Mobile: cycle states
+                const st = getSheetState();
+                if (typeof force === 'boolean') {
+                    setSheetState(force ? 'half' : 'collapsed');
+                } else {
+                    // tap: collapsed -> half -> full -> half
+                    if (st === 'collapsed') setSheetState('half');
+                    else if (st === 'half') setSheetState('full');
+                    else setSheetState('half');
+                }
+                updatePanelArrows();
+                if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
+                return;
+            }
+
+            // Desktop
             if (typeof force === 'boolean') panel.classList.toggle('open', force);
             else panel.classList.toggle('open');
-
             updatePanelArrows();
             if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
         }
@@ -1503,9 +1614,17 @@
             document.getElementById('info-tab').onclick = () => togglePanel();
             document.getElementById('toggle-info').onclick = (e) => { e.stopPropagation(); togglePanel(); };
 
+            // Mobile: tap header toggles half/full; swipe controls states
             document.getElementById('info-header').onclick = () => {
                 if (isPortrait()) togglePanel();
             };
+
+            const scrim = document.getElementById('sheet-scrim');
+            if (scrim) {
+                scrim.onclick = () => {
+                    if (isPortrait()) setSheetState('collapsed');
+                };
+            }
 
             window.addEventListener('resize', () => {
                 render(false);
@@ -1514,10 +1633,124 @@
 
             window.matchMedia('(max-aspect-ratio: 1/1)').addEventListener('change', () => {
                 updateInfoUI();
+                // при смене ориентации фиксируем корректный режим панели
+                if (isPortrait()) {
+                    setSheetState('collapsed');
+                } else {
+                    document.getElementById('info-panel').removeAttribute('data-state');
+                }
                 if (lastRenderedRoot) d3.timeout(() => panTreeToAvailableCenter(lastRenderedRoot), 0);
             });
 
+            if (isPortrait()) setSheetState('collapsed');
             updatePanelArrows();
+
+            attachSheetGestures();
+        }
+
+        function cssPxVar(name, fallbackPx) {
+            const v = getCssVar(name);
+            if (!v) return fallbackPx;
+            if (v.endsWith('px')) return parseFloat(v);
+            if (v.endsWith('vh')) return window.innerHeight * (parseFloat(v) / 100);
+            return fallbackPx;
+        }
+
+        function attachSheetGestures() {
+            const panel = document.getElementById('info-panel');
+            const header = document.getElementById('info-header');
+            if (!panel || !header) return;
+
+            let dragging = false;
+            let startY = 0;
+            let startTranslate = 0;
+            let panelH = 0;
+
+            const getTranslateY = () => {
+                const tr = panel.style.transform || '';
+                const m = tr.match(/translateY\(([-0-9.]+)px\)/);
+                return m ? parseFloat(m[1]) : null;
+            };
+
+            const stateToTranslate = (st) => {
+                panelH = panel.getBoundingClientRect().height;
+                const peek = cssPxVar('--sheet-peek', 64);
+                const half = cssPxVar('--sheet-half', window.innerHeight * 0.56);
+                if (st === 'full') return 0;
+                if (st === 'half') return Math.max(0, panelH - half);
+                return Math.max(0, panelH - peek);
+            };
+
+            const applyTranslate = (px, withTransition) => {
+                panel.style.transition = withTransition ? '' : 'none';
+                panel.style.transform = `translateY(${px}px)`;
+            };
+
+            const snapToNearestState = (currentTranslate) => {
+                panelH = panel.getBoundingClientRect().height;
+                const peek = cssPxVar('--sheet-peek', 64);
+                const half = cssPxVar('--sheet-half', window.innerHeight * 0.56);
+
+                const visible = Math.max(0, Math.min(panelH, panelH - currentTranslate));
+                const targets = [
+                    { st: 'collapsed', v: peek },
+                    { st: 'half', v: Math.min(panelH, half) },
+                    { st: 'full', v: panelH }
+                ];
+                targets.sort((a, b) => Math.abs(a.v - visible) - Math.abs(b.v - visible));
+                setSheetState(targets[0].st);
+                // очистим inline transform, пусть работает CSS
+                panel.style.transform = '';
+                panel.style.transition = '';
+            };
+
+            const onDown = (clientY) => {
+                if (!isPortrait()) return;
+                dragging = true;
+                startY = clientY;
+                panelH = panel.getBoundingClientRect().height;
+                startTranslate = stateToTranslate(getSheetState());
+                applyTranslate(startTranslate, false);
+            };
+
+            const onMove = (clientY) => {
+                if (!dragging) return;
+                const dy = clientY - startY;
+                // тянем вниз/вверх, но не выходим за пределы
+                const next = Math.max(0, Math.min(panelH, startTranslate + dy));
+                applyTranslate(next, false);
+            };
+
+            const onUp = () => {
+                if (!dragging) return;
+                dragging = false;
+                const tr = getTranslateY();
+                const current = (tr === null) ? startTranslate : tr;
+                snapToNearestState(current);
+            };
+
+            // Touch
+            header.addEventListener('touchstart', (e) => {
+                if (!isPortrait()) return;
+                if (e.touches?.length !== 1) return;
+                onDown(e.touches[0].clientY);
+            }, { passive: true });
+
+            window.addEventListener('touchmove', (e) => {
+                if (!dragging) return;
+                if (e.touches?.length !== 1) return;
+                onMove(e.touches[0].clientY);
+            }, { passive: true });
+
+            window.addEventListener('touchend', () => onUp(), { passive: true });
+
+            // Mouse (на всякий)
+            header.addEventListener('mousedown', (e) => {
+                if (!isPortrait()) return;
+                onDown(e.clientY);
+            });
+            window.addEventListener('mousemove', (e) => onMove(e.clientY));
+            window.addEventListener('mouseup', () => onUp());
         }
 
         function onPersonClick(clickedId, fullRoot) {
