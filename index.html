@@ -586,6 +586,32 @@
                 height: calc(100% - 72px);
                 -webkit-overflow-scrolling: touch;
             }
+
+
+            /* Bigger tap targets for relatives lists on mobile */
+            .list {
+                gap: 10px;
+            }
+
+            .list-item {
+                padding: 14px 12px;
+                border-radius: 16px;
+                min-height: 52px;
+            }
+
+            .list-item:active {
+                background: rgba(15, 23, 42, .075);
+                border-color: rgba(15, 23, 42, .12);
+                transform: none;
+            }
+
+            .li-name {
+                font-size: 14px;
+            }
+
+            .li-meta {
+                font-size: 12px;
+            }
         }
     </style>
 </head>
@@ -1170,8 +1196,7 @@
             updateInfoUI();
             // Mobile UX: при выборе человека показываем bottom-sheet (half)
             if (isPortrait()) {
-                const st = getSheetState();
-                if (st === 'collapsed') setSheetState('half');
+                setSheetState('half');
             }
             if (doRerender) render(false);
         }
