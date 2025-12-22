@@ -255,6 +255,8 @@
             border-radius: 18px 0 0 18px;
             box-shadow: var(--shadow);
             border: 1px solid rgba(15, 23, 42, .06);
+            /* Чтобы TAB выглядел частью панели: границу на стыке рисует TAB */
+            border-left: none;
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
             overflow: hidden;
@@ -392,7 +394,8 @@
                 linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04)),
                 rgba(15, 23, 42, .70);
 
-            box-shadow: 0 16px 34px rgba(0, 0, 0, .22);
+            /* Тень такая же, как у панели — выглядит единым блоком */
+            box-shadow: var(--shadow);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
 
@@ -404,7 +407,13 @@
         }
 
         .info-tab.open {
-            transform: translateX(calc(-1 * var(--panel-w)));
+            /* Чуть перекрываем стык, чтобы не было 1px “шва” */
+            transform: translateX(calc(-1 * var(--panel-w) + 2px));
+        }
+
+        /* Когда панель открыта, TAB становится “бортиком” панели */
+        .info-tab.open {
+            border-color: rgba(15, 23, 42, .10);
         }
 
         .info-tab:hover {
