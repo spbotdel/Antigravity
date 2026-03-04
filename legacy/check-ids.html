@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <script>
+    fetch("./3.ged")
+      .then(r => r.text())
+      .then(text => {
+        // Ищем все строки с INDI
+        const lines = text.split('\n');
+        const indiLines = lines.filter(line => line.includes('INDI'));
+        
+        console.log("Найдено INDI строк:", indiLines.length);
+        console.log("Первые 5 INDI строк:");
+        indiLines.slice(0, 5).forEach(line => console.log(line));
+        
+        // Извлекаем ID
+        const ids = [];
+        lines.forEach(line => {
+          const match = line.match(/0\s+(@?[IF]\d+@?)\s+(INDI|FAM)/);
+          if (match) ids.push(match[1]);
+        });
+        
+        console.log("\nВсе ID в файле:");
+        ids.forEach(id => console.log(id));
+      });
+  </script>
+</body>
+</html>

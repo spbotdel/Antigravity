@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Семейное древо</title>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-0: #0b1020;
+            --bg-1: #101a3a;
+
+            --panel-border: rgba(255, 255, 255, .10);
+
+            --text: #e7eaf3;
+            --muted: rgba(231, 234, 243, .72);
+
+            --card: #ffffff;
+            --card-text: #0f172a;
+            --card-muted: #64748b;
+
+            --male: #2563eb;
+            --female: #ef4444;
+            --unknown: #94a3b8;
+
+            --link: rgba(226, 232, 240, .26);
+            --link-strong: rgba(226, 232, 240, .38);
+
+            --shadow: 0 14px 30px rgba(0, 0, 0, .22);
+
+            --ring: #fb7185;
+
+            --dim: 0.18;
+            --dimLinks: 0.12;
+
+            --branch-color: rgba(56, 189, 248, .85);
+
+            --panel-w: 360px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            background:
+                radial-gradient(1200px 700px at 20% 20%, rgba(99, 102, 241, .20), transparent 60%),
+                radial-gradient(1000px 700px at 80% 30%, rgba(34, 211, 238, .16), transparent 55%),
+                radial-gradient(900px 700px at 60% 90%, rgba(244, 63, 94, .10), transparent 55%),
+                linear-gradient(160deg, var(--bg-1), var(--bg-0));
+            color: var(--text);
+        }
+
+        .app-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column
+        }
+
+        .app-header {
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, .55);
+            border-bottom: 1px solid var(--panel-border);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        .logo i {
+            width: 34px;
+            height: 34px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .10);
+            color: #a5b4fc;
+            font-size: 16px;
+        }
+
+        .logo h1 {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: .2px
+        }
+
+        .logo .sub {
+            margin-left: 10px;
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 500;
+            display: none;
+        }
+
+        @media(min-width:980px) {
+            .logo .sub {
+                display: inline
+            }
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .ctrl-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, .08);
+            border: 1px solid rgba(255, 255, 255, .10);
+            color: var(--text);
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, .12);
+            transition: transform .12s ease, background .12s ease, border-color .12s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ctrl-btn:hover {
+            background: rgba(255, 255, 255, .12);
+            border-color: rgba(255, 255, 255, .16);
+            transform: translateY(-1px);
+        }
+
+        .ctrl-btn:active {
+            transform: translateY(0px) scale(.98);
+        }
+
+        .main-content {
+            flex: 1;
+            position: relative
+        }
+
+        #tree {
+            width: 100%;
+            height: 100%
+        }
+
+        .link {
+            fill: none;
+            stroke: var(--link);
+            stroke-width: 1.6;
+            stroke-linecap: round;
+        }
+
+        .node {
+            cursor: default
+        }
+
+        .card-shadow {
+            filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .18));
+        }
+
+        .person-outer {
+            fill: var(--card);
+            stroke-width: 1.6;
+            transition: transform .12s ease, filter .12s ease, stroke-width .12s ease, opacity .15s ease;
+        }
+
+        .person-outer.m {
+            stroke: color-mix(in srgb, var(--male) 65%, white)
+        }
+
+        .person-outer.f {
+            stroke: color-mix(in srgb, var(--female) 65%, white)
+        }
+
+        .person-outer.u {
+            stroke: rgba(148, 163, 184, .9)
+        }
+
+        .node:hover .person-outer {
+            filter: drop-shadow(0 14px 22px rgba(0, 0, 0, .22));
+            transform: translateY(-1px);
+        }
+
+        .node.selected .person-outer {
+            stroke: #f59e0b !important;
+            stroke-width: 3 !important;
+        }
+
+        .dimmed {
+            opacity: var(--dim);
+        }
+
+        .dimmed-link {
+            opacity: var(--dimLinks);
+        }
+
+        .in-branch .person-outer {
+            filter: drop-shadow(0 18px 26px color-mix(in srgb, var(--branch-color) 35%, transparent));
+        }
+
+        .in-branch-link {
+            stroke: var(--branch-color) !important;
+            opacity: .78 !important;
+            stroke-width: 2.1 !important;
+        }
+
+        /* ===== INFO PANEL (desktop: right) ===== */
+        .info-panel {
+            position: fixed;
+            top: 76px;
+            right: 0;
+            width: var(--panel-w);
+            height: calc(100vh - 132px);
+            transform: translateX(100%);
+            /* <-- теперь скрывается полностью */
+            transition: transform .28s ease;
+            z-index: 100;
+            will-change: transform;
+            pointer-events: auto;
+            overflow: visible;
+        }
+
+        .info-panel.open {
+            transform: translateX(0)
+        }
+
+        /* Внутренняя “поверхность” */
+        .info-surface {
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, .92);
+            color: #0f172a;
+            border-radius: 18px 0 0 18px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(15, 23, 42, .06);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            overflow: hidden;
+        }
+
+        .info-header {
+            background: rgba(15, 23, 42, .92);
+            color: #fff;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .info-header-title {
+            font-weight: 800;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .toggle-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .10);
+            border: 1px solid rgba(255, 255, 255, .12);
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+        }
+
+        .info-content {
+            padding: 14px 14px 18px;
+            overflow: auto;
+            height: calc(100% - 52px);
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, .05);
+            border: 1px solid rgba(15, 23, 42, .08);
+            font-size: 12px;
+            color: rgba(15, 23, 42, .78);
+            margin-top: 10px;
+        }
+
+        .section {
+            margin-top: 14px;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 900;
+            color: rgba(15, 23, 42, .72);
+            text-transform: uppercase;
+            letter-spacing: .6px;
+            margin-bottom: 8px;
+        }
+
+        .list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .list-item {
+            padding: 10px 10px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, .045);
+            border: 1px solid rgba(15, 23, 42, .08);
+            cursor: pointer;
+            transition: transform .12s ease, background .12s ease, border-color .12s ease;
+        }
+
+        .list-item:hover {
+            background: rgba(15, 23, 42, .06);
+            border-color: rgba(15, 23, 42, .10);
+            transform: translateY(-1px);
+        }
+
+        .li-name {
+            font-weight: 800;
+            font-size: 13px;
+            color: rgba(15, 23, 42, .90);
+        }
+
+        .li-meta {
+            font-size: 12px;
+            color: rgba(15, 23, 42, .60);
+            margin-top: 4px;
+        }
+
+        /* ===== DESKTOP TAB (отдельно от панели!) ===== */
+        .info-tab {
+            position: fixed;
+            right: 0;
+            top: 190px;
+            width: 58px;
+            height: 320px;
+            z-index: 101;
+            /* чуть выше панели */
+            cursor: pointer;
+            user-select: none;
+
+            border-radius: 18px 0 0 18px;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-right: none;
+
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .04)),
+                rgba(15, 23, 42, .70);
+
+            box-shadow: 0 16px 34px rgba(0, 0, 0, .22);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            transition: transform .28s ease, background .18s ease;
+        }
+
+        .info-tab.open {
+            transform: translateX(calc(-1 * var(--panel-w)));
+        }
+
+        .info-tab:hover {
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .06)),
+                rgba(15, 23, 42, .72);
+        }
+
+        .info-tab-inner {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            padding: 10px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-tab-arrow {
+            width: 36px;
+            height: 36px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, .10);
+            border: 1px solid rgba(255, 255, 255, .12);
+            color: #fff;
+            font-size: 15px;
+            flex: 0 0 auto;
+            box-shadow: 0 10px 18px rgba(0, 0, 0, .16);
+        }
+
+        /* аккуратная вертикальная подпись */
+        .info-tab-label {
+            width: 100%;
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            overflow: hidden;
+            padding: 4px 2px;
+        }
+
+        .vword {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .vchar {
+            font-weight: 800;
+            letter-spacing: .2px;
+            font-size: 12px;
+            line-height: 12px;
+            color: rgba(255, 255, 255, .94);
+            text-shadow: 0 1px 0 rgba(0, 0, 0, .22);
+        }
+
+        .vchar.muted {
+            font-weight: 700;
+            opacity: .82;
+        }
+
+        /* ===== Portrait/bottom-sheet ===== */
+        @media (max-aspect-ratio: 1/1) {
+            :root {
+                --panel-w: 100vw;
+                --sheet-peek: 56px;
+                /* будет синхронизироваться JS-ом */
+                --sheet-half: 56vh;
+                /* будет синхронизироваться JS-ом */
+            }
+
+            .info-tab {
+                display: none;
+            }
+
+            /* ===== Mobile bottom-sheet (app-like) ===== */
+            .sheet-scrim {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, .35);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity .18s ease;
+                z-index: 95;
+            }
+
+            .sheet-scrim.show {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            .info-panel {
+                top: auto;
+                right: auto;
+                left: 0;
+                bottom: 0;
+                width: 100%;
+                height: min(78vh, 620px);
+                border-radius: 18px 18px 0 0;
+                /* default collapsed */
+                transform: translateY(calc(100% - var(--sheet-peek)));
+            }
+
+            /* state-driven transforms */
+            .info-panel[data-state="collapsed"] {
+                transform: translateY(calc(100% - var(--sheet-peek)));
+            }
+
+            .info-panel[data-state="half"] {
+                transform: translateY(calc(100% - var(--sheet-half)));
+            }
+
+            /* drag support */
+            .info-panel.dragging {
+                transition: none !important;
+            }
+
+            .info-header {
+                touch-action: none;
+                /* allow vertical drag */
+            }
+
+            /* В collapsed показываем только header (убираем белую полоску) */
+            .info-panel[data-state="collapsed"] .info-content {
+                display: none;
+            }
+
+            .info-surface {
+                border-radius: 18px 18px 0 0;
+            }
+
+            .info-header {
+                cursor: pointer;
+                padding: 12px 14px 10px;
+            }
+
+            /* grab handle */
+            .info-header::before {
+                content: "";
+                width: 46px;
+                height: 4px;
+                border-radius: 4px;
+                background: rgba(255, 255, 255, .35);
+                display: block;
+                margin: 2px auto 10px;
+            }
+
+            .info-header-title {
+                font-size: 15px;
+                text-align: center;
+                width: 100%;
+            }
+
+            /* toggle button on mobile is optional; keep but smaller */
+            .toggle-btn {
+                border-radius: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+
+        <header class="app-header">
+            <div class="logo">
+                <i class="fa-solid fa-tree"></i>
+                <h1>Семейное древо <span class="sub">— интерактивная генеалогия</span></h1>
+            </div>
+
+            <div class="controls">
+                <button id="zoom-in" class="ctrl-btn" title="Увеличить"><i class="fa-solid fa-plus"></i></button>
+                <button id="zoom-out" class="ctrl-btn" title="Уменьшить"><i class="fa-solid fa-minus"></i></button>
+                <button id="reset-view" class="ctrl-btn" title="Сброс"><i
+                        class="fa-solid fa-arrows-rotate"></i></button>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div id="tree"></div>
+        </div>
+
+        <!-- TAB ВНЕ панели (важно!) -->
+        <div id="info-tab" class="info-tab" title="Информация">
+            <div class="info-tab-inner">
+                <div id="info-tab-arrow" class="info-tab-arrow"><i class="fa-solid fa-arrow-left"></i></div>
+                <div id="info-tab-label" class="info-tab-label"></div>
+            </div>
+        </div>
+
+        <div id="sheet-scrim" class="sheet-scrim"></div>
+
+        <div id="info-panel" class="info-panel">
+            <div class="info-surface">
+                <div id="info-header" class="info-header" title="Открыть / закрыть">
+                    <div id="info-title" class="info-header-title">Информация</div>
+                    <button id="toggle-info" class="toggle-btn" aria-label="toggle">
+                        <i id="toggle-info-icon" class="fa-solid fa-arrow-left"></i>
+                    </button>
+                </div>
+
+                <div id="person-info" class="info-content">Выберите человека</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        /* ================= STATE ================= */
+        let data = null;
+        let rootId = null;
+
+        let currentId = null;
+        let focusRawId = null;
+        let focusResolvedId = null;
+
+        let svg = null, g = null, zoom = null, layout = null;
+        let w = 0, h = 0;
+
+        let lastTransform = d3.zoomIdentity;
+        let lastRenderedRoot = null;
+
+        /* ================= CONFIG ================= */
+        const CARD_W = 230;
+        const CARD_H = 90;
+        const COUPLE_GAP = 8;
+        const COUPLE_TOTAL_H = CARD_H * 2 + COUPLE_GAP;
+
+        const NODE_X = COUPLE_TOTAL_H + 14;
+        const NODE_Y = 250;
+        const SEP_SIBLINGS = 1.0;
+        const SEP_OTHER = 1.12;
+
+        const ANIM_MS = 900;
+
+        const PAN_MS = 900;
+        const PAN_EASE = d3.easeCubicInOut;
+
+        const MARRIAGE_ICON = 'fa-heart';
+
+        /* ================= INIT ================= */
+        fetch('./3.ged')
+            .then(r => r.text())
+            .then(t => {
+                data = parseGedcom(t);
+                rootId = findRoot();
+                initSvgOnce();
+                render(true);
+                setupUI();
+                updateInfoUI();
+                syncSheetMetricsLater();
+                // стартуем на мобиле в collapsed
+                if (isPortrait()) setSheetState('collapsed');
+            })
+            .catch(e => console.error('GED load error', e));
+
+        function initSvgOnce() {
+            const container = document.getElementById('tree');
+            w = container.clientWidth;
+            h = container.clientHeight;
+
+            svg = d3.select('#tree').append('svg')
+                .attr('width', w)
+                .attr('height', h);
+
+            g = svg.append('g');
+
+            zoom = d3.zoom()
+                .scaleExtent([0.15, 3])
+                .on('zoom', e => {
+                    lastTransform = e.transform;
+                    g.attr('transform', e.transform);
+                });
+
+            svg.call(zoom);
+            svg.call(zoom.transform, lastTransform);
+
+            layout = d3.tree()
+                .nodeSize([NODE_X, NODE_Y])
+                .separation((a, b) => a.parent === b.parent ? SEP_SIBLINGS : SEP_OTHER);
+        }
+
+        /* ================= GEDCOM ================= */
+        function parseGedcom(t) {
+            const people = {}, fams = {};
+            let cur = null, evt = null;
+
+            t.split(/\r?\n/).forEach(l => {
+                const m = l.match(/^(\d+)\s+(@?[^ ]+@?)\s*(.*)$/);
+                if (!m) return;
+
+                const lvl = +m[1];
+                const tag = m[2].replace(/@/g, '');
+                const val = m[3];
+
+                if (lvl === 0) {
+                    evt = null;
+                    if (val.includes('INDI')) {
+                        cur = { t: 'P', id: tag };
+                        people[tag] = { id: tag, name: '', sex: '', birth: '', death: '', FAMS: [], FAMC: [] };
+                    } else if (val.includes('FAM')) {
+                        cur = { t: 'F', id: tag };
+                        fams[tag] = { id: tag, husb: null, wife: null, chil: [], marriage: '' };
+                    } else cur = null;
+                    return;
+                }
+
+                if (!cur) return;
+
+                if (lvl === 1) {
+                    evt = null;
+                    if (tag === 'BIRT') evt = 'birth';
+                    if (tag === 'DEAT') evt = 'death';
+                    if (tag === 'MARR') evt = 'marriage';
+                }
+
+                if (cur.t === 'P') {
+                    const p = people[cur.id];
+                    if (tag === 'NAME') p.name = val.replace(/\//g, '').trim();
+                    if (tag === 'SEX') p.sex = val;
+                    if (tag === 'FAMS') p.FAMS.push(val.replace(/@/g, ''));
+                    if (tag === 'FAMC') p.FAMC.push(val.replace(/@/g, ''));
+                    if (lvl === 2 && evt && tag === 'DATE') p[evt] = val.trim();
+                }
+
+                if (cur.t === 'F') {
+                    const f = fams[cur.id];
+                    if (tag === 'HUSB') f.husb = val.replace(/@/g, '');
+                    if (tag === 'WIFE') f.wife = val.replace(/@/g, '');
+                    if (tag === 'CHIL') f.chil.push(val.replace(/@/g, ''));
+                    if (lvl === 2 && evt && tag === 'DATE') f[evt] = val.trim();
+                }
+            });
+
+            return { people, fams };
+        }
+
+        function findRoot() {
+            const ids = Object.keys(data.people);
+            return ids.find(id => !(data.people[id].FAMC || []).length) || ids[0];
+        }
+
+        /* ================= TREE BUILD ================= */
+        function buildDisplayTree(personId, seen = new Set()) {
+            if (!personId || seen.has(personId)) return null;
+            seen.add(personId);
+
+            const p = data.people[personId];
+            if (!p) return null;
+
+            const fams = (p.FAMS || []).map(fid => data.fams[fid]).filter(Boolean);
+
+            const mainFam = fams.find(f => {
+                const spouse = (f.husb === personId) ? f.wife : f.husb;
+                return !!spouse || (f.chil && f.chil.length);
+            });
+
+            if (mainFam) {
+                const spouseId = (mainFam.husb === personId) ? mainFam.wife : mainFam.husb;
+                const node = {
+                    type: 'couple',
+                    primaryId: personId,
+                    spouseId: spouseId || null,
+                    marriage: mainFam.marriage || '',
+                    children: []
+                };
+
+                (mainFam.chil || []).forEach(cid => {
+                    const ch = buildDisplayTree(cid, new Set(seen));
+                    if (ch) node.children.push(ch);
+                });
+
+                if (!node.children.length) delete node.children;
+                return node;
+            }
+
+            return {
+                type: 'person',
+                id: personId,
+                name: p.name || 'Без имени',
+                sex: p.sex || '',
+                b: p.birth || '',
+                d: p.death || '',
+            };
+        }
+
+        function dataPrimaryId(node) {
+            if (!node) return null;
+            if (node.type === 'couple') return node.primaryId;
+            if (node.type === 'person') return node.id;
+            return null;
+        }
+
+        function resolveFocusTarget(rootH, clickedId) {
+            let found = null;
+            rootH.each(d => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                if (pid === clickedId) found = pid;
+            });
+            if (found) return found;
+
+            let couplePrimary = null;
+            rootH.each(d => {
+                if (d.data.type === 'couple' && d.data.spouseId === clickedId) {
+                    couplePrimary = d.data.primaryId;
+                }
+            });
+            return couplePrimary || clickedId;
+        }
+
+        /* ================= BRANCH + SIBLINGS ================= */
+        function computeBranchIds(rootH, targetPersonId) {
+            let targetNode = null;
+            rootH.each(d => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                if (pid === targetPersonId) targetNode = d;
+            });
+            if (!targetNode) return new Set();
+
+            const ids = new Set();
+            targetNode.ancestors().forEach(d => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                if (pid) ids.add(pid);
+            });
+            targetNode.descendants().forEach(d => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                if (pid) ids.add(pid);
+            });
+            return ids;
+        }
+
+        function getSiblingIds(personId) {
+            const p = data.people[personId];
+            if (!p) return [];
+            const famc = (p.FAMC || [])[0];
+            if (!famc) return [];
+            const fam = data.fams[famc];
+            if (!fam) return [];
+            const kids = fam.chil || [];
+            return kids.filter(id => id && id !== personId);
+        }
+
+        function expandIdsWithSiblingsFlat(baseIds, targetPersonId) {
+            const out = new Set(baseIds);
+            const sibs = getSiblingIds(targetPersonId);
+            for (const sid of sibs) out.add(sid);
+            return out;
+        }
+
+        function pruneDataByIds(node, keepIds, siblingSet) {
+            if (!node) return null;
+
+            const selfId = dataPrimaryId(node);
+            const isSibling = selfId && siblingSet && siblingSet.has(selfId);
+
+            if (isSibling) {
+                const p = data.people[selfId];
+                return {
+                    type: 'person',
+                    id: selfId,
+                    name: p?.name || 'Без имени',
+                    sex: p?.sex || '',
+                    b: p?.birth || '',
+                    d: p?.death || ''
+                };
+            }
+
+            const selfKept = selfId ? keepIds.has(selfId) : false;
+
+            const kids = (node.children || [])
+                .map(ch => pruneDataByIds(ch, keepIds, siblingSet))
+                .filter(Boolean);
+
+            if (selfKept || kids.length) {
+                const copy = { ...node };
+                if (kids.length) copy.children = kids;
+                else delete copy.children;
+                return copy;
+            }
+            return null;
+        }
+
+        /* ================= COLORS ================= */
+        function setBranchColorFromId(personId) {
+            const hue = hashHue(String(personId || 'x'));
+            const css = `hsla(${hue}, 92%, 62%, .88)`;
+            document.documentElement.style.setProperty('--branch-color', css);
+        }
+        function hashHue(s) {
+            let h = 0;
+            for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+            return h % 360;
+        }
+
+        /* ================= APP-LIKE CENTERING (PAN ONLY) ================= */
+        function isPortrait() {
+            return window.matchMedia('(max-aspect-ratio: 1/1)').matches;
+        }
+
+        function getAvailableViewportRect() {
+            const panel = document.getElementById('info-panel');
+            const state = panel?.dataset?.state || 'collapsed';
+            const open = isPortrait() ? (state !== 'collapsed') : panel?.classList.contains('open');
+
+            let left = 0, top = 0, right = w, bottom = h;
+
+            if (!panel || !open) {
+                return { left, top, right, bottom, cx: (left + right) / 2, cy: (top + bottom) / 2 };
+            }
+
+            const r = panel.getBoundingClientRect();
+
+            if (isPortrait()) {
+                bottom = Math.max(0, Math.min(h, r.top));
+            } else {
+                right = Math.max(0, Math.min(w, r.left));
+            }
+
+            if (right - left < 120 || bottom - top < 120) {
+                left = 0; top = 0; right = w; bottom = h;
+            }
+
+            return { left, top, right, bottom, cx: (left + right) / 2, cy: (top + bottom) / 2 };
+        }
+
+        function computeTreeBounds(renderRoot) {
+            const nodes = renderRoot.descendants();
+            if (!nodes.length) return null;
+
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+            for (const n of nodes) {
+                const vHalf = (n.data.type === 'couple') ? (COUPLE_TOTAL_H / 2) : (CARD_H / 2);
+                const hHalf = (CARD_W / 2);
+
+                minX = Math.min(minX, n.x - vHalf);
+                maxX = Math.max(maxX, n.x + vHalf);
+
+                minY = Math.min(minY, n.y - hHalf);
+                maxY = Math.max(maxY, n.y + hHalf);
+            }
+
+            return { minX, maxX, minY, maxY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+        }
+
+        function panTreeToAvailableCenter(renderRoot) {
+            if (!renderRoot) return;
+            const b = computeTreeBounds(renderRoot);
+            if (!b) return;
+
+            const k = lastTransform.k || 1;
+            const avail = getAvailableViewportRect();
+
+            const tx = avail.cx - (b.cy * k);
+            const ty = avail.cy - (b.cx * k);
+
+            const next = d3.zoomIdentity.translate(tx, ty).scale(k);
+
+            svg.interrupt();
+            svg.transition()
+                .duration(PAN_MS)
+                .ease(PAN_EASE)
+                .call(zoom.transform, next);
+        }
+
+        /* ================= LINK ANCHORS ================= */
+        function getLinkSourceAnchor(node) {
+            if (!node) return { x: 0, y: 0 };
+            const y = node.y + (CARD_W / 2);
+            return { x: node.x, y };
+        }
+
+        function getLinkTargetAnchor(node) {
+            if (!node) return { x: 0, y: 0 };
+            const d = node.data;
+            const y = node.y - (CARD_W / 2);
+
+            if (d.type === 'couple') {
+                const half = (CARD_H + COUPLE_GAP) / 2;
+                const topCardCenterX = node.x - half;
+                return { x: topCardCenterX, y };
+            }
+            return { x: node.x, y };
+        }
+
+        /* ================= NODE DRAW ================= */
+        function drawNode(gNode, n, fullRoot) {
+            if (n.type === 'person') {
+                const p = data.people[n.id] || { name: n.name, sex: n.sex, birth: n.b, death: n.d };
+                drawPersonCard(gNode, {
+                    id: n.id,
+                    name: p.name || n.name,
+                    sex: p.sex || n.sex,
+                    b: p.birth || n.b,
+                    d: p.death || n.d
+                }, 0, fullRoot);
+                return;
+            }
+
+            if (n.type === 'couple') {
+                const primary = data.people[n.primaryId];
+                const spouse = n.spouseId ? data.people[n.spouseId] : null;
+                const half = (CARD_H + COUPLE_GAP) / 2;
+
+                drawPersonCard(gNode, {
+                    id: n.primaryId,
+                    name: primary?.name || 'Без имени',
+                    sex: primary?.sex || '',
+                    b: primary?.birth || '',
+                    d: primary?.death || ''
+                }, -half, fullRoot);
+
+                if (spouse) {
+                    drawPersonCard(gNode, {
+                        id: n.spouseId,
+                        name: spouse?.name || 'Без имени',
+                        sex: spouse?.sex || '',
+                        b: spouse?.birth || '',
+                        d: spouse?.death || ''
+                    }, +half, fullRoot);
+                }
+
+                gNode.append('path')
+                    .attr('d', `M 0 ${-half + CARD_H / 2} L 0 ${+half - CARD_H / 2}`)
+                    .attr('fill', 'none')
+                    .attr('stroke', getCssVar('--link-strong'))
+                    .attr('stroke-width', 1.4);
+
+                const marriage = formatGedcomDate(n.marriage);
+                const W = marriage ? 200 : 56;
+                const H = 32;
+
+                gNode.append('foreignObject')
+                    .attr('x', -W / 2).attr('y', -H / 2)
+                    .attr('width', W).attr('height', H)
+                    .style('pointer-events', 'none')
+                    .append('xhtml:div')
+                    .style('width', '100%')
+                    .style('height', '100%')
+                    .style('display', 'flex')
+                    .style('align-items', 'center')
+                    .style('justify-content', 'center')
+                    .html(`
+            <div style="
+              display:inline-flex;align-items:center;gap:${marriage ? 8 : 0}px;
+              padding:5px 12px;border-radius:999px;
+              background:rgba(255,255,255,.92);
+              border:1px solid rgba(15,23,42,.08);
+              box-shadow: 0 10px 22px rgba(0,0,0,.12);
+              font-size:11px;color:rgba(15,23,42,.82);
+              font-weight:700;
+            ">
+              <i class="fa-solid ${escapeHtml(MARRIAGE_ICON)}" style="font-size:16px;color:${escapeHtml(getCssVar('--ring'))}"></i>
+              ${marriage ? `<span>${escapeHtml(marriage)}</span>` : ``}
+            </div>
+          `);
+
+                const kidsCount = (n.children && n.children.length) ? n.children.length : 0;
+                if (kidsCount > 0) {
+                    const chipW = 70, chipH = 26;
+                    const chipX = (-CARD_W / 2) + 10;
+                    const chipY = (-half - CARD_H / 2) + 10;
+
+                    gNode.append('foreignObject')
+                        .attr('x', chipX)
+                        .attr('y', chipY)
+                        .attr('width', chipW)
+                        .attr('height', chipH)
+                        .style('pointer-events', 'none')
+                        .append('xhtml:div')
+                        .style('width', '100%')
+                        .style('height', '100%')
+                        .style('display', 'flex')
+                        .style('align-items', 'center')
+                        .style('justify-content', 'center')
+                        .html(`
+              <div style="
+                width:100%;height:100%;
+                display:flex;align-items:center;justify-content:center;gap:7px;
+                border-radius:999px;
+                background:rgba(15,23,42,.06);
+                border:1px solid rgba(15,23,42,.10);
+                color:rgba(15,23,42,.78);
+                font-size:11px;font-weight:700;
+              ">
+                <i class="fa-solid fa-children" style="font-size:12px;"></i>
+                <span>${kidsCount}</span>
+              </div>
+            `);
+                }
+            }
+        }
+
+        function drawPersonCard(gNode, p, yOffset, fullRoot) {
+            const cls = p.sex === 'M' ? 'm' : p.sex === 'F' ? 'f' : 'u';
+
+            const group = gNode.append('g')
+                .attr('transform', `translate(0,${yOffset})`)
+                .style('cursor', 'pointer')
+                .on('click', (ev) => { ev.stopPropagation(); onPersonClick(p.id, fullRoot); });
+
+            group.append('rect')
+                .attr('class', 'person-outer card-shadow ' + cls)
+                .attr('x', -CARD_W / 2).attr('y', -CARD_H / 2)
+                .attr('width', CARD_W).attr('height', CARD_H)
+                .attr('rx', 18);
+
+            const lines = splitName3(p.name);
+            const text = group.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('y', -20)
+                .style('font-weight', '700')
+                .style('font-size', '12.5px')
+                .style('fill', getCssVar('--card-text'));
+
+            lines.forEach((ln, idx) => {
+                text.append('tspan')
+                    .attr('x', 0)
+                    .attr('dy', idx === 0 ? 0 : 14)
+                    .text(shorten(ln, 30));
+            });
+
+            const life = formatLifeLine(p);
+            if (life) {
+                group.append('text')
+                    .attr('text-anchor', 'middle')
+                    .attr('y', 34)
+                    .style('font-size', '11px')
+                    .style('font-weight', '600')
+                    .style('fill', getCssVar('--card-muted'))
+                    .text(life);
+            }
+
+            if (p.id === currentId) gNode.classed('selected', true);
+            else gNode.classed('selected', false);
+        }
+
+        /* ================= INFO PANEL ================= */
+        function selectPerson(id, doRerender = true) {
+            currentId = id;
+            updateInfoUI();
+
+            // Mobile: при выборе человека держим карточку в свернутом состоянии (peek)
+            if (isPortrait()) {
+                syncSheetMetricsLater();
+                setSheetState('collapsed', { keepTitle: true });
+            }
+
+            if (doRerender) render(false);
+        }
+
+        function renderMiniPerson(p) {
+            const name = escapeHtml(p?.name || 'Без имени');
+            const b = formatGedcomDate(p?.birth || '');
+            const d = formatGedcomDate(p?.death || '');
+            const life = (b && d) ? `${b} — ${d}` : (b || d || '');
+            return `
+        <div class="list-item" data-person-id="${escapeHtml(p.id)}">
+          <div class="li-name">${name}</div>
+          ${life ? `<div class="li-meta">${escapeHtml(life)}</div>` : ``}
+        </div>
+      `;
+        }
+
+        function getChildrenIds(personId) {
+            const p = data.people[personId];
+            if (!p) return [];
+            const out = new Set();
+            (p.FAMS || []).forEach(fid => {
+                const fam = data.fams[fid];
+                if (!fam) return;
+                (fam.chil || []).forEach(cid => { if (cid) out.add(cid); });
+            });
+            return Array.from(out);
+        }
+
+        // ✅ Таб: Фамилия вертикально + инициалы
+        function renderVerticalNameToTab() {
+            const el = document.getElementById('info-tab-label');
+            if (!el) return;
+
+            el.innerHTML = '';
+            if (!currentId) return;
+
+            const full = String(data.people[currentId]?.name || '').trim().replace(/\s+/g, ' ');
+            if (!full) return;
+
+            const parts = full.split(' ').filter(Boolean);
+            const first = parts[0] || '';
+            const patronymic = parts.length >= 3 ? parts[1] : '';
+            const last = parts.length >= 2 ? parts[parts.length - 1] : '';
+
+            const initials = [
+                first ? (first[0].toUpperCase() + '.') : '',
+                patronymic ? (patronymic[0].toUpperCase() + '.') : ''
+            ].filter(Boolean).join('');
+
+            // Сначала фамилия (главное), ниже инициалы
+            const words = [];
+            if (last) words.push({ text: last, muted: false });
+            if (initials) words.push({ text: initials, muted: true });
+
+            for (const w of words) {
+                const ww = document.createElement('div');
+                ww.className = 'vword';
+                for (const ch of String(w.text)) {
+                    const c = document.createElement('div');
+                    c.className = 'vchar' + (w.muted ? ' muted' : '');
+                    c.textContent = ch;
+                    ww.appendChild(c);
+                }
+                el.appendChild(ww);
+            }
+        }
+
+        function updatePanelArrows() {
+            const panel = document.getElementById('info-panel');
+            const tab = document.getElementById('info-tab');
+
+            const state = panel?.dataset?.state || 'collapsed';
+            const desktopOpen = panel?.classList.contains('open');
+
+            // Desktop tab follows desktop open state
+            if (tab) tab.classList.toggle('open', desktopOpen);
+
+            const tabArrow = document.getElementById('info-tab-arrow');
+            if (tabArrow) {
+                tabArrow.innerHTML = desktopOpen
+                    ? `<i class="fa-solid fa-arrow-right"></i>`
+                    : `<i class="fa-solid fa-arrow-left"></i>`;
+            }
+
+            // Toggle icon adapts for mobile states
+            const icon = document.getElementById('toggle-info-icon');
+            if (!icon) return;
+
+            if (isPortrait()) {
+                // collapsed -> up (expand), half/full -> down (collapse)
+                icon.className = (state === 'collapsed') ? 'fa-solid fa-arrow-up' : 'fa-solid fa-arrow-down';
+            } else {
+                icon.className = desktopOpen ? 'fa-solid fa-arrow-right' : 'fa-solid fa-arrow-left';
+            }
+        }
+
+        function getSheetState() {
+            const panel = document.getElementById('info-panel');
+            return panel?.dataset?.state || 'collapsed';
+        }
+
+        function setSheetState(state, opts = {}) {
+            const panel = document.getElementById('info-panel');
+            const scrim = document.getElementById('sheet-scrim');
+            if (!panel) return;
+
+            panel.dataset.state = state;
+
+            // Keep legacy 'open' class for calculations (occupied viewport)
+            if (isPortrait()) {
+                panel.classList.toggle('open', state !== 'collapsed');
+                if (scrim) scrim.classList.toggle('show', state === 'half');
+            }
+
+            updatePanelArrows();
+            // Не панорамируем дерево автоматически при смене состояния панели
+        }
+
+        function syncSheetMetricsLater() {
+            if (!isPortrait()) return;
+            // два rAF чтобы дождаться раскладки/шрифтов
+            requestAnimationFrame(() => requestAnimationFrame(() => syncSheetMetrics()));
+        }
+
+        function syncSheetMetrics() {
+            if (!isPortrait()) return;
+            const panel = document.getElementById('info-panel');
+            const header = document.getElementById('info-header');
+            if (!panel || !header) return;
+
+            const headerH = Math.ceil(header.getBoundingClientRect().height) + 2;
+            document.documentElement.style.setProperty('--sheet-peek', `${headerH}px`);
+
+            // half height: 55% of viewport but not bigger than panel height
+            const panelH = Math.min(window.innerHeight * 0.78, 620);
+            const half = Math.min(panelH, Math.max(headerH + 140, Math.round(window.innerHeight * 0.55)));
+            document.documentElement.style.setProperty('--sheet-half', `${half}px`);
+        }
+
+        function togglePanel(force) {
+            const panel = document.getElementById('info-panel');
+
+            if (!isPortrait()) {
+                // Desktop: классический open/close
+                if (typeof force === 'boolean') panel.classList.toggle('open', force);
+                else panel.classList.toggle('open');
+                updatePanelArrows();
+                // Не панорамируем дерево автоматически при смене состояния панели
+                return;
+            }
+
+            // Mobile: state machine (collapsed <-> half)
+            syncSheetMetricsLater();
+
+            let next;
+            if (typeof force === 'boolean') {
+                next = force ? 'half' : 'collapsed';
+            } else {
+                const cur = getSheetState();
+                next = (cur === 'collapsed') ? 'half' : 'collapsed';
+            }
+            setSheetState(next);
+        }
+
+        function updateInfoUI() {
+            const title = document.getElementById('info-title');
+            const p = currentId ? data.people[currentId] : null;
+
+            title.textContent = p?.name ? p.name : 'Информация';
+            renderVerticalNameToTab();
+
+            const info = document.getElementById('person-info');
+            if (!p) {
+                info.innerHTML = 'Выберите человека';
+            } else {
+                const b = formatGedcomDate(p?.birth || '');
+                const d = formatGedcomDate(p?.death || '');
+                const sex = (p?.sex === 'M') ? 'Мужчина' : (p?.sex === 'F') ? 'Женщина' : '—';
+
+                const siblings = getSiblingIds(currentId).map(id => data.people[id]).filter(Boolean);
+                const children = getChildrenIds(currentId).map(id => data.people[id]).filter(Boolean);
+
+                info.innerHTML = `
+          <div style="font-weight:900;font-size:16px;color:#0f172a">${escapeHtml(p?.name || '')}</div>
+
+          <div class="pill"><i class="fa-solid fa-user"></i> <span>${escapeHtml(sex)}</span></div>
+          <div class="pill"><i class="fa-solid fa-cake-candles"></i> <span>${escapeHtml(b || '—')}</span></div>
+          <div class="pill"><i class="fa-solid fa-skull"></i> <span>${escapeHtml(d || '—')}</span></div>
+
+          <div class="section">
+            <div class="section-title">Братья и сёстры (${siblings.length})</div>
+            ${siblings.length ? `
+              <div class="list">${siblings.map(sp => renderMiniPerson(sp)).join('')}</div>
+            ` : `<div style="color:rgba(15,23,42,.55);font-size:12px;">Нет данных</div>`}
+          </div>
+
+          <div class="section">
+            <div class="section-title">Дети (${children.length})</div>
+            ${children.length ? `
+              <div class="list">${children.map(ch => renderMiniPerson(ch)).join('')}</div>
+            ` : `<div style="color:rgba(15,23,42,.55);font-size:12px;">Нет данных</div>`}
+          </div>
+        `;
+
+                document.querySelectorAll('[data-person-id]').forEach(el => {
+                    el.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const id = el.getAttribute('data-person-id');
+                        if (!id) return;
+                        selectPerson(id, true);
+                    });
+                });
+            }
+
+            updatePanelArrows();
+            syncSheetMetricsLater();
+            if (isPortrait()) setSheetState('collapsed');
+        }
+
+        /* ================= FORMAT ================= */
+        function splitName3(full) {
+            const s = String(full || '').trim().replace(/\s+/g, ' ');
+            if (!s) return ['Без имени'];
+            const t = s.split(' ');
+            if (t.length >= 3) {
+                const first = t[0];
+                const patronymic = t[1];
+                const last = t.slice(2).join(' ');
+                return [first, patronymic, last];
+            }
+            if (t.length === 2) return [t[0], t[1]];
+            return [t[0]];
+        }
+
+        function formatGedcomDate(raw) {
+            const s = String(raw || '').trim().toUpperCase();
+            if (!s) return '';
+
+            const approx = s.startsWith('ABT ') || s.startsWith('EST ') || s.startsWith('CAL ');
+            const before = s.startsWith('BEF ');
+            const after = s.startsWith('AFT ');
+
+            let x = s.replace(/^ABT\s+/, '')
+                .replace(/^EST\s+/, '')
+                .replace(/^CAL\s+/, '')
+                .replace(/^BEF\s+/, '')
+                .replace(/^AFT\s+/, '')
+                .trim();
+
+            if (/^\d{4}$/.test(x)) {
+                if (approx) return `≈${x}`;
+                if (before) return `<${x}`;
+                if (after) return `>${x}`;
+                return x;
+            }
+
+            const months = {
+                JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
+                JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12'
+            };
+
+            const parts = x.split(/\s+/);
+            if (parts.length === 3) {
+                const dd = pad2(parts[0]);
+                const mm = months[parts[1]] || '';
+                const yyyy = parts[2];
+                if (mm && /^\d{4}$/.test(yyyy)) {
+                    const out = `${dd}.${mm}.${yyyy}`;
+                    if (approx) return `≈${out}`;
+                    if (before) return `<${out}`;
+                    if (after) return `>${out}`;
+                    return out;
+                }
+            }
+            if (parts.length === 2) {
+                const mm = months[parts[0]] || '';
+                const yyyy = parts[1];
+                if (mm && /^\d{4}$/.test(yyyy)) {
+                    const out = `${mm}.${yyyy}`;
+                    if (approx) return `≈${out}`;
+                    if (before) return `<${out}`;
+                    if (after) return `>${out}`;
+                    return out;
+                }
+            }
+            return raw.trim();
+        }
+
+        function pad2(v) {
+            const n = String(v || '').replace(/\D/g, '');
+            if (!n) return '00';
+            return n.length === 1 ? `0${n}` : n.slice(0, 2);
+        }
+
+        function formatLifeLine(p) {
+            const b = formatGedcomDate(p?.b || '');
+            const d = formatGedcomDate(p?.d || '');
+            if (b && d) return `${b} — ${d}`;
+            if (b) return b;
+            if (d) return d;
+            return '';
+        }
+
+        function escapeHtml(s) {
+            return String(s || '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", "&#039;");
+        }
+
+        function shorten(s, n) {
+            s = String(s || '');
+            return s.length > n ? s.slice(0, n - 1) + '…' : s;
+        }
+
+        function getCssVar(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        /* ================= RENDER ================= */
+        function render(doFit) {
+            const container = document.getElementById('tree');
+            const nw = container.clientWidth;
+            const nh = container.clientHeight;
+            if (nw !== w || nh !== h) {
+                w = nw; h = nh;
+                svg.attr('width', w).attr('height', h);
+            }
+
+            const baseData = buildDisplayTree(rootId);
+
+            const fullRoot = d3.hierarchy(baseData);
+            layout(fullRoot);
+
+            const highlightCandidate = focusResolvedId || currentId;
+
+            let branchIds = new Set();
+            let siblingSet = new Set();
+            if (highlightCandidate) {
+                const resolved = resolveFocusTarget(fullRoot, highlightCandidate);
+                setBranchColorFromId(resolved);
+                branchIds = computeBranchIds(fullRoot, resolved);
+
+                siblingSet = new Set(getSiblingIds(resolved));
+                branchIds = expandIdsWithSiblingsFlat(branchIds, resolved);
+            }
+
+            let renderData = baseData;
+            if (focusResolvedId && branchIds.size) {
+                renderData = pruneDataByIds(baseData, branchIds, siblingSet) || baseData;
+            }
+
+            const root = d3.hierarchy(renderData);
+            layout(root);
+            lastRenderedRoot = root;
+
+            const nodeKey = (d) => {
+                const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : '';
+                return `${d.data.type}:${pid}`;
+            };
+
+            const linkGen = d3.linkHorizontal().x(p => p.y).y(p => p.x);
+            const links = root.links();
+
+            function linkKey(l) {
+                const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
+                const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
+                return `${a}=>${b}`;
+            }
+
+            const linkSel = g.selectAll('path.link').data(links, linkKey);
+            linkSel.exit().transition().duration(ANIM_MS).style('opacity', 0).remove();
+
+            const linkEnter = linkSel.enter()
+                .append('path')
+                .attr('class', 'link')
+                .style('opacity', 0)
+                .attr('d', l => linkGen({
+                    source: getLinkSourceAnchor(l.source),
+                    target: getLinkTargetAnchor(l.target)
+                }));
+
+            const linkMerge = linkEnter.merge(linkSel);
+
+            const nodes = root.descendants();
+            const nodeSel = g.selectAll('g.node').data(nodes, nodeKey);
+
+            nodeSel.exit().transition().duration(ANIM_MS).style('opacity', 0).remove();
+
+            const nodeEnter = nodeSel.enter()
+                .append('g')
+                .attr('class', d => `node ${d.data.type}`)
+                .style('opacity', 0)
+                .attr('transform', d => `translate(${d.y},${d.x})`)
+                .each(function (d) {
+                    drawNode(d3.select(this), d.data, fullRoot);
+                });
+
+            const nodeMerge = nodeEnter.merge(nodeSel);
+
+            nodeMerge.each(function (d) {
+                const sel = d3.select(this);
+                sel.selectAll('*').remove();
+                drawNode(sel, d.data, fullRoot);
+            });
+
+            nodeMerge.classed('dimmed', false).classed('in-branch', false);
+            linkMerge.classed('dimmed-link', false).classed('in-branch-link', false);
+
+            if (!focusResolvedId && branchIds.size) {
+                nodeMerge.each(function (d) {
+                    const pid = (d.data.type === 'couple') ? d.data.primaryId : (d.data.type === 'person') ? d.data.id : null;
+                    if (pid && !branchIds.has(pid)) d3.select(this).classed('dimmed', true);
+                    else d3.select(this).classed('in-branch', true);
+                });
+
+                linkMerge.each(function (l) {
+                    const a = (l.source.data.type === 'couple') ? l.source.data.primaryId : l.source.data.id;
+                    const b = (l.target.data.type === 'couple') ? l.target.data.primaryId : l.target.data.id;
+                    if (!(branchIds.has(a) && branchIds.has(b))) d3.select(this).classed('dimmed-link', true);
+                    else d3.select(this).classed('in-branch-link', true);
+                });
+            } else if (focusResolvedId) {
+                nodeMerge.classed('in-branch', true);
+                linkMerge.classed('in-branch-link', true);
+            }
+
+            nodeMerge.transition()
+                .duration(ANIM_MS)
+                .ease(d3.easeCubicInOut)
+                .style('opacity', 1)
+                .attr('transform', d => `translate(${d.y},${d.x})`);
+
+            linkMerge.transition()
+                .duration(ANIM_MS)
+                .ease(d3.easeCubicInOut)
+                .style('opacity', 1)
+                .attr('d', l => linkGen({
+                    source: getLinkSourceAnchor(l.source),
+                    target: getLinkTargetAnchor(l.target)
+                }));
+
+            if (doFit) fitToContent();
+            // иначе сохраняем текущий zoom/позицию (не центрируем автоматически)
+        }
+
+        function fitToContent() {
+            const b = g.node().getBBox();
+            if (!b.width || !b.height) return;
+
+            const pad = 120;
+            const s = Math.min(0.95, (w - pad) / b.width, (h - pad) / b.height);
+            const tx = w / 2 - (b.x + b.width / 2) * s;
+            const ty = h / 2 - (b.y + b.height / 2) * s;
+
+            const target = d3.zoomIdentity.translate(tx, ty).scale(s);
+
+            svg.transition()
+                .duration(700)
+                .ease(d3.easeCubicInOut)
+                .call(zoom.transform, target);
+        }
+
+        /* ================= UI ================= */
+        function setupUI() {
+            document.getElementById('zoom-in').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1.2);
+            document.getElementById('zoom-out').onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 0.85);
+
+            document.getElementById('reset-view').onclick = () => {
+                focusRawId = null;
+                focusResolvedId = null;
+                render(true);
+            };
+
+            document.getElementById('info-tab').onclick = () => togglePanel();
+            document.getElementById('toggle-info').onclick = (e) => { e.stopPropagation(); togglePanel(); };
+
+            const scrim = document.getElementById('sheet-scrim');
+            if (scrim) scrim.onclick = () => { if (isPortrait()) setSheetState('collapsed'); };
+
+            document.getElementById('info-header').onclick = () => {
+                if (isPortrait()) togglePanel();
+            };
+
+            // Mobile: drag the sheet by grabbing the header
+            (() => {
+                const header = document.getElementById('info-header');
+                const panel = document.getElementById('info-panel');
+                if (!header || !panel) return;
+
+                let dragging = false;
+                let startY = 0;
+                let startTranslate = 0;
+
+                const getPanelTranslateY = () => {
+                    const tr = getComputedStyle(panel).transform;
+                    if (!tr || tr === 'none') return 0;
+                    const m = tr.match(/matrix\(([^)]+)\)/);
+                    if (!m) return 0;
+                    const parts = m[1].split(',').map(s => parseFloat(s.trim()));
+                    // matrix(a,b,c,d,tx,ty)
+                    return parts.length >= 6 ? parts[5] : 0;
+                };
+
+                const snapToNearest = (currentY) => {
+                    syncSheetMetrics(); // use computed vars
+                    const peek = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-peek')) || 56;
+                    const half = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-half')) || (window.innerHeight * 0.55);
+                    const panelH = panel.getBoundingClientRect().height;
+
+                    const yCollapsed = panelH - peek;
+                    const yHalf = panelH - half;
+
+                    // mid-point decision
+                    const mid = (yCollapsed + yHalf) / 2;
+                    const target = (currentY > mid) ? 'collapsed' : 'half';
+                    panel.style.transform = '';
+                    panel.classList.remove('dragging');
+                    setSheetState(target);
+                };
+
+                header.addEventListener('pointerdown', (e) => {
+                    if (!isPortrait()) return;
+                    dragging = true;
+                    header.setPointerCapture(e.pointerId);
+                    startY = e.clientY;
+                    startTranslate = getPanelTranslateY();
+                    panel.classList.add('dragging');
+                });
+
+                header.addEventListener('pointermove', (e) => {
+                    if (!dragging || !isPortrait()) return;
+
+                    const dy = e.clientY - startY;
+                    syncSheetMetrics(); // ensure vars are fresh
+                    const peek = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-peek')) || 56;
+                    const half = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-half')) || (window.innerHeight * 0.55);
+                    const panelH = panel.getBoundingClientRect().height;
+
+                    const yCollapsed = panelH - peek;
+                    const yHalf = panelH - half;
+
+                    let nextY = startTranslate + dy;
+                    nextY = Math.max(yHalf, Math.min(yCollapsed, nextY));
+
+                    panel.style.transform = `translateY(${nextY}px)`;
+                });
+
+                const endDrag = (e) => {
+                    if (!dragging) return;
+                    dragging = false;
+                    try { header.releasePointerCapture(e.pointerId); } catch { }
+                    const curY = getPanelTranslateY();
+                    snapToNearest(curY);
+                };
+
+                header.addEventListener('pointerup', endDrag);
+                header.addEventListener('pointercancel', endDrag);
+            })();
+
+
+            window.addEventListener('resize', () => {
+                render(false);
+                updateInfoUI();
+                syncSheetMetricsLater();
+            });
+
+            window.matchMedia('(max-aspect-ratio: 1/1)').addEventListener('change', () => {
+                updateInfoUI();
+                syncSheetMetricsLater();
+                if (isPortrait()) setSheetState('collapsed');
+                // Не панорамируем дерево автоматически при смене состояния панели
+            });
+
+            updatePanelArrows();
+            syncSheetMetricsLater();
+            if (isPortrait()) setSheetState('collapsed');
+        }
+
+        function onPersonClick(clickedId, fullRoot) {
+            selectPerson(clickedId, false);
+
+            const resolved = resolveFocusTarget(fullRoot, clickedId);
+
+            if (focusRawId === clickedId) {
+                focusRawId = null;
+                focusResolvedId = null;
+            } else {
+                focusRawId = clickedId;
+                focusResolvedId = resolved;
+            }
+
+            render(false);
+        }
+    </script>
+</body>
+
+</html>
