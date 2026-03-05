@@ -918,8 +918,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   }
 
   return (
-    <div className="builder-layout builder-layout-reworked">
-      <aside className="surface-card builder-sidebar">
+    <div className="builder-layout builder-layout-reworked builder-layout-canvas">
+      <aside className="surface-card builder-sidebar builder-sidebar-overlay">
         <div className="sidebar-header builder-sidebar-header">
           <div className="builder-sidebar-copy">
             <p className="eyebrow">Люди</p>
@@ -957,8 +957,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       </aside>
 
       <main className="builder-main">
-        <div className="surface-card viewer-stage builder-stage">
-          <div className="stage-header builder-stage-header">
+        <div className="surface-card viewer-stage builder-stage builder-stage-canvas">
+          <div className="stage-header builder-stage-header builder-stage-header-overlay">
             <div className="stage-header-copy">
               <p className="stage-kicker">Схема дерева</p>
               <h2>{stageTitle}</h2>

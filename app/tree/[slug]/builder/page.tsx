@@ -19,8 +19,8 @@ export default async function BuilderPage({ params }: BuilderPageProps) {
   }
 
   return (
-    <main className="page-shell workspace-page">
-      <section className="section-header workspace-header">
+    <main className="page-shell workspace-page workspace-page-canvas">
+      <section className="section-header workspace-header workspace-header-canvas">
         <div className="workspace-header-main">
         <div className="workspace-meta-row">
           <p className="eyebrow">Конструктор</p>

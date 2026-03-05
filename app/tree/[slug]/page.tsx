@@ -17,8 +17,8 @@ export default async function TreePage({ params }: TreePageProps) {
     const snapshot = await getTreeSnapshot(slug);
 
     return (
-      <main className="page-shell workspace-page">
-        <section className="section-header workspace-header">
+      <main className="page-shell workspace-page workspace-page-canvas">
+        <section className="section-header workspace-header workspace-header-canvas">
           <div className="workspace-header-main">
             <div className="workspace-meta-row">
               <p className="eyebrow">{formatTreeVisibility(snapshot.tree.visibility)} дерево</p>

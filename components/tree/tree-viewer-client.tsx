@@ -21,8 +21,8 @@ export function TreeViewerClient({ snapshot }: TreeViewerClientProps) {
 
   return (
     <div className="viewer-layout">
-      <div className="surface-card viewer-stage">
-        <div className="stage-header">
+      <div className="surface-card viewer-stage viewer-stage-canvas">
+        <div className="stage-header viewer-stage-header-overlay">
           <div className="stage-header-copy">
             <p className="stage-kicker">Схема семьи</p>
             <h2>Главная структура дерева</h2>
