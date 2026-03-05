@@ -14,6 +14,18 @@ const ACTION_MENU_HEIGHT = 148;
 const BUILDER_SELECTED_MIN_SCALE = 0.55;
 const BUILDER_VIEWPORT_MARGIN_X = 96;
 const BUILDER_VIEWPORT_MARGIN_Y = 84;
+const BADGE_RADIUS = 20;
+const BADGE_CX = -CARD_WIDTH / 2 + 30;
+const BADGE_CY = -6;
+const PARTNER_VERTICAL_GAP = 108;
+const PARTNER_MIN_SEPARATION = 108;
+const PARTNERSHIP_LABEL_Y_OFFSET = -1;
+
+const GENDER_FALLBACK_AVATARS: Record<"male" | "female", string> = {
+  male: "/avatars/avatar-male.svg",
+  female: "/avatars/avatar-female.svg"
+};
+const EMPTY_PERSON_PHOTO_URLS: Record<string, string> = {};
 
 function extractYear(value?: string | null) {
   return value ? value.slice(0, 4) : null;
@@ -114,6 +126,30 @@ function getNodeMeta(node: {
   return primaryYears || "Даты не указаны";
 }
 
+function getAvatarPatternId(personId: string) {
+  return `tree-avatar-${personId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function getPersonBadgeImage(
+  personId: string | undefined,
+  gender: string | null | undefined,
+  personPhotoUrls: Record<string, string> | undefined
+) {
+  if (personId && personPhotoUrls?.[personId]) {
+    return personPhotoUrls[personId];
+  }
+
+  if (gender === "female") {
+    return GENDER_FALLBACK_AVATARS.female;
+  }
+
+  if (gender === "male") {
+    return GENDER_FALLBACK_AVATARS.male;
+  }
+
+  return null;
+}
+
 export type FamilyTreeCanvasAction = "edit" | "add-parent" | "add-child" | "add-partner" | "delete";
 
 export interface FamilyTreeCanvasCreatePreview {
@@ -176,12 +212,14 @@ interface FamilyTreeCanvasProps {
   onSelectPerson: (personId: string) => void;
   interactive?: boolean;
   onNodeAction?: (personId: string, action: FamilyTreeCanvasAction) => void;
+  onPartnershipDateChange?: (partnershipId: string, startDate: string | null) => Promise<void> | void;
   onEmptyAction?: () => void;
   createPreview?: FamilyTreeCanvasCreatePreview | null;
   displayMode?: "viewer" | "builder";
   people?: PersonRecord[];
   parentLinks?: ParentLinkRecord[];
   partnerships?: PartnershipRecord[];
+  personPhotoUrls?: Record<string, string>;
 }
 
 interface PositionedCanvasNode {
@@ -280,7 +318,7 @@ function getPreviewCenter(
   }
 
   const partnerDirection = anchorNode.x > (treeTop + treeBottom) / 2 ? -1 : 1;
-  return { x: anchorNode.y, y: anchorNode.x + partnerDirection * 156 };
+  return { x: anchorNode.y, y: anchorNode.x + partnerDirection * PARTNER_VERTICAL_GAP };
 }
 
 function buildPreviewLinkPath(
@@ -374,42 +412,33 @@ function getPreferredPartnerOffset(options: {
   treeBottom: number;
 }) {
   const baseLevel = Math.floor(options.index / 2) + 1;
-  const maxLevel = Math.max(baseLevel + 3, Math.ceil(options.occupiedYs.length / 2) + 1);
+  const preferredDirection = options.index % 2 === 0 ? 1 : -1;
+  const maxLevel = Math.max(baseLevel + 4, Math.ceil(options.occupiedYs.length / 2) + 2);
   const candidates: Array<{ direction: number; level: number; targetY: number; score: number }> = [];
 
   for (let level = baseLevel; level <= maxLevel; level += 1) {
-    const baseOffset = 156 * level;
-    for (const direction of [1, -1]) {
+    const baseOffset = PARTNER_VERTICAL_GAP * level;
+    for (const direction of [preferredDirection, -preferredDirection]) {
       const targetY = options.anchorY + direction * baseOffset;
-      const crowdingScore = options.occupiedYs.reduce((score, value) => {
-        const distance = Math.abs(value - targetY);
-        return score + Math.max(0, 220 - distance);
-      }, 0);
-      const boundsPenalty = targetY < options.treeTop - 220 || targetY > options.treeBottom + 220 ? 24 : 0;
-      const distancePenalty = (level - baseLevel) * 18;
-      const directionalBias = direction === 1 ? -4 : 0;
+      const nearestDistance = options.occupiedYs.length
+        ? options.occupiedYs.reduce((minDistance, value) => Math.min(minDistance, Math.abs(value - targetY)), Number.POSITIVE_INFINITY)
+        : Number.POSITIVE_INFINITY;
+      const overlapPenalty = nearestDistance < PARTNER_MIN_SEPARATION ? 500 + (PARTNER_MIN_SEPARATION - nearestDistance) * 20 : 0;
+      const boundsPenalty = targetY < options.treeTop - PARTNER_VERTICAL_GAP || targetY > options.treeBottom + PARTNER_VERTICAL_GAP ? 22 : 0;
+      const distancePenalty = (level - baseLevel) * 36;
+      const directionalBias = direction === preferredDirection ? 0 : 8;
 
       candidates.push({
         direction,
         level,
         targetY,
-        score: crowdingScore + boundsPenalty + distancePenalty + directionalBias
+        score: overlapPenalty + boundsPenalty + distancePenalty + directionalBias
       });
     }
   }
 
   candidates.sort((left, right) => left.score - right.score || left.level - right.level || left.direction - right.direction);
-  return candidates[0]?.targetY ?? options.anchorY + getPartnerDirection(options.index) * 156;
-}
-
-function buildPartnerConnectorPath(anchor: { x: number; y: number }, partner: { x: number; y: number }) {
-  const direction = partner.y > anchor.y ? 1 : -1;
-  const x = anchor.x + CARD_WIDTH / 2 - 28;
-  const fromY = anchor.y + direction * (CARD_HEIGHT / 2 - 6);
-  const toY = partner.y - direction * (CARD_HEIGHT / 2 - 6);
-  const midY = (fromY + toY) / 2;
-
-  return `M ${x} ${fromY} C ${x} ${midY}, ${x} ${midY}, ${x} ${toY}`;
+  return candidates[0]?.targetY ?? options.anchorY + getPartnerDirection(options.index) * PARTNER_VERTICAL_GAP;
 }
 
 function buildSharedChildLinkPath(
@@ -424,6 +453,20 @@ function buildSharedChildLinkPath(
   const controlX = (fromX + toX) / 2;
 
   return `M ${fromX} ${fromY} C ${controlX} ${fromY}, ${controlX} ${toY}, ${toX} ${toY}`;
+}
+
+function normalizeIsoDate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const match = String(value).match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : null;
+}
+
+function formatCanvasDate(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${day}.${month}.${year}`;
 }
 
 function getCenteredTransform(
@@ -458,6 +501,16 @@ interface BuilderCanvasLink {
   key: string;
 }
 
+interface BuilderPartnershipLabel {
+  key: string;
+  partnershipId: string;
+  text: string;
+  inputDate: string;
+  width: number;
+  x: number;
+  y: number;
+}
+
 interface BuilderCanvasMeasure {
   bottomPad: number;
   childMeasures: BuilderCanvasMeasure[];
@@ -486,7 +539,7 @@ function getPartnerOffsets(count: number) {
   return Array.from({ length: count }, (_, index) => {
     const level = Math.floor(index / 2) + 1;
     const sign = index % 2 === 0 ? 1 : -1;
-    return sign * 156 * level;
+    return sign * PARTNER_VERTICAL_GAP * level;
   });
 }
 
@@ -494,8 +547,18 @@ function getColumnOccupiedYs(nodes: PositionedCanvasNode[], x: number) {
   return nodes.filter((node) => node.x === x).map((node) => node.y);
 }
 
+function getLocalColumnOccupiedYs(nodes: PositionedCanvasNode[], anchor: { x: number; y: number }) {
+  const localRange = PARTNER_VERTICAL_GAP * 2 + CARD_HEIGHT;
+  const occupied = getColumnOccupiedYs(nodes, anchor.x).filter((value) => Math.abs(value - anchor.y) <= localRange);
+  if (!occupied.some((value) => value === anchor.y)) {
+    occupied.push(anchor.y);
+  }
+
+  return occupied;
+}
+
 function getPartnerPlacementY(nodes: PositionedCanvasNode[], anchor: { x: number; y: number }, index: number) {
-  const occupiedYs = getColumnOccupiedYs(nodes, anchor.x);
+  const occupiedYs = getLocalColumnOccupiedYs(nodes, anchor);
   const columnTop = occupiedYs.length ? Math.min(anchor.y, ...occupiedYs) : anchor.y;
   const columnBottom = occupiedYs.length ? Math.max(anchor.y, ...occupiedYs) : anchor.y;
 
@@ -544,13 +607,14 @@ function buildBuilderCanvasLayout(
 ) {
   const tree = collectBuilderTree(root);
   if (!tree.rootId) {
-    return { links: [] as BuilderCanvasLink[], nodes: [] as PositionedCanvasNode[] };
+    return { links: [] as BuilderCanvasLink[], nodes: [] as PositionedCanvasNode[], partnershipLabels: [] as BuilderPartnershipLabel[] };
   }
 
   const peopleById = new Map(people.map((person) => [person.id, person] as const));
   const childrenByParent = new Map<string, string[]>();
   const parentIdsByChild = new Map<string, string[]>();
   const partnershipsByPerson = new Map<string, PartnershipRecord[]>();
+  const partnershipDateLabelById = new Map<string, { text: string; inputDate: string }>();
 
   parentLinks.forEach((link) => {
     const nextChildren = childrenByParent.get(link.parent_person_id) || [];
@@ -562,6 +626,27 @@ function buildBuilderCanvasLayout(
     parentIdsByChild.set(link.child_person_id, nextParents);
   });
 
+  function resolvePartnershipDateLabel(partnership: PartnershipRecord) {
+    const partnershipDate = normalizeIsoDate(partnership.start_date);
+    if (partnershipDate) {
+      return { text: formatCanvasDate(partnershipDate), inputDate: partnershipDate };
+    }
+
+    const firstSideChildren = new Set(childrenByParent.get(partnership.person_a_id) || []);
+    const secondSideChildren = new Set(childrenByParent.get(partnership.person_b_id) || []);
+    const firstSharedChildDate = [...firstSideChildren]
+      .filter((childId) => secondSideChildren.has(childId))
+      .map((childId) => normalizeIsoDate(peopleById.get(childId)?.birth_date || null))
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => left.localeCompare(right))[0];
+
+    if (firstSharedChildDate) {
+      return { text: formatCanvasDate(firstSharedChildDate), inputDate: firstSharedChildDate };
+    }
+
+    return { text: "укажите дату", inputDate: "" };
+  }
+
   partnerships.forEach((partnership) => {
     const personALinks = partnershipsByPerson.get(partnership.person_a_id) || [];
     personALinks.push(partnership);
@@ -570,6 +655,8 @@ function buildBuilderCanvasLayout(
     const personBLinks = partnershipsByPerson.get(partnership.person_b_id) || [];
     personBLinks.push(partnership);
     partnershipsByPerson.set(partnership.person_b_id, personBLinks);
+
+    partnershipDateLabelById.set(partnership.id, resolvePartnershipDateLabel(partnership));
   });
 
   function arePartners(personAId: string, personBId: string) {
@@ -634,8 +721,33 @@ function buildBuilderCanvasLayout(
 
   const nodes: PositionedCanvasNode[] = [];
   const links: BuilderCanvasLink[] = [];
+  const partnershipLabels: BuilderPartnershipLabel[] = [];
+  const seenPartnershipLabels = new Set<string>();
   const positionsById = new Map<string, { x: number; y: number }>();
   const subtree = measure(tree.rootId);
+
+  function addPartnershipLabel(anchor: { x: number; y: number }, partner: { x: number; y: number }, partnershipId: string) {
+    if (!partnershipId || seenPartnershipLabels.has(partnershipId)) {
+      return;
+    }
+
+    const dateLabel = partnershipDateLabelById.get(partnershipId);
+    if (!dateLabel) {
+      return;
+    }
+
+    seenPartnershipLabels.add(partnershipId);
+    const labelWidth = Math.max(108, dateLabel.text.length * 7 + 36);
+    partnershipLabels.push({
+      key: `partnership-label:${partnershipId}`,
+      partnershipId,
+      text: dateLabel.text,
+      inputDate: dateLabel.inputDate,
+      width: labelWidth,
+      x: anchor.x,
+      y: (anchor.y + partner.y) / 2 + PARTNERSHIP_LABEL_Y_OFFSET
+    });
+  }
 
   function addPartnersForPerson(personId: string, anchor: { x: number; y: number }) {
     const partnerSpecs = (partnershipsByPerson.get(personId) || [])
@@ -678,11 +790,7 @@ function buildBuilderCanvasLayout(
 
       nodes.push(partnerNode);
       positionsById.set(partner.id, { x: partnerNode.x, y: partnerNode.y });
-      links.push({
-        className: "tree-link tree-side-link tree-partner-link",
-        d: buildPartnerConnectorPath(anchor, partnerNode),
-        key: `partner:${personId}:${partner.id}`
-      });
+      addPartnershipLabel(anchor, { x: partnerNode.x, y: partnerNode.y }, spec.partnershipId);
 
       addInvisibleParentsForPerson(partner.id, { x: partnerNode.x, y: partnerNode.y });
     });
@@ -747,9 +855,7 @@ function buildBuilderCanvasLayout(
       const anchor = partnerId ? positionsById.get(partnerId) : null;
       if (anchor) {
         const existingPartnerNodes = nodes.filter((node) => node.anchorId === partnerId && node.relationType === "partner");
-        const occupiedYs = nodes
-          .filter((node) => node.x === anchor.x)
-          .map((node) => node.y);
+        const occupiedYs = getLocalColumnOccupiedYs(nodes, anchor);
         const y = getPreferredPartnerOffset({
           anchorY: anchor.y,
           index: existingPartnerNodes.length,
@@ -775,11 +881,7 @@ function buildBuilderCanvasLayout(
 
         nodes.push(partnerNode);
         positionsById.set(person.id, { x: partnerNode.x, y: partnerNode.y });
-        links.push({
-          className: "tree-link tree-side-link tree-partner-link",
-          d: buildPartnerConnectorPath(anchor, partnerNode),
-          key: `selected-partner:${partnerId}:${person.id}`
-        });
+        addPartnershipLabel(anchor, { x: partnerNode.x, y: partnerNode.y }, partnerPartnership.id);
         addInvisibleParentsForPerson(person.id, { x: partnerNode.x, y: partnerNode.y });
         return;
       }
@@ -968,7 +1070,7 @@ function buildBuilderCanvasLayout(
     ensureSelectedNodeVisible(selectedPersonId);
   }
 
-  return { links, nodes };
+  return { links, nodes, partnershipLabels };
 }
 
 export function FamilyTreeCanvas({
@@ -977,19 +1079,23 @@ export function FamilyTreeCanvas({
   onSelectPerson,
   interactive = false,
   onNodeAction,
+  onPartnershipDateChange,
   onEmptyAction,
   createPreview = null,
   displayMode = "viewer",
   people = [],
   parentLinks = [],
-  partnerships = []
+  partnerships = [],
+  personPhotoUrls = EMPTY_PERSON_PHOTO_URLS
 }: FamilyTreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onSelectPersonRef = useRef(onSelectPerson);
   const onNodeActionRef = useRef(onNodeAction);
+  const onPartnershipDateChangeRef = useRef(onPartnershipDateChange);
   const zoomTransformRef = useRef<d3.ZoomTransform | null>(null);
   const lastSelectedPersonIdRef = useRef<string | null>(selectedPersonId);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [editingPartnershipId, setEditingPartnershipId] = useState<string | null>(null);
 
   const hierarchy = useMemo(() => {
     if (!tree) {
@@ -1004,12 +1110,20 @@ export function FamilyTreeCanvas({
   }, [selectedPersonId]);
 
   useEffect(() => {
+    setEditingPartnershipId(null);
+  }, [selectedPersonId, displayMode]);
+
+  useEffect(() => {
     onSelectPersonRef.current = onSelectPerson;
   }, [onSelectPerson]);
 
   useEffect(() => {
     onNodeActionRef.current = onNodeAction;
   }, [onNodeAction]);
+
+  useEffect(() => {
+    onPartnershipDateChangeRef.current = onPartnershipDateChange;
+  }, [onPartnershipDateChange]);
 
   useEffect(() => {
     if (!interactive || !createMenuOpen) {
@@ -1058,6 +1172,7 @@ export function FamilyTreeCanvas({
     const graphContent = graph.append("g");
     const overlayLayer = graph.append("g");
     const defs = svg.append("defs");
+    const avatarPatternByPersonId = new Map<string, string>();
 
     const shadow = defs
       .append("filter")
@@ -1069,10 +1184,48 @@ export function FamilyTreeCanvas({
 
     shadow.append("feDropShadow").attr("dx", 0).attr("dy", 10).attr("stdDeviation", 12).attr("flood-color", "#181b22").attr("flood-opacity", 0.08);
 
+    function registerAvatarPattern(personId: string, source: string) {
+      if (avatarPatternByPersonId.has(personId)) {
+        return avatarPatternByPersonId.get(personId)!;
+      }
+
+      const patternId = getAvatarPatternId(personId);
+      defs
+        .append("pattern")
+        .attr("id", patternId)
+        .attr("patternUnits", "objectBoundingBox")
+        .attr("patternContentUnits", "objectBoundingBox")
+        .attr("width", 1)
+        .attr("height", 1)
+        .append("image")
+        .attr("href", source)
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", 1)
+        .attr("height", 1)
+        .attr("preserveAspectRatio", "xMidYMid slice")
+        .attr("opacity", 0.96);
+
+      avatarPatternByPersonId.set(personId, patternId);
+      return patternId;
+    }
+
     if (displayMode === "builder") {
       const layout = buildBuilderCanvasLayout(tree, people, parentLinks, partnerships, selectedPersonId);
       const selectedCanvasNode = selectedPersonId ? layout.nodes.find((node) => node.id === selectedPersonId) || null : null;
       const selectedChanged = lastSelectedPersonIdRef.current !== selectedPersonId;
+      layout.nodes.forEach((node) => {
+        if (node.type !== "person" || !node.id) {
+          return;
+        }
+
+        const badgeImage = getPersonBadgeImage(node.id, node.gender, personPhotoUrls);
+        if (!badgeImage) {
+          return;
+        }
+
+        registerAvatarPattern(node.id, badgeImage);
+      });
 
       const zoom = d3
         .zoom<SVGSVGElement, unknown>()
@@ -1091,6 +1244,169 @@ export function FamilyTreeCanvas({
         .append("path")
         .attr("class", (datum) => datum.className)
         .attr("d", (datum) => datum.d);
+
+      const partnershipLabels = overlayLayer
+        .selectAll("g.builder-partnership-label")
+        .data(layout.partnershipLabels)
+        .enter()
+        .append("g")
+        .attr("class", "builder-partnership-label")
+        .attr("transform", (datum) => `translate(${datum.x},${datum.y})`);
+
+      const canEditPartnershipDates = interactive && displayMode === "builder" && Boolean(onPartnershipDateChangeRef.current);
+
+      partnershipLabels
+        .append("rect")
+        .attr("x", (datum) => -datum.width / 2)
+        .attr("y", -10)
+        .attr("rx", 10)
+        .attr("width", (datum) => datum.width)
+        .attr("height", 20)
+        .attr("class", "tree-partnership-chip");
+
+      const partnershipText = partnershipLabels
+        .append("text")
+        .attr("class", "tree-partnership-chip-text")
+        .attr("text-anchor", "middle")
+        .attr("x", 0)
+        .attr("y", 1);
+
+      partnershipText
+        .append("tspan")
+        .attr("class", "tree-partnership-chip-heart")
+        .text("❤ ");
+
+      partnershipText
+        .append("tspan")
+        .text((datum) => datum.text);
+
+      if (canEditPartnershipDates) {
+        partnershipLabels
+          .attr("class", (datum) =>
+            datum.partnershipId === editingPartnershipId
+              ? "builder-partnership-label builder-partnership-label-editing"
+              : "builder-partnership-label builder-partnership-label-interactive"
+          )
+          .attr("role", "button")
+          .attr("tabindex", 0)
+          .style("cursor", "pointer")
+          .attr("aria-label", "Редактировать дату пары")
+          .on("click", (event, datum) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setCreateMenuOpen(false);
+            setEditingPartnershipId(datum.partnershipId);
+          })
+          .on("keydown", (event: KeyboardEvent, datum) => {
+            if (event.key !== "Enter" && event.key !== " ") {
+              return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            setCreateMenuOpen(false);
+            setEditingPartnershipId(datum.partnershipId);
+          });
+      }
+
+      if (canEditPartnershipDates && editingPartnershipId) {
+        const activeLabel = layout.partnershipLabels.find((label) => label.partnershipId === editingPartnershipId) || null;
+        if (activeLabel) {
+          const editorWidth = Math.max(210, activeLabel.width + 92);
+          const editorShell = overlayLayer
+            .append("foreignObject")
+            .attr("x", activeLabel.x - editorWidth / 2)
+            .attr("y", activeLabel.y - 16)
+            .attr("width", editorWidth)
+            .attr("height", 34)
+            .style("overflow", "visible");
+
+          const editorRoot = editorShell
+            .append("xhtml:div")
+            .attr("class", "tree-partnership-editor")
+            .html(
+              `<form class="tree-partnership-editor-form">` +
+                `<span class="tree-partnership-editor-heart">❤</span>` +
+                `<input class="tree-partnership-editor-input" type="date" aria-label="Дата пары" value="${activeLabel.inputDate}" />` +
+                `<button class="tree-partnership-editor-save" type="submit" aria-label="Сохранить дату пары">OK</button>` +
+                `<button class="tree-partnership-editor-cancel" type="button" aria-label="Отменить редактирование даты пары">✕</button>` +
+              `</form>`
+            );
+
+          const editorElement = editorRoot.node() as HTMLDivElement | null;
+          if (editorElement) {
+            const form = editorElement.querySelector<HTMLFormElement>("form");
+            const input = editorElement.querySelector<HTMLInputElement>("input");
+            const saveButton = editorElement.querySelector<HTMLButtonElement>(".tree-partnership-editor-save");
+            const cancelButton = editorElement.querySelector<HTMLButtonElement>(".tree-partnership-editor-cancel");
+
+            const closeEditor = () => {
+              setEditingPartnershipId((current) => (current === activeLabel.partnershipId ? null : current));
+            };
+
+            const blockEvent = (event: Event) => {
+              event.stopPropagation();
+            };
+
+            editorElement.addEventListener("pointerdown", blockEvent);
+            editorElement.addEventListener("click", blockEvent);
+            editorElement.addEventListener("wheel", blockEvent, { passive: true });
+
+            cancelButton?.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              closeEditor();
+            });
+
+            input?.addEventListener("keydown", (event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                closeEditor();
+              }
+            });
+
+            if (form && input) {
+              form.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (!onPartnershipDateChangeRef.current) {
+                  closeEditor();
+                  return;
+                }
+
+                input.disabled = true;
+                if (saveButton) {
+                  saveButton.disabled = true;
+                }
+                if (cancelButton) {
+                  cancelButton.disabled = true;
+                }
+
+                try {
+                  await onPartnershipDateChangeRef.current(activeLabel.partnershipId, input.value || null);
+                  closeEditor();
+                } catch {
+                  input.disabled = false;
+                  if (saveButton) {
+                    saveButton.disabled = false;
+                  }
+                  if (cancelButton) {
+                    cancelButton.disabled = false;
+                  }
+                }
+              });
+            }
+
+            window.setTimeout(() => {
+              input?.focus();
+            }, 0);
+          }
+        } else {
+          setEditingPartnershipId(null);
+        }
+      }
 
       const nodes = graphContent
         .selectAll("g.builder-node")
@@ -1128,16 +1444,25 @@ export function FamilyTreeCanvas({
 
       nodes
         .append("circle")
-        .attr("cx", -CARD_WIDTH / 2 + 30)
-        .attr("cy", -6)
-        .attr("r", 20)
-        .attr("class", "tree-node-badge");
+        .attr("cx", BADGE_CX)
+        .attr("cy", BADGE_CY)
+        .attr("r", BADGE_RADIUS)
+        .attr("class", "tree-node-badge")
+        .attr("fill", (datum) => {
+          if (!datum.id) {
+            return null;
+          }
+
+          const patternId = avatarPatternByPersonId.get(datum.id);
+          return patternId ? `url(#${patternId})` : null;
+        });
 
       nodes
+        .filter((datum) => !datum.id || !avatarPatternByPersonId.has(datum.id))
         .append("text")
         .attr("class", "tree-node-initials")
         .attr("text-anchor", "middle")
-        .attr("x", -CARD_WIDTH / 2 + 30)
+        .attr("x", BADGE_CX)
         .attr("y", 0)
         .text((datum) => getMonogramFromName(datum.name));
 
@@ -1280,6 +1605,18 @@ export function FamilyTreeCanvas({
     const root = layout(hierarchy);
     const descendants = root.descendants();
     const selectedNode = selectPreferredCanvasItem(descendants, selectedPersonId, (datum) => datum.data);
+    descendants.forEach((datum) => {
+      if (datum.data.type !== "person" || !datum.data.id) {
+        return;
+      }
+
+      const badgeImage = getPersonBadgeImage(datum.data.id, datum.data.gender, personPhotoUrls);
+      if (!badgeImage) {
+        return;
+      }
+
+      registerAvatarPattern(datum.data.id, badgeImage);
+    });
     const previewAnchorNode = createPreview
       ? selectPreferredCanvasItem(descendants, createPreview.anchorPersonId, (datum) => datum.data)
       : null;
@@ -1370,16 +1707,25 @@ export function FamilyTreeCanvas({
 
     nodes
       .append("circle")
-      .attr("cx", -CARD_WIDTH / 2 + 30)
-      .attr("cy", -6)
-      .attr("r", 20)
-      .attr("class", (datum) => (datum.data.type === "couple" ? "tree-node-badge tree-node-badge-couple" : "tree-node-badge"));
+      .attr("cx", BADGE_CX)
+      .attr("cy", BADGE_CY)
+      .attr("r", BADGE_RADIUS)
+      .attr("class", (datum) => (datum.data.type === "couple" ? "tree-node-badge tree-node-badge-couple" : "tree-node-badge"))
+      .attr("fill", (datum) => {
+        if (datum.data.type !== "person" || !datum.data.id) {
+          return null;
+        }
+
+        const patternId = avatarPatternByPersonId.get(datum.data.id);
+        return patternId ? `url(#${patternId})` : null;
+      });
 
     nodes
+      .filter((datum) => datum.data.type === "couple" || !datum.data.id || !avatarPatternByPersonId.has(datum.data.id))
       .append("text")
       .attr("class", "tree-node-initials")
       .attr("text-anchor", "middle")
-      .attr("x", -CARD_WIDTH / 2 + 30)
+      .attr("x", BADGE_CX)
       .attr("y", 0)
       .text((datum) => getMonogram(datum.data));
 
@@ -1564,7 +1910,7 @@ export function FamilyTreeCanvas({
       const y = (height - bounds.height * scale) / 2 - bounds.y * scale;
       svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
     }
-  }, [createMenuOpen, displayMode, hierarchy, interactive, parentLinks, partnerships, people, selectedPersonId]);
+  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoUrls, selectedPersonId]);
 
   if (!tree) {
     return (

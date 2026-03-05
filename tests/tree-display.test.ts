@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildBuilderDisplayTree, buildDisplayTree, collectPersonMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildDisplayTree, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
 import type { TreeSnapshot } from "@/lib/types";
 
 const snapshot: TreeSnapshot = {
@@ -288,5 +288,53 @@ describe("tree display helpers", () => {
     const media = collectPersonMedia(snapshot, "person-1");
     expect(media).toHaveLength(1);
     expect(media[0]?.title).toBe("Portrait");
+  });
+
+  it("builds preview photo URLs per person and prefers primary photos", () => {
+    const urls = buildPersonPhotoPreviewUrls({
+      media: [
+        ...snapshot.media,
+        {
+          id: "media-2",
+          tree_id: "tree-1",
+          kind: "photo",
+          provider: "supabase_storage",
+          visibility: "public",
+          storage_path: "trees/tree-1/photos/media-2/root-second.jpg",
+          external_url: null,
+          title: "Portrait 2",
+          caption: null,
+          mime_type: "image/jpeg",
+          size_bytes: 1024,
+          created_by: null,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: "media-3",
+          tree_id: "tree-1",
+          kind: "video",
+          provider: "yandex_disk",
+          visibility: "public",
+          storage_path: null,
+          external_url: "https://disk.yandex.example/video",
+          title: "Video",
+          caption: null,
+          mime_type: null,
+          size_bytes: null,
+          created_by: null,
+          created_at: new Date().toISOString()
+        }
+      ],
+      personMedia: [
+        { id: "pm-2", person_id: "person-1", media_id: "media-2", is_primary: false },
+        { id: "pm-3", person_id: "person-1", media_id: "media-1", is_primary: true },
+        { id: "pm-4", person_id: "person-2", media_id: "media-3", is_primary: true }
+      ]
+    });
+
+    expect(urls).toMatchObject({
+      "person-1": "/api/media/media-1"
+    });
+    expect(urls["person-2"]).toBeUndefined();
   });
 });

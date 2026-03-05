@@ -131,6 +131,23 @@ run_cold_start() {
   set -e
 }
 
+print_backlog_hint() {
+  local hint_script=".codex/utils/backlog-start-hint.py"
+
+  if [ ! -f "$hint_script" ]; then
+    return 0
+  fi
+
+  set +e
+  python3 "$hint_script"
+  local hint_exit=$?
+  set -e
+
+  if [ "$hint_exit" -ne 0 ]; then
+    echo "[codex] warning: failed to render backlog hint."
+  fi
+}
+
 # Auto-route migration on first run so user can just type `start`.
 if [ -f ".claude/migration-context.json" ]; then
   ROUTE_JSON="$(bash .codex/commands/migration-router.sh)"
@@ -173,6 +190,7 @@ fi
 printf "%s\n" "$OUTPUT"
 
 if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 2 ]; then
+  print_backlog_hint
   ensure_local_dev_server
 fi
 

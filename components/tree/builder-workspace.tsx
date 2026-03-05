@@ -8,7 +8,7 @@ import {
 } from "@/components/tree/family-tree-canvas";
 import { getStorageBucket } from "@/lib/env";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-import { buildBuilderDisplayTree, collectPersonMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import { formatDate } from "@/lib/utils";
 import type { ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
@@ -219,6 +219,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     [currentSnapshot, visualRootPersonId]
   );
   const displayTree = useMemo(() => buildBuilderDisplayTree(effectiveSnapshot), [effectiveSnapshot]);
+  const personPhotoPreviewUrls = useMemo(
+    () => buildPersonPhotoPreviewUrls(currentSnapshot),
+    [currentSnapshot.media, currentSnapshot.personMedia]
+  );
   const selectedPerson = selectedPersonId ? peopleById.get(selectedPersonId) || null : null;
   const selectedPersonPending = Boolean(selectedPerson && isTemporaryPersonId(selectedPerson.id));
   const rootPerson = visualRootPersonId ? peopleById.get(visualRootPersonId) || null : null;
@@ -847,6 +851,22 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setStatus(payload.message || "Пара удалена.");
   }
 
+  async function savePartnershipDate(partnershipId: string, startDate: string | null) {
+    setStatus(null);
+    const payload = await requestJson(`/api/partnerships/${partnershipId}`, "PATCH", {
+      startDate
+    });
+    if (!payload?.partnership) {
+      return;
+    }
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      partnerships: prev.partnerships.map((partnership) => (partnership.id === partnershipId ? payload.partnership : partnership))
+    }));
+    setStatus(payload.message || "Дата пары обновлена.");
+  }
+
   async function savePerson(personId: string, values: {
     fullName: string;
     gender: string | null;
@@ -960,6 +980,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             people={currentSnapshot.people}
             parentLinks={currentSnapshot.parentLinks}
             partnerships={currentSnapshot.partnerships}
+            personPhotoUrls={personPhotoPreviewUrls}
+            onPartnershipDateChange={savePartnershipDate}
             onNodeAction={handleCanvasAction}
             onEmptyAction={startStandaloneCreate}
           />

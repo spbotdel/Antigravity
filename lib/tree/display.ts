@@ -250,3 +250,25 @@ export function collectPersonMedia(snapshot: TreeSnapshot, personId: string) {
   const mediaIds = snapshot.personMedia.filter((relation) => relation.person_id === personId).map((relation) => relation.media_id);
   return snapshot.media.filter((asset) => mediaIds.includes(asset.id));
 }
+
+export function buildPersonPhotoPreviewUrls(snapshot: Pick<TreeSnapshot, "media" | "personMedia">) {
+  const photoMediaIds = new Set(
+    snapshot.media.filter((asset) => asset.kind === "photo").map((asset) => asset.id)
+  );
+  const sortedRelations = [...snapshot.personMedia].sort((left, right) => Number(right.is_primary) - Number(left.is_primary));
+  const result: Record<string, string> = {};
+
+  for (const relation of sortedRelations) {
+    if (result[relation.person_id]) {
+      continue;
+    }
+
+    if (!photoMediaIds.has(relation.media_id)) {
+      continue;
+    }
+
+    result[relation.person_id] = `/api/media/${relation.media_id}`;
+  }
+
+  return result;
+}

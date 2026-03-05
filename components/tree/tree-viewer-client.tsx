@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { FamilyTreeCanvas } from "@/components/tree/family-tree-canvas";
-import { buildDisplayTree, collectPersonMedia } from "@/lib/tree/display";
+import { buildDisplayTree, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
 import { formatGender, formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import { formatDate } from "@/lib/utils";
 import type { TreeSnapshot } from "@/lib/types";
@@ -15,6 +15,7 @@ interface TreeViewerClientProps {
 export function TreeViewerClient({ snapshot }: TreeViewerClientProps) {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(snapshot.tree.root_person_id || snapshot.people[0]?.id || null);
   const displayTree = useMemo(() => buildDisplayTree(snapshot), [snapshot]);
+  const personPhotoPreviewUrls = useMemo(() => buildPersonPhotoPreviewUrls(snapshot), [snapshot.media, snapshot.personMedia]);
   const selectedPerson = snapshot.people.find((person) => person.id === selectedPersonId) || null;
   const selectedMedia = selectedPerson ? collectPersonMedia(snapshot, selectedPerson.id) : [];
 
@@ -28,7 +29,12 @@ export function TreeViewerClient({ snapshot }: TreeViewerClientProps) {
           </div>
           <p className="stage-hint">Перетаскивайте схему мышью и масштабируйте колесиком, чтобы спокойно просматривать ветви.</p>
         </div>
-        <FamilyTreeCanvas tree={displayTree} selectedPersonId={selectedPersonId} onSelectPerson={setSelectedPersonId} />
+        <FamilyTreeCanvas
+          tree={displayTree}
+          selectedPersonId={selectedPersonId}
+          onSelectPerson={setSelectedPersonId}
+          personPhotoUrls={personPhotoPreviewUrls}
+        />
       </div>
 
       <aside className="surface-card info-rail">

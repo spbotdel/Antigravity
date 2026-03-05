@@ -1,0 +1,12 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Female avatar">
+  <defs>
+    <linearGradient id="female-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffe0ee" />
+      <stop offset="100%" stop-color="#ffb6d2" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#female-bg)" />
+  <circle cx="32" cy="24" r="10" fill="#f8d7c3" />
+  <path d="M20 27c0-7 5.4-14 12-14s12 7 12 14v3H20v-3z" fill="#7b3f64" />
+  <path d="M15 58c0-10.5 7.6-18.6 17-18.6S49 47.5 49 58H15z" fill="#c55383" />
+</svg>

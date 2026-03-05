@@ -175,6 +175,53 @@ describe("family tree canvas interactions", () => {
     expect(container.querySelector(".tree-card-preview")).not.toBeNull();
   });
 
+  it("uses a gender fallback avatar in the badge when no photo preview URL is provided", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "person-1",
+      name: "Maria Ivanova",
+      gender: "female",
+      birthDate: "1990-01-01",
+      deathDate: null,
+      children: []
+    };
+
+    const { container } = render(<FamilyTreeCanvas tree={tree} selectedPersonId="person-1" onSelectPerson={vi.fn()} />);
+
+    const badge = container.querySelector("circle.tree-node-badge");
+    const fallbackImage = container.querySelector("pattern#tree-avatar-person-1 image");
+
+    expect(badge?.getAttribute("fill")).toBe("url(#tree-avatar-person-1)");
+    expect(fallbackImage?.getAttribute("href")).toBe("/avatars/avatar-female.svg");
+  });
+
+  it("uses person photo preview when a photo URL is available", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "person-1",
+      name: "Ivan Petrov",
+      gender: "male",
+      birthDate: "1990-01-01",
+      deathDate: null,
+      children: []
+    };
+
+    const { container } = render(
+      <FamilyTreeCanvas
+        tree={tree}
+        selectedPersonId="person-1"
+        onSelectPerson={vi.fn()}
+        personPhotoUrls={{ "person-1": "/samples/member-photo.jpg" }}
+      />
+    );
+
+    const badge = container.querySelector("circle.tree-node-badge");
+    const photoImage = container.querySelector("pattern#tree-avatar-person-1 image");
+
+    expect(badge?.getAttribute("fill")).toBe("url(#tree-avatar-person-1)");
+    expect(photoImage?.getAttribute("href")).toBe("/samples/member-photo.jpg");
+  });
+
   it("anchors builder partners below the person and keeps two parents separated on the left", async () => {
     const tree: DisplayTreeNode = {
       type: "person",
@@ -335,6 +382,7 @@ describe("family tree canvas interactions", () => {
 
     expect(partnerTransform?.x).toBe(rootTransform?.x);
     expect(partnerTransform?.y).toBeGreaterThan(rootTransform?.y ?? 0);
+    expect(Math.abs((partnerTransform?.y || 0) - (rootTransform?.y || 0))).toBeLessThanOrEqual(160);
     expect(parentTransform?.x).toBeLessThan(rootTransform?.x ?? 0);
     expect(secondParentTransform?.x).toBeLessThan(rootTransform?.x ?? 0);
     expect(secondParentTransform?.y).not.toBe(parentTransform?.y);
@@ -481,7 +529,7 @@ describe("family tree canvas interactions", () => {
     expect(partnerTransform).not.toBeNull();
     expect(partnerTransform?.x).toBe(siblingTransform?.x);
     expect(partnerTransform?.y).not.toBe(siblingTransform?.y);
-    expect(Math.abs((partnerTransform?.y || 0) - (siblingTransform?.y || 0))).toBeGreaterThanOrEqual(132);
+    expect(Math.abs((partnerTransform?.y || 0) - (siblingTransform?.y || 0))).toBeGreaterThanOrEqual(108);
   });
 
   it("renders shared children from the midpoint of the pair instead of a single parent link", () => {
@@ -594,10 +642,161 @@ describe("family tree canvas interactions", () => {
       />
     );
 
-    expect(container.querySelectorAll(".tree-partner-link")).toHaveLength(1);
+    expect(container.querySelectorAll(".tree-partner-link")).toHaveLength(0);
     expect(container.querySelectorAll(".tree-shared-child-link")).toHaveLength(1);
     expect(container.querySelectorAll(".tree-desc-link")).toHaveLength(0);
+    expect(screen.getByText("01.01.2010")).toBeInTheDocument();
     expect(screen.getAllByText("Partner")).toHaveLength(1);
+  });
+
+  it("shows partnership date between spouses when start_date is present", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "root",
+      name: "Root",
+      gender: "male",
+      birthDate: "1990-01-01",
+      deathDate: null,
+      children: []
+    };
+    const people: PersonRecord[] = [
+      {
+        id: "root",
+        tree_id: "tree-1",
+        full_name: "Root",
+        gender: "male",
+        birth_date: "1990-01-01",
+        death_date: null,
+        birth_place: null,
+        death_place: null,
+        bio: null,
+        is_living: true,
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        id: "partner",
+        tree_id: "tree-1",
+        full_name: "Partner",
+        gender: "female",
+        birth_date: "1991-01-01",
+        death_date: null,
+        birth_place: null,
+        death_place: null,
+        bio: null,
+        is_living: true,
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
+    const partnerships: PartnershipRecord[] = [
+      {
+        id: "partnership-1",
+        tree_id: "tree-1",
+        person_a_id: "root",
+        person_b_id: "partner",
+        status: "married",
+        start_date: "2011-06-29",
+        end_date: null,
+        created_at: new Date().toISOString()
+      }
+    ];
+
+    render(
+      <FamilyTreeCanvas
+        tree={tree}
+        selectedPersonId="root"
+        onSelectPerson={vi.fn()}
+        displayMode="builder"
+        people={people}
+        parentLinks={[]}
+        partnerships={partnerships}
+      />
+    );
+
+    expect(screen.getByText("29.06.2011")).toBeInTheDocument();
+  });
+
+  it("allows editing partnership date inline from the heart chip", async () => {
+    const onPartnershipDateChange = vi.fn(async () => undefined);
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "root",
+      name: "Root",
+      gender: "male",
+      birthDate: "1990-01-01",
+      deathDate: null,
+      children: []
+    };
+    const people: PersonRecord[] = [
+      {
+        id: "root",
+        tree_id: "tree-1",
+        full_name: "Root",
+        gender: "male",
+        birth_date: "1990-01-01",
+        death_date: null,
+        birth_place: null,
+        death_place: null,
+        bio: null,
+        is_living: true,
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        id: "partner",
+        tree_id: "tree-1",
+        full_name: "Partner",
+        gender: "female",
+        birth_date: "1991-01-01",
+        death_date: null,
+        birth_place: null,
+        death_place: null,
+        bio: null,
+        is_living: true,
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
+    const partnerships: PartnershipRecord[] = [
+      {
+        id: "partnership-1",
+        tree_id: "tree-1",
+        person_a_id: "root",
+        person_b_id: "partner",
+        status: "partner",
+        start_date: null,
+        end_date: null,
+        created_at: new Date().toISOString()
+      }
+    ];
+
+    render(
+      <FamilyTreeCanvas
+        tree={tree}
+        selectedPersonId="root"
+        onSelectPerson={vi.fn()}
+        interactive
+        displayMode="builder"
+        people={people}
+        parentLinks={[]}
+        partnerships={partnerships}
+        onPartnershipDateChange={onPartnershipDateChange}
+      />
+    );
+
+    fireEvent.click(screen.getByText("укажите дату"));
+    const input = await screen.findByLabelText("Дата пары");
+    fireEvent.change(input, { target: { value: "2011-06-29" } });
+    fireEvent.click(screen.getByLabelText("Сохранить дату пары"));
+
+    await waitFor(() => {
+      expect(onPartnershipDateChange).toHaveBeenCalledWith("partnership-1", "2011-06-29");
+    });
   });
 
   it("renders parents for an overlay partner without duplicating the partner card", () => {
