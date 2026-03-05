@@ -13,5 +13,10 @@
     "silent_mode": true,
     "auto_commit": false,
     "show_commit_message": true
+  },
+  "memory_sync": {
+    "enabled": true,
+    "mode": "hybrid",
+    "on_completion": "always"
   }
 }

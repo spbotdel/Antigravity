@@ -11,3 +11,4 @@ What happens:
 2. Cold-start protocol runs.
 3. If a newer framework version is detected, update is applied automatically via `.codex/commands/quick-update.sh`.
 4. Shared project memory is loaded from `.claude/*`.
+5. Local Next.js dev server is auto-started on `http://localhost:3000/` (if it is not already running).

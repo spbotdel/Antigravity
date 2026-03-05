@@ -10,8 +10,16 @@ JSON envelope:
 - `timestamp`: ISO UTC
 - `tasks`: optional task result list
 - `errors`: optional error list
+- `warnings`: optional warning list
 - `data`: optional payload (e.g., crash reason)
 - `duration_total_ms`: optional duration
+
+Completion task list includes `memory_sync` with:
+- `name`: `memory_sync`
+- `status`: `success | error`
+- `result`: `MEMORY:updated:<n>` (or skip reason)
+
+`memory_sync` errors are non-blocking for overall completion status and are surfaced via task status and warnings.
 
 `needs_input` reasons currently used:
 - `crash_detected`

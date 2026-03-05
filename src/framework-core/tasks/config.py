@@ -24,6 +24,11 @@ def _default_config(project_name: str) -> dict:
             "silent_mode": True,
             "auto_commit": False,
             "show_commit_message": True
+        },
+        "memory_sync": {
+            "enabled": True,
+            "mode": "hybrid",
+            "on_completion": "always"
         }
     }
 

@@ -62,3 +62,72 @@ The core product baseline already exists in this repository. The main near-term 
 2. Type `start` in the agent chat.
 3. Work on one concrete task.
 4. Type `/fi` to close the cycle.
+
+<!-- FRAMEWORK:AUTO:START -->
+## Framework Auto Sync
+
+- Updated at (UTC): `2026-03-04 22:23:35Z`
+- Active branch: `main`
+- Git status: `STATUS:27 files`
+- Git diff: `DIFF:4280 lines`
+
+### Top Changed Paths
+
+- `.claude/.framework-config`
+- `.claude/ARCHITECTURE.md`
+- `.claude/BACKLOG.md`
+- `.claude/SNAPSHOT.md`
+- `.codex/commands/fi.md`
+- `.codex/commands/finish.md`
+- `.codex/contracts/core-cli-contract.md`
+- `.env.example`
+- `app/api/tree/[slug]/snapshot/route.ts`
+- `app/globals.css`
+
+### Detected Stack
+
+- Node.js / npm
+
+### Top-Level Structure Snapshot
+
+- `.env.example`
+- `.env.local`
+- `.gitattributes`
+- `.github/`
+- `.gitignore`
+- `.next/`
+- `.next-dev.err.log`
+- `.next-dev.log`
+- `.next-start.err.log`
+- `.next-start.log`
+- `.tmp/`
+- `3.ged`
+- `AGENTS.md`
+- `app/`
+- `CHANGELOG.md`
+- `check-ids.html`
+- `CLAUDE.md`
+- `components/`
+- `css/`
+- `FRAMEWORK_GUIDE.md`
+<!-- FRAMEWORK:AUTO:END -->
+
+<!-- FRAMEWORK:SESSION:START -->
+## Latest Completion Session
+
+- Completed at (UTC): `2026-03-04 22:23:35Z`
+- Branch: `main`
+- Git status summary: `STATUS:27 files`
+- Git diff summary: `DIFF:4280 lines`
+
+- Session summary: `27` changed files, `4280` diff lines, `10` tracked changed paths.
+
+### Key Task Statuses
+
+- `config_init`: `success` (`CONFIG:exists`)
+- `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
+- `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
+- `dialog_export`: `success` (`EXPORT:skipped:disabled`)
+- `git_status`: `success` (`STATUS:27 files`)
+- `git_diff`: `success` (`DIFF:4280 lines`)
+<!-- FRAMEWORK:SESSION:END -->

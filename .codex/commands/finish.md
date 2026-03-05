@@ -9,4 +9,8 @@ Adapter entry:
 What happens:
 1. Completion protocol runs.
 2. Security/export/git checks are executed.
-3. Structured result is returned.
+3. Shared memory files are synchronized on every run (`hybrid` mode):
+   - `.claude/SNAPSHOT.md`
+   - `.claude/BACKLOG.md`
+   - `.claude/ARCHITECTURE.md`
+4. Structured result is returned, including `memory_sync` task status.
