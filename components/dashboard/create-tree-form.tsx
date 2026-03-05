@@ -51,7 +51,7 @@ export function CreateTreeForm({ submitLabel = "Создать первое де
       <div className="field-grid field-grid-2">
         <label>
           Название дерева
-          <input name="title" required placeholder="Семейное дерево Ивановых" />
+          <input name="title" required placeholder="Семейное дерево Петровых" />
         </label>
         <label>
           Адрес ссылки
@@ -60,7 +60,7 @@ export function CreateTreeForm({ submitLabel = "Создать первое де
       </div>
       <label>
         Описание
-        <textarea name="description" rows={4} placeholder="Короткое описание дерева." />
+        <textarea name="description" rows={4} placeholder="Короткое описание веток и периода семьи." />
       </label>
       {error ? <p className="form-error">{error}</p> : null}
       <button className="primary-button" type="submit" disabled={loading}>

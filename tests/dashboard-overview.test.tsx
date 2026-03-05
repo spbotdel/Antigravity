@@ -55,8 +55,8 @@ describe("dashboard overview", () => {
 
     render(<DashboardOverview dashboard={dashboard} />);
 
-    expect(screen.getByRole("link", { name: "Продолжить редактирование" })).toHaveAttribute("href", "/tree/slug-tree-owned/builder");
-    expect(screen.getByRole("link", { name: "Открыть дерево" })).toHaveAttribute("href", "/tree/slug-tree-owned");
+    expect(screen.getByRole("link", { name: "Открыть конструктор" })).toHaveAttribute("href", "/tree/slug-tree-owned/builder");
+    expect(screen.getByRole("link", { name: "Открыть просмотр" })).toHaveAttribute("href", "/tree/slug-tree-owned");
   });
 
   it("shows edit and open actions for invited admin trees", () => {
@@ -64,8 +64,8 @@ describe("dashboard overview", () => {
 
     render(<DashboardOverview dashboard={dashboard} />);
 
-    expect(screen.getByRole("link", { name: "Редактировать дерево" })).toHaveAttribute("href", "/tree/slug-tree-admin/builder");
-    expect(screen.getByRole("link", { name: "Открыть дерево" })).toHaveAttribute("href", "/tree/slug-tree-admin");
+    expect(screen.getByRole("link", { name: "В конструктор" })).toHaveAttribute("href", "/tree/slug-tree-admin/builder");
+    expect(screen.getByRole("link", { name: "Открыть просмотр" })).toHaveAttribute("href", "/tree/slug-tree-admin");
   });
 
   it("shows only open action for viewer trees", () => {
@@ -73,8 +73,8 @@ describe("dashboard overview", () => {
 
     render(<DashboardOverview dashboard={dashboard} />);
 
-    expect(screen.getByRole("link", { name: "Открыть дерево" })).toHaveAttribute("href", "/tree/slug-tree-viewer");
-    expect(screen.queryByRole("link", { name: "Редактировать дерево" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Открыть просмотр" })).toHaveAttribute("href", "/tree/slug-tree-viewer");
+    expect(screen.queryByRole("link", { name: "В конструктор" })).not.toBeInTheDocument();
   });
 
   it("shows invited trees together with the create panel for invited-only users", () => {
@@ -84,6 +84,6 @@ describe("dashboard overview", () => {
 
     expect(screen.getByRole("heading", { name: "Доступ по приглашениям" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Создайте свое дерево" })).toBeInTheDocument();
-    expect(screen.getByTestId("create-tree-form")).toHaveTextContent("Создать свое дерево");
+    expect(screen.getByTestId("create-tree-form")).toHaveTextContent("Создать дерево");
   });
 });

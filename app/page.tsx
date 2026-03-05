@@ -6,63 +6,54 @@ export default function HomePage() {
       <section className="landing-hero">
         <div className="landing-hero-copy">
           <p className="eyebrow">Семейное дерево</p>
-          <h1 className="landing-title">Соберите семейную память в одном спокойном дереве.</h1>
+          <h1 className="landing-title">Соберите семейную историю в одном рабочем дереве.</h1>
           <p className="landing-lead">
-            Родственники, истории и фотографии остаются рядом со схемой семьи. Владелец управляет доступом, а участники видят только то, что им открыто.
+            Родственники, связи и материалы остаются рядом со схемой. Владелец управляет доступом, участники открывают только нужный уровень данных.
           </p>
           <div className="hero-actions landing-actions">
             <Link href="/auth/register" className="primary-button">
-              Создать дерево
+              Начать с дерева
             </Link>
             <Link href="/auth/login" className="ghost-button">
               Войти
             </Link>
           </div>
-          <div className="landing-hero-points">
-            <article className="landing-hero-point">
-              <span>Схема</span>
-              <strong>Дерево остается главным объектом экрана.</strong>
-            </article>
-            <article className="landing-hero-point">
-              <span>Доступ</span>
-              <strong>Публичная ссылка или приглашения без сложной настройки.</strong>
-            </article>
-            <article className="landing-hero-point">
-              <span>Материалы</span>
-              <strong>Фото и истории остаются рядом с людьми, а не в отдельной админке.</strong>
-            </article>
-          </div>
+          <ul className="landing-hero-list">
+            <li className="landing-hero-list-item">Схема семьи остается главным объектом экрана.</li>
+            <li className="landing-hero-list-item">Права доступа не мешают работе с деревом.</li>
+            <li className="landing-hero-list-item">Фото и истории привязаны к людям и веткам.</li>
+          </ul>
         </div>
 
         <section className="surface-card landing-workspace-card">
           <div className="landing-workspace-header">
             <p className="card-kicker">Рабочее пространство</p>
             <div className="landing-workspace-pills">
-              <span className="meta-pill">Viewer и builder</span>
-              <span className="meta-pill meta-pill-muted">Участники и роли</span>
+              <span className="meta-pill">Viewer + Builder</span>
+              <span className="meta-pill meta-pill-muted">Роли и доступ</span>
             </div>
           </div>
           <div className="landing-workspace-copy">
-            <h2>Первый экран показывает, как работает продукт, без маркетингового шума.</h2>
-            <p>Открыть дерево, перейти в конструктор и проверить доступ можно из одного спокойного контура.</p>
+            <h2>Короткий контур: открыть дерево, перейти в конструктор, проверить доступ.</h2>
+            <p>Интерфейс собран вокруг семьи и веток, а не вокруг длинных маркетинговых блоков.</p>
           </div>
           <div className="landing-workspace-list">
             <article className="landing-workspace-row">
               <span>Просмотр</span>
-              <strong>Сначала видно структуру семьи и материалы, а не длинный набор блоков.</strong>
+              <strong>Сразу видно структуру семьи и базовые материалы.</strong>
             </article>
             <article className="landing-workspace-row">
               <span>Редактирование</span>
-              <strong>Конструктор читается как рабочий режим, а не как отдельный продукт.</strong>
+              <strong>Конструктор ведет к действиям без лишних переходов.</strong>
             </article>
             <article className="landing-workspace-row">
               <span>Контроль</span>
-              <strong>Роли, приглашения и видимость подключаются только там, где они нужны.</strong>
+              <strong>Роли и видимость включаются только в нужных местах.</strong>
             </article>
           </div>
           <div className="landing-workspace-footer">
-            <span>Одно дерево для семьи</span>
-            <strong>Переходы короткие, действия ясные, сама схема не теряется.</strong>
+            <span>Один адрес для семьи</span>
+            <strong>Открываете дерево и продолжаете работу с того же экрана.</strong>
           </div>
         </section>
       </section>
@@ -70,33 +61,33 @@ export default function HomePage() {
       <section className="landing-detail-grid">
         <article className="surface-card">
           <p className="card-kicker">Права и роли</p>
-          <h3>Владелец, администратор и участник читаются как реальные роли, а не как набор технических флажков.</h3>
-          <p>Редактирование, просмотр и управление доступом уже разведены по сценариям, поэтому дерево не нужно сопровождать отдельными инструкциями.</p>
+          <h3>Владелец, администратор и участник работают в одном дереве с разными правами.</h3>
+          <p>Доступы разделены по реальным сценариям и не требуют отдельной настройки на каждом шаге.</p>
         </article>
         <article className="surface-card">
-          <p className="card-kicker">Фото и истории</p>
-          <h3>Семейные материалы остаются рядом с людьми и ветками дерева, а не теряются в отдельном архиве.</h3>
-          <p>Публичные фотографии можно открыть по ссылке, личные оставить только участникам, а сам интерфейс не заставляет искать их по разным экранам.</p>
+          <p className="card-kicker">Материалы</p>
+          <h3>Фотографии и заметки остаются рядом с людьми, а не в отдельной админке.</h3>
+          <p>Публичные материалы видны по ссылке, приватные остаются только для участников дерева.</p>
         </article>
       </section>
 
       <section className="surface-card landing-summary-card">
         <div className="landing-summary-copy">
-          <p className="card-kicker">Для чего это подходит</p>
-          <h2>Когда нужно собрать семейную структуру, сохранить материалы и спокойно дать доступ близким.</h2>
+          <p className="card-kicker">Кому подходит</p>
+          <h2>Когда нужно вести живое семейное дерево и давать доступ близким без перегруженного интерфейса.</h2>
         </div>
         <div className="landing-summary-grid">
           <div>
             <span>Для семьи</span>
-            <p>Один адрес дерева, понятный просмотр и приглашения без лишних шагов.</p>
+            <p>Один адрес дерева и понятный просмотр для родственников.</p>
           </div>
           <div>
             <span>Для владельца</span>
-            <p>Редактирование, настройки и журнал остаются под рукой, но не перегружают первый экран.</p>
+            <p>Конструктор, настройки и журнал доступны из одного рабочего контура.</p>
           </div>
           <div>
             <span>Для участников</span>
-            <p>Открывается ровно тот объем информации, который действительно нужен для просмотра и совместной памяти.</p>
+            <p>Открывается только тот объем информации, который разрешен владельцем.</p>
           </div>
         </div>
       </section>

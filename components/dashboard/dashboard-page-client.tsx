@@ -9,16 +9,16 @@ import type { MembershipRecord, TreeRecord } from "@/lib/types";
 
 const dashboardHeaderCopy = {
   owned: {
-    title: "Основное дерево",
-    description: "Откройте схему, внесите изменения или перейдите к просмотру без лишних шагов."
+    title: "Ваше дерево",
+    description: "Откройте конструктор для изменений или перейдите к просмотру без лишних шагов."
   },
   invited_only: {
-    title: "Доступные деревья",
-    description: "Приглашенные рабочие пространства собраны в одном месте. При необходимости здесь же можно создать свое дерево."
+    title: "Приглашенные деревья",
+    description: "Все доступные вам деревья собраны в одном месте. При необходимости здесь же создается собственное дерево."
   },
   empty: {
-    title: "Создайте дерево",
-    description: "После создания здесь появится основное рабочее пространство владельца."
+    title: "Создайте первое дерево",
+    description: "После создания вы сразу попадете в конструктор и сможете продолжить работу из dashboard."
   }
 } as const;
 
@@ -138,7 +138,7 @@ export function DashboardPageClient() {
         <p className="eyebrow">Панель управления</p>
         <h1 className="dashboard-title">{header.title}</h1>
         <p className="muted-copy">
-          {state.status === "loading" ? "Загружаю состав деревьев и права доступа..." : header.description}
+          {state.status === "loading" ? "Загружаю деревья и права доступа..." : header.description}
         </p>
       </section>
 
