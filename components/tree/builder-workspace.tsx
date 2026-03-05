@@ -919,43 +919,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
   return (
     <div className="builder-layout builder-layout-reworked builder-layout-canvas">
-      <aside className="surface-card builder-sidebar builder-sidebar-overlay">
-        <div className="sidebar-header builder-sidebar-header">
-          <div className="builder-sidebar-copy">
-            <p className="eyebrow">Люди</p>
-            <h2>{currentSnapshot.people.length} родственников</h2>
-            <p className="muted-copy">Список слева остается коротким. Основная работа идет на схеме и в карточке справа.</p>
-          </div>
-          <button
-            type="button"
-            className="ghost-button ghost-button-compact"
-            onClick={startStandaloneCreate}
-          >
-            Новый
-          </button>
-        </div>
-        {currentSnapshot.people.length ? (
-          <div className="person-list">
-            {currentSnapshot.people.map((person) => (
-              <button
-                type="button"
-                key={person.id}
-                className={person.id === selectedPersonId ? "person-list-item person-list-item-active" : "person-list-item"}
-                onClick={() => focusPerson(person.id)}
-              >
-                <div className="person-list-item-top">
-                  <strong>{person.full_name}</strong>
-                  {visualRootPersonId === person.id ? <span className="person-list-badge">Корень</span> : null}
-                </div>
-                <span className="person-list-meta">{getPersonListMeta(person)}</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state builder-sidebar-empty">Добавьте первого человека, чтобы слева появился список родственников.</div>
-        )}
-      </aside>
-
       <main className="builder-main">
         <div className="surface-card viewer-stage builder-stage builder-stage-canvas">
           <div className="stage-header builder-stage-header builder-stage-header-overlay">
@@ -969,6 +932,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               <span className="workspace-meta-chip">
                 {rootPerson ? `Корень: ${rootPerson.full_name}` : "Нужен корень"}
               </span>
+              <button type="button" className="ghost-button ghost-button-compact" onClick={startStandaloneCreate}>
+                Новый блок
+              </button>
             </div>
           </div>
           <FamilyTreeCanvas

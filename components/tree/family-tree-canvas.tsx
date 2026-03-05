@@ -14,6 +14,10 @@ const ACTION_MENU_HEIGHT = 148;
 const BUILDER_SELECTED_MIN_SCALE = 0.55;
 const BUILDER_VIEWPORT_MARGIN_X = 96;
 const BUILDER_VIEWPORT_MARGIN_Y = 84;
+const BUILDER_FOCUS_X_RATIO = 0.46;
+const BUILDER_FOCUS_Y_RATIO = 0.34;
+const VIEWER_FIT_X_RATIO = 0.38;
+const VIEWER_FIT_Y_RATIO = 0.24;
 const BADGE_RADIUS = 20;
 const BADGE_CX = -CARD_WIDTH / 2 + 30;
 const BADGE_CY = -6;
@@ -469,13 +473,15 @@ function formatCanvasDate(value: string) {
   return `${day}.${month}.${year}`;
 }
 
-function getCenteredTransform(
+function getFocusedTransform(
   width: number,
   height: number,
   point: { x: number; y: number },
-  scale: number
+  scale: number,
+  xRatio = 0.5,
+  yRatio = 0.5
 ) {
-  return d3.zoomIdentity.translate(width / 2 - point.x * scale, height / 2 - point.y * scale).scale(scale);
+  return d3.zoomIdentity.translate(width * xRatio - point.x * scale, height * yRatio - point.y * scale).scale(scale);
 }
 
 function isPointComfortablyVisible(
@@ -1573,7 +1579,10 @@ export function FamilyTreeCanvas({
               zoomTransformRef.current.k < BUILDER_SELECTED_MIN_SCALE)
           ) {
             const nextScale = Math.max(zoomTransformRef.current.k, BUILDER_SELECTED_MIN_SCALE);
-            svg.call(zoom.transform, getCenteredTransform(width, height, selectedCanvasNode, nextScale));
+            svg.call(
+              zoom.transform,
+              getFocusedTransform(width, height, selectedCanvasNode, nextScale, BUILDER_FOCUS_X_RATIO, BUILDER_FOCUS_Y_RATIO)
+            );
           } else {
             svg.call(zoom.transform, zoomTransformRef.current);
           }
@@ -1581,14 +1590,17 @@ export function FamilyTreeCanvas({
           const scale = bounds && bounds.width > 0 && bounds.height > 0
             ? Math.max(Math.min((width - 140) / bounds.width, (height - 120) / bounds.height, 1), BUILDER_SELECTED_MIN_SCALE)
             : BUILDER_SELECTED_MIN_SCALE;
-          svg.call(zoom.transform, getCenteredTransform(width, height, selectedCanvasNode, scale));
+          svg.call(
+            zoom.transform,
+            getFocusedTransform(width, height, selectedCanvasNode, scale, BUILDER_FOCUS_X_RATIO, BUILDER_FOCUS_Y_RATIO)
+          );
         }
       } else if (zoomTransformRef.current) {
         svg.call(zoom.transform, zoomTransformRef.current);
       } else if (bounds && bounds.width > 0 && bounds.height > 0) {
         const scale = Math.min((width - 140) / bounds.width, (height - 120) / bounds.height, 1);
-        const x = (width - bounds.width * scale) / 2 - bounds.x * scale;
-        const y = (height - bounds.height * scale) / 2 - bounds.y * scale;
+        const x = width * VIEWER_FIT_X_RATIO - bounds.x * scale;
+        const y = height * VIEWER_FIT_Y_RATIO - bounds.y * scale;
         svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
       }
 
@@ -1906,8 +1918,8 @@ export function FamilyTreeCanvas({
       svg.call(zoom.transform, zoomTransformRef.current);
     } else if (bounds && bounds.width > 0 && bounds.height > 0) {
       const scale = Math.min((width - 140) / bounds.width, (height - 120) / bounds.height, 1);
-      const x = (width - bounds.width * scale) / 2 - bounds.x * scale;
-      const y = (height - bounds.height * scale) / 2 - bounds.y * scale;
+      const x = width * VIEWER_FIT_X_RATIO - bounds.x * scale;
+      const y = height * VIEWER_FIT_Y_RATIO - bounds.y * scale;
       svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
     }
   }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoUrls, selectedPersonId]);

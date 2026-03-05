@@ -2120,22 +2120,27 @@ textarea {
 
 .builder-stage-header-overlay {
   position: absolute;
-  top: 14px;
-  left: 14px;
-  right: 14px;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 8;
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 13px;
-  border: 1px solid rgba(100, 132, 186, 0.2);
-  background: linear-gradient(165deg, rgba(243, 250, 255, 0.64), rgba(228, 240, 255, 0.5));
-  backdrop-filter: blur(9px);
-  -webkit-backdrop-filter: blur(9px);
+  padding: 14px 16px 56px;
+  border-radius: 18px 18px 0 0;
+  border: none;
+  background: linear-gradient(
+    180deg,
+    rgba(250, 253, 255, 0.98) 0%,
+    rgba(246, 251, 255, 0.94) 40%,
+    rgba(242, 249, 255, 0.78) 68%,
+    rgba(242, 249, 255, 0) 100%
+  );
   pointer-events: none;
 }
 
 .builder-stage-header-overlay .stage-header-copy {
-  max-width: min(68ch, 72%);
+  margin-left: clamp(20px, 7vw, 104px);
+  max-width: min(68ch, 62%);
 }
 
 .builder-stage-note {
@@ -2151,29 +2156,7 @@ textarea {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.builder-sidebar-overlay {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  width: 272px;
-  z-index: 9;
-  max-height: calc(100vh - 164px);
-  overflow: auto;
-  border: 1px solid rgba(100, 132, 186, 0.16);
-  background: linear-gradient(165deg, rgba(243, 250, 255, 0.54), rgba(227, 239, 255, 0.38));
-  backdrop-filter: blur(9px);
-  -webkit-backdrop-filter: blur(9px);
-}
-
-.builder-sidebar-overlay .builder-sidebar-copy .muted-copy {
-  display: none;
-}
-
-.builder-sidebar-overlay .person-list {
-  max-height: calc(100vh - 292px);
-  overflow: auto;
+  pointer-events: auto;
 }
 
 .builder-panels {
@@ -3174,13 +3157,6 @@ textarea {
 
   .builder-layout-reworked {
     min-height: auto;
-  }
-
-  .builder-sidebar-overlay {
-    width: auto;
-    overflow: visible;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
 
   .builder-stage-canvas,
