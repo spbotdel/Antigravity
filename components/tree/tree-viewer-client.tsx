@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 import { FamilyTreeCanvas } from "@/components/tree/family-tree-canvas";
-import { buildDisplayTree, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
 import { formatGender, formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import { formatDate } from "@/lib/utils";
 import type { TreeSnapshot } from "@/lib/types";
@@ -14,7 +14,7 @@ interface TreeViewerClientProps {
 
 export function TreeViewerClient({ snapshot }: TreeViewerClientProps) {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(snapshot.tree.root_person_id || snapshot.people[0]?.id || null);
-  const displayTree = useMemo(() => buildDisplayTree(snapshot), [snapshot]);
+  const displayTree = useMemo(() => buildBuilderDisplayTree(snapshot), [snapshot]);
   const personPhotoPreviewUrls = useMemo(() => buildPersonPhotoPreviewUrls(snapshot), [snapshot.media, snapshot.personMedia]);
   const selectedPerson = snapshot.people.find((person) => person.id === selectedPersonId) || null;
   const selectedMedia = selectedPerson ? collectPersonMedia(snapshot, selectedPerson.id) : [];
@@ -33,6 +33,10 @@ export function TreeViewerClient({ snapshot }: TreeViewerClientProps) {
           tree={displayTree}
           selectedPersonId={selectedPersonId}
           onSelectPerson={setSelectedPersonId}
+          displayMode="builder"
+          people={snapshot.people}
+          parentLinks={snapshot.parentLinks}
+          partnerships={snapshot.partnerships}
           personPhotoUrls={personPhotoPreviewUrls}
         />
       </div>
