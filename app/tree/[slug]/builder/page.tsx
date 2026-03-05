@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { TreeNav } from "@/components/layout/tree-nav";
 import { BuilderWorkspace } from "@/components/tree/builder-workspace";
-import { getTreeSnapshot } from "@/lib/server/repository";
+import { getBuilderSnapshot } from "@/lib/server/repository";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ interface BuilderPageProps {
 
 export default async function BuilderPage({ params }: BuilderPageProps) {
   const { slug } = await params;
-  const snapshot = await getTreeSnapshot(slug);
+  const snapshot = await getBuilderSnapshot(slug);
 
   if (!snapshot.actor.canEdit) {
     redirect(`/tree/${slug}`);
@@ -37,7 +37,7 @@ export default async function BuilderPage({ params }: BuilderPageProps) {
           canManageSettings={snapshot.actor.canManageSettings}
         />
       </section>
-      <BuilderWorkspace snapshot={snapshot} />
+      <BuilderWorkspace snapshot={snapshot} mediaLoaded={false} />
     </main>
   );
 }

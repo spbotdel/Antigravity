@@ -1,5 +1,5 @@
 import { toErrorResponse } from "@/lib/server/errors";
-import { getTreeSnapshot } from "@/lib/server/repository";
+import { getBuilderSnapshot } from "@/lib/server/repository";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -8,8 +8,8 @@ interface Params {
 export async function GET(request: Request, { params }: Params) {
   try {
     const { slug } = await params;
-    const includeMedia = new URL(request.url).searchParams.get("includeMedia") !== "0";
-    const snapshot = await getTreeSnapshot(slug, { includeMedia });
+    const includeMedia = new URL(request.url).searchParams.get("includeMedia") === "1";
+    const snapshot = await getBuilderSnapshot(slug, { includeMedia });
     return Response.json(snapshot);
   } catch (error) {
     return toErrorResponse(error);

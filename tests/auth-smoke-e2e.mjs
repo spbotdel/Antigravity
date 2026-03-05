@@ -25,7 +25,7 @@ const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_
 });
 
 const timestamp = Date.now();
-const email = `register.smoke.${timestamp}@antigravity-smoke.dev`;
+const email = `register.smoke.${timestamp}@gmail.com`;
 const password = "SmokeRegister123!";
 const displayName = `Smoke Owner ${timestamp}`;
 const treeTitle = `Smoke Register Tree ${timestamp}`;
@@ -163,12 +163,17 @@ async function registerOwner(page) {
       return outcome;
     }
 
-    if (outcome.errorText?.includes("email rate limit exceeded") && attempt === 0) {
+    const errorText = outcome.errorText || "";
+    const isRateLimited =
+      errorText.includes("email rate limit exceeded") ||
+      errorText.includes("Слишком много попыток регистрации подряд");
+
+    if (isRateLimited && attempt === 0) {
       await page.waitForTimeout(75000);
       continue;
     }
 
-    if (outcome.errorText?.includes("email rate limit exceeded")) {
+    if (isRateLimited) {
       return { registrationMode: "rate_limited" };
     }
 

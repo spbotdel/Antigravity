@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDisplayTree, collectPersonMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildDisplayTree, collectPersonMedia } from "@/lib/tree/display";
 import type { TreeSnapshot } from "@/lib/types";
 
 const snapshot: TreeSnapshot = {
@@ -235,6 +235,52 @@ describe("tree display helpers", () => {
     expect(tree?.children?.[0]).toMatchObject({
       type: "person",
       id: "person-1"
+    });
+  });
+
+  it("keeps builder tree descendant-only and does not insert couple nodes", () => {
+    const tree = buildBuilderDisplayTree({
+      ...snapshot,
+      people: [
+        ...snapshot.people,
+        {
+          id: "person-3",
+          tree_id: "tree-1",
+          full_name: "Partner Person",
+          gender: "female",
+          birth_date: "1952-05-05",
+          death_date: null,
+          birth_place: null,
+          death_place: null,
+          bio: null,
+          is_living: true,
+          created_by: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ],
+      partnerships: [
+        {
+          id: "partnership-1",
+          tree_id: "tree-1",
+          person_a_id: "person-1",
+          person_b_id: "person-3",
+          status: "married",
+          start_date: null,
+          end_date: null,
+          created_at: new Date().toISOString()
+        }
+      ]
+    });
+
+    expect(tree).toMatchObject({
+      type: "person",
+      id: "person-1"
+    });
+    expect(tree?.children).toHaveLength(1);
+    expect(tree?.children?.[0]).toMatchObject({
+      type: "person",
+      id: "person-2"
     });
   });
 

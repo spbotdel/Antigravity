@@ -18,9 +18,8 @@ import { buildAuditEntryViews } from "@/lib/audit-presenter";
 import { buildViewerActor, canSeeMedia, canViewTree, hasRequiredRole } from "@/lib/permissions";
 import { getBaseUrl, getStorageBucket } from "@/lib/env";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { fetchSupabaseAdminRestJson } from "@/lib/supabase/admin-rest";
-import { createRouteSupabaseClient } from "@/lib/supabase/route";
-import { getCurrentUser } from "@/lib/server/auth";
+import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson } from "@/lib/supabase/admin-rest";
+import { getCurrentUser, requireAuthenticatedUserId } from "@/lib/server/auth";
 import { AppError } from "@/lib/server/errors";
 import { createInviteToken, hashInviteToken } from "@/lib/server/invite-token";
 
@@ -74,14 +73,12 @@ async function mutateAdminFirst<T>(pathWithQuery: string, method: "POST" | "PATC
 }
 
 async function getAuthenticatedUserId() {
-  const supabase = await createRouteSupabaseClient();
-  const { data, error } = await supabase.auth.getSession();
-
-  if (error || !data.session?.user) {
+  const userId = await requireAuthenticatedUserId();
+  if (!userId) {
     throw new AppError(401, "Требуется авторизация.");
   }
 
-  return data.session.user.id;
+  return userId;
 }
 
 export async function getTreeBySlug(slug: string) {
@@ -193,6 +190,20 @@ async function insertAuditLog(input: {
     },
     "Не удалось записать событие в журнал изменений."
   );
+}
+
+function queueAuditLog(input: {
+  treeId: string;
+  actorUserId: string | null;
+  entityType: string;
+  entityId: string;
+  action: string;
+  beforeJson: unknown;
+  afterJson: unknown;
+}) {
+  void insertAuditLog(input).catch((error) => {
+    console.error("[audit-log] best-effort insert failed", error);
+  });
 }
 
 export async function createTreeForOwner(input: { title: string; slug: string; description?: string | null }) {
@@ -311,39 +322,57 @@ export async function updateTreeVisibility(treeId: string, visibility: TreeRecor
   return data;
 }
 
-export async function getTreeSnapshot(slug: string): Promise<TreeSnapshot> {
-  const tree = await getTreeBySlug(slug);
-  const user = await getCurrentUser();
-  const membership = user ? await getMembership(tree.id, user.id) : null;
+async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean }): Promise<TreeSnapshot> {
+  const includeMedia = options?.includeMedia ?? true;
+  const [tree, user] = await Promise.all([getTreeBySlug(slug), getCurrentUser()]);
+
+  const batchedRequests: Array<{ key: string; pathWithQuery: string }> = [
+    {
+      key: "people",
+      pathWithQuery: `persons?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=full_name.asc`
+    },
+    {
+      key: "parentLinks",
+      pathWithQuery: `person_parent_links?select=*&tree_id=eq.${encodeURIComponent(tree.id)}`
+    },
+    {
+      key: "partnerships",
+      pathWithQuery: `person_partnerships?select=*&tree_id=eq.${encodeURIComponent(tree.id)}`
+    }
+  ];
+
+  if (user) {
+    batchedRequests.unshift({
+      key: "membership",
+      pathWithQuery: `tree_memberships?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&user_id=eq.${encodeURIComponent(user.id)}&status=eq.active&limit=1`
+    });
+  }
+
+  if (includeMedia) {
+    batchedRequests.push({
+      key: "media",
+      pathWithQuery: `media_assets?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=created_at.desc`
+    });
+  }
+
+  const batchedResults = await fetchSupabaseAdminRestBatchJson<unknown>(batchedRequests);
+  const batchedRowsByKey = new Map(batchedRequests.map((request, index) => [request.key, batchedResults[index]] as const));
+  const membership = user ? ((batchedRowsByKey.get("membership") as MembershipRecord[] | undefined)?.[0] ?? null) : null;
 
   if (!canViewTree(tree.visibility, membership)) {
     throw new AppError(403, "Это закрытое дерево. Войдите в аккаунт по приглашению.");
   }
 
   const actor = buildViewerActor(user?.id ?? null, membership?.role ?? null);
-  const [people, parentLinks, partnerships, allMedia] = await Promise.all([
-    fetchAdminRows<PersonRecord>(
-      `persons?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=full_name.asc`,
-      "Не удалось загрузить людей из дерева."
-    ),
-    fetchAdminRows<ParentLinkRecord>(
-      `person_parent_links?select=*&tree_id=eq.${encodeURIComponent(tree.id)}`,
-      "Не удалось загрузить связи родитель-ребенок."
-    ),
-    fetchAdminRows<PartnershipRecord>(
-      `person_partnerships?select=*&tree_id=eq.${encodeURIComponent(tree.id)}`,
-      "Не удалось загрузить пары."
-    ),
-    fetchAdminRows<MediaAssetRecord>(
-      `media_assets?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=created_at.desc`,
-      "Не удалось загрузить медиафайлы дерева."
-    )
-  ]);
+  const people = (batchedRowsByKey.get("people") as PersonRecord[] | undefined) || [];
+  const parentLinks = (batchedRowsByKey.get("parentLinks") as ParentLinkRecord[] | undefined) || [];
+  const partnerships = (batchedRowsByKey.get("partnerships") as PartnershipRecord[] | undefined) || [];
+  const allMedia = includeMedia ? ((batchedRowsByKey.get("media") as MediaAssetRecord[] | undefined) || []) : [];
 
   const media = allMedia.filter((item) => canSeeMedia(actor.role, item.visibility));
   const visibleMediaIds = media.map((item) => item.id);
   const personMedia =
-    visibleMediaIds.length > 0
+    includeMedia && visibleMediaIds.length > 0
       ? await fetchAdminRows<PersonMediaRecord>(
           `person_media?select=id,person_id,media_id,is_primary&media_id=in.${buildUuidInFilter(visibleMediaIds)}`,
           "Не удалось загрузить связи людей с медиафайлами."
@@ -359,6 +388,16 @@ export async function getTreeSnapshot(slug: string): Promise<TreeSnapshot> {
     media,
     personMedia
   };
+}
+
+export async function getTreeSnapshot(slug: string, options?: { includeMedia?: boolean }): Promise<TreeSnapshot> {
+  return loadTreeSnapshot(slug, options);
+}
+
+export async function getBuilderSnapshot(slug: string, options?: { includeMedia?: boolean }): Promise<TreeSnapshot> {
+  return loadTreeSnapshot(slug, {
+    includeMedia: options?.includeMedia ?? false
+  });
 }
 
 export async function listMemberships(treeId: string) {
@@ -498,7 +537,7 @@ export async function createPerson(input: {
     throw new AppError(400, "Не удалось создать запись о человеке.");
   }
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: input.treeId,
     actorUserId: userId,
     entityType: "person",
@@ -550,7 +589,7 @@ export async function updatePerson(
   );
   if (!data) throw new AppError(400, "Не удалось обновить данные человека.");
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: before.tree_id,
     actorUserId: userId,
     entityType: "person",
@@ -578,7 +617,7 @@ export async function deletePerson(personId: string) {
     "Не удалось удалить запись о человеке."
   );
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: before.tree_id,
     actorUserId: userId,
     entityType: "person",
@@ -605,7 +644,7 @@ export async function createParentLink(input: { treeId: string; parentPersonId: 
 
   if (!data) throw new AppError(400, "Не удалось создать связь родитель-ребенок.");
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: input.treeId,
     actorUserId: userId,
     entityType: "parent_link",
@@ -633,7 +672,7 @@ export async function deleteParentLink(linkId: string) {
     "Не удалось удалить связь родитель-ребенок."
   );
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: before.tree_id,
     actorUserId: userId,
     entityType: "parent_link",
@@ -662,7 +701,7 @@ export async function createPartnership(input: { treeId: string; personAId: stri
 
   if (!data) throw new AppError(400, "Не удалось создать пару.");
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: input.treeId,
     actorUserId: userId,
     entityType: "partnership",
@@ -697,7 +736,7 @@ export async function updatePartnership(partnershipId: string, input: Partial<{ 
 
   if (!data) throw new AppError(400, "Не удалось обновить данные пары.");
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: before.tree_id,
     actorUserId: userId,
     entityType: "partnership",
@@ -725,7 +764,7 @@ export async function deletePartnership(partnershipId: string) {
     "Не удалось удалить пару."
   );
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: before.tree_id,
     actorUserId: userId,
     entityType: "partnership",

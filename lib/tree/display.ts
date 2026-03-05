@@ -169,6 +169,83 @@ export function buildDisplayTree(snapshot: TreeSnapshot): DisplayTreeNode | null
   return walkPerson(rootId, new Set(), new Set());
 }
 
+export function buildBuilderDisplayTree(snapshot: TreeSnapshot): DisplayTreeNode | null {
+  const peopleById = new Map(snapshot.people.map((person) => [person.id, person]));
+  if (!peopleById.size) {
+    return null;
+  }
+
+  const childrenByParent = new Map<string, ParentLinkRecord[]>();
+  const parentLinksByChild = new Map<string, ParentLinkRecord[]>();
+
+  function comparePersonIds(personAId: string, personBId: string) {
+    const personA = peopleById.get(personAId);
+    const personB = peopleById.get(personBId);
+    if (!personA || !personB) {
+      return personAId.localeCompare(personBId);
+    }
+
+    return (
+      compareNullableDate(personA.birth_date, personB.birth_date) ||
+      personA.full_name.localeCompare(personB.full_name, "ru") ||
+      personA.id.localeCompare(personB.id)
+    );
+  }
+
+  snapshot.parentLinks.forEach((link) => {
+    const nextChildren = childrenByParent.get(link.parent_person_id) || [];
+    nextChildren.push(link);
+    nextChildren.sort((left, right) => comparePersonIds(left.child_person_id, right.child_person_id));
+    childrenByParent.set(link.parent_person_id, nextChildren);
+
+    const nextParents = parentLinksByChild.get(link.child_person_id) || [];
+    nextParents.push(link);
+    parentLinksByChild.set(link.child_person_id, nextParents);
+  });
+
+  const rootId =
+    (snapshot.tree.root_person_id && peopleById.has(snapshot.tree.root_person_id) ? snapshot.tree.root_person_id : null) ||
+    [...snapshot.people]
+      .filter((person) => !(parentLinksByChild.get(person.id) || []).length)
+      .sort((left, right) => comparePersonIds(left.id, right.id))[0]?.id ||
+    [...snapshot.people].sort((left, right) => comparePersonIds(left.id, right.id))[0]?.id;
+
+  if (!rootId) {
+    return null;
+  }
+
+  function walkPerson(personId: string, seenPeople: Set<string>): DisplayTreeNode | null {
+    if (seenPeople.has(personId)) {
+      return null;
+    }
+
+    const person = peopleById.get(personId);
+    if (!person) {
+      return null;
+    }
+
+    const nextSeenPeople = new Set(seenPeople);
+    nextSeenPeople.add(personId);
+
+    const children = uniqueIds((childrenByParent.get(personId) || []).map((link) => link.child_person_id))
+      .sort(comparePersonIds)
+      .map((childId) => walkPerson(childId, nextSeenPeople))
+      .filter(Boolean) as DisplayTreeNode[];
+
+    return {
+      type: "person",
+      id: person.id,
+      name: person.full_name,
+      gender: person.gender,
+      birthDate: person.birth_date,
+      deathDate: person.death_date,
+      children
+    };
+  }
+
+  return walkPerson(rootId, new Set());
+}
+
 export function collectPersonMedia(snapshot: TreeSnapshot, personId: string) {
   const mediaIds = snapshot.personMedia.filter((relation) => relation.person_id === personId).map((relation) => relation.media_id);
   return snapshot.media.filter((asset) => mediaIds.includes(asset.id));

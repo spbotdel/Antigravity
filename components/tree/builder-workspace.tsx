@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 
 import {
   FamilyTreeCanvas,
@@ -8,13 +8,14 @@ import {
 } from "@/components/tree/family-tree-canvas";
 import { getStorageBucket } from "@/lib/env";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-import { buildDisplayTree, collectPersonMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, collectPersonMedia } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import { formatDate } from "@/lib/utils";
-import type { PersonRecord, TreeSnapshot } from "@/lib/types";
+import type { ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
 
 interface BuilderWorkspaceProps {
   snapshot: TreeSnapshot;
+  mediaLoaded?: boolean;
 }
 
 type BuilderPanel = "person" | "relations" | "media";
@@ -101,18 +102,126 @@ function getCreateContextHeading(context: CreateContext, anchorPerson: PersonRec
   };
 }
 
-export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
+function getAutoCreateName(type: Exclude<CreateContext["type"], "standalone">) {
+  if (type === "parent") {
+    return "Новый родитель";
+  }
+
+  if (type === "child") {
+    return "Новый ребенок";
+  }
+
+  return "Новый партнер";
+}
+
+function sortPeopleRecords(people: PersonRecord[]) {
+  return [...people].sort((left, right) => left.full_name.localeCompare(right.full_name, "ru") || left.id.localeCompare(right.id));
+}
+
+function compareNullableDate(left?: string | null, right?: string | null) {
+  if (left && right) {
+    return left.localeCompare(right);
+  }
+
+  if (left) {
+    return -1;
+  }
+
+  if (right) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function getBuilderDefaultRootId(snapshot: TreeSnapshot) {
+  if (snapshot.tree.root_person_id && snapshot.people.some((person) => person.id === snapshot.tree.root_person_id)) {
+    return snapshot.tree.root_person_id;
+  }
+
+  const childIds = new Set(snapshot.parentLinks.map((link) => link.child_person_id));
+  const rootCandidate = [...snapshot.people]
+    .filter((person) => !childIds.has(person.id))
+    .sort((left, right) => compareNullableDate(left.birth_date, right.birth_date) || left.full_name.localeCompare(right.full_name, "ru") || left.id.localeCompare(right.id))[0];
+
+  return rootCandidate?.id || snapshot.people[0]?.id || null;
+}
+
+function isTemporaryPersonId(personId: string | null) {
+  return Boolean(personId && personId.startsWith("temp-person-"));
+}
+
+function replaceSelectedPersonIfCurrent(
+  setSelectedPersonId: Dispatch<SetStateAction<string | null>>,
+  expectedPersonId: string | null,
+  nextPersonId: string | null
+) {
+  setSelectedPersonId((currentPersonId) => (currentPersonId === expectedPersonId ? nextPersonId : currentPersonId));
+}
+
+function replacePersonIdInSnapshot(snapshot: TreeSnapshot, tempPersonId: string, nextPerson: PersonRecord) {
+  if (tempPersonId === nextPerson.id) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    tree:
+      snapshot.tree.root_person_id === tempPersonId
+        ? {
+            ...snapshot.tree,
+            root_person_id: nextPerson.id
+          }
+        : snapshot.tree,
+    people: sortPeopleRecords(
+      snapshot.people.map((person) => (person.id === tempPersonId ? nextPerson : person))
+    ),
+    parentLinks: snapshot.parentLinks.map((link) => ({
+      ...link,
+      parent_person_id: link.parent_person_id === tempPersonId ? nextPerson.id : link.parent_person_id,
+      child_person_id: link.child_person_id === tempPersonId ? nextPerson.id : link.child_person_id
+    })),
+    partnerships: snapshot.partnerships.map((partnership) => ({
+      ...partnership,
+      person_a_id: partnership.person_a_id === tempPersonId ? nextPerson.id : partnership.person_a_id,
+      person_b_id: partnership.person_b_id === tempPersonId ? nextPerson.id : partnership.person_b_id
+    })),
+    personMedia: snapshot.personMedia.map((item) => ({
+      ...item,
+      person_id: item.person_id === tempPersonId ? nextPerson.id : item.person_id
+    }))
+  };
+}
+
+export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorkspaceProps) {
   const [currentSnapshot, setCurrentSnapshot] = useState(snapshot);
-  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(snapshot.tree.root_person_id || snapshot.people[0]?.id || null);
+  const [isMediaLoaded, setIsMediaLoaded] = useState(mediaLoaded);
+  const [visualRootPersonId, setVisualRootPersonId] = useState<string | null>(getBuilderDefaultRootId(snapshot));
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(getBuilderDefaultRootId(snapshot));
   const [activePanel, setActivePanel] = useState<BuilderPanel>("person");
   const [personMode, setPersonMode] = useState<BuilderPersonMode>(snapshot.people.length ? "edit" : "create");
   const [createContext, setCreateContext] = useState<CreateContext>({ type: "standalone" });
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const displayTree = useMemo(() => buildDisplayTree(currentSnapshot), [currentSnapshot]);
+  const currentSnapshotRef = useRef(currentSnapshot);
+  const tempPersonResolutionPromisesRef = useRef(new Map<string, Promise<string | null>>());
+  const tempPersonResolutionResolversRef = useRef(new Map<string, (personId: string | null) => void>());
+  const resolvedTempPersonIdsRef = useRef(new Map<string, string | null>());
   const peopleById = useMemo(() => new Map(currentSnapshot.people.map((person) => [person.id, person])), [currentSnapshot.people]);
+  const effectiveSnapshot = useMemo(
+    () => ({
+      ...currentSnapshot,
+      tree: {
+        ...currentSnapshot.tree,
+        root_person_id: visualRootPersonId
+      }
+    }),
+    [currentSnapshot, visualRootPersonId]
+  );
+  const displayTree = useMemo(() => buildBuilderDisplayTree(effectiveSnapshot), [effectiveSnapshot]);
   const selectedPerson = selectedPersonId ? peopleById.get(selectedPersonId) || null : null;
-  const rootPerson = currentSnapshot.tree.root_person_id ? peopleById.get(currentSnapshot.tree.root_person_id) || null : null;
+  const selectedPersonPending = Boolean(selectedPerson && isTemporaryPersonId(selectedPerson.id));
+  const rootPerson = visualRootPersonId ? peopleById.get(visualRootPersonId) || null : null;
   const selectedMedia = selectedPerson ? collectPersonMedia(currentSnapshot, selectedPerson.id) : [];
   const anchorPerson = createContext.type === "standalone" ? null : peopleById.get(createContext.anchorPersonId) || null;
   const createHeading = getCreateContextHeading(createContext, anchorPerson);
@@ -122,7 +231,7 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
   const selectedPartnerships = selectedPerson
     ? currentSnapshot.partnerships.filter((partnership) => partnership.person_a_id === selectedPerson.id || partnership.person_b_id === selectedPerson.id)
     : [];
-  const isSelectedRoot = Boolean(selectedPerson && currentSnapshot.tree.root_person_id === selectedPerson.id);
+  const isSelectedRoot = Boolean(selectedPerson && visualRootPersonId === selectedPerson.id);
   const selectedPersonSummaryStats = selectedPerson
     ? [
         { label: "Родители", value: String(selectedParentLinks.length) },
@@ -133,10 +242,10 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
     : [];
   const inspectorTitle = createModeActive ? createHeading.title : selectedPerson ? selectedPerson.full_name : "Выберите человека";
   const inspectorDescription = createModeActive
-    ? createContext.type === "standalone"
-      ? "Заполните поля справа и сохраните новый блок."
-      : "Заполните данные нового человека. После сохранения связь появится автоматически."
-    : selectedPerson
+    ? "Заполните поля справа и сохраните новый блок."
+    : selectedPersonPending
+      ? "Блок создается. Как только сервер подтвердит запись, справа откроется обычное редактирование."
+      : selectedPerson
       ? activePanel === "person"
         ? "Здесь редактируются и сохраняются данные выбранного человека."
         : activePanel === "relations"
@@ -145,30 +254,99 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
       : "Сначала выберите человека на схеме или в списке слева.";
   const stageTitle = createModeActive ? "Основная схема семьи" : selectedPerson ? selectedPerson.full_name : "Основная схема семьи";
   const stageNote = createModeActive
-    ? createContext.type === "standalone"
-      ? "Создайте новый блок. Для существующих карточек используйте + в углу, чтобы добавить родственника через правую панель."
-      : `${createHeading.description} Данные нового человека заполняются справа.`
+    ? "Создайте новый отдельный блок. Для существующих карточек используйте +, чтобы сразу добавлять родственников в схему."
     : selectedPerson
       ? "Выберите блок, чтобы он подсветился. Кнопка + открывает меню связей, корзина удаляет выбранного человека."
       : "Выберите карточку на схеме или добавьте первого человека, чтобы начать собирать структуру семьи.";
+
+  function updateSnapshot(updater: (prev: TreeSnapshot) => TreeSnapshot) {
+    const nextSnapshot = updater(currentSnapshotRef.current);
+    currentSnapshotRef.current = nextSnapshot;
+    setCurrentSnapshot(nextSnapshot);
+    return nextSnapshot;
+  }
+
+  function registerPendingTempPerson(tempPersonId: string) {
+    if (tempPersonResolutionPromisesRef.current.has(tempPersonId) || resolvedTempPersonIdsRef.current.has(tempPersonId)) {
+      return;
+    }
+
+    const promise = new Promise<string | null>((resolve) => {
+      tempPersonResolutionResolversRef.current.set(tempPersonId, resolve);
+    });
+    tempPersonResolutionPromisesRef.current.set(tempPersonId, promise);
+  }
+
+  function settleTempPerson(tempPersonId: string, resolvedPersonId: string | null) {
+    resolvedTempPersonIdsRef.current.set(tempPersonId, resolvedPersonId);
+    const resolve = tempPersonResolutionResolversRef.current.get(tempPersonId);
+    if (resolve) {
+      resolve(resolvedPersonId);
+    }
+    tempPersonResolutionResolversRef.current.delete(tempPersonId);
+    tempPersonResolutionPromisesRef.current.delete(tempPersonId);
+  }
+
+  async function resolveStablePersonId(personId: string | null) {
+    if (!personId || !isTemporaryPersonId(personId)) {
+      return personId;
+    }
+
+    if (resolvedTempPersonIdsRef.current.has(personId)) {
+      return resolvedTempPersonIdsRef.current.get(personId) || null;
+    }
+
+    const pendingResolution = tempPersonResolutionPromisesRef.current.get(personId);
+    if (!pendingResolution) {
+      return null;
+    }
+
+    return pendingResolution;
+  }
+
+  useEffect(() => {
+    currentSnapshotRef.current = currentSnapshot;
+  }, [currentSnapshot]);
 
   useEffect(() => {
     if (selectedPersonId && peopleById.has(selectedPersonId)) {
       return;
     }
 
-    const fallbackId = currentSnapshot.tree.root_person_id || currentSnapshot.people[0]?.id || null;
+    const fallbackId = visualRootPersonId || currentSnapshot.people[0]?.id || null;
     setSelectedPersonId(fallbackId);
     setActivePanel("person");
     setPersonMode(fallbackId ? "edit" : "create");
     if (!fallbackId) {
       setCreateContext({ type: "standalone" });
     }
-  }, [currentSnapshot.people, currentSnapshot.tree.root_person_id, peopleById, selectedPersonId]);
+  }, [currentSnapshot.people, peopleById, selectedPersonId, visualRootPersonId]);
 
   useEffect(() => {
+    currentSnapshotRef.current = snapshot;
     setCurrentSnapshot(snapshot);
-  }, [snapshot]);
+    setVisualRootPersonId(getBuilderDefaultRootId(snapshot));
+    setIsMediaLoaded(mediaLoaded);
+    tempPersonResolutionPromisesRef.current.clear();
+    tempPersonResolutionResolversRef.current.clear();
+    resolvedTempPersonIdsRef.current.clear();
+  }, [mediaLoaded, snapshot]);
+
+  useEffect(() => {
+    if (visualRootPersonId && peopleById.has(visualRootPersonId)) {
+      return;
+    }
+
+    setVisualRootPersonId(getBuilderDefaultRootId(currentSnapshot));
+  }, [currentSnapshot, peopleById, visualRootPersonId]);
+
+  useEffect(() => {
+    if (activePanel !== "media" || isMediaLoaded) {
+      return;
+    }
+
+    void reloadSnapshot();
+  }, [activePanel, isMediaLoaded]);
 
   useEffect(() => {
     if (createContext.type !== "standalone" && !peopleById.has(createContext.anchorPersonId)) {
@@ -189,11 +367,146 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
     setCreateContext({ type: "standalone" });
   }
 
-  function startRelatedCreate(type: Exclude<CreateContext["type"], "standalone">, anchorPersonId: string) {
-    setSelectedPersonId(anchorPersonId);
+  async function addRelatedPerson(type: Exclude<CreateContext["type"], "standalone">, anchorPersonId: string) {
+    const snapshotAtStart = currentSnapshotRef.current;
+    const tempTimestamp = Date.now();
+    const tempPersonId = `temp-person-${tempTimestamp}`;
+    const tempRelationId = `temp-relation-${tempTimestamp}`;
+    const tempNow = new Date().toISOString();
+    const anchorPartnerships = snapshotAtStart.partnerships.filter(
+      (partnership) => partnership.person_a_id === anchorPersonId || partnership.person_b_id === anchorPersonId
+    );
+    const defaultChildPartnerId =
+      type === "child" && anchorPartnerships.length === 1
+        ? anchorPartnerships[0]?.person_a_id === anchorPersonId
+          ? anchorPartnerships[0].person_b_id
+          : anchorPartnerships[0]?.person_a_id
+        : null;
+    const optimisticPerson: PersonRecord = {
+      id: tempPersonId,
+      tree_id: snapshotAtStart.tree.id,
+      full_name: getAutoCreateName(type),
+      gender: null,
+      birth_date: null,
+      death_date: null,
+      birth_place: null,
+      death_place: null,
+      bio: null,
+      is_living: true,
+      created_by: snapshotAtStart.actor.userId,
+      created_at: tempNow,
+      updated_at: tempNow
+    };
+    const optimisticParentLinks: ParentLinkRecord[] =
+      type === "child"
+        ? [
+            {
+              id: tempRelationId,
+              tree_id: snapshotAtStart.tree.id,
+              parent_person_id: anchorPersonId,
+              child_person_id: tempPersonId,
+              relation_type: "biological",
+              created_at: tempNow
+            },
+            ...(defaultChildPartnerId
+              ? [
+                  {
+                    id: `${tempRelationId}-partner`,
+                    tree_id: snapshotAtStart.tree.id,
+                    parent_person_id: defaultChildPartnerId,
+                    child_person_id: tempPersonId,
+                    relation_type: "biological",
+                    created_at: tempNow
+                  }
+                ]
+              : [])
+          ]
+        : type === "parent"
+          ? [
+              {
+                id: tempRelationId,
+                tree_id: snapshotAtStart.tree.id,
+                parent_person_id: tempPersonId,
+                child_person_id: anchorPersonId,
+                relation_type: "biological",
+                created_at: tempNow
+              }
+            ]
+          : [];
+    const optimisticPartnership: PartnershipRecord | null =
+      type === "partner"
+        ? {
+            id: tempRelationId,
+            tree_id: snapshotAtStart.tree.id,
+            person_a_id: anchorPersonId,
+            person_b_id: tempPersonId,
+            status: "partner",
+            start_date: null,
+            end_date: null,
+            created_at: tempNow
+          }
+        : null;
+
     setActivePanel("person");
-    setPersonMode("create");
-    setCreateContext({ type, anchorPersonId });
+    setPersonMode("edit");
+    setCreateContext({ type: "standalone" });
+    registerPendingTempPerson(tempPersonId);
+    updateSnapshot((prev) => ({
+      ...prev,
+      people: sortPeopleRecords([...prev.people, optimisticPerson]),
+      parentLinks: optimisticParentLinks.length ? [...prev.parentLinks, ...optimisticParentLinks] : prev.parentLinks,
+      partnerships: optimisticPartnership ? [...prev.partnerships, optimisticPartnership] : prev.partnerships
+    }));
+    setSelectedPersonId(tempPersonId);
+    setStatus("Новый блок добавляется...");
+
+    const created = await createPersonWithContext(
+      {
+        fullName: getAutoCreateName(type),
+        isLiving: true
+      },
+      { type, anchorPersonId }
+    );
+
+    if (!created) {
+      settleTempPerson(tempPersonId, null);
+      updateSnapshot((prev) => ({
+        ...prev,
+        people: prev.people.filter((person) => person.id !== tempPersonId),
+        parentLinks: prev.parentLinks.filter((link) => !optimisticParentLinks.some((optimisticLink) => optimisticLink.id === link.id)),
+        partnerships: prev.partnerships.filter((partnership) => partnership.id !== tempRelationId)
+      }));
+      replaceSelectedPersonIfCurrent(setSelectedPersonId, tempPersonId, anchorPersonId);
+      setStatus(null);
+      return;
+    }
+
+    setStatus(`${created.createStatus} Заполните данные справа.`);
+    updateSnapshot((prev) => {
+      const promotedSnapshot = replacePersonIdInSnapshot(prev, tempPersonId, created.newPerson);
+      return {
+        ...promotedSnapshot,
+        tree: created.updatedTree || promotedSnapshot.tree,
+        parentLinks: created.newParentLink
+          ? [
+              ...promotedSnapshot.parentLinks.filter((link) => !optimisticParentLinks.some((optimisticLink) => optimisticLink.id === link.id)),
+              created.newParentLink,
+              ...(created.extraParentLinks || [])
+            ]
+          : promotedSnapshot.parentLinks.filter((link) => !optimisticParentLinks.some((optimisticLink) => optimisticLink.id === link.id)),
+        partnerships: created.newPartnership
+          ? [...promotedSnapshot.partnerships.filter((partnership) => partnership.id !== tempRelationId), created.newPartnership]
+          : promotedSnapshot.partnerships.filter((partnership) => partnership.id !== tempRelationId)
+      };
+    });
+    settleTempPerson(tempPersonId, created.newPerson.id);
+    setVisualRootPersonId((currentRootId) => (currentRootId === tempPersonId ? created.newPerson.id : currentRootId));
+    setCreateContext((currentContext) =>
+      currentContext.type !== "standalone" && currentContext.anchorPersonId === tempPersonId
+        ? { ...currentContext, anchorPersonId: created.newPerson.id }
+        : currentContext
+    );
+    replaceSelectedPersonIfCurrent(setSelectedPersonId, tempPersonId, created.newPerson.id);
   }
 
   async function createPersonWithContext(
@@ -209,10 +522,17 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
     },
     context: CreateContext
   ) {
+    async function rollbackCreatedPerson(personId: string, message: string) {
+      await requestJson(`/api/persons/${personId}`, "DELETE", {});
+      setError(message);
+      return null;
+    }
+
     setStatus(null);
     setError(null);
+    const snapshotAtRequest = currentSnapshotRef.current;
     const created = await requestJson("/api/persons", "POST", {
-      treeId: currentSnapshot.tree.id,
+      treeId: snapshotAtRequest.tree.id,
       fullName: values.fullName,
       gender: values.gender || null,
       birthDate: values.birthDate || null,
@@ -228,64 +548,115 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
     }
 
     const newPerson = created.person;
+    let newParentLink: ParentLinkRecord | null = null;
+    const extraParentLinks: ParentLinkRecord[] = [];
+    let newPartnership: PartnershipRecord | null = null;
+    let updatedTree: TreeSnapshot["tree"] | null = null;
     let createStatus = created.message || "Человек добавлен.";
+    const resolvedAnchorPersonId =
+      context.type === "standalone" ? null : await resolveStablePersonId(context.anchorPersonId);
+
+    if (context.type !== "standalone" && !resolvedAnchorPersonId) {
+      return rollbackCreatedPerson(newPerson.id, "Не удалось дождаться сохранения выбранного блока. Пустой блок откатан.");
+    }
 
     if (context.type === "child") {
       const relation = await requestJson("/api/relationships/parent-child", "POST", {
-        treeId: currentSnapshot.tree.id,
-        parentPersonId: context.anchorPersonId,
+        treeId: snapshotAtRequest.tree.id,
+        parentPersonId: resolvedAnchorPersonId,
         childPersonId: newPerson.id,
         relationType: "biological"
       });
-      createStatus = relation ? "Блок добавлен и привязан как ребенок." : "Блок добавлен, но связь с ребенком не создалась.";
+      if (!relation?.link) {
+        return rollbackCreatedPerson(newPerson.id, "Не удалось привязать нового ребенка. Пустой блок откатан.");
+      }
+      newParentLink = relation.link;
+      const anchorPartnerships = currentSnapshotRef.current.partnerships.filter(
+        (partnership) => partnership.person_a_id === resolvedAnchorPersonId || partnership.person_b_id === resolvedAnchorPersonId
+      );
+      if (anchorPartnerships.length === 1) {
+        const rawPartnerId =
+          anchorPartnerships[0]?.person_a_id === resolvedAnchorPersonId ? anchorPartnerships[0].person_b_id : anchorPartnerships[0]?.person_a_id;
+        const partnerId = await resolveStablePersonId(rawPartnerId);
+        if (partnerId && partnerId !== resolvedAnchorPersonId) {
+          const partnerRelation = await requestJson("/api/relationships/parent-child", "POST", {
+            treeId: snapshotAtRequest.tree.id,
+            parentPersonId: partnerId,
+            childPersonId: newPerson.id,
+            relationType: "biological"
+          });
+          if (!partnerRelation?.link) {
+            return rollbackCreatedPerson(newPerson.id, "Не удалось привязать ребенка к паре. Пустой блок откатан.");
+          }
+          extraParentLinks.push(partnerRelation.link);
+        }
+        createStatus = "Блок добавлен и привязан как общий ребенок пары.";
+      } else {
+        createStatus = "Блок добавлен и привязан как ребенок.";
+      }
     }
 
     if (context.type === "parent") {
       const relation = await requestJson("/api/relationships/parent-child", "POST", {
-        treeId: currentSnapshot.tree.id,
+        treeId: snapshotAtRequest.tree.id,
         parentPersonId: newPerson.id,
-        childPersonId: context.anchorPersonId,
+        childPersonId: resolvedAnchorPersonId,
         relationType: "biological"
       });
-      createStatus = relation ? "Блок добавлен и привязан как родитель." : "Блок добавлен, но связь с родителем не создалась.";
+      if (!relation?.link) {
+        return rollbackCreatedPerson(newPerson.id, "Не удалось привязать нового родителя. Пустой блок откатан.");
+      }
+      newParentLink = relation.link;
+      createStatus = "Блок добавлен и привязан как родитель.";
     }
 
     if (context.type === "partner") {
       const relation = await requestJson("/api/partnerships", "POST", {
-        treeId: currentSnapshot.tree.id,
-        personAId: context.anchorPersonId,
+        treeId: snapshotAtRequest.tree.id,
+        personAId: resolvedAnchorPersonId,
         personBId: newPerson.id,
         status: "partner",
         startDate: null,
         endDate: null
       });
-      createStatus = relation ? "Блок добавлен и привязан как партнер." : "Блок добавлен, но связь с партнером не создалась.";
+      if (!relation?.partnership) {
+        return rollbackCreatedPerson(newPerson.id, "Не удалось привязать нового партнера. Пустой блок откатан.");
+      }
+      newPartnership = relation.partnership;
+      createStatus = "Блок добавлен и привязан как партнер.";
     }
 
-    if (currentSnapshot.people.length === 0) {
-      const rootUpdate = await requestJson(`/api/trees/${currentSnapshot.tree.id}`, "PATCH", {
-        title: currentSnapshot.tree.title,
-        slug: currentSnapshot.tree.slug,
-        description: currentSnapshot.tree.description || "",
+    if (snapshotAtRequest.people.length === 0) {
+      const rootUpdate = await requestJson(`/api/trees/${snapshotAtRequest.tree.id}`, "PATCH", {
+        title: snapshotAtRequest.tree.title,
+        slug: snapshotAtRequest.tree.slug,
+        description: snapshotAtRequest.tree.description || "",
         rootPersonId: newPerson.id
       });
       if (rootUpdate) {
+        updatedTree = rootUpdate.tree || null;
         createStatus = "Первый блок добавлен и назначен корнем дерева.";
       }
     }
 
-    return { newPerson, createStatus };
+    return { newPerson, newParentLink, extraParentLinks, newPartnership, updatedTree, createStatus };
   }
 
-  async function reloadSnapshot() {
-    const response = await fetch(`/api/tree/${currentSnapshot.tree.slug}/snapshot`, { cache: "no-store" });
+  async function reloadSnapshot(options?: { includeMedia?: boolean }) {
+    const includeMedia = options?.includeMedia ?? true;
+    const suffix = includeMedia ? "?includeMedia=1" : "";
+    const response = await fetch(`/api/tree/${currentSnapshotRef.current.tree.slug}/builder-snapshot${suffix}`, { cache: "no-store" });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload) {
       setError((payload && payload.error) || "Не удалось обновить дерево после изменения.");
       return null;
     }
 
+    currentSnapshotRef.current = payload;
     setCurrentSnapshot(payload);
+    if (includeMedia) {
+      setIsMediaLoaded(true);
+    }
     return payload;
   }
 
@@ -318,14 +689,20 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
   }
 
   async function setRootPerson(personId: string | null) {
-    const payload = await submitJson(`/api/trees/${currentSnapshot.tree.id}`, "PATCH", {
+    setStatus(null);
+    const payload = await requestJson(`/api/trees/${currentSnapshotRef.current.tree.id}`, "PATCH", {
       rootPersonId: personId
     });
 
-    if (!payload) {
+    if (!payload?.tree) {
       return;
     }
 
+    updateSnapshot((prev) => ({
+      ...prev,
+      tree: payload.tree
+    }));
+    setVisualRootPersonId(personId);
     setStatus(personId ? "Корень дерева обновлен." : "Корень дерева снят.");
     if (personId) {
       setSelectedPersonId(personId);
@@ -336,6 +713,7 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
+    const selectedPersonIdBeforeCreate = selectedPersonId;
     const created = await createPersonWithContext(
       {
         fullName: String(form.get("fullName") || ""),
@@ -355,13 +733,17 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
 
     formElement.reset();
     setStatus(created.createStatus);
-    const freshSnapshot = await reloadSnapshot();
+    updateSnapshot((prev) => ({
+      ...prev,
+      tree: created.updatedTree || prev.tree,
+      people: sortPeopleRecords([...prev.people, created.newPerson]),
+      parentLinks: created.newParentLink ? [...prev.parentLinks, created.newParentLink, ...(created.extraParentLinks || [])] : prev.parentLinks,
+      partnerships: created.newPartnership ? [...prev.partnerships, created.newPartnership] : prev.partnerships
+    }));
     setActivePanel("person");
     setPersonMode("edit");
     setCreateContext({ type: "standalone" });
-    if (freshSnapshot) {
-      setSelectedPersonId(created.newPerson.id);
-    }
+    replaceSelectedPersonIfCurrent(setSelectedPersonId, selectedPersonIdBeforeCreate, created.newPerson.id);
   }
 
   async function handleDeletePerson(person: PersonRecord) {
@@ -370,29 +752,122 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
       return;
     }
 
-    const fallbackPersonId = currentSnapshot.people.find((entry) => entry.id !== person.id)?.id || null;
-    if (currentSnapshot.tree.root_person_id === person.id) {
-      const rootUpdated = await requestJson(`/api/trees/${currentSnapshot.tree.id}`, "PATCH", {
-        rootPersonId: fallbackPersonId
-      });
-      if (!rootUpdated && currentSnapshot.people.length > 1) {
-        return;
-      }
+    const snapshotBeforeDelete = currentSnapshotRef.current;
+    const selectedBeforeDelete = selectedPersonId;
+    const activePanelBeforeDelete = activePanel;
+    const personModeBeforeDelete = personMode;
+    const createContextBeforeDelete = createContext;
+    const fallbackPersonId = snapshotBeforeDelete.people.find((entry) => entry.id !== person.id)?.id || null;
+    updateSnapshot(() => ({
+      ...snapshotBeforeDelete,
+      people: snapshotBeforeDelete.people.filter((entry) => entry.id !== person.id),
+      parentLinks: snapshotBeforeDelete.parentLinks.filter((link) => link.parent_person_id !== person.id && link.child_person_id !== person.id),
+      partnerships: snapshotBeforeDelete.partnerships.filter((partnership) => partnership.person_a_id !== person.id && partnership.person_b_id !== person.id),
+      personMedia: snapshotBeforeDelete.personMedia.filter((relation) => relation.person_id !== person.id)
+    }));
+    const previousVisualRootPersonId = visualRootPersonId;
+    if (visualRootPersonId === person.id) {
+      setVisualRootPersonId(fallbackPersonId);
     }
-
     setSelectedPersonId(fallbackPersonId);
     setActivePanel("person");
     setPersonMode(fallbackPersonId ? "edit" : "create");
     setCreateContext({ type: "standalone" });
-    await submitJson(`/api/persons/${person.id}`, "DELETE", {});
+    setStatus("Удаляем человека...");
+
+    let updatedTree: TreeSnapshot["tree"] | null = null;
+    if (snapshotBeforeDelete.tree.root_person_id === person.id) {
+      const rootUpdated = await requestJson(`/api/trees/${snapshotBeforeDelete.tree.id}`, "PATCH", {
+        rootPersonId: fallbackPersonId
+      });
+      if (!rootUpdated && snapshotBeforeDelete.people.length > 1) {
+        currentSnapshotRef.current = snapshotBeforeDelete;
+        setCurrentSnapshot(snapshotBeforeDelete);
+        setVisualRootPersonId(previousVisualRootPersonId);
+        setSelectedPersonId(selectedBeforeDelete);
+        setActivePanel(activePanelBeforeDelete);
+        setPersonMode(personModeBeforeDelete);
+        setCreateContext(createContextBeforeDelete);
+        setStatus(null);
+        return;
+      }
+      updatedTree = rootUpdated?.tree || null;
+    }
+
+    setStatus(null);
+    const deleted = await requestJson(`/api/persons/${person.id}`, "DELETE", {});
+    if (!deleted) {
+      currentSnapshotRef.current = snapshotBeforeDelete;
+      setCurrentSnapshot(snapshotBeforeDelete);
+      setVisualRootPersonId(previousVisualRootPersonId);
+      setSelectedPersonId(selectedBeforeDelete);
+      setActivePanel(activePanelBeforeDelete);
+      setPersonMode(personModeBeforeDelete);
+      setCreateContext(createContextBeforeDelete);
+      setStatus(null);
+      return;
+    }
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      tree: updatedTree || prev.tree,
+      people: prev.people,
+      parentLinks: prev.parentLinks,
+      partnerships: prev.partnerships,
+      personMedia: prev.personMedia
+    }));
+    setStatus(deleted.message || "Человек удален.");
   }
 
   async function removeParentLink(relationId: string) {
-    await submitJson(`/api/relationships/parent-child/${relationId}`, "DELETE", {});
+    setStatus(null);
+    const payload = await requestJson(`/api/relationships/parent-child/${relationId}`, "DELETE", {});
+    if (!payload) {
+      return;
+    }
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      parentLinks: prev.parentLinks.filter((link) => link.id !== relationId)
+    }));
+    setStatus(payload.message || "Связь родитель-ребенок удалена.");
   }
 
   async function removePartnership(relationId: string) {
-    await submitJson(`/api/partnerships/${relationId}`, "DELETE", {});
+    setStatus(null);
+    const payload = await requestJson(`/api/partnerships/${relationId}`, "DELETE", {});
+    if (!payload) {
+      return;
+    }
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      partnerships: prev.partnerships.filter((partnership) => partnership.id !== relationId)
+    }));
+    setStatus(payload.message || "Пара удалена.");
+  }
+
+  async function savePerson(personId: string, values: {
+    fullName: string;
+    gender: string | null;
+    birthDate: string | null;
+    deathDate: string | null;
+    birthPlace: string | null;
+    deathPlace: string | null;
+    bio: string | null;
+    isLiving: boolean;
+  }) {
+    setStatus(null);
+    const payload = await requestJson(`/api/persons/${personId}`, "PATCH", values);
+    if (!payload?.person) {
+      return;
+    }
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      people: sortPeopleRecords(prev.people.map((person) => (person.id === personId ? payload.person : person)))
+    }));
+    setStatus(payload.message || "Данные человека обновлены.");
   }
 
   function handleCanvasAction(personId: string, action: FamilyTreeCanvasAction) {
@@ -402,17 +877,17 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
     }
 
     if (action === "add-parent") {
-      startRelatedCreate("parent", personId);
+      void addRelatedPerson("parent", personId);
       return;
     }
 
     if (action === "add-child") {
-      startRelatedCreate("child", personId);
+      void addRelatedPerson("child", personId);
       return;
     }
 
     if (action === "add-partner") {
-      startRelatedCreate("partner", personId);
+      void addRelatedPerson("partner", personId);
       return;
     }
 
@@ -450,7 +925,7 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
               >
                 <div className="person-list-item-top">
                   <strong>{person.full_name}</strong>
-                  {currentSnapshot.tree.root_person_id === person.id ? <span className="person-list-badge">Корень</span> : null}
+                  {visualRootPersonId === person.id ? <span className="person-list-badge">Корень</span> : null}
                 </div>
                 <span className="person-list-meta">{getPersonListMeta(person)}</span>
               </button>
@@ -481,6 +956,10 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
             selectedPersonId={selectedPersonId}
             onSelectPerson={focusPerson}
             interactive
+            displayMode="builder"
+            people={currentSnapshot.people}
+            parentLinks={currentSnapshot.parentLinks}
+            partnerships={currentSnapshot.partnerships}
             onNodeAction={handleCanvasAction}
             onEmptyAction={startStandaloneCreate}
           />
@@ -592,13 +1071,7 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
                   <div className="builder-create-context-card">
                     <div className="builder-create-context-copy">
                       <strong>{anchorPerson.full_name}</strong>
-                      <span>
-                        {createContext.type === "parent"
-                          ? "Новый блок будет добавлен как родитель."
-                          : createContext.type === "child"
-                            ? "Новый блок будет добавлен как ребенок."
-                            : "Новый блок будет добавлен как партнер."}
-                      </span>
+                      <span>Отдельный блок создается без связи. Для мгновенного добавления родственника используйте + на карточке дерева.</span>
                     </div>
                     <button type="button" className="ghost-button ghost-button-compact" onClick={startStandaloneCreate}>
                       Без связи
@@ -645,6 +1118,14 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
                   </button>
                 </form>
               </div>
+            ) : selectedPersonPending ? (
+              <div className="builder-section-block">
+                <div className="builder-section-heading">
+                  <h3>Блок создается</h3>
+                  <p className="muted-copy">Новый человек уже стоит на схеме. Дождитесь подтверждения сервера, и поля станут редактируемыми.</p>
+                </div>
+                <div className="builder-relation-empty">Сейчас запись создается в базе. Обычно это занимает несколько секунд.</div>
+              </div>
             ) : selectedPerson ? (
               <div className="builder-section-block">
                 <div className="builder-section-heading">
@@ -656,7 +1137,7 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
                   onSubmit={async (event) => {
                     event.preventDefault();
                     const form = new FormData(event.currentTarget);
-                    await submitJson(`/api/persons/${selectedPerson.id}`, "PATCH", {
+                    await savePerson(selectedPerson.id, {
                       fullName: String(form.get("fullName") || "").trim(),
                       gender: String(form.get("gender") || "") || null,
                       birthDate: String(form.get("birthDate") || "") || null,
@@ -670,11 +1151,11 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
                 >
                   <label className="builder-field-span">
                     Полное имя
-                    <input name="fullName" defaultValue={selectedPerson.full_name} required />
+                    <input name="fullName" defaultValue={selectedPerson.full_name} required suppressHydrationWarning />
                   </label>
                   <label>
                     Пол
-                    <select name="gender" defaultValue={selectedPerson.gender || ""}>
+                    <select name="gender" defaultValue={selectedPerson.gender || ""} suppressHydrationWarning>
                       {PERSON_GENDER_OPTIONS.map((option) => (
                         <option key={option.value || "none"} value={option.value}>
                           {option.label}
@@ -684,23 +1165,23 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
                   </label>
                   <label>
                     Дата рождения
-                    <input name="birthDate" type="date" defaultValue={selectedPerson.birth_date || ""} />
+                    <input name="birthDate" type="date" defaultValue={selectedPerson.birth_date || ""} suppressHydrationWarning />
                   </label>
                   <label>
                     Место рождения
-                    <input name="birthPlace" defaultValue={selectedPerson.birth_place || ""} />
+                    <input name="birthPlace" defaultValue={selectedPerson.birth_place || ""} suppressHydrationWarning />
                   </label>
                   <label>
                     Дата смерти
-                    <input name="deathDate" type="date" defaultValue={selectedPerson.death_date || ""} />
+                    <input name="deathDate" type="date" defaultValue={selectedPerson.death_date || ""} suppressHydrationWarning />
                   </label>
                   <label>
                     Место смерти
-                    <input name="deathPlace" defaultValue={selectedPerson.death_place || ""} />
+                    <input name="deathPlace" defaultValue={selectedPerson.death_place || ""} suppressHydrationWarning />
                   </label>
                   <label className="builder-field-span">
                     История
-                    <textarea name="bio" rows={3} defaultValue={selectedPerson.bio || ""} />
+                    <textarea name="bio" rows={3} defaultValue={selectedPerson.bio || ""} suppressHydrationWarning />
                   </label>
                   <div className="card-actions builder-field-span builder-form-actions">
                     <button className="primary-button" type="submit">
@@ -755,7 +1236,7 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
                                   type="button"
                                   className="danger-button danger-button-compact"
                                   onClick={async () => {
-                                    await submitJson(`/api/relationships/parent-child/${link.id}`, "DELETE", {});
+                                    await removeParentLink(link.id);
                                   }}
                                 >
                                   Удалить
@@ -790,7 +1271,7 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
                                   type="button"
                                   className="danger-button danger-button-compact"
                                   onClick={async () => {
-                                    await submitJson(`/api/relationships/parent-child/${link.id}`, "DELETE", {});
+                                    await removeParentLink(link.id);
                                   }}
                                 >
                                   Удалить
@@ -827,7 +1308,7 @@ export function BuilderWorkspace({ snapshot }: BuilderWorkspaceProps) {
                                   type="button"
                                   className="danger-button danger-button-compact"
                                   onClick={async () => {
-                                    await submitJson(`/api/partnerships/${partnership.id}`, "DELETE", {});
+                                    await removePartnership(partnership.id);
                                   }}
                                 >
                                   Удалить
