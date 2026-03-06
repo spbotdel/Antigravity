@@ -19,6 +19,19 @@ function getSearchParam(value: string | string[] | undefined) {
   return value || null;
 }
 
+function getPositiveInteger(value: string | null, fallback: number) {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+
+  return Math.floor(parsed);
+}
+
 function buildViewerHref(slug: string, shareToken?: string | null) {
   if (!shareToken) {
     return `/tree/${slug}`;
@@ -31,13 +44,14 @@ export default async function AuditPage({ params, searchParams }: AuditPageProps
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const shareToken = getSearchParam(resolvedSearchParams.share);
+  const page = getPositiveInteger(getSearchParam(resolvedSearchParams.page), 1);
   const snapshot = await getTreeSnapshot(slug, { shareToken });
 
   if (!snapshot.actor.canReadAudit) {
     redirect(buildViewerHref(slug, shareToken));
   }
 
-  const entries = await listAudit(snapshot.tree.id);
+  const audit = await listAudit(snapshot.tree.id, { page, pageSize: 50 });
 
   return (
     <main className="page-shell workspace-page">
@@ -45,7 +59,8 @@ export default async function AuditPage({ params, searchParams }: AuditPageProps
         <div className="workspace-header-main">
           <div className="workspace-meta-row">
             <p className="eyebrow">Журнал владельца</p>
-            <span className="workspace-meta-chip">{entries.length} событий</span>
+            <span className="workspace-meta-chip">{audit.total} событий</span>
+            <span className="workspace-meta-chip">Страница {audit.page}</span>
             <span className="workspace-meta-chip">МСК</span>
           </div>
           <h1>{snapshot.tree.title}</h1>
@@ -60,7 +75,7 @@ export default async function AuditPage({ params, searchParams }: AuditPageProps
           canManageSettings={snapshot.actor.canManageSettings}
         />
       </section>
-      <AuditLogTable entries={entries} />
+      <AuditLogTable entries={audit.entries} total={audit.total} page={audit.page} pageSize={audit.pageSize} slug={slug} />
     </main>
   );
 }

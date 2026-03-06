@@ -141,6 +141,13 @@ export interface AuditEntryView {
   event_label: string;
 }
 
+export interface PaginatedAuditEntryView {
+  entries: AuditEntryView[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface ViewerActor {
   userId: string | null;
   role: UserRole | null;

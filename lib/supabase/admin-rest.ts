@@ -27,6 +27,7 @@ interface AdminRestPayload {
   method: string;
   headers: Record<string, string>;
   bodyBase64: string;
+  includeHeaders?: boolean;
   timeoutMs: number;
 }
 
@@ -81,6 +82,36 @@ function buildAdminRestPayload(url: string, serviceRoleKey: string, timeoutMs: n
   } satisfies AdminRestPayload;
 }
 
+function buildAdminRestPayloadWithOptions(
+  url: string,
+  serviceRoleKey: string,
+  timeoutMs: number,
+  init?: { method?: string; body?: unknown; headers?: Record<string, string>; includeHeaders?: boolean }
+) {
+  const body = init?.body === undefined ? "" : JSON.stringify(init.body);
+  return {
+    url,
+    method: init?.method || "GET",
+    headers: {
+      apikey: serviceRoleKey,
+      authorization: `Bearer ${serviceRoleKey}`,
+      accept: "application/json",
+      "accept-profile": "public",
+      "content-profile": "public",
+      ...(body
+        ? {
+            "content-type": "application/json",
+            prefer: "return=representation"
+          }
+        : {}),
+      ...(init?.headers || {})
+    },
+    bodyBase64: body ? Buffer.from(body, "utf8").toString("base64") : "",
+    includeHeaders: Boolean(init?.includeHeaders),
+    timeoutMs
+  } satisfies AdminRestPayload;
+}
+
 function parseAdminRestResponseBody<T>(result: { status: number; bodyBase64?: string }) {
   const rawBody = Buffer.from(result.bodyBase64 || "", "base64").toString("utf8");
   const parsedBody = rawBody ? JSON.parse(rawBody) : null;
@@ -129,4 +160,25 @@ export async function fetchSupabaseAdminRestJson<T>(pathWithQuery: string, init?
   );
 
   return parseAdminRestResponseBody<T>(result);
+}
+
+export async function fetchSupabaseAdminRestJsonWithHeaders<T>(
+  pathWithQuery: string,
+  init?: { method?: string; body?: unknown; headers?: Record<string, string> }
+) {
+  const { url, serviceRoleKey } = getSupabaseServiceEnv();
+  const timeoutMs = getAdminRestTimeoutMs();
+  const result = await runAdminRestRequest(
+    buildAdminRestPayloadWithOptions(`${url}/rest/v1/${pathWithQuery}`, serviceRoleKey, timeoutMs, {
+      method: init?.method,
+      body: init?.body,
+      headers: init?.headers,
+      includeHeaders: true
+    })
+  );
+
+  return {
+    data: parseAdminRestResponseBody<T>(result),
+    headers: (result as { headers?: Record<string, string> }).headers || {}
+  };
 }

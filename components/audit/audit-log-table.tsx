@@ -1,10 +1,16 @@
+import Link from "next/link";
+
 import type { AuditEntryView } from "@/lib/types";
 
 interface AuditLogTableProps {
   entries: AuditEntryView[];
+  total: number;
+  page: number;
+  pageSize: number;
+  slug: string;
 }
 
-export function AuditLogTable({ entries }: AuditLogTableProps) {
+export function AuditLogTable({ entries, total, page, pageSize, slug }: AuditLogTableProps) {
   const formatter = new Intl.DateTimeFormat("ru-RU", {
     timeZone: "Europe/Moscow",
     day: "2-digit",
@@ -18,6 +24,9 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
   const actors = new Set(entries.map((entry) => entry.actor_label));
   const latestEntry = entries[0] ?? null;
   const latestActor = latestEntry?.actor_label || "Система";
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageStart = entries.length ? (page - 1) * pageSize + 1 : 0;
+  const pageEnd = entries.length ? pageStart + entries.length - 1 : 0;
   const toneSummary = [
     { key: "create", label: "Создания", count: entries.filter((entry) => entry.event_tone === "create").length },
     { key: "update", label: "Изменения", count: entries.filter((entry) => entry.event_tone === "update").length },
@@ -44,13 +53,13 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
       <section className="audit-summary-grid">
         <article className="surface-card audit-summary-card">
           <span>Всего событий</span>
-          <strong>{entries.length}</strong>
-          <p>Вся история действий по дереву.</p>
+          <strong>{total}</strong>
+          <p>Полный объем истории, а не только текущая страница.</p>
         </article>
         <article className="surface-card audit-summary-card">
           <span>Кто менял</span>
           <strong>{actors.size}</strong>
-          <p>Уникальных участников или системных действий в ленте.</p>
+          <p>Уникальных участников или системных действий на текущей странице.</p>
         </article>
         <article className="surface-card audit-summary-card">
           <span>Последнее событие</span>
@@ -79,6 +88,15 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
           ))}
         </div>
 
+        <div className="audit-tone-row">
+          <span className="audit-tone-chip">
+            Показано: {pageStart}-{pageEnd} из {total}
+          </span>
+          <span className="audit-tone-chip">
+            Страница: {page} из {totalPages}
+          </span>
+        </div>
+
         <div className="audit-feed-list">
           {entries.map((entry) => (
             <article key={entry.id} className="audit-entry-card">
@@ -101,6 +119,25 @@ export function AuditLogTable({ entries }: AuditLogTableProps) {
             </article>
           ))}
         </div>
+
+        {totalPages > 1 ? (
+          <div className="card-actions dashboard-card-actions">
+            {page > 1 ? (
+              <Link href={`/tree/${slug}/audit?page=${page - 1}`} className="secondary-button">
+                Назад
+              </Link>
+            ) : (
+              <span className="members-static-note">Это первая страница</span>
+            )}
+            {page < totalPages ? (
+              <Link href={`/tree/${slug}/audit?page=${page + 1}`} className="secondary-button">
+                Дальше
+              </Link>
+            ) : (
+              <span className="members-static-note">Это последняя страница</span>
+            )}
+          </div>
+        ) : null}
       </section>
     </div>
   );

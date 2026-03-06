@@ -4,6 +4,7 @@ import type {
   InviteRecord,
   MediaAssetRecord,
   MembershipRecord,
+  PaginatedAuditEntryView,
   PersonMediaRecord,
   PersonRecord,
   PartnershipRecord,
@@ -19,7 +20,7 @@ import { buildAuditEntryViews } from "@/lib/audit-presenter";
 import { buildViewerActor, canSeeMedia, canViewTree, hasRequiredRole } from "@/lib/permissions";
 import { getBaseUrl, getStorageBucket } from "@/lib/env";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson } from "@/lib/supabase/admin-rest";
+import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson, fetchSupabaseAdminRestJsonWithHeaders } from "@/lib/supabase/admin-rest";
 import { getCurrentUser, requireAuthenticatedUserId } from "@/lib/server/auth";
 import { AppError } from "@/lib/server/errors";
 import { createInviteToken, createOpaqueToken, hashInviteToken, hashOpaqueToken } from "@/lib/server/invite-token";
@@ -27,6 +28,7 @@ import { createInviteToken, createOpaqueToken, hashInviteToken, hashOpaqueToken 
 const admin = () => createAdminSupabaseClient();
 
 const REPOSITORY_NETWORK_ERROR_MARKERS = ["SUPABASE_UNAVAILABLE", "fetch failed", "connect timeout", "timed out", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"];
+const SHARE_LINKS_SCHEMA_CACHE_MARKERS = ["tree_share_links", "schema cache"];
 
 function toRepositoryReadError(error: unknown, fallbackMessage: string) {
   if (error instanceof AppError) {
@@ -41,8 +43,27 @@ function toRepositoryReadError(error: unknown, fallbackMessage: string) {
   return new AppError(500, message || fallbackMessage);
 }
 
+function isShareLinksSchemaUnavailableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return SHARE_LINKS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
+}
+
 function buildUuidInFilter(values: string[]) {
   return `(${[...new Set(values.filter(Boolean))].join(",")})`;
+}
+
+function parseContentRangeTotal(value: string | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const match = /\/(\d+)$/.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 async function fetchAdminRows<T>(pathWithQuery: string, fallbackMessage: string) {
@@ -142,10 +163,19 @@ async function getValidShareLink(treeId: string, shareToken?: string | null) {
   }
 
   const tokenHash = hashOpaqueToken(shareToken);
-  const shareLink = await fetchAdminFirst<ShareLinkRecord>(
-    `tree_share_links?select=*&tree_id=eq.${encodeURIComponent(treeId)}&token_hash=eq.${encodeURIComponent(tokenHash)}`,
-    "Не удалось проверить семейную ссылку."
-  );
+  let shareLink: ShareLinkRecord | null = null;
+  try {
+    shareLink = await fetchAdminFirst<ShareLinkRecord>(
+      `tree_share_links?select=*&tree_id=eq.${encodeURIComponent(treeId)}&token_hash=eq.${encodeURIComponent(tokenHash)}`,
+      "Не удалось проверить семейную ссылку."
+    );
+  } catch (error) {
+    if (isShareLinksSchemaUnavailableError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
 
   if (!shareLink) {
     return null;
@@ -169,6 +199,9 @@ function queueShareLinkAccessTouch(shareLinkId: string) {
     { last_accessed_at: new Date().toISOString() },
     "Не удалось обновить время доступа по семейной ссылке."
   ).catch((error) => {
+    if (isShareLinksSchemaUnavailableError(error)) {
+      return;
+    }
     console.error("[share-link] best-effort access touch failed", error);
   });
 }
@@ -503,10 +536,18 @@ export async function listInvites(treeId: string) {
 
 export async function listShareLinks(treeId: string) {
   await requireTreeRole(treeId, ["owner", "admin"]);
-  return fetchAdminRows<ShareLinkRecord>(
-    `tree_share_links?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
-    "Не удалось загрузить семейные ссылки."
-  );
+  try {
+    return await fetchAdminRows<ShareLinkRecord>(
+      `tree_share_links?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
+      "Не удалось загрузить семейные ссылки."
+    );
+  } catch (error) {
+    if (isShareLinksSchemaUnavailableError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
 }
 
 export async function createShareLink(input: { treeId: string; label?: string | null; expiresInDays: number }) {
@@ -517,18 +558,27 @@ export async function createShareLink(input: { treeId: string; label?: string | 
   const expiresAt = new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString();
   const label = input.label?.trim() || "Семейный просмотр";
 
-  const data = await mutateAdminFirst<ShareLinkRecord>(
-    "tree_share_links",
-    "POST",
-    {
-      tree_id: input.treeId,
-      label,
-      token_hash: tokenHash,
-      expires_at: expiresAt,
-      created_by: userId
-    },
-    "Не удалось создать семейную ссылку."
-  );
+  let data: ShareLinkRecord | null = null;
+  try {
+    data = await mutateAdminFirst<ShareLinkRecord>(
+      "tree_share_links",
+      "POST",
+      {
+        tree_id: input.treeId,
+        label,
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+        created_by: userId
+      },
+      "Не удалось создать семейную ссылку."
+    );
+  } catch (error) {
+    if (isShareLinksSchemaUnavailableError(error)) {
+      throw new AppError(503, "Семейные ссылки пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    throw error;
+  }
 
   if (!data) {
     throw new AppError(400, "Не удалось создать семейную ссылку.");
@@ -552,10 +602,19 @@ export async function createShareLink(input: { treeId: string; label?: string | 
 }
 
 export async function revokeShareLink(shareLinkId: string) {
-  const before = await fetchAdminFirst<ShareLinkRecord>(
-    `tree_share_links?select=*&id=eq.${encodeURIComponent(shareLinkId)}`,
-    "Не удалось загрузить семейную ссылку."
-  );
+  let before: ShareLinkRecord | null = null;
+  try {
+    before = await fetchAdminFirst<ShareLinkRecord>(
+      `tree_share_links?select=*&id=eq.${encodeURIComponent(shareLinkId)}`,
+      "Не удалось загрузить семейную ссылку."
+    );
+  } catch (error) {
+    if (isShareLinksSchemaUnavailableError(error)) {
+      throw new AppError(503, "Семейные ссылки пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    throw error;
+  }
 
   if (!before) {
     throw new AppError(404, "Семейная ссылка не найдена.");
@@ -567,12 +626,21 @@ export async function revokeShareLink(shareLinkId: string) {
 
   const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
   const revokedAt = new Date().toISOString();
-  const data = await mutateAdminFirst<ShareLinkRecord>(
-    `tree_share_links?id=eq.${encodeURIComponent(shareLinkId)}&select=*`,
-    "PATCH",
-    { revoked_at: revokedAt },
-    "Не удалось отозвать семейную ссылку."
-  );
+  let data: ShareLinkRecord | null = null;
+  try {
+    data = await mutateAdminFirst<ShareLinkRecord>(
+      `tree_share_links?id=eq.${encodeURIComponent(shareLinkId)}&select=*`,
+      "PATCH",
+      { revoked_at: revokedAt },
+      "Не удалось отозвать семейную ссылку."
+    );
+  } catch (error) {
+    if (isShareLinksSchemaUnavailableError(error)) {
+      throw new AppError(503, "Семейные ссылки пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    throw error;
+  }
 
   if (!data) {
     throw new AppError(400, "Не удалось отозвать семейную ссылку.");
@@ -591,14 +659,29 @@ export async function revokeShareLink(shareLinkId: string) {
   return data;
 }
 
-export async function listAudit(treeId: string): Promise<AuditEntryView[]> {
+export async function listAudit(treeId: string, options?: { page?: number; pageSize?: number }): Promise<PaginatedAuditEntryView> {
   await requireTreeRole(treeId, ["owner"]);
-  const entries = await fetchAdminRows<AuditEntry>(
-    `audit_log?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
-    "Не удалось загрузить журнал изменений."
-  );
+  const page = Math.max(1, options?.page || 1);
+  const pageSize = Math.min(100, Math.max(20, options?.pageSize || 50));
+  const offset = (page - 1) * pageSize;
+  const { data: entries, headers } = await fetchSupabaseAdminRestJsonWithHeaders<AuditEntry[]>(
+    `audit_log?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc&limit=${pageSize}&offset=${offset}`,
+    {
+      headers: {
+        prefer: "count=exact"
+      }
+    }
+  ).catch((error) => {
+    throw toRepositoryReadError(error, "Не удалось загрузить журнал изменений.");
+  });
+  const total = parseContentRangeTotal(headers["Content-Range"] || headers["content-range"]) ?? entries.length;
   if (!entries.length) {
-    return [];
+    return {
+      entries: [],
+      total,
+      page,
+      pageSize
+    };
   }
 
   const relatedUserIds = new Set<string>();
@@ -678,7 +761,12 @@ export async function listAudit(treeId: string): Promise<AuditEntryView[]> {
 
   const personNamesById = new Map(persons.map((person) => [person.id, person.full_name] as const));
 
-  return buildAuditEntryViews(entries, { usersById, personNamesById });
+  return {
+    entries: buildAuditEntryViews(entries, { usersById, personNamesById }),
+    total,
+    page,
+    pageSize
+  };
 }
 
 export async function createPerson(input: {
