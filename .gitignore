@@ -26,6 +26,7 @@ __pycache__/
 .claude/.last_session
 .claude/.session-owner
 
+# Local generated reports live here; canonical project research docs are in docs/research/
 reports/
 security/reports/
 tests/artifacts/
