@@ -1,14 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import type { User } from "@supabase/supabase-js";
 import { useEffect, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
-export function AppHeader() {
-  const [user, setUser] = useState<User | null>(null);
+interface AppHeaderProps {
+  initialUser: {
+    id: string;
+    email: string | null;
+  } | null;
+}
+
+export function AppHeader({ initialUser }: AppHeaderProps) {
+  const [user, setUser] = useState(initialUser);
+
+  function normalizeUser(
+    value:
+      | {
+          id: string;
+          email: string | null;
+        }
+      | {
+          id: string;
+          email?: string | null;
+        }
+      | null
+      | undefined
+  ) {
+    if (!value) {
+      return null;
+    }
+
+    return {
+      id: value.id,
+      email: value.email ?? null
+    };
+  }
 
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
@@ -18,12 +47,12 @@ export function AppHeader() {
       .getUser()
       .then(({ data }) => {
         if (active) {
-          setUser(data.user ?? null);
+          setUser(normalizeUser(data.user) ?? initialUser ?? null);
         }
       })
       .catch(() => {
         if (active) {
-          setUser(null);
+          setUser(initialUser ?? null);
         }
       });
 
@@ -31,7 +60,7 @@ export function AppHeader() {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (active) {
-        setUser(session?.user ?? null);
+        setUser(normalizeUser(session?.user) ?? initialUser ?? null);
       }
     });
 
@@ -39,7 +68,7 @@ export function AppHeader() {
       active = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [initialUser]);
 
   return (
     <header className="app-header">

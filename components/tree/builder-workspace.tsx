@@ -1124,7 +1124,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     </button>
                   </div>
                 ) : null}
-                <form className="stack-form builder-form-grid" onSubmit={submitCreatePerson}>
+                <form
+                  key={`create-${createContext.type}-${createContext.type === "standalone" ? "none" : createContext.anchorPersonId}`}
+                  className="stack-form builder-form-grid"
+                  onSubmit={submitCreatePerson}
+                >
                   <label className="builder-field-span">
                     Полное имя
                     <input name="fullName" required placeholder="Мария Иванова" />
@@ -1179,6 +1183,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                   <p className="muted-copy">Изменения сохраняются по кнопке ниже.</p>
                 </div>
                 <form
+                  key={`edit-${selectedPerson.id}`}
                   className="stack-form builder-form-grid"
                   onSubmit={async (event) => {
                     event.preventDefault();
