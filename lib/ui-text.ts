@@ -18,7 +18,8 @@ const mediaVisibilityLabels: Record<MediaVisibility, string> = {
 
 const mediaKindLabels: Record<MediaKind, string> = {
   photo: "Фото",
-  video: "Видео"
+  video: "Видео",
+  document: "Документ"
 };
 
 const inviteMethodLabels: Record<InviteMethod, string> = {
@@ -50,7 +51,11 @@ const auditActionLabels: Record<string, string> = {
   "photo.created": "Добавлено фото",
   "photo.deleted": "Удалено фото",
   "video.created": "Добавлено видео",
-  "video.deleted": "Удалено видео"
+  "video.deleted": "Удалено видео",
+  "document.created": "Добавлен документ",
+  "document.deleted": "Удален документ",
+  "share_link.created": "Создана семейная ссылка",
+  "share_link.revoked": "Семейная ссылка отозвана"
 };
 
 const auditEntityLabels: Record<string, string> = {

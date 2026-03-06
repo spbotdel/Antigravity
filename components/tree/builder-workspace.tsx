@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type PointerEvent, type SetStateAction } from "react";
 
 import {
   FamilyTreeCanvas,
@@ -33,6 +33,9 @@ const PERSON_GENDER_OPTIONS = [
   { value: "other", label: "Другое" }
 ] as const;
 
+const BUILDER_CANVAS_MIN_HEIGHT = 700;
+const BUILDER_CANVAS_MAX_HEIGHT = 1600;
+
 function formatParentLinkMeta(value?: string | null) {
   if (!value || value === "biological") {
     return "Родственная связь";
@@ -59,6 +62,18 @@ function formatPartnershipStatus(value?: string | null) {
   }
 
   return value;
+}
+
+function getMediaOpenLabel(kind: TreeSnapshot["media"][number]["kind"]) {
+  if (kind === "video") {
+    return "Открыть видео";
+  }
+
+  if (kind === "document") {
+    return "Открыть документ";
+  }
+
+  return "Открыть файл";
 }
 
 function getPersonListMeta(person: PersonRecord) {
@@ -203,7 +218,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [createContext, setCreateContext] = useState<CreateContext>({ type: "standalone" });
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [canvasHeight, setCanvasHeight] = useState(980);
   const currentSnapshotRef = useRef(currentSnapshot);
+  const resizeSessionRef = useRef<{ startHeight: number; startY: number } | null>(null);
   const tempPersonResolutionPromisesRef = useRef(new Map<string, Promise<string | null>>());
   const tempPersonResolutionResolversRef = useRef(new Map<string, (personId: string | null) => void>());
   const resolvedTempPersonIdsRef = useRef(new Map<string, string | null>());
@@ -262,6 +279,45 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     : selectedPerson
       ? "Выберите блок, чтобы он подсветился. Кнопка + открывает меню связей, корзина удаляет выбранного человека."
       : "Выберите карточку на схеме или добавьте первого человека, чтобы начать собирать структуру семьи.";
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const preferred = Math.round(window.innerHeight * 0.95);
+    setCanvasHeight(Math.min(BUILDER_CANVAS_MAX_HEIGHT, Math.max(BUILDER_CANVAS_MIN_HEIGHT, preferred)));
+  }, []);
+
+  function startCanvasResize(event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    resizeSessionRef.current = {
+      startHeight: canvasHeight,
+      startY: event.clientY
+    };
+
+    function handlePointerMove(moveEvent: globalThis.PointerEvent) {
+      const session = resizeSessionRef.current;
+      if (!session) {
+        return;
+      }
+
+      const nextHeight = session.startHeight + (moveEvent.clientY - session.startY);
+      const clampedHeight = Math.min(BUILDER_CANVAS_MAX_HEIGHT, Math.max(BUILDER_CANVAS_MIN_HEIGHT, Math.round(nextHeight)));
+      setCanvasHeight(clampedHeight);
+    }
+
+    function stopResize() {
+      resizeSessionRef.current = null;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+      window.removeEventListener("pointercancel", stopResize);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize, { once: true });
+    window.addEventListener("pointercancel", stopResize, { once: true });
+  }
 
   function updateSnapshot(updater: (prev: TreeSnapshot) => TreeSnapshot) {
     const nextSnapshot = updater(currentSnapshotRef.current);
@@ -927,34 +983,36 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               <h2>{stageTitle}</h2>
               <p className="builder-stage-note">{stageNote}</p>
             </div>
-            <div className="builder-stage-meta">
-              <span className="workspace-meta-chip">{currentSnapshot.people.length} человек</span>
-              <span className="workspace-meta-chip">
-                {rootPerson ? `Корень: ${rootPerson.full_name}` : "Нужен корень"}
-              </span>
-              <button type="button" className="ghost-button ghost-button-compact" onClick={startStandaloneCreate}>
-                Новый блок
-              </button>
-            </div>
           </div>
-          <FamilyTreeCanvas
-            tree={displayTree}
-            selectedPersonId={selectedPersonId}
-            onSelectPerson={focusPerson}
-            interactive
-            displayMode="builder"
-            people={currentSnapshot.people}
-            parentLinks={currentSnapshot.parentLinks}
-            partnerships={currentSnapshot.partnerships}
-            personPhotoUrls={personPhotoPreviewUrls}
-            onPartnershipDateChange={savePartnershipDate}
-            onNodeAction={handleCanvasAction}
-            onEmptyAction={startStandaloneCreate}
-          />
+          <div className="builder-canvas-shell" style={{ height: `${canvasHeight}px` }}>
+            <FamilyTreeCanvas
+              tree={displayTree}
+              selectedPersonId={selectedPersonId}
+              onSelectPerson={focusPerson}
+              interactive
+              displayMode="builder"
+              people={currentSnapshot.people}
+              parentLinks={currentSnapshot.parentLinks}
+              partnerships={currentSnapshot.partnerships}
+              personPhotoUrls={personPhotoPreviewUrls}
+              viewportHeightHint={canvasHeight}
+              onPartnershipDateChange={savePartnershipDate}
+              onNodeAction={handleCanvasAction}
+              onEmptyAction={startStandaloneCreate}
+            />
+          </div>
+          <button
+            type="button"
+            className="builder-canvas-resize-handle"
+            aria-label="Изменить высоту схемы"
+            onPointerDown={startCanvasResize}
+          >
+            <span className="builder-canvas-resize-grip" />
+          </button>
         </div>
       </main>
 
-      <aside className="surface-card builder-inspector">
+      <aside className="surface-card builder-inspector builder-inspector-overlay">
         <div className="builder-inspector-header">
           <div className="builder-inspector-copy">
             <p className="eyebrow">{createModeActive ? "Новый блок" : "Карточка человека"}</p>
@@ -1330,21 +1388,21 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
                 <div className="builder-section-block">
                   <div className="builder-block-heading">
-                    <strong>Фото</strong>
-                    <p className="muted-copy">Загрузите изображение и сразу задайте видимость.</p>
+                    <strong>Файлы</strong>
+                    <p className="muted-copy">Фото, видео и документы загружаются одним потоком и сразу привязываются к выбранному человеку.</p>
                   </div>
                   <form
                     className="stack-form builder-form-grid"
                     onSubmit={async (event) => {
                       event.preventDefault();
                       const form = new FormData(event.currentTarget);
-                      const file = form.get("photo") as File | null;
+                      const file = form.get("mediaFile") as File | null;
                       if (!file || file.size === 0) {
-                        setError("Сначала выберите файл фотографии.");
+                        setError("Сначала выберите файл.");
                         return;
                       }
 
-                      const request = await submitJson("/api/media/photos/upload-url", "POST", {
+                      const request = await requestJson("/api/media/upload-intent", "POST", {
                         treeId: currentSnapshot.tree.id,
                         personId: selectedPerson.id,
                         filename: file.name,
@@ -1368,7 +1426,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         return;
                       }
 
-                      await submitJson("/api/media/photos/complete", "POST", {
+                      await submitJson("/api/media/complete", "POST", {
                         treeId: currentSnapshot.tree.id,
                         personId: selectedPerson.id,
                         mediaId: request.mediaId,
@@ -1384,12 +1442,17 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     }}
                   >
                     <label className="builder-field-span">
-                      Фото
-                      <input name="photo" type="file" accept="image/*" required />
+                      Файл
+                      <input
+                        name="mediaFile"
+                        type="file"
+                        accept="image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx"
+                        required
+                      />
                     </label>
                     <label>
                       Название
-                      <input name="title" required placeholder="Свадебный портрет" />
+                      <input name="title" required placeholder="Свадебный портрет или архивный документ" />
                     </label>
                     <label>
                       Видимость
@@ -1403,52 +1466,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       <textarea name="caption" rows={3} placeholder="Необязательная подпись" />
                     </label>
                     <button className="primary-button builder-field-span" type="submit">
-                      Загрузить фото
+                      Загрузить файл
                     </button>
                   </form>
                 </div>
-
-                {currentSnapshot.tree.visibility === "public" ? (
-                  <div className="builder-section-block">
-                    <div className="builder-block-heading">
-                      <strong>Видео</strong>
-                      <p className="muted-copy">В v1 видео с Яндекс Диска доступны только для открытого дерева.</p>
-                    </div>
-                    <form
-                      className="stack-form builder-form-grid"
-                      onSubmit={async (event) => {
-                        event.preventDefault();
-                        const form = new FormData(event.currentTarget);
-                        await submitJson("/api/media/videos", "POST", {
-                          treeId: currentSnapshot.tree.id,
-                          personId: selectedPerson.id,
-                          title: String(form.get("title") || ""),
-                          caption: String(form.get("caption") || ""),
-                          externalUrl: String(form.get("externalUrl") || "")
-                        });
-                        event.currentTarget.reset();
-                      }}
-                    >
-                      <label>
-                        Название видео
-                        <input name="title" placeholder="Архивное видео" />
-                      </label>
-                      <label>
-                        Публичная ссылка Яндекс Диска
-                        <input name="externalUrl" placeholder="https://disk.yandex..." />
-                      </label>
-                      <label className="builder-field-span">
-                        Подпись
-                        <textarea name="caption" rows={3} placeholder="Необязательная подпись" />
-                      </label>
-                      <button className="primary-button builder-field-span" type="submit">
-                        Сохранить видео
-                      </button>
-                    </form>
-                  </div>
-                ) : (
-                  <div className="empty-state">Видео с Яндекс Диска доступно только в открытом дереве. Переключите режим в настройках.</div>
-                )}
 
                 <div className="builder-media-grid">
                   {selectedMedia.length ? (
@@ -1461,6 +1482,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         </div>
                         <h4>{asset.title}</h4>
                         <p>{asset.caption || "Подпись не добавлена."}</p>
+                        {asset.kind !== "photo" ? (
+                          <a href={`/api/media/${asset.id}`} target="_blank" rel="noreferrer" className="ghost-button">
+                            {getMediaOpenLabel(asset.kind)}
+                          </a>
+                        ) : null}
                         <button
                           className="danger-button"
                           type="button"
@@ -1473,12 +1499,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       </article>
                     ))
                   ) : (
-                    <div className="empty-state">Для этого человека медиа пока не загружены.</div>
+                    <div className="empty-state">Для этого человека пока не загружены файлы.</div>
                   )}
                 </div>
               </>
             ) : (
-              <div className="empty-state">Сначала выберите человека, чтобы добавлять фото и видео именно в его карточку.</div>
+              <div className="empty-state">Сначала выберите человека, чтобы добавлять фото, видео и документы именно в его карточку.</div>
             )}
           </section>
         ) : null}

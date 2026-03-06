@@ -16,6 +16,9 @@
 5. C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-plan-2026-03-06.md
 6. C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-implementation-plan-2026-03-06.md
 7. C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md
+8. C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-owner-playbook-2026-03-06.md
+9. C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-backup-restore-runbook-2026-03-06.md
+10. C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-launch-checklist-2026-03-06.md
 
 ## Ключевые выводы исследования
 1. Главные functional gaps Antigravity: нет GEDCOM import/export, нет merge дублей, ограниченная media-модель (video через public link), слабая модель расширенных родственных связей в UX.
@@ -33,6 +36,7 @@
 - invite-based collaboration для тех, кто помогает редактировать и загружать медиа,
 - read-only family sharing по ссылке.
 10. Для исполнения уже зафиксирован engineering backlog по репозиторию: отдельная сущность `tree_share_links`, unified private media, members screen rework, UAT EU+RF.
+11. Для `Phase E` уже подготовлены operational docs: owner playbook, backup/restore runbook и launch/UAT checklist.
 
 ## Жесткие ограничения, которые нужно помнить
 1. На этапе исследования не менять runtime API/БД/типы/UI.
@@ -43,6 +47,7 @@
 2. Ближайший этап - довести `V1.0 Slava edition` как production-ready family product для владельца и его родственников.
 3. После этого уже возвращаться к массовой версии.
 4. Учитывать новое уточнение: unified media strategy должна учитывать кросс-региональную доступность EU + RF и минимальный recurring cost.
+5. На operational уровне важно различать: код готов к launch и automated smoke готовы к прогону, но live Supabase network path из текущего окружения может оставаться нестабильным.
 
 ## Рекомендуемый next step в новом чате GPT-5.4
 Вставить этот блок:
@@ -56,6 +61,9 @@
 - C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-plan-2026-03-06.md
 - C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-implementation-plan-2026-03-06.md
 - C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md
+- C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-owner-playbook-2026-03-06.md
+- C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-backup-restore-runbook-2026-03-06.md
+- C:\Users\Acer\OneDrive\Документы\Playground\reports\family-tree-v1-slava-edition-launch-checklist-2026-03-06.md
 
 Дата среза: 2026-03-06.
 Сначала: переведи engineering backlog `Slava edition` в конкретный execution plan по репозиторию.
@@ -70,4 +78,6 @@
 
 1. Если возникает конфликт между общим market roadmap и `Slava edition`, ближайшим source of truth считать:
 - `family-tree-v1-slava-edition-plan-2026-03-06.md`,
-- `family-tree-v1-slava-edition-implementation-plan-2026-03-06.md`.
+- `family-tree-v1-slava-edition-implementation-plan-2026-03-06.md`,
+- `family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md`,
+- operational docs `owner-playbook`, `backup-restore-runbook`, `launch-checklist`.

@@ -7,10 +7,11 @@ interface Params {
   params: Promise<{ mediaId: string }>;
 }
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   try {
     const { mediaId } = await params;
-    const result = await resolveMediaAccess(mediaId);
+    const shareToken = new URL(request.url).searchParams.get("share");
+    const result = await resolveMediaAccess(mediaId, shareToken);
     return NextResponse.redirect(result.url);
   } catch (error) {
     return toErrorResponse(error);

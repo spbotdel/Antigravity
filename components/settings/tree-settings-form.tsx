@@ -182,7 +182,7 @@ export function TreeSettingsForm({ tree, people }: TreeSettingsFormProps) {
 
         <div className="settings-note-panel settings-note-panel-compact">
           <strong>Что важно</strong>
-          <p>Видео с Яндекс Диска в v1 считаются публичными и подходят только для открытого дерева.</p>
+          <p>Фото, видео и документы теперь загружаются как файлы. Доступ к ним управляется общей настройкой видимости и ролями участников.</p>
         </div>
       </section>
 

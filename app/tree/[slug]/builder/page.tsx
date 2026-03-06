@@ -8,14 +8,33 @@ export const dynamic = "force-dynamic";
 
 interface BuilderPageProps {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function BuilderPage({ params }: BuilderPageProps) {
+function getSearchParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) {
+    return value[0] || null;
+  }
+
+  return value || null;
+}
+
+function buildViewerHref(slug: string, shareToken?: string | null) {
+  if (!shareToken) {
+    return `/tree/${slug}`;
+  }
+
+  return `/tree/${slug}?share=${encodeURIComponent(shareToken)}`;
+}
+
+export default async function BuilderPage({ params, searchParams }: BuilderPageProps) {
   const { slug } = await params;
-  const snapshot = await getBuilderSnapshot(slug);
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const shareToken = getSearchParam(resolvedSearchParams.share);
+  const snapshot = await getBuilderSnapshot(slug, { shareToken });
 
   if (!snapshot.actor.canEdit) {
-    redirect(`/tree/${slug}`);
+    redirect(buildViewerHref(slug, shareToken));
   }
 
   return (
@@ -31,6 +50,7 @@ export default async function BuilderPage({ params }: BuilderPageProps) {
       </div>
         <TreeNav
           slug={slug}
+          shareToken={shareToken}
           canEdit={snapshot.actor.canEdit}
           canManageMembers={snapshot.actor.canManageMembers}
           canReadAudit={snapshot.actor.canReadAudit}

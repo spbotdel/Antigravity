@@ -8,8 +8,10 @@ interface Params {
 export async function GET(request: Request, { params }: Params) {
   try {
     const { slug } = await params;
-    const includeMedia = new URL(request.url).searchParams.get("includeMedia") !== "0";
-    const snapshot = await getTreeSnapshot(slug, { includeMedia });
+    const searchParams = new URL(request.url).searchParams;
+    const includeMedia = searchParams.get("includeMedia") !== "0";
+    const shareToken = searchParams.get("share");
+    const snapshot = await getTreeSnapshot(slug, { includeMedia, shareToken });
     return Response.json(snapshot);
   } catch (error) {
     return toErrorResponse(error);

@@ -92,4 +92,64 @@ describe("audit presenter", () => {
     expect(views[0]?.details).toContain("Место рождения: было Казань, стало Москва.");
     expect(views[0]?.details).toContain("Статус: было жив(а), стало умер(ла).");
   });
+
+  it("builds human-readable share link events", () => {
+    const entries: AuditEntry[] = [
+      {
+        id: "audit-3",
+        tree_id: "tree-1",
+        actor_user_id: "user-1",
+        entity_type: "share_link",
+        entity_id: "share-1",
+        action: "share_link.created",
+        before_json: null,
+        after_json: {
+          id: "share-1",
+          label: "Родные из РФ",
+          expires_at: "2026-03-20T12:00:00.000Z"
+        },
+        created_at: "2026-03-06T12:00:00.000Z"
+      },
+      {
+        id: "audit-4",
+        tree_id: "tree-1",
+        actor_user_id: "user-1",
+        entity_type: "share_link",
+        entity_id: "share-1",
+        action: "share_link.revoked",
+        before_json: {
+          id: "share-1",
+          label: "Родные из РФ",
+          expires_at: "2026-03-20T12:00:00.000Z"
+        },
+        after_json: {
+          id: "share-1",
+          label: "Родные из РФ",
+          expires_at: "2026-03-20T12:00:00.000Z",
+          revoked_at: "2026-03-07T15:30:00.000Z"
+        },
+        created_at: "2026-03-07T15:30:00.000Z"
+      }
+    ];
+
+    const views = buildAuditEntryViews(entries, {
+      usersById: new Map([
+        [
+          "user-1",
+          {
+            name: "Слава",
+            email: "slava@example.com",
+            role: "owner",
+            status: "active"
+          }
+        ]
+      ]),
+      personNamesById: new Map()
+    });
+
+    expect(views[0]?.summary).toBe('Создана семейная ссылка "Родные из РФ".');
+    expect(views[0]?.event_tone).toBe("create");
+    expect(views[1]?.summary).toBe('Отозвана семейная ссылка "Родные из РФ".');
+    expect(views[1]?.event_tone).toBe("delete");
+  });
 });

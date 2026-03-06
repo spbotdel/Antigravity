@@ -10,8 +10,8 @@ The active app supports:
 - one family tree per owner in v1
 - public and private tree visibility
 - secure invite links
-- photo storage in private Supabase Storage with signed delivery
-- public Yandex Disk video links for public trees
+- family share links for read-only viewing
+- private file media with signed delivery
 - owner-only audit log
 
 The old static genealogy viewer is preserved in [`legacy/`](./legacy).
@@ -92,8 +92,7 @@ npm run dev
 
 - only one tree per owner
 - no GEDCOM import/export
-- Yandex video is public-only
-- private video hosting is out of scope
+- media storage is sized for a small private family archive, not for terabyte-scale workloads
 - no realtime collaborative editing
 - no ownership transfer
 

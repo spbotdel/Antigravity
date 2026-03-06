@@ -19,6 +19,8 @@ const snapshot: TreeSnapshot = {
     userId: null,
     role: null,
     isAuthenticated: false,
+    accessSource: "public",
+    shareLinkId: null,
     canEdit: false,
     canManageMembers: false,
     canManageSettings: false,

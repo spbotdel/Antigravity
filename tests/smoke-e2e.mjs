@@ -20,18 +20,24 @@ function readEnv(filePath) {
 const env = readEnv(path.resolve(".env.local"));
 const baseUrl = env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const storageBucket = env.NEXT_PUBLIC_STORAGE_BUCKET || "tree-photos";
-const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+const adminKey = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY;
+if (!adminKey) {
+  throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for smoke e2e admin operations.");
+}
+const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, adminKey, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
 const fixturePath = path.resolve("tests/fixtures/smoke-photo.png");
 const timestamp = Date.now();
 const slug = `smoke-family-${timestamp}`;
+const treeTitle = `Smoke Family ${timestamp}`;
 const ownerName = `Smoke Root ${timestamp}`;
 const childName = `Smoke Child ${timestamp}`;
 const editedChildName = `Smoke Child Edited ${timestamp}`;
 const publicPhotoTitle = `Public Smoke Photo ${timestamp}`;
 const membersPhotoTitle = `Members Smoke Photo ${timestamp}`;
+const adminPhotoTitle = `Admin Smoke Photo ${timestamp}`;
 
 function builderInspector(page) {
   return page.locator("aside.builder-inspector");
@@ -80,6 +86,37 @@ async function createUser(kind) {
   return { id: data.user.id, email, password };
 }
 
+async function provisionTreeForOwner(ownerUserId) {
+  const treeRes = await supabase
+    .from("trees")
+    .insert({
+      owner_user_id: ownerUserId,
+      title: treeTitle,
+      slug,
+      description: "Automated smoke test tree.",
+      visibility: "private"
+    })
+    .select("id")
+    .single();
+
+  if (treeRes.error || !treeRes.data?.id) {
+    throw treeRes.error || new Error("Не удалось создать дерево для smoke-сценария.");
+  }
+
+  const membershipRes = await supabase.from("tree_memberships").insert({
+    tree_id: treeRes.data.id,
+    user_id: ownerUserId,
+    role: "owner",
+    status: "active"
+  });
+
+  if (membershipRes.error) {
+    throw membershipRes.error;
+  }
+
+  return treeRes.data.id;
+}
+
 async function deleteUserWithRetry(userId) {
   await withRetries(`deleteUser:${userId}`, async () => {
     const result = await supabase.auth.admin.deleteUser(userId);
@@ -98,28 +135,6 @@ async function login(page, email, password) {
   await page.waitForURL("**/dashboard");
 }
 
-async function createTree(page) {
-  await page.getByLabel("Название дерева").fill(`Smoke Family ${timestamp}`);
-  await page.getByLabel("Адрес ссылки").fill(slug);
-  await page.getByLabel("Описание").fill("Automated smoke test tree.");
-  await page.getByRole("button", { name: "Создать первое дерево" }).click();
-  await page.waitForURL(new RegExp(`(/dashboard|/tree/${slug}/builder)$`));
-
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    await page.goto(`${baseUrl}/tree/${slug}/builder`);
-    await page.waitForURL(`**/tree/${slug}/builder`);
-    try {
-      await waitForBuilderReady(page);
-      return;
-    } catch {
-      if (attempt === 4) {
-        throw new Error("Конструктор не стал доступен после создания дерева.");
-      }
-      await page.waitForTimeout(1500);
-    }
-  }
-}
-
 async function createPerson(page, values) {
   const inspector = builderInspector(page);
   await inspector.getByRole("button", { name: "Человек", exact: true }).click();
@@ -128,7 +143,9 @@ async function createPerson(page, values) {
   }
   const createSection = inspector.locator("section.builder-panel-stack");
   await createSection.locator('input[name="fullName"]').fill(values.fullName);
-  await createSection.locator('input[name="gender"]').fill(values.gender);
+  if (values.gender) {
+    await createSection.locator('select[name="gender"]').selectOption(values.gender);
+  }
   await createSection.locator('input[name="birthDate"]').fill(values.birthDate);
   await createSection.locator('input[name="birthPlace"]').fill(values.birthPlace);
   await createSection.locator('textarea[name="bio"]').fill(values.bio);
@@ -160,17 +177,17 @@ async function createRelatedPersonInline(page, values) {
 }
 
 async function updateSelectedPersonInline(page, values) {
-  const canvas = page.locator(".tree-canvas");
+  const inspector = builderInspector(page);
   if (values.fullName !== undefined) {
-    await canvas.locator('input[data-field="fullName"]').fill(values.fullName);
+    await inspector.locator('input[name="fullName"]').fill(values.fullName);
   }
   if (values.birthPlace !== undefined) {
-    await canvas.locator('input[data-field="birthPlace"]').fill(values.birthPlace);
+    await inspector.locator('input[name="birthPlace"]').fill(values.birthPlace);
   }
   if (values.gender !== undefined) {
-    await canvas.locator('input[data-field="gender"]').fill(values.gender);
+    await inspector.locator('select[name="gender"]').selectOption(values.gender);
   }
-  await canvas.getByRole("button", { name: "Сохранить", exact: true }).click();
+  await inspector.getByRole("button", { name: "Сохранить", exact: true }).click();
   await page.getByText("Данные человека обновлены.").waitFor({ timeout: 30000 });
 }
 
@@ -185,23 +202,21 @@ async function configureTree(page) {
   await page.getByLabel("Корневой человек").selectOption({ label: ownerName });
   await page.getByRole("button", { name: "Сохранить данные" }).click();
   await page.getByText("Данные дерева обновлены.").waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: "Сделать открытым" }).click();
-  await page.getByText("Видимость дерева обновлена.").waitFor({ timeout: 30000 });
 }
 
-async function uploadPhoto(page, title, visibility) {
+async function uploadMediaFile(page, title, visibility) {
   await page.goto(`${baseUrl}/tree/${slug}/builder`);
   await waitForBuilderReady(page);
   await page.getByRole("button", { name: new RegExp(ownerName) }).first().click();
   const inspector = builderInspector(page);
   await inspector.getByRole("button", { name: "Медиа", exact: true }).click();
   const photoForm = inspector.locator("form").nth(0);
-  await photoForm.getByLabel("Фото").setInputFiles(fixturePath);
+  await photoForm.getByLabel("Файл").setInputFiles(fixturePath);
   await photoForm.getByLabel("Название").fill(title);
   await photoForm.getByLabel("Подпись").fill(`${title} caption`);
   await photoForm.getByLabel("Видимость").selectOption(visibility);
-  await photoForm.getByRole("button", { name: "Загрузить фото" }).click();
-  await page.getByText("Фотография сохранена.").waitFor({ timeout: 30000 });
+  await photoForm.getByRole("button", { name: "Загрузить файл" }).click();
+  await page.getByText("Файл сохранен.").waitFor({ timeout: 30000 });
   await inspector.getByRole("heading", { name: title, exact: true }).first().waitFor({ timeout: 30000 });
 }
 
@@ -216,6 +231,24 @@ async function createInvite(page, role, email) {
   return (await success.locator("p").textContent()).trim();
 }
 
+async function createShareLink(page, label) {
+  await page.goto(`${baseUrl}/tree/${slug}/members`);
+  const shareSection = page.locator("section").filter({ hasText: "Ссылка для просмотра без аккаунта" }).first();
+  await shareSection.locator('input[name="label"]').fill(label);
+  await shareSection.locator('input[name="expiresInDays"]').fill("14");
+  await shareSection.getByRole("button", { name: "Создать ссылку для просмотра" }).click();
+  const success = page.locator(".inline-feedback-card-success").filter({ hasText: "Ссылка готова" });
+  await success.waitFor();
+  return (await success.locator("p").textContent()).trim();
+}
+
+async function revokeShareLink(page) {
+  await page.goto(`${baseUrl}/tree/${slug}/members`);
+  const shareListSection = page.locator("section").filter({ hasText: "Ссылки для семейного просмотра" }).last();
+  await shareListSection.getByRole("button", { name: "Отозвать ссылку", exact: true }).click();
+  await shareListSection.getByText("Отозвана").first().waitFor({ timeout: 30000 });
+}
+
 async function acceptInvite(browser, user, inviteUrl) {
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -227,15 +260,35 @@ async function acceptInvite(browser, user, inviteUrl) {
   return { context, page };
 }
 
-async function assertAnonymousVisibility(browser) {
+async function assertPrivateTreeBlocked(browser) {
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(`${baseUrl}/tree/${slug}`);
+  await page.getByRole("heading", { name: "Дерево недоступно" }).waitFor();
+  await context.close();
+}
+
+async function assertShareLinkVisibility(browser, shareUrl) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const normalizedShareUrl = shareUrl.replace("http://localhost:3000", baseUrl);
+  await page.goto(normalizedShareUrl);
   await page.getByRole("heading", { name: publicPhotoTitle, exact: true }).first().waitFor();
-  const membersVisible = await page.getByRole("heading", { name: membersPhotoTitle, exact: true }).count();
-  if (membersVisible !== 0) {
-    throw new Error("Анонимный посетитель видит заголовок фото только для участников.");
+  await page.getByRole("heading", { name: membersPhotoTitle, exact: true }).first().waitFor();
+  await page.getByRole("heading", { name: adminPhotoTitle, exact: true }).first().waitFor();
+  const builderLinks = await page.getByRole("link", { name: "Конструктор", exact: true }).count();
+  if (builderLinks !== 0) {
+    throw new Error("Получатель семейной ссылки видит ссылку на конструктор.");
   }
+  await context.close();
+}
+
+async function assertRevokedShareLinkBlocked(browser, shareUrl) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const normalizedShareUrl = shareUrl.replace("http://localhost:3000", baseUrl);
+  await page.goto(normalizedShareUrl);
+  await page.getByRole("heading", { name: "Дерево недоступно" }).waitFor();
   await context.close();
 }
 
@@ -245,19 +298,22 @@ async function verifyDbState(ownerEmail, adminEmail, viewerEmail) {
     throw new Error(treeRes.error.message || "Не удалось найти дерево для проверки.");
   }
 
-  const [mediaRes, profilesRes] = await Promise.all([
+  const [mediaRes, profilesRes, shareLinksRes] = await Promise.all([
     supabase.from("media_assets").select("id,title,visibility,kind").eq("tree_id", treeRes.data.id),
-    supabase.from("profiles").select("email").in("email", [ownerEmail, adminEmail, viewerEmail])
+    supabase.from("profiles").select("email").in("email", [ownerEmail, adminEmail, viewerEmail]),
+    supabase.from("tree_share_links").select("id,revoked_at").eq("tree_id", treeRes.data.id)
   ]);
 
-  if (mediaRes.error || profilesRes.error) {
-    throw new Error(mediaRes.error?.message || profilesRes.error?.message || "Проверка базы данных завершилась ошибкой.");
+  if (mediaRes.error || profilesRes.error || shareLinksRes.error) {
+    throw new Error(mediaRes.error?.message || profilesRes.error?.message || shareLinksRes.error?.message || "Проверка базы данных завершилась ошибкой.");
   }
 
   return {
     tree: treeRes.data,
     mediaCount: mediaRes.data.length,
-    profileCount: profilesRes.data.length
+    profileCount: profilesRes.data.length,
+    shareLinkCount: shareLinksRes.data.length,
+    revokedShareLinkCount: shareLinksRes.data.filter((item) => item.revoked_at).length
   };
 }
 
@@ -280,6 +336,7 @@ async function cleanupArtifacts(userIds) {
     await supabase.from("media_assets").delete().eq("tree_id", treeId);
     await supabase.from("person_parent_links").delete().eq("tree_id", treeId);
     await supabase.from("person_partnerships").delete().eq("tree_id", treeId);
+    await supabase.from("tree_share_links").delete().eq("tree_id", treeId);
     await supabase.from("tree_invites").delete().eq("tree_id", treeId);
     await supabase.from("tree_memberships").delete().eq("tree_id", treeId);
     await supabase.from("audit_log").delete().eq("tree_id", treeId);
@@ -301,6 +358,7 @@ async function main() {
   const admin = await createUser("admin");
   const viewer = await createUser("viewer");
   const createdUserIds = [owner.id, admin.id, viewer.id];
+  await provisionTreeForOwner(owner.id);
 
   const browser = await chromium.launch({ headless: true });
 
@@ -309,7 +367,8 @@ async function main() {
     const ownerPage = await ownerContext.newPage();
 
     await login(ownerPage, owner.email, owner.password);
-    await createTree(ownerPage);
+    await ownerPage.goto(`${baseUrl}/tree/${slug}/builder`);
+    await waitForBuilderReady(ownerPage);
     await createPerson(ownerPage, {
       fullName: ownerName,
       gender: "male",
@@ -332,8 +391,8 @@ async function main() {
     });
     await addRelationship(ownerPage);
     await configureTree(ownerPage);
-    await uploadPhoto(ownerPage, publicPhotoTitle, "public");
-    await uploadPhoto(ownerPage, membersPhotoTitle, "members");
+    await uploadMediaFile(ownerPage, publicPhotoTitle, "public");
+    await uploadMediaFile(ownerPage, membersPhotoTitle, "members");
 
     const adminInvite = await createInvite(ownerPage, "admin", admin.email);
     const viewerInvite = await createInvite(ownerPage, "viewer", viewer.email);
@@ -342,16 +401,22 @@ async function main() {
     await adminSession.page.goto(`${baseUrl}/tree/${slug}/builder`);
     await waitForBuilderReady(adminSession.page);
     await adminSession.page.locator(".person-list-item").first().waitFor({ timeout: 30000 });
+    await uploadMediaFile(adminSession.page, adminPhotoTitle, "members");
     await adminSession.context.close();
 
     const viewerSession = await acceptInvite(browser, viewer, viewerInvite);
     await viewerSession.page.getByRole("heading", { name: publicPhotoTitle, exact: true }).first().waitFor();
     await viewerSession.page.getByRole("heading", { name: membersPhotoTitle, exact: true }).first().waitFor();
+    await viewerSession.page.getByRole("heading", { name: adminPhotoTitle, exact: true }).first().waitFor();
     await viewerSession.page.goto(`${baseUrl}/tree/${slug}/builder`);
     await viewerSession.page.waitForURL(`**/tree/${slug}`);
     await viewerSession.context.close();
 
-    await assertAnonymousVisibility(browser);
+    const shareUrl = await createShareLink(ownerPage, `Smoke Share ${timestamp}`);
+    await assertPrivateTreeBlocked(browser);
+    await assertShareLinkVisibility(browser, shareUrl);
+    await revokeShareLink(ownerPage);
+    await assertRevokedShareLinkBlocked(browser, shareUrl);
 
     const dbState = await verifyDbState(owner.email, admin.email, viewer.email);
 

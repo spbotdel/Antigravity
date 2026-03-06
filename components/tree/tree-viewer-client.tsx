@@ -10,12 +10,40 @@ import type { TreeSnapshot } from "@/lib/types";
 
 interface TreeViewerClientProps {
   snapshot: TreeSnapshot;
+  shareToken?: string | null;
 }
 
-export function TreeViewerClient({ snapshot }: TreeViewerClientProps) {
+function getMediaOpenLabel(kind: TreeSnapshot["media"][number]["kind"]) {
+  if (kind === "video") {
+    return "Открыть видео";
+  }
+
+  if (kind === "document") {
+    return "Открыть документ";
+  }
+
+  return "Открыть файл";
+}
+
+function withShareToken(url: string, shareToken?: string | null) {
+  if (!shareToken) {
+    return url;
+  }
+
+  const [pathname, queryString] = url.split("?");
+  const params = new URLSearchParams(queryString || "");
+  params.set("share", shareToken);
+  const nextQueryString = params.toString();
+  return nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
+}
+
+export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps) {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(snapshot.tree.root_person_id || snapshot.people[0]?.id || null);
   const displayTree = useMemo(() => buildBuilderDisplayTree(snapshot), [snapshot]);
-  const personPhotoPreviewUrls = useMemo(() => buildPersonPhotoPreviewUrls(snapshot), [snapshot.media, snapshot.personMedia]);
+  const personPhotoPreviewUrls = useMemo(() => {
+    const rawUrls = buildPersonPhotoPreviewUrls(snapshot);
+    return Object.fromEntries(Object.entries(rawUrls).map(([personId, url]) => [personId, withShareToken(url, shareToken)]));
+  }, [shareToken, snapshot.media, snapshot.personMedia]);
   const selectedPerson = snapshot.people.find((person) => person.id === selectedPersonId) || null;
   const selectedMedia = selectedPerson ? collectPersonMedia(snapshot, selectedPerson.id) : [];
 
@@ -78,10 +106,10 @@ export function TreeViewerClient({ snapshot }: TreeViewerClientProps) {
                       <span>{formatMediaVisibility(asset.visibility)}</span>
                     </div>
                     {asset.kind === "photo" ? (
-                      <img src={`/api/media/${asset.id}`} alt={asset.title} className="media-photo" />
+                      <img src={withShareToken(`/api/media/${asset.id}`, shareToken)} alt={asset.title} className="media-photo" />
                     ) : (
-                      <a href={`/api/media/${asset.id}`} target="_blank" rel="noreferrer" className="ghost-button">
-                        Открыть видео на Яндекс Диске
+                      <a href={withShareToken(`/api/media/${asset.id}`, shareToken)} target="_blank" rel="noreferrer" className="ghost-button">
+                        {getMediaOpenLabel(asset.kind)}
                       </a>
                     )}
                     <h4>{asset.title}</h4>

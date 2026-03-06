@@ -8,13 +8,24 @@ export const dynamic = "force-dynamic";
 
 interface TreePageProps {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function TreePage({ params }: TreePageProps) {
+function getSearchParam(value: string | string[] | undefined) {
+  if (Array.isArray(value)) {
+    return value[0] || null;
+  }
+
+  return value || null;
+}
+
+export default async function TreePage({ params, searchParams }: TreePageProps) {
   const { slug } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const shareToken = getSearchParam(resolvedSearchParams.share);
 
   try {
-    const snapshot = await getTreeSnapshot(slug);
+    const snapshot = await getTreeSnapshot(slug, { shareToken });
 
     return (
       <main className="page-shell workspace-page workspace-page-canvas">
@@ -27,15 +38,16 @@ export default async function TreePage({ params }: TreePageProps) {
             <h1>{snapshot.tree.title}</h1>
             <p className="muted-copy">{snapshot.tree.description || "Описание пока не добавлено."}</p>
           </div>
-          <TreeNav
-            slug={slug}
-            canEdit={snapshot.actor.canEdit}
-            canManageMembers={snapshot.actor.canManageMembers}
-            canReadAudit={snapshot.actor.canReadAudit}
-            canManageSettings={snapshot.actor.canManageSettings}
-          />
-        </section>
-        <TreeViewerClient snapshot={snapshot} />
+        <TreeNav
+          slug={slug}
+          shareToken={shareToken}
+          canEdit={snapshot.actor.canEdit}
+          canManageMembers={snapshot.actor.canManageMembers}
+          canReadAudit={snapshot.actor.canReadAudit}
+          canManageSettings={snapshot.actor.canManageSettings}
+        />
+      </section>
+        <TreeViewerClient snapshot={snapshot} shareToken={shareToken} />
       </main>
     );
   } catch (error) {

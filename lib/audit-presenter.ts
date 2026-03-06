@@ -301,11 +301,35 @@ function describeInvite(entry: AuditEntry, before: JsonRecord | null, after: Jso
   };
 }
 
+function describeShareLink(entry: AuditEntry, before: JsonRecord | null, after: JsonRecord | null) {
+  const snapshot = after || before;
+  const label = getString(snapshot, "label") || "Семейный просмотр";
+
+  if (entry.action === "share_link.revoked") {
+    return {
+      summary: `Отозвана семейная ссылка "${label}".`,
+      details: [
+        `Название: ${label}.`,
+        `Действовала до: ${formatMoscowDateTime(getValue(before, "expires_at"))}.`,
+        `Отозвана: ${formatMoscowDateTime(getValue(after, "revoked_at"))}.`
+      ]
+    };
+  }
+
+  return {
+    summary: `Создана семейная ссылка "${label}".`,
+    details: [
+      `Название: ${label}.`,
+      `Действует до: ${formatMoscowDateTime(getValue(snapshot, "expires_at"))}.`
+    ]
+  };
+}
+
 function describeMedia(entry: AuditEntry, before: JsonRecord | null, after: JsonRecord | null) {
   const snapshot = after || before;
   const title = fallbackName(getString(snapshot, "title"), "без названия");
-  const isPhoto = entry.action.startsWith("photo.");
-  const noun = isPhoto ? "фото" : "видео";
+  const kind = getString(snapshot, "kind");
+  const noun = kind === "document" ? "документ" : kind === "video" ? "видео" : "фото";
 
   if (entry.action.endsWith(".deleted")) {
     return {
@@ -430,11 +454,15 @@ function buildPresentation(entry: AuditEntry, context: AuditPresentationContext)
     return describeInvite(entry, before, after);
   }
 
+  if (entry.action.startsWith("share_link.")) {
+    return describeShareLink(entry, before, after);
+  }
+
   if (entry.action.startsWith("membership.")) {
     return describeMembership(entry, before, after, context.usersById);
   }
 
-  if (entry.action.startsWith("photo.") || entry.action.startsWith("video.")) {
+  if (entry.action.startsWith("photo.") || entry.action.startsWith("video.") || entry.action.startsWith("document.")) {
     return describeMedia(entry, before, after);
   }
 

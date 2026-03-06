@@ -1,10 +1,11 @@
 export type UserRole = "owner" | "admin" | "viewer";
 export type TreeVisibility = "public" | "private";
 export type MediaVisibility = "public" | "members";
-export type MediaKind = "photo" | "video";
+export type MediaKind = "photo" | "video" | "document";
 export type MediaProvider = "supabase_storage" | "yandex_disk";
 export type InviteMethod = "link" | "email";
 export type MembershipStatus = "active" | "revoked";
+export type ViewerAccessSource = "membership" | "share_link" | "public" | "anonymous";
 
 export interface Profile {
   id: string;
@@ -106,6 +107,18 @@ export interface InviteRecord {
   created_at: string;
 }
 
+export interface ShareLinkRecord {
+  id: string;
+  tree_id: string;
+  label: string;
+  token_hash: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_accessed_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface AuditEntry {
   id: string;
   tree_id: string;
@@ -132,6 +145,8 @@ export interface ViewerActor {
   userId: string | null;
   role: UserRole | null;
   isAuthenticated: boolean;
+  accessSource: ViewerAccessSource;
+  shareLinkId: string | null;
   canEdit: boolean;
   canManageMembers: boolean;
   canManageSettings: boolean;

@@ -20,7 +20,11 @@ function readEnv(filePath) {
 const env = readEnv(path.resolve(".env.local"));
 const baseUrl = env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const storageBucket = env.NEXT_PUBLIC_STORAGE_BUCKET || "tree-photos";
-const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, {
+const adminKey = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY;
+if (!adminKey) {
+  throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for auth smoke admin operations.");
+}
+const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, adminKey, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 

@@ -8,8 +8,13 @@ interface Params {
 export async function GET(request: Request, { params }: Params) {
   try {
     const { slug } = await params;
-    const includeMedia = new URL(request.url).searchParams.get("includeMedia") === "1";
-    const snapshot = await getBuilderSnapshot(slug, { includeMedia });
+    const searchParams = new URL(request.url).searchParams;
+    const includeMedia = searchParams.get("includeMedia") === "1";
+    const shareToken = searchParams.get("share");
+    const snapshot = await getBuilderSnapshot(slug, { includeMedia, shareToken });
+    if (!snapshot.actor.canEdit) {
+      return Response.json({ error: "У вас нет доступа к конструктору этого дерева." }, { status: 403 });
+    }
     return Response.json(snapshot);
   } catch (error) {
     return toErrorResponse(error);

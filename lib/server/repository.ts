@@ -9,6 +9,7 @@ import type {
   PartnershipRecord,
   ParentLinkRecord,
   Profile,
+  ShareLinkRecord,
   TreeRecord,
   TreeSnapshot,
   UserRole,
@@ -21,7 +22,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson } from "@/lib/supabase/admin-rest";
 import { getCurrentUser, requireAuthenticatedUserId } from "@/lib/server/auth";
 import { AppError } from "@/lib/server/errors";
-import { createInviteToken, hashInviteToken } from "@/lib/server/invite-token";
+import { createInviteToken, createOpaqueToken, hashInviteToken, hashOpaqueToken } from "@/lib/server/invite-token";
 
 const admin = () => createAdminSupabaseClient();
 
@@ -133,6 +134,98 @@ export async function getActorForTree(treeId: string): Promise<ViewerActor> {
 
   const membership = await getMembership(treeId, user.id);
   return buildViewerActor(user.id, membership?.role ?? null);
+}
+
+async function getValidShareLink(treeId: string, shareToken?: string | null) {
+  if (!shareToken) {
+    return null;
+  }
+
+  const tokenHash = hashOpaqueToken(shareToken);
+  const shareLink = await fetchAdminFirst<ShareLinkRecord>(
+    `tree_share_links?select=*&tree_id=eq.${encodeURIComponent(treeId)}&token_hash=eq.${encodeURIComponent(tokenHash)}`,
+    "Не удалось проверить семейную ссылку."
+  );
+
+  if (!shareLink) {
+    return null;
+  }
+
+  if (shareLink.revoked_at) {
+    return null;
+  }
+
+  if (new Date(shareLink.expires_at).getTime() < Date.now()) {
+    return null;
+  }
+
+  return shareLink;
+}
+
+function queueShareLinkAccessTouch(shareLinkId: string) {
+  void mutateAdminFirst<ShareLinkRecord>(
+    `tree_share_links?id=eq.${encodeURIComponent(shareLinkId)}&select=*`,
+    "PATCH",
+    { last_accessed_at: new Date().toISOString() },
+    "Не удалось обновить время доступа по семейной ссылке."
+  ).catch((error) => {
+    console.error("[share-link] best-effort access touch failed", error);
+  });
+}
+
+async function getTreeReadAccess(tree: TreeRecord, shareToken?: string | null) {
+  const [user, shareLink] = await Promise.all([getCurrentUser(), getValidShareLink(tree.id, shareToken)]);
+  const membership = user ? await getMembership(tree.id, user.id) : null;
+  const hasShareLinkAccess = Boolean(shareLink);
+
+  if (!canViewTree(tree.visibility, membership, hasShareLinkAccess)) {
+    if (shareToken) {
+      throw new AppError(403, "Ссылка для семейного просмотра недействительна или истекла.");
+    }
+
+    throw new AppError(403, "Это закрытое дерево. Войдите в аккаунт по приглашению.");
+  }
+
+  const accessSource =
+    membership?.role != null ? "membership" : hasShareLinkAccess ? "share_link" : tree.visibility === "public" ? "public" : "anonymous";
+  const actor = buildViewerActor(user?.id ?? null, membership?.role ?? null, {
+    accessSource,
+    shareLinkId: shareLink?.id ?? null
+  });
+
+  return {
+    actor,
+    hasShareLinkAccess,
+    membership,
+    shareLink,
+    user
+  };
+}
+
+function resolveMediaKindFromMimeType(mimeType: string): MediaAssetRecord["kind"] {
+  const normalized = mimeType.trim().toLowerCase();
+
+  if (normalized.startsWith("image/")) {
+    return "photo";
+  }
+
+  if (normalized.startsWith("video/")) {
+    return "video";
+  }
+
+  if (
+    normalized === "application/pdf" ||
+    normalized.startsWith("text/") ||
+    normalized.includes("word") ||
+    normalized.includes("officedocument") ||
+    normalized.includes("spreadsheet") ||
+    normalized.includes("presentation") ||
+    normalized === "application/rtf"
+  ) {
+    return "document";
+  }
+
+  throw new AppError(400, "Этот тип файла пока не поддерживается.");
 }
 
 export async function listUserTrees(userId: string) {
@@ -322,9 +415,14 @@ export async function updateTreeVisibility(treeId: string, visibility: TreeRecor
   return data;
 }
 
-async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean }): Promise<TreeSnapshot> {
+async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean; shareToken?: string | null }): Promise<TreeSnapshot> {
   const includeMedia = options?.includeMedia ?? true;
-  const [tree, user] = await Promise.all([getTreeBySlug(slug), getCurrentUser()]);
+  const tree = await getTreeBySlug(slug);
+  const { actor, hasShareLinkAccess, shareLink } = await getTreeReadAccess(tree, options?.shareToken);
+
+  if (shareLink) {
+    queueShareLinkAccessTouch(shareLink.id);
+  }
 
   const batchedRequests: Array<{ key: string; pathWithQuery: string }> = [
     {
@@ -341,13 +439,6 @@ async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean
     }
   ];
 
-  if (user) {
-    batchedRequests.unshift({
-      key: "membership",
-      pathWithQuery: `tree_memberships?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&user_id=eq.${encodeURIComponent(user.id)}&status=eq.active&limit=1`
-    });
-  }
-
   if (includeMedia) {
     batchedRequests.push({
       key: "media",
@@ -357,19 +448,12 @@ async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean
 
   const batchedResults = await fetchSupabaseAdminRestBatchJson<unknown>(batchedRequests);
   const batchedRowsByKey = new Map(batchedRequests.map((request, index) => [request.key, batchedResults[index]] as const));
-  const membership = user ? ((batchedRowsByKey.get("membership") as MembershipRecord[] | undefined)?.[0] ?? null) : null;
-
-  if (!canViewTree(tree.visibility, membership)) {
-    throw new AppError(403, "Это закрытое дерево. Войдите в аккаунт по приглашению.");
-  }
-
-  const actor = buildViewerActor(user?.id ?? null, membership?.role ?? null);
   const people = (batchedRowsByKey.get("people") as PersonRecord[] | undefined) || [];
   const parentLinks = (batchedRowsByKey.get("parentLinks") as ParentLinkRecord[] | undefined) || [];
   const partnerships = (batchedRowsByKey.get("partnerships") as PartnershipRecord[] | undefined) || [];
   const allMedia = includeMedia ? ((batchedRowsByKey.get("media") as MediaAssetRecord[] | undefined) || []) : [];
 
-  const media = allMedia.filter((item) => canSeeMedia(actor.role, item.visibility));
+  const media = allMedia.filter((item) => canSeeMedia(actor.role, item.visibility, hasShareLinkAccess));
   const visibleMediaIds = media.map((item) => item.id);
   const personMedia =
     includeMedia && visibleMediaIds.length > 0
@@ -390,13 +474,14 @@ async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean
   };
 }
 
-export async function getTreeSnapshot(slug: string, options?: { includeMedia?: boolean }): Promise<TreeSnapshot> {
+export async function getTreeSnapshot(slug: string, options?: { includeMedia?: boolean; shareToken?: string | null }): Promise<TreeSnapshot> {
   return loadTreeSnapshot(slug, options);
 }
 
-export async function getBuilderSnapshot(slug: string, options?: { includeMedia?: boolean }): Promise<TreeSnapshot> {
+export async function getBuilderSnapshot(slug: string, options?: { includeMedia?: boolean; shareToken?: string | null }): Promise<TreeSnapshot> {
   return loadTreeSnapshot(slug, {
-    includeMedia: options?.includeMedia ?? false
+    includeMedia: options?.includeMedia ?? false,
+    shareToken: options?.shareToken ?? null
   });
 }
 
@@ -414,6 +499,96 @@ export async function listInvites(treeId: string) {
     `tree_invites?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
     "Не удалось загрузить приглашения."
   );
+}
+
+export async function listShareLinks(treeId: string) {
+  await requireTreeRole(treeId, ["owner", "admin"]);
+  return fetchAdminRows<ShareLinkRecord>(
+    `tree_share_links?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
+    "Не удалось загрузить семейные ссылки."
+  );
+}
+
+export async function createShareLink(input: { treeId: string; label?: string | null; expiresInDays: number }) {
+  const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
+  const tree = await getTreeById(input.treeId);
+  const token = createOpaqueToken();
+  const tokenHash = hashOpaqueToken(token);
+  const expiresAt = new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+  const label = input.label?.trim() || "Семейный просмотр";
+
+  const data = await mutateAdminFirst<ShareLinkRecord>(
+    "tree_share_links",
+    "POST",
+    {
+      tree_id: input.treeId,
+      label,
+      token_hash: tokenHash,
+      expires_at: expiresAt,
+      created_by: userId
+    },
+    "Не удалось создать семейную ссылку."
+  );
+
+  if (!data) {
+    throw new AppError(400, "Не удалось создать семейную ссылку.");
+  }
+
+  await insertAuditLog({
+    treeId: input.treeId,
+    actorUserId: userId,
+    entityType: "share_link",
+    entityId: data.id,
+    action: "share_link.created",
+    beforeJson: null,
+    afterJson: data
+  });
+
+  return {
+    shareLink: data,
+    token,
+    url: `${getBaseUrl()}/tree/${tree.slug}?share=${encodeURIComponent(token)}`
+  };
+}
+
+export async function revokeShareLink(shareLinkId: string) {
+  const before = await fetchAdminFirst<ShareLinkRecord>(
+    `tree_share_links?select=*&id=eq.${encodeURIComponent(shareLinkId)}`,
+    "Не удалось загрузить семейную ссылку."
+  );
+
+  if (!before) {
+    throw new AppError(404, "Семейная ссылка не найдена.");
+  }
+
+  if (before.revoked_at) {
+    throw new AppError(409, "Семейная ссылка уже отозвана.");
+  }
+
+  const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
+  const revokedAt = new Date().toISOString();
+  const data = await mutateAdminFirst<ShareLinkRecord>(
+    `tree_share_links?id=eq.${encodeURIComponent(shareLinkId)}&select=*`,
+    "PATCH",
+    { revoked_at: revokedAt },
+    "Не удалось отозвать семейную ссылку."
+  );
+
+  if (!data) {
+    throw new AppError(400, "Не удалось отозвать семейную ссылку.");
+  }
+
+  await insertAuditLog({
+    treeId: before.tree_id,
+    actorUserId: userId,
+    entityType: "share_link",
+    entityId: shareLinkId,
+    action: "share_link.revoked",
+    beforeJson: before,
+    afterJson: data
+  });
+
+  return data;
 }
 
 export async function listAudit(treeId: string): Promise<AuditEntryView[]> {
@@ -925,10 +1100,23 @@ export async function createPhotoUploadTarget(input: {
   title: string;
   caption?: string | null;
 }) {
+  return createMediaUploadTarget(input);
+}
+
+export async function createMediaUploadTarget(input: {
+  treeId: string;
+  personId: string;
+  filename: string;
+  mimeType: string;
+  visibility: "public" | "members";
+  title: string;
+  caption?: string | null;
+}) {
   await requireTreeRole(input.treeId, ["owner", "admin"]);
   const mediaId = crypto.randomUUID();
+  const kind = resolveMediaKindFromMimeType(input.mimeType);
   const safeName = input.filename.replace(/[^a-zA-Z0-9._-]/g, "-");
-  const storagePath = `trees/${input.treeId}/photos/${mediaId}/${safeName}`;
+  const storagePath = `trees/${input.treeId}/media/${kind}/${mediaId}/${safeName}`;
 
   const { data, error } = await admin().storage.from(getStorageBucket()).createSignedUploadUrl(storagePath, { upsert: false });
   if (error || !data) {
@@ -937,6 +1125,7 @@ export async function createPhotoUploadTarget(input: {
 
   return {
     mediaId,
+    kind,
     path: storagePath,
     signedUrl: data.signedUrl,
     token: data.token
@@ -954,14 +1143,29 @@ export async function completePhotoUpload(input: {
   mimeType: string;
   sizeBytes?: number | null;
 }) {
+  return completeMediaUpload(input);
+}
+
+export async function completeMediaUpload(input: {
+  treeId: string;
+  personId: string;
+  mediaId: string;
+  storagePath: string;
+  title: string;
+  caption?: string | null;
+  visibility: "public" | "members";
+  mimeType: string;
+  sizeBytes?: number | null;
+}) {
   const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
+  const kind = resolveMediaKindFromMimeType(input.mimeType);
 
   const { data, error } = await admin()
     .from("media_assets")
     .insert({
       id: input.mediaId,
       tree_id: input.treeId,
-      kind: "photo",
+      kind,
       provider: "supabase_storage",
       visibility: input.visibility,
       storage_path: input.storagePath,
@@ -974,7 +1178,7 @@ export async function completePhotoUpload(input: {
     .select("*")
     .single<MediaAssetRecord>();
 
-  if (error || !data) throw new AppError(400, error?.message || "Не удалось завершить загрузку фото.");
+  if (error || !data) throw new AppError(400, error?.message || "Не удалось завершить загрузку файла.");
 
   const { error: relationError } = await admin().from("person_media").insert({
     person_id: input.personId,
@@ -991,7 +1195,7 @@ export async function completePhotoUpload(input: {
     actorUserId: userId,
     entityType: "media",
     entityId: input.mediaId,
-    action: "photo.created",
+    action: `${kind}.created`,
     beforeJson: null,
     afterJson: data
   });
@@ -999,73 +1203,23 @@ export async function completePhotoUpload(input: {
   return data;
 }
 
-export async function createVideo(input: { treeId: string; personId: string; title: string; caption?: string | null; externalUrl: string }) {
-  const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
-  const tree = await getTreeById(input.treeId);
-  if (tree.visibility !== "public") {
-    throw new AppError(400, "Ссылки на видео Яндекс Диска доступны только для открытых деревьев в v1.");
-  }
-
-  const { data, error } = await admin()
-    .from("media_assets")
-    .insert({
-      tree_id: input.treeId,
-      kind: "video",
-      provider: "yandex_disk",
-      visibility: "public",
-      external_url: input.externalUrl,
-      title: input.title,
-      caption: input.caption || null,
-      created_by: userId
-    })
-    .select("*")
-    .single<MediaAssetRecord>();
-
-  if (error || !data) throw new AppError(400, error?.message || "Не удалось сохранить ссылку на видео.");
-
-  const { error: relationError } = await admin().from("person_media").insert({
-    person_id: input.personId,
-    media_id: data.id,
-    is_primary: false
-  });
-
-  if (relationError) throw new AppError(400, relationError.message);
-
-  await insertAuditLog({
-    treeId: input.treeId,
-    actorUserId: userId,
-    entityType: "media",
-    entityId: data.id,
-    action: "video.created",
-    beforeJson: null,
-    afterJson: data
-  });
-
-  return data;
-}
-
-export async function resolveMediaAccess(mediaId: string) {
+export async function resolveMediaAccess(mediaId: string, shareToken?: string | null) {
   const { data: media, error } = await admin().from("media_assets").select("*").eq("id", mediaId).single<MediaAssetRecord>();
   if (error || !media) throw new AppError(404, "Медиа не найдено.");
 
   const tree = await getTreeById(media.tree_id);
-  const user = await getCurrentUser();
-  const membership = user ? await getMembership(tree.id, user.id) : null;
+  const readAccess = await getTreeReadAccess(tree, shareToken);
 
-  if (!canViewTree(tree.visibility, membership)) {
-    throw new AppError(403, "Дерево закрыто.");
-  }
-
-  if (!canSeeMedia(membership?.role ?? null, media.visibility)) {
+  if (!canSeeMedia(readAccess.actor.role, media.visibility, readAccess.hasShareLinkAccess)) {
     throw new AppError(403, "У вас нет доступа к этому медиафайлу.");
   }
 
-  if (media.kind === "video") {
+  if (media.external_url) {
     return { kind: "video" as const, url: media.external_url || "" };
   }
 
   if (!media.storage_path) {
-    throw new AppError(404, "Файл фотографии отсутствует.");
+    throw new AppError(404, "Файл медиа отсутствует.");
   }
 
   const { data: signed, error: signedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(media.storage_path, 60);
@@ -1079,7 +1233,7 @@ export async function deleteMedia(mediaId: string) {
   if (beforeError || !before) throw new AppError(404, "Медиа не найдено.");
 
   const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
-  if (before.kind === "photo" && before.storage_path) {
+  if (before.storage_path) {
     await admin().storage.from(getStorageBucket()).remove([before.storage_path]);
   }
 
@@ -1091,7 +1245,7 @@ export async function deleteMedia(mediaId: string) {
     actorUserId: userId,
     entityType: "media",
     entityId: mediaId,
-    action: before.kind === "photo" ? "photo.deleted" : "video.deleted",
+    action: `${before.kind}.deleted`,
     beforeJson: before,
     afterJson: null
   });
