@@ -222,6 +222,57 @@ describe("family tree canvas interactions", () => {
     expect(photoImage?.getAttribute("href")).toBe("/samples/member-photo.jpg");
   });
 
+  it("uses child avatars when age is under 18", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "person-1",
+      name: "Little Maria",
+      gender: "female",
+      birthDate: "2016-01-01",
+      deathDate: null,
+      children: []
+    };
+
+    const { container } = render(<FamilyTreeCanvas tree={tree} selectedPersonId="person-1" onSelectPerson={vi.fn()} />);
+    const childImage = container.querySelector("pattern#tree-avatar-person-1 image");
+
+    expect(childImage?.getAttribute("href")).toBe("/avatars/avatar-girl.svg");
+  });
+
+  it("uses senior avatars when age is 60 or above", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "person-1",
+      name: "Old Ivan",
+      gender: "male",
+      birthDate: "1940-01-01",
+      deathDate: null,
+      children: []
+    };
+
+    const { container } = render(<FamilyTreeCanvas tree={tree} selectedPersonId="person-1" onSelectPerson={vi.fn()} />);
+    const seniorImage = container.querySelector("pattern#tree-avatar-person-1 image");
+
+    expect(seniorImage?.getAttribute("href")).toBe("/avatars/avatar-grandfather.svg");
+  });
+
+  it("uses fallback avatars for cyrillic gender values", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "person-1",
+      name: "Anya",
+      gender: "Ж",
+      birthDate: null,
+      deathDate: null,
+      children: []
+    };
+
+    const { container } = render(<FamilyTreeCanvas tree={tree} selectedPersonId="person-1" onSelectPerson={vi.fn()} />);
+    const image = container.querySelector("pattern#tree-avatar-person-1 image");
+
+    expect(image?.getAttribute("href")).toBe("/avatars/avatar-female.svg");
+  });
+
   it("anchors builder partners below the person and keeps two parents separated on the left", async () => {
     const tree: DisplayTreeNode = {
       type: "person",

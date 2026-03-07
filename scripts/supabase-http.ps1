@@ -1,9 +1,14 @@
 param(
   [Parameter(Mandatory = $true)]
-  [string]$PayloadBase64
+  [string]$PayloadInput
 )
 
-$payloadJson = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($PayloadBase64))
+$payloadJson = ''
+if (Test-Path -LiteralPath $PayloadInput) {
+  $payloadJson = Get-Content -LiteralPath $PayloadInput -Raw -Encoding UTF8
+} else {
+  $payloadJson = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($PayloadInput))
+}
 $payload = $payloadJson | ConvertFrom-Json
 
 function Invoke-EncodedHttpRequest($SinglePayload) {

@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 const mediaVisibilitySchema = z.enum(["public", "members"]);
+const mediaUploadBaseSchema = {
+  treeId: z.string().uuid(),
+  personId: z.string().uuid(),
+  mediaId: z.string().uuid(),
+  visibility: mediaVisibilitySchema,
+  title: z.string().trim().min(1).max(120),
+  caption: z.string().trim().max(400).optional().or(z.literal(""))
+} as const;
 
 export const photoUploadSchema = z.object({
   treeId: z.string().uuid(),
@@ -13,13 +21,8 @@ export const photoUploadSchema = z.object({
 });
 
 export const completePhotoSchema = z.object({
-  treeId: z.string().uuid(),
-  personId: z.string().uuid(),
-  mediaId: z.string().uuid(),
+  ...mediaUploadBaseSchema,
   storagePath: z.string().trim().min(1),
-  visibility: mediaVisibilitySchema,
-  title: z.string().trim().min(1).max(120),
-  caption: z.string().trim().max(400).optional().or(z.literal("")),
   mimeType: z.string().trim().min(3).max(120),
   sizeBytes: z.number().int().positive().optional()
 });
@@ -35,14 +38,16 @@ export const mediaUploadIntentSchema = z.object({
 });
 
 export const completeMediaSchema = z.object({
-  treeId: z.string().uuid(),
-  personId: z.string().uuid(),
-  mediaId: z.string().uuid(),
+  ...mediaUploadBaseSchema,
   storagePath: z.string().trim().min(1),
-  visibility: mediaVisibilitySchema,
-  title: z.string().trim().min(1).max(120),
-  caption: z.string().trim().max(400).optional().or(z.literal("")),
   mimeType: z.string().trim().min(3).max(120),
-  sizeBytes: z.number().int().positive().optional()
-});
+  sizeBytes: z.number().int().positive().optional(),
+  provider: z.literal("supabase_storage").optional()
+}).or(
+  z.object({
+    ...mediaUploadBaseSchema,
+    provider: z.literal("yandex_disk"),
+    externalUrl: z.string().trim().url().max(2000)
+  })
+);
 

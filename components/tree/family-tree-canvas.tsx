@@ -6,7 +6,7 @@ import * as d3 from "d3";
 import type { DisplayTreeNode, ParentLinkRecord, PartnershipRecord, PersonRecord } from "@/lib/types";
 
 const CARD_WIDTH = 248;
-const CARD_HEIGHT = 102;
+const CARD_HEIGHT = 112;
 const CARD_RADIUS = 18;
 const ACTION_BUTTON_RADIUS = 16;
 const ACTION_MENU_WIDTH = 164;
@@ -18,16 +18,30 @@ const BUILDER_FOCUS_X_RATIO = 0.46;
 const BUILDER_FOCUS_Y_RATIO = 0.34;
 const VIEWER_FIT_X_RATIO = 0.38;
 const VIEWER_FIT_Y_RATIO = 0.24;
-const BADGE_RADIUS = 20;
-const BADGE_CX = -CARD_WIDTH / 2 + 30;
-const BADGE_CY = -6;
-const PARTNER_VERTICAL_GAP = 108;
-const PARTNER_MIN_SEPARATION = 108;
+const BADGE_RADIUS = 26;
+const BADGE_CX = -CARD_WIDTH / 2 + 34;
+const BADGE_CY = -4;
+const NODE_LABEL_X = -CARD_WIDTH / 2 + 68;
+const BADGE_FALLBACK_FILL = "rgba(240, 109, 61, 0.12)";
+const PARTNER_VERTICAL_GAP = 118;
+const PARTNER_MIN_SEPARATION = 118;
 const PARTNERSHIP_LABEL_Y_OFFSET = -1;
 
 const GENDER_FALLBACK_AVATARS: Record<"male" | "female", string> = {
   male: "/avatars/avatar-male.svg",
   female: "/avatars/avatar-female.svg"
+};
+const GENDER_AGE_AVATARS: Record<"male" | "female", { child: string; adult: string; senior: string }> = {
+  male: {
+    child: "/avatars/avatar-boy.svg",
+    adult: "/avatars/avatar-male.svg",
+    senior: "/avatars/avatar-grandfather.svg"
+  },
+  female: {
+    child: "/avatars/avatar-girl.svg",
+    adult: "/avatars/avatar-female.svg",
+    senior: "/avatars/avatar-grandmother.svg"
+  }
 };
 const EMPTY_PERSON_PHOTO_URLS: Record<string, string> = {};
 
@@ -94,15 +108,16 @@ function getNodeSubtitle(node: { type: "person" | "couple"; spouseName?: string 
     return node.spouseName ? "Семейная пара" : "Партнерство";
   }
 
-  if (node.gender === "female") {
+  const normalizedGender = normalizeGenderValue(node.gender);
+  if (normalizedGender === "female") {
     return "Женщина";
   }
 
-  if (node.gender === "male") {
+  if (normalizedGender === "male") {
     return "Мужчина";
   }
 
-  if (node.gender === "other") {
+  if (normalizedGender === "other") {
     return "Другое";
   }
 
@@ -134,24 +149,105 @@ function getAvatarPatternId(personId: string) {
   return `tree-avatar-${personId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 }
 
+function normalizeGenderValue(value?: string | null): "male" | "female" | "other" | null {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (["female", "f", "woman", "girl", "ж", "жен", "женщина", "девочка"].includes(normalized)) {
+    return "female";
+  }
+
+  if (["male", "m", "man", "boy", "м", "муж", "мужчина", "мальчик"].includes(normalized)) {
+    return "male";
+  }
+
+  if (["other", "o", "другое"].includes(normalized)) {
+    return "other";
+  }
+
+  return null;
+}
+
+function parseIsoDate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month, day));
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function getPersonAgeYears(birthDate?: string | null, deathDate?: string | null) {
+  const birth = parseIsoDate(birthDate);
+  if (!birth) {
+    return null;
+  }
+
+  const reference = parseIsoDate(deathDate) || new Date();
+  let age = reference.getUTCFullYear() - birth.getUTCFullYear();
+  const monthDiff = reference.getUTCMonth() - birth.getUTCMonth();
+  const dayDiff = reference.getUTCDate() - birth.getUTCDate();
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
+function getAgeAvatarVariant(age: number | null) {
+  if (age === null) {
+    return null;
+  }
+
+  if (age < 18) {
+    return "child" as const;
+  }
+
+  if (age >= 60) {
+    return "senior" as const;
+  }
+
+  return "adult" as const;
+}
+
 function getPersonBadgeImage(
   personId: string | undefined,
   gender: string | null | undefined,
-  personPhotoUrls: Record<string, string> | undefined
+  personPhotoUrls: Record<string, string> | undefined,
+  birthDate?: string | null,
+  deathDate?: string | null
 ) {
   if (personId && personPhotoUrls?.[personId]) {
     return personPhotoUrls[personId];
   }
 
-  if (gender === "female") {
-    return GENDER_FALLBACK_AVATARS.female;
+  const normalizedGender = normalizeGenderValue(gender);
+  if (normalizedGender !== "female" && normalizedGender !== "male") {
+    return null;
   }
 
-  if (gender === "male") {
-    return GENDER_FALLBACK_AVATARS.male;
+  const age = getPersonAgeYears(birthDate, deathDate);
+  const ageVariant = getAgeAvatarVariant(age);
+  if (!ageVariant) {
+    return GENDER_FALLBACK_AVATARS[normalizedGender];
   }
 
-  return null;
+  return GENDER_AGE_AVATARS[normalizedGender][ageVariant];
 }
 
 export type FamilyTreeCanvasAction = "edit" | "add-parent" | "add-child" | "add-partner" | "delete";
@@ -224,6 +320,7 @@ interface FamilyTreeCanvasProps {
   parentLinks?: ParentLinkRecord[];
   partnerships?: PartnershipRecord[];
   personPhotoUrls?: Record<string, string>;
+  viewportHeightHint?: number;
 }
 
 interface PositionedCanvasNode {
@@ -1092,7 +1189,8 @@ export function FamilyTreeCanvas({
   people = [],
   parentLinks = [],
   partnerships = [],
-  personPhotoUrls = EMPTY_PERSON_PHOTO_URLS
+  personPhotoUrls = EMPTY_PERSON_PHOTO_URLS,
+  viewportHeightHint = 0
 }: FamilyTreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onSelectPersonRef = useRef(onSelectPerson);
@@ -1225,7 +1323,7 @@ export function FamilyTreeCanvas({
           return;
         }
 
-        const badgeImage = getPersonBadgeImage(node.id, node.gender, personPhotoUrls);
+        const badgeImage = getPersonBadgeImage(node.id, node.gender, personPhotoUrls, node.birthDate, node.deathDate);
         if (!badgeImage) {
           return;
         }
@@ -1456,11 +1554,11 @@ export function FamilyTreeCanvas({
         .attr("class", "tree-node-badge")
         .attr("fill", (datum) => {
           if (!datum.id) {
-            return null;
+            return BADGE_FALLBACK_FILL;
           }
 
           const patternId = avatarPatternByPersonId.get(datum.id);
-          return patternId ? `url(#${patternId})` : null;
+          return patternId ? `url(#${patternId})` : BADGE_FALLBACK_FILL;
         });
 
       nodes
@@ -1474,7 +1572,6 @@ export function FamilyTreeCanvas({
 
       nodes.each(function renderBuilderNodeText(datum) {
         const group = d3.select(this);
-        const labelX = -CARD_WIDTH / 2 + 60;
         const lines = wrapName(datum.name);
 
         lines.forEach((line, index) => {
@@ -1482,7 +1579,7 @@ export function FamilyTreeCanvas({
             .append("text")
             .attr("class", index === 0 ? "tree-node-label" : "tree-node-label tree-node-label-secondary")
             .attr("text-anchor", "start")
-            .attr("x", labelX)
+            .attr("x", NODE_LABEL_X)
             .attr("y", -16 + index * 16)
             .text(line);
         });
@@ -1491,7 +1588,7 @@ export function FamilyTreeCanvas({
           .append("text")
           .attr("class", "tree-node-sub")
           .attr("text-anchor", "start")
-          .attr("x", labelX)
+          .attr("x", NODE_LABEL_X)
           .attr("y", lines.length > 1 ? 18 : 10)
           .text(getNodeSubtitle(datum));
 
@@ -1499,7 +1596,7 @@ export function FamilyTreeCanvas({
           .append("text")
           .attr("class", "tree-node-meta")
           .attr("text-anchor", "start")
-          .attr("x", labelX)
+          .attr("x", NODE_LABEL_X)
           .attr("y", lines.length > 1 ? 34 : 26)
           .text(getNodeMeta(datum));
       });
@@ -1622,7 +1719,13 @@ export function FamilyTreeCanvas({
         return;
       }
 
-      const badgeImage = getPersonBadgeImage(datum.data.id, datum.data.gender, personPhotoUrls);
+      const badgeImage = getPersonBadgeImage(
+        datum.data.id,
+        datum.data.gender,
+        personPhotoUrls,
+        datum.data.birthDate,
+        datum.data.deathDate
+      );
       if (!badgeImage) {
         return;
       }
@@ -1729,7 +1832,7 @@ export function FamilyTreeCanvas({
         }
 
         const patternId = avatarPatternByPersonId.get(datum.data.id);
-        return patternId ? `url(#${patternId})` : null;
+        return patternId ? `url(#${patternId})` : BADGE_FALLBACK_FILL;
       });
 
     nodes
@@ -1743,14 +1846,13 @@ export function FamilyTreeCanvas({
 
     nodes.each(function renderNodeText(datum) {
       const group = d3.select(this);
-      const labelX = -CARD_WIDTH / 2 + 60;
       const lines = getNodeLines(datum.data);
       lines.forEach((line, index) => {
         group
           .append("text")
           .attr("class", index === 0 ? "tree-node-label" : "tree-node-label tree-node-label-secondary")
           .attr("text-anchor", "start")
-          .attr("x", labelX)
+          .attr("x", NODE_LABEL_X)
           .attr("y", -16 + index * 16)
           .text(line);
       });
@@ -1759,7 +1861,7 @@ export function FamilyTreeCanvas({
         .append("text")
         .attr("class", "tree-node-sub")
         .attr("text-anchor", "start")
-        .attr("x", labelX)
+        .attr("x", NODE_LABEL_X)
         .attr("y", lines.length > 1 ? 18 : 10)
         .text(getNodeSubtitle(datum.data));
 
@@ -1767,7 +1869,7 @@ export function FamilyTreeCanvas({
         .append("text")
         .attr("class", "tree-node-meta")
         .attr("text-anchor", "start")
-        .attr("x", labelX)
+        .attr("x", NODE_LABEL_X)
         .attr("y", lines.length > 1 ? 34 : 26)
         .text(getNodeMeta(datum.data));
     });
@@ -1922,7 +2024,7 @@ export function FamilyTreeCanvas({
       const y = height * VIEWER_FIT_Y_RATIO - bounds.y * scale;
       svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
     }
-  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoUrls, selectedPersonId]);
+  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoUrls, selectedPersonId, viewportHeightHint]);
 
   if (!tree) {
     return (

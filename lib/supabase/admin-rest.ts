@@ -8,6 +8,20 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_ADMIN_REST_TIMEOUT_MS = 15000;
 const ADMIN_REST_MAX_BUFFER = 1024 * 1024 * 8;
 
+export function parsePowerShellJsonStdout<T>(rawStdout: string): T {
+  const withoutBom = rawStdout.replace(/^\uFEFF/, "");
+  const withoutNulls = withoutBom.replace(/\u0000/g, "");
+  const trimmed = withoutNulls.trim();
+  const firstBrace = trimmed.search(/[\[{]/);
+  const lastObject = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
+  const candidate =
+    firstBrace >= 0 && lastObject >= firstBrace
+      ? trimmed.slice(firstBrace, lastObject + 1)
+      : trimmed;
+
+  return JSON.parse(candidate) as T;
+}
+
 function getAdminRestTimeoutMs() {
   const rawValue = process.env.SUPABASE_SERVER_REQUEST_TIMEOUT_MS || process.env.SUPABASE_REQUEST_TIMEOUT_MS;
   if (!rawValue) {
@@ -46,7 +60,7 @@ async function runAdminRestRequests(payloads: AdminRestPayload[]) {
     timeout: maxTimeoutMs + 5000
   });
 
-  const parsed = JSON.parse(stdout.trim()) as
+  const parsed = parsePowerShellJsonStdout<
     | {
         status: number;
         bodyBase64?: string;
@@ -54,7 +68,8 @@ async function runAdminRestRequests(payloads: AdminRestPayload[]) {
     | Array<{
         status: number;
         bodyBase64?: string;
-      }>;
+      }>
+  >(stdout);
 
   return Array.isArray(parsed) ? parsed : [parsed];
 }

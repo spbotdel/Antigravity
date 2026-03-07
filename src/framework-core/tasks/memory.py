@@ -140,6 +140,118 @@ def _build_markdown_lines(rows: Iterable[str]) -> str:
     return "\n".join(values) if values else "- `<none>`"
 
 
+def _read_package_manifest(root: Path) -> Dict[str, object]:
+    package_path = root / "package.json"
+    if not package_path.exists():
+        return {}
+    try:
+        with open(package_path, encoding="utf-8") as file_handle:
+            payload = json.load(file_handle)
+        if isinstance(payload, dict):
+            return payload
+    except Exception:
+        logging.exception("memory_sync: failed to read package.json")
+    return {}
+
+
+def _package_version(manifest: Dict[str, object], package_name: str) -> Optional[str]:
+    for key in ("dependencies", "devDependencies", "peerDependencies"):
+        block = manifest.get(key)
+        if not isinstance(block, dict):
+            continue
+        value = block.get(package_name)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _format_package_version(raw_version: Optional[str]) -> Optional[str]:
+    if not raw_version:
+        return None
+    cleaned = raw_version.strip()
+    while cleaned and cleaned[0] in "^~<>= ":
+        cleaned = cleaned[1:]
+    return cleaned or raw_version
+
+
+def _build_architecture_state_block(root: Path, timestamp_utc: str) -> str:
+    manifest = _read_package_manifest(root)
+    next_version = _format_package_version(_package_version(manifest, "next"))
+    react_version = _format_package_version(_package_version(manifest, "react"))
+    typescript_version = _format_package_version(_package_version(manifest, "typescript"))
+    has_supabase = bool(root.joinpath("supabase").exists()) or any(
+        _package_version(manifest, package_name)
+        for package_name in ("@supabase/supabase-js", "@supabase/ssr", "supabase")
+    )
+    has_app_router = root.joinpath("app").exists()
+    has_components = root.joinpath("components").exists()
+    has_lib = root.joinpath("lib").exists()
+    has_tests = root.joinpath("tests").exists()
+    has_legacy = any(
+        root.joinpath(path_name).exists()
+        for path_name in ("legacy", "index.html", "css", "js")
+    )
+
+    if has_app_router and next_version:
+        primary_runtime = "Next.js App Router web application"
+    elif has_app_router:
+        primary_runtime = "App Router web application"
+    elif root.joinpath("index.html").exists():
+        primary_runtime = "Static browser viewer"
+    else:
+        primary_runtime = "Runtime requires manual confirmation"
+
+    stack_parts: List[str] = []
+    if next_version:
+        stack_parts.append(f"Next.js {next_version}")
+    if react_version:
+        stack_parts.append(f"React {react_version}")
+    if typescript_version or root.joinpath("tsconfig.json").exists():
+        stack_parts.append("TypeScript")
+    if has_supabase:
+        stack_parts.append("Supabase")
+    application_stack = " + ".join(stack_parts) if stack_parts else "Stack requires manual confirmation"
+
+    boundary_lines: List[str] = []
+    if has_app_router:
+        boundary_lines.append("- `app/` - App Router pages, auth flows, dashboard, tree routes, and route handlers.")
+    if has_components:
+        boundary_lines.append("- `components/` - UI components for builder, viewer, settings, members, and auth.")
+    if has_lib:
+        boundary_lines.append("- `lib/` - shared server logic, permissions, validators, tree/media helpers, and Supabase clients.")
+    if has_supabase:
+        boundary_lines.append("- `supabase/` - schema migrations, seed data, and local Supabase configuration.")
+    if has_tests:
+        boundary_lines.append("- `tests/` - unit, smoke, and e2e coverage for product flows.")
+    if has_legacy:
+        boundary_lines.append("- `legacy/` plus top-level `index.html`/`css/`/`js/` - preserved static viewer artifacts, not the primary runtime.")
+
+    notes: List[str] = []
+    if has_app_router and has_legacy:
+        notes.append("- The checked-out repository contains the live Next.js/Supabase product and a preserved legacy viewer.")
+    elif has_app_router:
+        notes.append("- The checked-out repository contains the live application slice.")
+    elif has_legacy:
+        notes.append("- The repository still appears to be centered on a static viewer.")
+    notes.append("- Treat this generated block as the current source of truth for repo shape; manual notes below should only add decisions that cannot be inferred automatically.")
+
+    backend_value = "Supabase auth, database, RLS, and storage" if has_supabase else "Not detected"
+    legacy_value = "Legacy assets preserved in `legacy/` and top-level viewer files" if has_legacy else "Not detected"
+
+    return (
+        "## Current Architecture Snapshot\n\n"
+        f"- Generated at (UTC): `{timestamp_utc}`\n"
+        f"- Primary runtime: `{primary_runtime}`\n"
+        f"- Application stack: `{application_stack}`\n"
+        f"- Backend/data layer: `{backend_value}`\n"
+        f"- Legacy artifacts: {legacy_value}\n\n"
+        "### Active Runtime Boundaries\n\n"
+        f"{_build_markdown_lines(boundary_lines)}\n\n"
+        "### Freshness Rules\n\n"
+        f"{_build_markdown_lines(notes)}\n"
+    )
+
+
 def _build_snapshot_auto_block(
     timestamp_utc: str,
     branch: str,
@@ -318,6 +430,7 @@ def sync_shared_memory_task(
             structure,
             changed_paths,
         )
+        architecture_state = _build_architecture_state_block(root, timestamp_utc)
         session_block = _build_latest_session_block(
             timestamp_utc,
             branch,
@@ -335,13 +448,17 @@ def sync_shared_memory_task(
 
         updated_files = 0
         for path, auto_content in targets.items():
+            architecture_changed = False
+            if path == root / STATE_FILES[2]:
+                architecture_changed = _upsert_marked_block(path, "FRAMEWORK:ARCHITECTURE", architecture_state)
             auto_changed = _upsert_marked_block(path, "FRAMEWORK:AUTO", auto_content)
             session_changed = _upsert_marked_block(path, "FRAMEWORK:SESSION", session_block)
-            if auto_changed or session_changed:
+            if architecture_changed or auto_changed or session_changed:
                 updated_files += 1
             logging.info(
-                "memory_sync: file=%s auto_changed=%s session_changed=%s",
+                "memory_sync: file=%s architecture_changed=%s auto_changed=%s session_changed=%s",
                 path.as_posix(),
+                architecture_changed,
                 auto_changed,
                 session_changed,
             )

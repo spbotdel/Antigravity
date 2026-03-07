@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mediaUploadIntentSchema } from "@/lib/validators/media";
+import { completeMediaSchema, mediaUploadIntentSchema } from "@/lib/validators/media";
 import { createTreeSchema } from "@/lib/validators/tree";
 
 describe("validators", () => {
@@ -40,5 +40,20 @@ describe("validators", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("accepts external video completion payloads", () => {
+    const result = completeMediaSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      personId: crypto.randomUUID(),
+      mediaId: crypto.randomUUID(),
+      provider: "yandex_disk",
+      externalUrl: "https://disk.yandex.ru/i/family-video",
+      visibility: "members",
+      title: "Семейная видеозапись",
+      caption: "Архивное видео"
+    });
+
+    expect(result.success).toBe(true);
   });
 });

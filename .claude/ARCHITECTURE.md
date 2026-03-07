@@ -1,104 +1,138 @@
 # ARCHITECTURE — Antigravity
 
-*Current checked-out architecture plus project workflow contracts*
+*Hybrid memory file. The generated snapshot block below is the source of truth for current repo shape; manual notes are supplemental only.*
 
-## Detected Stack
+<!-- FRAMEWORK:ARCHITECTURE:START -->
+## Current Architecture Snapshot
 
-- Static HTML entry point
-- Vanilla JavaScript modules
-- D3.js-based tree rendering
-- GEDCOM source file loading
-- Framework runtime in Python and shell wrappers
+- Generated at (UTC): `2026-03-07 13:48:38Z`
+- Primary runtime: `Next.js App Router web application`
+- Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
+- Backend/data layer: `Supabase auth, database, RLS, and storage`
+- Legacy artifacts: Legacy assets preserved in `legacy/` and top-level viewer files
 
-## Current Codebase Reality
+### Active Runtime Boundaries
 
-The checked-out `main` branch is an older static viewer, not the Supabase-enabled application slice the team expects to continue. That mismatch is currently more important than any individual feature request.
+- `app/` - App Router pages, auth flows, dashboard, tree routes, and route handlers.
+- `components/` - UI components for builder, viewer, settings, members, and auth.
+- `lib/` - shared server logic, permissions, validators, tree/media helpers, and Supabase clients.
+- `supabase/` - schema migrations, seed data, and local Supabase configuration.
+- `tests/` - unit, smoke, and e2e coverage for product flows.
+- `legacy/` plus top-level `index.html`/`css/`/`js/` - preserved static viewer artifacts, not the primary runtime.
 
-## Top-Level Structure
+### Freshness Rules
 
-- `.gitattributes`
-- `.github/`
-- `.gitignore`
-- `3.ged`
-- `AGENTS.md`
-- `check-ids.html`
-- `CLAUDE.md`
-- `css/`
-- `FRAMEWORK_GUIDE.md`
-- `index.html`
-- `index.patch`
-- `info.txt`
-- `js/`
-- `README.md`
-- `security/`
-- `src/`
+- The checked-out repository contains the live Next.js/Supabase product and a preserved legacy viewer.
+- Treat this generated block as the current source of truth for repo shape; manual notes below should only add decisions that cannot be inferred automatically.
+<!-- FRAMEWORK:ARCHITECTURE:END -->
 
-## Current Application Components
+## Manual Notes
 
-### Browser entry point
-**Location:** `index.html`
-**Purpose:** Loads the static genealogy viewer and binds the main UX in a single page.
+- The active runtime is the Next.js + TypeScript + Supabase application described in `README.md` and `SNAPSHOT.md`.
+- The static viewer is preserved in `legacy/` and top-level legacy files, but it is not the primary runtime.
+- `lib/` is the main shared application layer:
+  server repository layer, permissions model, validators, tree display algorithms, and Supabase integration clients.
+- Keep project-specific architectural decisions here only when they cannot be inferred from repository structure.
 
-### Tree rendering logic
-**Location:** `js/treeRenderer.js`
-**Purpose:** Uses D3 to render and navigate the family tree visualization.
+## System Architecture
 
-### Data preparation
-**Location:** `js/gedcomParser.js` and `js/treeBuilder.js`
-**Purpose:** Parse GEDCOM input and build descendant tree structures for rendering.
-
-### Framework runtime
-**Location:** `.claude/`, `.codex/`, `src/framework-core/`, `security/`
-**Purpose:** Provide session lifecycle, project memory, migration flow, and completion checks.
-
-## Current Data Flow
+High-level architecture:
 
 ```text
-3.ged
-  -> GEDCOM parsing
-  -> descendant tree building
-  -> D3 hierarchy/rendering
-  -> browser interaction in the static viewer
+Browser (React / Next.js App Router)
+        ↓
+Next.js route handlers (app/api/*)
+        ↓
+Validation layer (lib/validators/*)
+        ↓
+Repository layer (lib/server/repository.ts)
+        ↓
+Supabase clients
+        ↓
+Supabase database + RLS
+        ↓
+Supabase storage (media)
 ```
 
-## Missing but Expected Slice
+## Layer Responsibilities
 
-The Supabase-backed application state remembered by the team is not present in this checkout.
+`app/`
+- routing
+- page composition
+- API route handlers
 
-Until that slice is restored, architecture work should focus on:
+`components/`
+- UI logic
+- tree canvas
+- builder UI
 
-- identifying the true application baseline
-- recovering the intended runtime boundaries
-- understanding how Supabase was expected to integrate
-- defining the first stable end-to-end flow
+`lib/`
+- business logic
+- permissions
+- validation
+- display tree building
+
+`supabase/`
+- schema
+- migrations
+- database policies
+
+`tests/`
+- validation of domain logic
+- display tree tests
+- integration tests
+
+## Data Ownership
+
+The source of truth for domain data is the Supabase database.
+
+Domain entities stored in database:
+
+- trees
+- persons
+- parent links
+- partnerships
+- media
+- memberships
+- share links
+
+The application server does not persist domain state locally.
+
+Next.js route handlers act as stateless request handlers.
+
+## Tree Rendering Pipeline
+
+The viewer and builder derive display trees from snapshot data.
+
+Pipeline:
+
+```text
+database records
+→ repository snapshot
+→ display tree builder
+→ canvas renderer
+→ interactive UI
+```
+
+Important:
+
+The display tree is derived and must not be treated as the canonical domain model.
 
 ## Workflow and Source of Truth
 
 - Product code and history: git repository `Antigravity`
 - Session context: `.claude/*`
 - Current task tracking before Vibe Kanban: `.claude/BACKLOG.md`
-- Future parallel task orchestration: Vibe Kanban, after explicit adoption
-
-## Branch and Shared Memory Policy
-
-- `main` is the current integration branch.
-- Do not create several parallel workspaces until Supabase stabilization is complete.
-- Once Vibe Kanban is introduced, keep `.claude/SNAPSHOT.md` and `.claude/ARCHITECTURE.md` synchronized from integration branches or dedicated integration PRs.
-- Avoid using `.claude/*` as an actively edited artifact in every future workspace branch.
-
-## Framework Notes
-
-- Project memory lives in `.claude/` files.
-- Execution adapters run from `.claude/` for Claude and `.codex/` for Codex.
-- Shared runtime is implemented in `src/framework-core/`.
+- Generated blocks in this file are refreshed by framework completion.
+- Avoid duplicating generated repo-shape facts in manual sections.
 
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-03-05 14:08:00Z`
+- Updated at (UTC): `2026-03-07 13:48:38Z`
 - Active branch: `main`
-- Git status: `STATUS:0 files`
-- Git diff: `DIFF:0 lines`
+- Git status: `STATUS:57 files`
+- Git diff: `DIFF:8744 lines`
 
 ### Detected Stack
 
@@ -120,27 +154,36 @@ Until that slice is restored, architecture work should focus on:
 - `3.ged`
 - `AGENTS.md`
 - `app/`
+- `ARCHITECTURE_RULES.md`
 - `CHANGELOG.md`
 - `check-ids.html`
 - `CLAUDE.md`
+- `COMMON_BUGS.md`
 - `components/`
-- `css/`
-- `FRAMEWORK_GUIDE.md`
 
 ### Recently Changed Paths
 
-- `<none>`
+- `.claude/ARCHITECTURE.md`
+- `.claude/BACKLOG.md`
+- `.claude/SNAPSHOT.md`
+- `.codex/commands/start.md`
+- `.codex/commands/start.sh`
+- `.codex/config/framework-adapter.json`
+- `.codex/utils/backlog-start-hint.py`
+- `.env.example`
+- `AGENTS.md`
+- `README.md`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-03-05 14:08:00Z`
+- Completed at (UTC): `2026-03-07 13:48:38Z`
 - Branch: `main`
-- Git status summary: `STATUS:0 files`
-- Git diff summary: `DIFF:0 lines`
+- Git status summary: `STATUS:57 files`
+- Git diff summary: `DIFF:8744 lines`
 
-- Session summary: `0` changed files, `0` diff lines, `0` tracked changed paths.
+- Session summary: `57` changed files, `8744` diff lines, `10` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -148,6 +191,6 @@ Until that slice is restored, architecture work should focus on:
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:0 files`)
-- `git_diff`: `success` (`DIFF:0 lines`)
+- `git_status`: `success` (`STATUS:57 files`)
+- `git_diff`: `success` (`DIFF:8744 lines`)
 <!-- FRAMEWORK:SESSION:END -->

@@ -8,6 +8,22 @@ from utils.parallel import time_task
 from utils.result import create_task_result
 
 
+DEFAULT_STARTUP_CONTEXT_FILES = [
+    ".claude/SNAPSHOT.md",
+    ".claude/BACKLOG.md",
+    ".claude/ARCHITECTURE.md",
+    "README.md",
+    "PROJECT_SUMMARY.md",
+    "REPO_MAP.md",
+    "TREE_MODEL.md",
+    "TREE_ALGORITHMS.md",
+    "DATA_FLOW.md",
+    "ARCHITECTURE_RULES.md",
+    "DECISIONS.md",
+    "COMMON_BUGS.md",
+]
+
+
 def _default_config(project_name: str) -> dict:
     return {
         "bug_reporting_enabled": False,
@@ -471,17 +487,17 @@ def ensure_project_baseline(create_missing: bool = True):
 
         architecture_content = (
             f"# ARCHITECTURE — {root.name}\n\n"
-            "*Generated from detected project artifacts*\n\n"
-            "## Detected Stack\n\n"
+            "*Hybrid memory file. Generated blocks are the source of truth for the current repo shape; manual notes stay below them.*\n\n"
+            "<!-- FRAMEWORK:ARCHITECTURE:START -->\n"
+            "## Current Architecture Snapshot\n\n"
+            "- Pending first completion sync.\n"
+            "<!-- FRAMEWORK:ARCHITECTURE:END -->\n\n"
+            "## Manual Notes\n\n"
+            f"{chr(10).join(heading_lines)}\n\n"
+            "## Reference Notes\n\n"
             f"{chr(10).join(stack_lines)}\n\n"
             "## Top-Level Structure\n\n"
-            f"{chr(10).join(structure_lines)}\n\n"
-            "## Key Topics\n\n"
-            f"{chr(10).join(heading_lines)}\n\n"
-            "## Notes\n\n"
-            "- Shared memory is stored in `.claude/`.\n"
-            "- Runtime entry points are in `CLAUDE.md` and `AGENTS.md`.\n"
-            "- Shared execution core is `src/framework-core/`.\n"
+            f"{chr(10).join(structure_lines)}\n"
         )
 
         roadmap_content = (
@@ -527,10 +543,37 @@ def ensure_project_baseline(create_missing: bool = True):
         return create_task_result("project_baseline", "error", "", error=str(e))
 
 
-def get_context_files():
-    """Get list of context files to load."""
-    return [
-        ".claude/SNAPSHOT.md",
-        ".claude/BACKLOG.md",
-        ".claude/ARCHITECTURE.md"
-    ]
+def _read_startup_context_paths(root: Path) -> list[str]:
+    config_path = root / ".codex" / "config" / "framework-adapter.json"
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception:
+        return list(DEFAULT_STARTUP_CONTEXT_FILES)
+
+    startup_context_paths = payload.get("startup_context_paths")
+    if not isinstance(startup_context_paths, list):
+        return list(DEFAULT_STARTUP_CONTEXT_FILES)
+
+    context_files = []
+    seen = set()
+    for raw_path in startup_context_paths:
+        if not isinstance(raw_path, str):
+            continue
+        normalized = raw_path.strip().replace("\\", "/")
+        if not normalized or normalized in seen:
+            continue
+        context_files.append(normalized)
+        seen.add(normalized)
+
+    return context_files or list(DEFAULT_STARTUP_CONTEXT_FILES)
+
+
+def get_context_files(root: Path | None = None) -> list[str]:
+    """Get list of startup context files that currently exist."""
+    base = root or Path.cwd()
+    context_candidates = _read_startup_context_paths(base)
+    context_files = []
+    for relative_path in context_candidates:
+        if (base / relative_path).exists():
+            context_files.append(relative_path)
+    return context_files

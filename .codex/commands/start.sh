@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 OWNER_PID="${PPID:-$$}"
+DEV_SERVER_PORT=3000
+DEV_SERVER_URL="http://localhost:${DEV_SERVER_PORT}/"
+DEV_SERVER_PID_FILE=".tmp/codex-dev-server.pid"
 
 is_port_open() {
   local port="$1"
@@ -79,30 +82,111 @@ wait_for_http() {
   return 1
 }
 
+process_alive() {
+  local pid="$1"
+
+  if [[ ! "$pid" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+
+  kill -0 "$pid" >/dev/null 2>&1
+}
+
+read_dev_pid() {
+  if [ ! -f "$DEV_SERVER_PID_FILE" ]; then
+    return 1
+  fi
+
+  tr -d '[:space:]' < "$DEV_SERVER_PID_FILE"
+}
+
+write_dev_pid() {
+  local pid="$1"
+  mkdir -p "$(dirname "$DEV_SERVER_PID_FILE")"
+  printf "%s\n" "$pid" > "$DEV_SERVER_PID_FILE"
+}
+
+clear_dev_pid() {
+  rm -f "$DEV_SERVER_PID_FILE"
+}
+
+print_dev_server_recovery_hint() {
+  echo "[codex] recovery: run 'bash .codex/commands/dev-status.sh' for diagnostics."
+  echo "[codex] recovery: review '.next-dev.log' and '.next-dev.err.log'."
+  echo "[codex] recovery: free port ${DEV_SERVER_PORT} or stop the conflicting process, then run 'start' again."
+}
+
+print_dev_server_diagnostics() {
+  local tracked_pid=""
+
+  echo "[codex] diagnostics: target=${DEV_SERVER_URL} port=${DEV_SERVER_PORT}"
+
+  if is_port_open "$DEV_SERVER_PORT"; then
+    echo "[codex] diagnostics: tcp:${DEV_SERVER_PORT}=open"
+  else
+    echo "[codex] diagnostics: tcp:${DEV_SERVER_PORT}=closed"
+  fi
+
+  if is_http_ready "$DEV_SERVER_URL"; then
+    echo "[codex] diagnostics: http_ready=yes"
+  else
+    echo "[codex] diagnostics: http_ready=no"
+  fi
+
+  tracked_pid="$(read_dev_pid || true)"
+  if [ -n "$tracked_pid" ] && process_alive "$tracked_pid"; then
+    echo "[codex] diagnostics: tracked_pid=${tracked_pid} (alive)"
+    return 0
+  fi
+
+  if [ -n "$tracked_pid" ]; then
+    echo "[codex] diagnostics: tracked_pid=${tracked_pid} (stale)"
+  else
+    echo "[codex] diagnostics: tracked_pid=none"
+  fi
+}
+
 ensure_local_dev_server() {
-  local target_url="http://localhost:3000/"
+  local tracked_pid=""
 
   if [ "${CODEX_AUTO_DEV_SERVER:-1}" = "0" ]; then
     return 0
   fi
 
-  if is_port_open 3000 && wait_for_http "$target_url" 5; then
-    echo "[codex] dev server already running at $target_url"
-    return 0
+  tracked_pid="$(read_dev_pid || true)"
+  if [ -n "$tracked_pid" ] && ! process_alive "$tracked_pid"; then
+    clear_dev_pid
+    tracked_pid=""
+  fi
+
+  if is_port_open "$DEV_SERVER_PORT"; then
+    if wait_for_http "$DEV_SERVER_URL" 5; then
+      if [ -n "$tracked_pid" ]; then
+        echo "[codex] dev server already running at ${DEV_SERVER_URL} (pid ${tracked_pid})"
+      else
+        echo "[codex] dev server already running at ${DEV_SERVER_URL}"
+      fi
+      return 0
+    fi
+
+    echo "[codex] warning: port ${DEV_SERVER_PORT} is occupied, but ${DEV_SERVER_URL} is not responding."
+    print_dev_server_diagnostics
+    print_dev_server_recovery_hint
+    return 1
   fi
 
   if ! command -v npm >/dev/null 2>&1; then
-    echo "[codex] warning: npm not found. cannot auto-start $target_url"
+    echo "[codex] warning: npm not found. cannot auto-start ${DEV_SERVER_URL}"
     return 0
   fi
 
-  echo "[codex] starting dev server at $target_url"
+  echo "[codex] starting dev server at ${DEV_SERVER_URL}"
 
   set +e
   if command -v nohup >/dev/null 2>&1; then
-    nohup npm run dev -- --hostname 0.0.0.0 --port 3000 > .next-dev.log 2> .next-dev.err.log < /dev/null &
+    nohup npm run dev -- --hostname 0.0.0.0 --port "$DEV_SERVER_PORT" > .next-dev.log 2> .next-dev.err.log < /dev/null &
   else
-    npm run dev -- --hostname 0.0.0.0 --port 3000 > .next-dev.log 2> .next-dev.err.log &
+    npm run dev -- --hostname 0.0.0.0 --port "$DEV_SERVER_PORT" > .next-dev.log 2> .next-dev.err.log &
   fi
   DEV_PID="$!"
   START_EXIT=$?
@@ -110,18 +194,28 @@ ensure_local_dev_server() {
 
   if [ "$START_EXIT" -ne 0 ] || [ -z "$DEV_PID" ]; then
     echo "[codex] warning: failed to launch dev server."
+    print_dev_server_diagnostics
+    print_dev_server_recovery_hint
     echo "[codex] logs: .next-dev.log .next-dev.err.log"
+    return 1
+  fi
+
+  write_dev_pid "$DEV_PID"
+
+  if wait_for_port "$DEV_SERVER_PORT" 20 && wait_for_http "$DEV_SERVER_URL" 60; then
+    echo "[codex] dev server ready at ${DEV_SERVER_URL} (pid ${DEV_PID})"
     return 0
   fi
 
-  if wait_for_http "$target_url" 60; then
-    echo "[codex] dev server ready at $target_url (pid $DEV_PID)"
-    return 0
+  if ! process_alive "$DEV_PID"; then
+    clear_dev_pid
   fi
 
-  echo "[codex] warning: dev server did not become ready at $target_url within 60s."
+  echo "[codex] warning: dev server did not become ready at ${DEV_SERVER_URL}."
+  print_dev_server_diagnostics
+  print_dev_server_recovery_hint
   echo "[codex] logs: .next-dev.log .next-dev.err.log"
-  return 0
+  return 1
 }
 
 run_cold_start() {
@@ -167,7 +261,7 @@ fi
 
 run_cold_start
 
-if [ "$EXIT_CODE" -eq 0 ] && [ "${CODEX_AUTO_UPDATE:-1}" != "0" ] && [ -f ".codex/commands/quick-update.sh" ]; then
+if [ "$EXIT_CODE" -eq 0 ] && [ "${CODEX_AUTO_UPDATE:-0}" = "1" ] && [ -f ".codex/commands/quick-update.sh" ]; then
   UPDATE_RESULT="$(python3 .codex/utils/parse-update-result.py "$OUTPUT")"
 
   if [[ "$UPDATE_RESULT" == UPDATE:available:* ]]; then
@@ -189,13 +283,18 @@ fi
 
 printf "%s\n" "$OUTPUT"
 
+FINAL_EXIT_CODE="$EXIT_CODE"
 if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 2 ]; then
   print_backlog_hint
-  ensure_local_dev_server
+  if ! ensure_local_dev_server; then
+    if [ "$FINAL_EXIT_CODE" -eq 0 ]; then
+      FINAL_EXIT_CODE=1
+    fi
+  fi
 fi
 
 if [ "$EXIT_CODE" -eq 2 ]; then
   echo "[codex] action-required: input is needed before continuing (crash recovery or active session lock)."
 fi
 
-exit "$EXIT_CODE"
+exit "$FINAL_EXIT_CODE"

@@ -39,7 +39,7 @@ export function TreeNav({ slug, shareToken, canEdit, canManageMembers, canReadAu
       {items
         .filter((item) => item.visible)
         .map((item) => (
-          <Link key={item.href} href={item.href} className={cn("pill-link", pathname === item.pathname && "pill-link-active")}>
+          <Link key={item.href} href={item.href} prefetch={false} className={cn("pill-link", pathname === item.pathname && "pill-link-active")}>
             {item.label}
           </Link>
         ))}

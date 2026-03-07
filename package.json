@@ -10,10 +10,13 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "smoke:auth": "node tests/auth-smoke-e2e.mjs",
+    "smoke:media": "node tests/media-storage-e2e.mjs",
     "smoke:e2e": "node tests/smoke-e2e.mjs",
     "smoke": "npm run smoke:auth && npm run smoke:e2e"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1004.0",
+    "@aws-sdk/s3-request-presigner": "^3.1004.0",
     "@supabase/ssr": "0.8.0",
     "@supabase/supabase-js": "2.98.0",
     "clsx": "2.1.1",

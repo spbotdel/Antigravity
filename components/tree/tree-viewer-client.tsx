@@ -3,26 +3,15 @@
 import { useMemo, useState } from "react";
 
 import { FamilyTreeCanvas } from "@/components/tree/family-tree-canvas";
+import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
 import { buildBuilderDisplayTree, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
-import { formatGender, formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
+import { formatGender } from "@/lib/ui-text";
 import { formatDate } from "@/lib/utils";
 import type { TreeSnapshot } from "@/lib/types";
 
 interface TreeViewerClientProps {
   snapshot: TreeSnapshot;
   shareToken?: string | null;
-}
-
-function getMediaOpenLabel(kind: TreeSnapshot["media"][number]["kind"]) {
-  if (kind === "video") {
-    return "Открыть видео";
-  }
-
-  if (kind === "document") {
-    return "Открыть документ";
-  }
-
-  return "Открыть файл";
 }
 
 function withShareToken(url: string, shareToken?: string | null) {
@@ -98,27 +87,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
             </div>
 
             <div className="media-strip">
-              {selectedMedia.length ? (
-                selectedMedia.map((asset) => (
-                  <article key={asset.id} className="media-card">
-                    <div className="media-meta">
-                      <span>{formatMediaKind(asset.kind)}</span>
-                      <span>{formatMediaVisibility(asset.visibility)}</span>
-                    </div>
-                    {asset.kind === "photo" ? (
-                      <img src={withShareToken(`/api/media/${asset.id}`, shareToken)} alt={asset.title} className="media-photo" />
-                    ) : (
-                      <a href={withShareToken(`/api/media/${asset.id}`, shareToken)} target="_blank" rel="noreferrer" className="ghost-button">
-                        {getMediaOpenLabel(asset.kind)}
-                      </a>
-                    )}
-                    <h4>{asset.title}</h4>
-                    <p>{asset.caption || "Подпись не добавлена."}</p>
-                  </article>
-                ))
-              ) : (
-                <div className="empty-state">Для этого человека пока не добавлено медиа.</div>
-              )}
+              <PersonMediaGallery media={selectedMedia} shareToken={shareToken} />
             </div>
           </>
         ) : (

@@ -1,5 +1,6 @@
 """Unit tests for shared memory synchronization helpers."""
 
+import importlib.util
 import sys
 import tempfile
 import unittest
@@ -7,10 +8,20 @@ from pathlib import Path
 
 
 FRAMEWORK_CORE_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(FRAMEWORK_CORE_ROOT) not in sys.path:
     sys.path.insert(0, str(FRAMEWORK_CORE_ROOT))
 
+BACKLOG_HINT_PATH = REPO_ROOT / ".codex" / "utils" / "backlog-start-hint.py"
+BACKLOG_HINT_SPEC = importlib.util.spec_from_file_location("backlog_start_hint", BACKLOG_HINT_PATH)
+if BACKLOG_HINT_SPEC is None or BACKLOG_HINT_SPEC.loader is None:
+    raise RuntimeError(f"Unable to load backlog hint module from {BACKLOG_HINT_PATH}")
+backlog_start_hint = importlib.util.module_from_spec(BACKLOG_HINT_SPEC)
+BACKLOG_HINT_SPEC.loader.exec_module(backlog_start_hint)
+
+from tasks.config import get_context_files  # noqa: E402
 from tasks.memory import (  # noqa: E402
+    _build_architecture_state_block,
     _build_architecture_auto_block,
     _build_backlog_auto_block,
     _build_latest_session_block,
@@ -115,6 +126,34 @@ class BuildBlockTests(unittest.TestCase):
         self.assertIn("Git diff", architecture)
         self.assertIn("Recently Changed Paths", architecture)
 
+    def test_build_architecture_state_block_reflects_live_app_shape(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "app").mkdir()
+            (root / "components").mkdir()
+            (root / "lib").mkdir()
+            (root / "supabase").mkdir()
+            (root / "legacy").mkdir()
+            (root / "tests").mkdir()
+            (root / "tsconfig.json").write_text("{}", encoding="utf-8")
+            (root / "package.json").write_text(
+                (
+                    "{"
+                    "\"dependencies\":{\"next\":\"16.1.6\",\"react\":\"19.2.4\",\"@supabase/supabase-js\":\"2.98.0\"},"
+                    "\"devDependencies\":{\"typescript\":\"5.9.3\"}"
+                    "}"
+                ),
+                encoding="utf-8",
+            )
+
+            state = _build_architecture_state_block(root, "2026-03-06 10:30:00Z")
+
+            self.assertIn("Next.js App Router web application", state)
+            self.assertIn("Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase", state)
+            self.assertIn("Supabase auth, database, RLS, and storage", state)
+            self.assertIn("legacy/", state)
+            self.assertIn("source of truth", state)
+
     def test_build_latest_session_block_handles_missing_tasks(self):
         session = _build_latest_session_block(
             timestamp_utc="2026-03-05 10:30:00Z",
@@ -135,6 +174,85 @@ class BuildBlockTests(unittest.TestCase):
         self.assertIn("Session summary", session)
 
 
+class StartupContextTests(unittest.TestCase):
+    def test_get_context_files_uses_startup_context_paths(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".claude").mkdir()
+            (root / ".codex" / "config").mkdir(parents=True)
+
+            expected_files = [
+                ".claude/SNAPSHOT.md",
+                ".claude/BACKLOG.md",
+                ".claude/ARCHITECTURE.md",
+                "README.md",
+                "PROJECT_SUMMARY.md",
+                "REPO_MAP.md",
+                "TREE_MODEL.md",
+                "TREE_ALGORITHMS.md",
+                "DATA_FLOW.md",
+                "ARCHITECTURE_RULES.md",
+                "DECISIONS.md",
+                "COMMON_BUGS.md",
+            ]
+
+            for relative_path in expected_files:
+                path = root / relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("ok\n", encoding="utf-8")
+
+            (root / ".codex" / "config" / "framework-adapter.json").write_text(
+                (
+                    "{"
+                    "\"startup_context_paths\":["
+                    "\".claude/SNAPSHOT.md\","
+                    "\".claude/BACKLOG.md\","
+                    "\".claude/ARCHITECTURE.md\","
+                    "\"README.md\","
+                    "\"PROJECT_SUMMARY.md\","
+                    "\"REPO_MAP.md\","
+                    "\"TREE_MODEL.md\","
+                    "\"TREE_ALGORITHMS.md\","
+                    "\"DATA_FLOW.md\","
+                    "\"ARCHITECTURE_RULES.md\","
+                    "\"DECISIONS.md\","
+                    "\"COMMON_BUGS.md\""
+                    "]"
+                    "}"
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(get_context_files(root), expected_files)
+
+
+class BacklogHintTests(unittest.TestCase):
+    def test_resolve_update_timestamp_prefers_latest_embedded_refresh(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backlog_path = Path(temp_dir) / "BACKLOG.md"
+            backlog_path.write_text(
+                (
+                    "# BACKLOG\n\n"
+                    "*Updated: 2026-03-02*\n\n"
+                    "## Framework Auto Sync\n\n"
+                    "- Updated at (UTC): `2026-03-06 23:29:07Z`\n\n"
+                    "## Latest Completion Session\n\n"
+                    "- Completed at (UTC): `2026-03-06 23:29:07Z`\n"
+                ),
+                encoding="utf-8",
+            )
+
+            resolved, source = backlog_start_hint._resolve_update_timestamp(
+                backlog_path,
+                backlog_path.read_text(encoding="utf-8"),
+            )
+
+            self.assertEqual(source, "embedded")
+            self.assertEqual(
+                resolved,
+                backlog_start_hint.datetime(2026, 3, 6, 23, 29, 7, tzinfo=backlog_start_hint.timezone.utc),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
-

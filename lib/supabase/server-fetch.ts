@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { parsePowerShellJsonStdout } from "@/lib/supabase/admin-rest";
 import { getSupabaseRequestTimeoutMs } from "@/lib/supabase/fetch";
 
 const execFileAsync = promisify(execFile);
@@ -114,11 +115,11 @@ async function powerShellFetch(input: RequestInfo | URL, init: RequestInit | und
       timeout: timeoutMs + 5000
     }
   );
-  const result = JSON.parse(stdout.trim()) as {
+  const result = parsePowerShellJsonStdout<{
     status: number;
     headers?: Record<string, string>;
     bodyBase64?: string;
-  };
+  }>(stdout);
 
   return new Response(Buffer.from(result.bodyBase64 || "", "base64"), {
     status: result.status,

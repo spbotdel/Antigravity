@@ -1,3 +1,12 @@
+import { execFile } from "node:child_process";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
 import type {
   AuditEntry,
   AuditEntryView,
@@ -18,14 +27,17 @@ import type {
 } from "@/lib/types";
 import { buildAuditEntryViews } from "@/lib/audit-presenter";
 import { buildViewerActor, canSeeMedia, canViewTree, hasRequiredRole } from "@/lib/permissions";
-import { getBaseUrl, getStorageBucket } from "@/lib/env";
+import { getBaseUrl, getFileBackedMediaProvider, getMediaStorageBackend, getObjectStorageEnv, getStorageBucket } from "@/lib/env";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson, fetchSupabaseAdminRestJsonWithHeaders } from "@/lib/supabase/admin-rest";
+import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson, fetchSupabaseAdminRestJsonWithHeaders, parsePowerShellJsonStdout } from "@/lib/supabase/admin-rest";
 import { getCurrentUser, requireAuthenticatedUserId } from "@/lib/server/auth";
 import { AppError } from "@/lib/server/errors";
 import { createInviteToken, createOpaqueToken, hashInviteToken, hashOpaqueToken } from "@/lib/server/invite-token";
 
 const admin = () => createAdminSupabaseClient();
+let objectStorageClient: S3Client | null = null;
+const execFileAsync = promisify(execFile);
+const OBJECT_STORAGE_HTTP_MAX_BUFFER = 1024 * 1024 * 4;
 
 const REPOSITORY_NETWORK_ERROR_MARKERS = ["SUPABASE_UNAVAILABLE", "fetch failed", "connect timeout", "timed out", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"];
 const SHARE_LINKS_SCHEMA_CACHE_MARKERS = ["tree_share_links", "schema cache"];
@@ -259,6 +271,153 @@ function resolveMediaKindFromMimeType(mimeType: string): MediaAssetRecord["kind"
   }
 
   throw new AppError(400, "Этот тип файла пока не поддерживается.");
+}
+
+function getObjectStorageClient() {
+  if (objectStorageClient) {
+    return objectStorageClient;
+  }
+
+  const config = getObjectStorageEnv();
+  objectStorageClient = new S3Client({
+    region: config.region,
+    endpoint: config.endpoint,
+    forcePathStyle: config.forcePathStyle,
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey
+    }
+  });
+
+  return objectStorageClient;
+}
+
+async function createObjectStorageSignedUploadUrl(storagePath: string, mimeType: string) {
+  const config = getObjectStorageEnv();
+  const signedUrl = await getSignedUrl(
+    getObjectStorageClient(),
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: storagePath,
+      ContentType: mimeType
+    }),
+    { expiresIn: 15 * 60 }
+  );
+
+  return {
+    bucket: config.bucket,
+    signedUrl,
+    token: null,
+    uploadProvider: "object_storage" as const
+  };
+}
+
+async function createObjectStorageSignedReadUrl(storagePath: string) {
+  const config = getObjectStorageEnv();
+  return getSignedUrl(
+    getObjectStorageClient(),
+    new GetObjectCommand({
+      Bucket: config.bucket,
+      Key: storagePath
+    }),
+    { expiresIn: 60 }
+  );
+}
+
+async function runSignedHttpRequest(input: {
+  url: string;
+  method: "PUT" | "DELETE";
+  contentType?: string;
+  bodyBuffer?: Buffer;
+}) {
+  const payload = {
+    url: input.url,
+    method: input.method,
+    headers: input.contentType
+      ? {
+          "content-type": input.contentType
+        }
+      : {},
+    bodyBase64: input.bodyBuffer ? input.bodyBuffer.toString("base64") : "",
+    timeoutMs: 15000
+  };
+  const payloadJson = JSON.stringify(payload);
+  let payloadInput = Buffer.from(payloadJson, "utf8").toString("base64");
+  let payloadFilePath: string | null = null;
+
+  if (input.bodyBuffer) {
+    payloadFilePath = path.join(os.tmpdir(), `antigravity-http-${crypto.randomUUID()}.json`);
+    await fs.writeFile(payloadFilePath, payloadJson, "utf8");
+    payloadInput = payloadFilePath;
+  }
+
+  const scriptPath = path.join(process.cwd(), "scripts", "supabase-http.ps1");
+  try {
+    const { stdout } = await execFileAsync(
+      "powershell",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, payloadInput],
+      {
+        maxBuffer: OBJECT_STORAGE_HTTP_MAX_BUFFER,
+        timeout: 20000
+      }
+    );
+
+    return parsePowerShellJsonStdout<{ status: number }>(stdout);
+  } finally {
+    if (payloadFilePath) {
+      await fs.unlink(payloadFilePath).catch(() => {});
+    }
+  }
+}
+
+export async function uploadFileToSignedUrl(input: {
+  signedUrl: string;
+  contentType?: string;
+  fileBuffer: Buffer;
+}) {
+  const result = await runSignedHttpRequest({
+    url: input.signedUrl,
+    method: "PUT",
+    contentType: input.contentType,
+    bodyBuffer: input.fileBuffer
+  });
+
+  if (result.status < 200 || result.status >= 300) {
+    throw new AppError(400, `Не удалось загрузить файл в storage (status ${result.status}).`);
+  }
+}
+
+async function deleteObjectStorageObject(storagePath: string) {
+  const config = getObjectStorageEnv();
+  const deleteUrl = await getSignedUrl(
+    getObjectStorageClient(),
+    new DeleteObjectCommand({
+      Bucket: config.bucket,
+      Key: storagePath
+    }),
+    { expiresIn: 60 }
+  );
+  const result = await runSignedHttpRequest({
+    url: deleteUrl,
+    method: "DELETE"
+  });
+
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Object storage delete failed with status ${result.status}.`);
+  }
+}
+
+function toObjectStorageError(error: unknown, fallbackMessage: string) {
+  if (error instanceof AppError) {
+    return error;
+  }
+
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  if (REPOSITORY_NETWORK_ERROR_MARKERS.some((marker) => message.includes(marker))) {
+    return new AppError(503, "Сервер не смог связаться с object storage. Попробуйте еще раз.");
+  }
+
+  return new AppError(500, message || fallbackMessage);
 }
 
 export async function listUserTrees(userId: string) {
@@ -1206,6 +1365,19 @@ export async function createMediaUploadTarget(input: {
   const safeName = input.filename.replace(/[^a-zA-Z0-9._-]/g, "-");
   const storagePath = `trees/${input.treeId}/media/${kind}/${mediaId}/${safeName}`;
 
+  if (getMediaStorageBackend() === "object_storage") {
+    const objectStorageTarget = await createObjectStorageSignedUploadUrl(storagePath, input.mimeType);
+    return {
+      mediaId,
+      kind,
+      path: storagePath,
+      bucket: objectStorageTarget.bucket,
+      signedUrl: objectStorageTarget.signedUrl,
+      token: objectStorageTarget.token,
+      uploadProvider: objectStorageTarget.uploadProvider
+    };
+  }
+
   const { data, error } = await admin().storage.from(getStorageBucket()).createSignedUploadUrl(storagePath, { upsert: false });
   if (error || !data) {
     throw new AppError(400, error?.message || "Не удалось создать ссылку для загрузки.");
@@ -1215,8 +1387,10 @@ export async function createMediaUploadTarget(input: {
     mediaId,
     kind,
     path: storagePath,
+    bucket: getStorageBucket(),
     signedUrl: data.signedUrl,
-    token: data.token
+    token: data.token,
+    uploadProvider: "supabase_storage" as const
   };
 }
 
@@ -1234,6 +1408,36 @@ export async function completePhotoUpload(input: {
   return completeMediaUpload(input);
 }
 
+type CompletedStoredMediaInput = {
+  treeId: string;
+  personId: string;
+  mediaId: string;
+  storagePath: string;
+  title: string;
+  caption?: string | null;
+  visibility: "public" | "members";
+  mimeType: string;
+  sizeBytes?: number | null;
+  provider?: "supabase_storage" | "object_storage";
+};
+
+type CompletedExternalVideoInput = {
+  treeId: string;
+  personId: string;
+  mediaId: string;
+  title: string;
+  caption?: string | null;
+  visibility: "public" | "members";
+  provider: "yandex_disk";
+  externalUrl: string;
+};
+
+function isExternalVideoCompletionInput(
+  input: CompletedStoredMediaInput | CompletedExternalVideoInput
+): input is CompletedExternalVideoInput {
+  return input.provider === "yandex_disk";
+}
+
 export async function completeMediaUpload(input: {
   treeId: string;
   personId: string;
@@ -1244,38 +1448,62 @@ export async function completeMediaUpload(input: {
   visibility: "public" | "members";
   mimeType: string;
   sizeBytes?: number | null;
+  provider?: "supabase_storage" | "object_storage";
+} | {
+  treeId: string;
+  personId: string;
+  mediaId: string;
+  title: string;
+  caption?: string | null;
+  visibility: "public" | "members";
+  provider: "yandex_disk";
+  externalUrl: string;
 }) {
   const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
-  const kind = resolveMediaKindFromMimeType(input.mimeType);
+  const kind = isExternalVideoCompletionInput(input) ? "video" : resolveMediaKindFromMimeType(input.mimeType);
+  const provider = isExternalVideoCompletionInput(input) ? "yandex_disk" : getFileBackedMediaProvider();
+  const storagePath = isExternalVideoCompletionInput(input) ? null : input.storagePath;
+  const externalUrl = isExternalVideoCompletionInput(input) ? input.externalUrl : null;
+  const mimeType = isExternalVideoCompletionInput(input) ? null : input.mimeType;
+  const sizeBytes = isExternalVideoCompletionInput(input) ? null : input.sizeBytes || null;
 
-  const { data, error } = await admin()
-    .from("media_assets")
-    .insert({
+  const data = await mutateAdminFirst<MediaAssetRecord>(
+    "media_assets",
+    "POST",
+    {
       id: input.mediaId,
       tree_id: input.treeId,
       kind,
-      provider: "supabase_storage",
+      provider,
       visibility: input.visibility,
-      storage_path: input.storagePath,
+      storage_path: storagePath,
+      external_url: externalUrl,
       title: input.title,
       caption: input.caption || null,
-      mime_type: input.mimeType,
-      size_bytes: input.sizeBytes || null,
+      mime_type: mimeType,
+      size_bytes: sizeBytes,
       created_by: userId
-    })
-    .select("*")
-    .single<MediaAssetRecord>();
+    },
+    "Не удалось завершить загрузку файла."
+  );
 
-  if (error || !data) throw new AppError(400, error?.message || "Не удалось завершить загрузку файла.");
+  if (!data) {
+    throw new AppError(400, "Не удалось завершить загрузку файла.");
+  }
 
-  const { error: relationError } = await admin().from("person_media").insert({
-    person_id: input.personId,
-    media_id: input.mediaId,
-    is_primary: false
-  });
-
-  if (relationError) {
-    throw new AppError(400, relationError.message);
+  try {
+    await mutateAdminRows<never>(
+      "person_media",
+      "POST",
+      {
+        person_id: input.personId,
+        media_id: input.mediaId,
+        is_primary: false
+      },
+      "Не удалось привязать медиа к человеку."
+    );
+  } catch (error) {
+    throw toRepositoryReadError(error, "Не удалось привязать медиа к человеку.");
   }
 
   await insertAuditLog({
@@ -1292,8 +1520,11 @@ export async function completeMediaUpload(input: {
 }
 
 export async function resolveMediaAccess(mediaId: string, shareToken?: string | null) {
-  const { data: media, error } = await admin().from("media_assets").select("*").eq("id", mediaId).single<MediaAssetRecord>();
-  if (error || !media) throw new AppError(404, "Медиа не найдено.");
+  const media = await fetchAdminFirst<MediaAssetRecord>(
+    `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,
+    "Не удалось загрузить медиа."
+  );
+  if (!media) throw new AppError(404, "Медиа не найдено.");
 
   const tree = await getTreeById(media.tree_id);
   const readAccess = await getTreeReadAccess(tree, shareToken);
@@ -1310,23 +1541,43 @@ export async function resolveMediaAccess(mediaId: string, shareToken?: string | 
     throw new AppError(404, "Файл медиа отсутствует.");
   }
 
+  if (media.provider === "object_storage") {
+    const signedUrl = await createObjectStorageSignedReadUrl(media.storage_path);
+    return { kind: media.kind, url: signedUrl };
+  }
+
   const { data: signed, error: signedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(media.storage_path, 60);
   if (signedError || !signed) throw new AppError(400, signedError?.message || "Не удалось создать подписанную ссылку.");
 
-  return { kind: "photo" as const, url: signed.signedUrl };
+  return { kind: media.kind, url: signed.signedUrl };
 }
 
 export async function deleteMedia(mediaId: string) {
-  const { data: before, error: beforeError } = await admin().from("media_assets").select("*").eq("id", mediaId).single<MediaAssetRecord>();
-  if (beforeError || !before) throw new AppError(404, "Медиа не найдено.");
+  const before = await fetchAdminFirst<MediaAssetRecord>(
+    `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,
+    "Не удалось загрузить медиа."
+  );
+  if (!before) throw new AppError(404, "Медиа не найдено.");
 
   const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
   if (before.storage_path) {
-    await admin().storage.from(getStorageBucket()).remove([before.storage_path]);
+    if (before.provider === "object_storage") {
+      try {
+        await deleteObjectStorageObject(before.storage_path);
+      } catch (error) {
+        throw toObjectStorageError(error, "Не удалось удалить файл из object storage.");
+      }
+    } else {
+      await admin().storage.from(getStorageBucket()).remove([before.storage_path]);
+    }
   }
 
-  const { error } = await admin().from("media_assets").delete().eq("id", mediaId);
-  if (error) throw new AppError(400, error.message);
+  await mutateAdminRows<never>(
+    `media_assets?id=eq.${encodeURIComponent(mediaId)}`,
+    "DELETE",
+    undefined,
+    "Не удалось удалить медиа."
+  );
 
   await insertAuditLog({
     treeId: before.tree_id,

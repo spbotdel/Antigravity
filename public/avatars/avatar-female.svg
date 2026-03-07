@@ -1,12 +1,17 @@
 <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Female avatar">
   <defs>
     <linearGradient id="female-bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#ffe0ee" />
-      <stop offset="100%" stop-color="#ffb6d2" />
+      <stop offset="0%" stop-color="#ffe9f3" />
+      <stop offset="100%" stop-color="#ffc8dd" />
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="url(#female-bg)" />
-  <circle cx="32" cy="24" r="10" fill="#f8d7c3" />
-  <path d="M20 27c0-7 5.4-14 12-14s12 7 12 14v3H20v-3z" fill="#7b3f64" />
-  <path d="M15 58c0-10.5 7.6-18.6 17-18.6S49 47.5 49 58H15z" fill="#c55383" />
+  <rect width="64" height="64" fill="url(#female-bg)" />
+  <path d="M13.5 57c0-11 8.3-18 18.5-18s18.5 7 18.5 18" fill="#cc5f8f" />
+  <path d="M15.5 32c0-11.6 7.4-19.3 16.5-19.3S48.5 20.4 48.5 32v6.3c0 7.9-7.4 13.5-16.5 13.5s-16.5-5.6-16.5-13.5V32z" fill="#7c466c" />
+  <circle cx="32" cy="34.2" r="13.8" fill="#f8d8c4" />
+  <circle cx="27" cy="33.2" r="1.6" fill="#7c466c" />
+  <circle cx="37" cy="33.2" r="1.6" fill="#7c466c" />
+  <path d="M25.5 40c2.1 2.5 4.2 3.7 6.5 3.7s4.4-1.2 6.5-3.7" fill="none" stroke="#a36148" stroke-width="2.4" stroke-linecap="round" />
+  <circle cx="20.8" cy="36.4" r="1.6" fill="#ffa2c5" />
+  <circle cx="43.2" cy="36.4" r="1.6" fill="#ffa2c5" />
 </svg>

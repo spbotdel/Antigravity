@@ -6,8 +6,7 @@ import {
   FamilyTreeCanvas,
   type FamilyTreeCanvasAction
 } from "@/components/tree/family-tree-canvas";
-import { getStorageBucket } from "@/lib/env";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
 import { buildBuilderDisplayTree, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import { formatDate } from "@/lib/utils";
@@ -35,6 +34,37 @@ const PERSON_GENDER_OPTIONS = [
 
 const BUILDER_CANVAS_MIN_HEIGHT = 700;
 const BUILDER_CANVAS_MAX_HEIGHT = 1600;
+const MAX_MEDIA_FILES_PER_BATCH = 12;
+const MAX_MEDIA_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+
+type MediaUploadKind = "photo" | "video" | "document" | "unknown";
+type MediaUploadStatus = "queued" | "uploading" | "finalizing" | "done" | "error";
+
+interface MediaUploadTargetRequest {
+  signedUrl: string;
+  uploadProvider?: "supabase_storage" | "object_storage";
+}
+
+interface MediaUploadProgressSnapshot {
+  uploadedBytes: number;
+  totalBytes: number;
+  percent: number;
+  speedBytesPerSecond: number | null;
+  remainingMs: number | null;
+}
+
+interface MediaUploadQueueItem {
+  id: string;
+  name: string;
+  kind: MediaUploadKind;
+  sizeBytes: number;
+  status: MediaUploadStatus;
+  uploadedBytes: number;
+  progressPercent: number;
+  speedBytesPerSecond: number | null;
+  remainingMs: number | null;
+  message: string | null;
+}
 
 function formatParentLinkMeta(value?: string | null) {
   if (!value || value === "biological") {
@@ -74,6 +104,147 @@ function getMediaOpenLabel(kind: TreeSnapshot["media"][number]["kind"]) {
   }
 
   return "Открыть файл";
+}
+
+function getMediaSourceLabel(asset: TreeSnapshot["media"][number]) {
+  if (asset.provider === "yandex_disk") {
+    return "Внешняя ссылка";
+  }
+
+  return "Storage";
+}
+
+function formatMediaUploadKindLabel(kind: MediaUploadKind) {
+  if (kind === "unknown") {
+    return "Файл";
+  }
+
+  return formatMediaKind(kind);
+}
+
+function detectMediaUploadKind(file: File): MediaUploadKind {
+  if (file.type.startsWith("image/")) {
+    return "photo";
+  }
+
+  if (file.type.startsWith("video/")) {
+    return "video";
+  }
+
+  if (
+    file.type === "application/pdf" ||
+    file.type.startsWith("text/") ||
+    file.type.includes("word") ||
+    file.type.includes("officedocument") ||
+    file.type.includes("spreadsheet") ||
+    file.type.includes("presentation") ||
+    file.type === "application/rtf"
+  ) {
+    return "document";
+  }
+
+  return "unknown";
+}
+
+function formatMediaUploadBytes(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "0 Б";
+  }
+
+  if (value >= 1024 * 1024 * 1024) {
+    return `${(value / (1024 * 1024 * 1024)).toFixed(1)} ГБ`;
+  }
+
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} МБ`;
+  }
+
+  if (value >= 1024) {
+    return `${Math.round(value / 1024)} КБ`;
+  }
+
+  return `${Math.round(value)} Б`;
+}
+
+function formatMediaUploadSpeed(value: number | null) {
+  if (!value || !Number.isFinite(value) || value <= 0) {
+    return "Скорость...";
+  }
+
+  return `${formatMediaUploadBytes(value)}/с`;
+}
+
+function formatMediaUploadRemaining(value: number | null) {
+  if (!value || !Number.isFinite(value) || value <= 0) {
+    return "Осталось...";
+  }
+
+  const totalSeconds = Math.max(1, Math.round(value / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes > 0) {
+    return `${minutes} мин ${seconds} с`;
+  }
+
+  return `${seconds} с`;
+}
+
+function buildMediaUploadProgress(loadedBytes: number, totalBytes: number, startedAtMs: number): MediaUploadProgressSnapshot {
+  const elapsedMs = Math.max(Date.now() - startedAtMs, 1);
+  const speedBytesPerSecond = loadedBytes > 0 ? (loadedBytes / elapsedMs) * 1000 : null;
+  const remainingBytes = Math.max(totalBytes - loadedBytes, 0);
+  const remainingMs = speedBytesPerSecond && speedBytesPerSecond > 0 ? (remainingBytes / speedBytesPerSecond) * 1000 : null;
+  const percent = totalBytes > 0 ? Math.min(100, Math.round((loadedBytes / totalBytes) * 100)) : 0;
+
+  return {
+    uploadedBytes: loadedBytes,
+    totalBytes,
+    percent,
+    speedBytesPerSecond,
+    remainingMs
+  };
+}
+
+async function uploadFileToMediaTarget(
+  request: MediaUploadTargetRequest,
+  file: File,
+  onProgress?: (progress: MediaUploadProgressSnapshot) => void
+) {
+  const formData = new FormData();
+  formData.set("signedUrl", request.signedUrl);
+  formData.set("contentType", file.type);
+  formData.set("file", file);
+
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const startedAtMs = Date.now();
+
+    xhr.open("POST", "/api/media/upload-file");
+    xhr.responseType = "json";
+    xhr.upload.onprogress = (event) => {
+      const totalBytes = event.lengthComputable ? event.total : file.size;
+      onProgress?.(buildMediaUploadProgress(event.loaded, totalBytes, startedAtMs));
+    };
+    xhr.onerror = () => {
+      reject(new Error("Не удалось отправить файл на сервер."));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(buildMediaUploadProgress(file.size, file.size, startedAtMs));
+        resolve();
+        return;
+      }
+
+      const payload = xhr.response && typeof xhr.response === "object" ? xhr.response : null;
+      const errorMessage =
+        (payload && "error" in payload && typeof payload.error === "string" && payload.error) ||
+        xhr.responseText ||
+        `Загрузка файла завершилась ошибкой (${xhr.status}).`;
+      reject(new Error(errorMessage));
+    };
+    xhr.send(formData);
+  });
 }
 
 function getPersonListMeta(person: PersonRecord) {
@@ -218,6 +389,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [createContext, setCreateContext] = useState<CreateContext>({ type: "standalone" });
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mediaUploadItems, setMediaUploadItems] = useState<MediaUploadQueueItem[]>([]);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [canvasHeight, setCanvasHeight] = useState(980);
   const currentSnapshotRef = useRef(currentSnapshot);
   const resizeSessionRef = useRef<{ startHeight: number; startY: number } | null>(null);
@@ -244,6 +417,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const selectedPersonPending = Boolean(selectedPerson && isTemporaryPersonId(selectedPerson.id));
   const rootPerson = visualRootPersonId ? peopleById.get(visualRootPersonId) || null : null;
   const selectedMedia = selectedPerson ? collectPersonMedia(currentSnapshot, selectedPerson.id) : [];
+  const selectedStorageMedia = selectedMedia.filter((asset) => asset.provider !== "yandex_disk");
+  const selectedExternalVideos = selectedMedia.filter((asset) => asset.provider === "yandex_disk");
   const anchorPerson = createContext.type === "standalone" ? null : peopleById.get(createContext.anchorPersonId) || null;
   const createHeading = getCreateContextHeading(createContext, anchorPerson);
   const createModeActive = activePanel === "person" && personMode === "create";
@@ -261,6 +436,34 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         { label: "Медиа", value: String(selectedMedia.length) }
       ]
     : [];
+  const selectedMediaSummary = selectedPerson
+    ? [
+        { label: "Всего", value: String(selectedMedia.length), note: "Все привязанные материалы" },
+        { label: "Storage", value: String(selectedStorageMedia.length), note: "Фото, видео и документы в хранилище" },
+        { label: "Внешние", value: String(selectedExternalVideos.length), note: "Видео по внешним ссылкам" }
+      ]
+    : [];
+  const totalQueuedMediaBytes = mediaUploadItems.reduce((sum, item) => sum + item.sizeBytes, 0);
+  const uploadedMediaBytes = mediaUploadItems.reduce((sum, item) => {
+    if (item.status === "done") {
+      return sum + item.sizeBytes;
+    }
+
+    return sum + Math.min(item.uploadedBytes, item.sizeBytes);
+  }, 0);
+  const mediaBatchProgressPercent =
+    totalQueuedMediaBytes > 0 ? Math.min(100, Math.round((uploadedMediaBytes / totalQueuedMediaBytes) * 100)) : 0;
+  const activeMediaUploadItem =
+    mediaUploadItems.find((item) => item.status === "uploading" || item.status === "finalizing") || null;
+  const activeMediaUploadIndex = activeMediaUploadItem ? mediaUploadItems.findIndex((item) => item.id === activeMediaUploadItem.id) + 1 : null;
+  const mediaUploadButtonLabel = isUploadingMedia
+    ? activeMediaUploadIndex
+      ? `Загрузка ${activeMediaUploadIndex}/${mediaUploadItems.length} · ${mediaBatchProgressPercent}%`
+      : `Подготавливаю ${mediaUploadItems.length} файлов`
+    : "Загрузить файлы";
+  const mediaUploadProgressLabel = isUploadingMedia
+    ? `${formatMediaUploadBytes(uploadedMediaBytes)} из ${formatMediaUploadBytes(totalQueuedMediaBytes)} · ${formatMediaUploadSpeed(activeMediaUploadItem?.speedBytesPerSecond ?? null)} · ${formatMediaUploadRemaining(activeMediaUploadItem?.remainingMs ?? null)}`
+    : null;
   const inspectorTitle = createModeActive ? createHeading.title : selectedPerson ? selectedPerson.full_name : "Выберите человека";
   const inspectorDescription = createModeActive
     ? "Заполните поля справа и сохраните новый блок."
@@ -720,14 +923,28 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     return payload;
   }
 
-  async function requestJson(url: string, method: string, body: unknown) {
-    setError(null);
+  async function requestJsonRaw(url: string, method: string, body: unknown) {
     const response = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
     const payload = await response.json().catch(() => ({}));
+    return { response, payload };
+  }
+
+  async function requestJsonOrThrow(url: string, method: string, body: unknown) {
+    const { response, payload } = await requestJsonRaw(url, method, body);
+    if (!response.ok) {
+      throw new Error(payload.error || "Запрос не выполнен.");
+    }
+
+    return payload;
+  }
+
+  async function requestJson(url: string, method: string, body: unknown) {
+    setError(null);
+    const { response, payload } = await requestJsonRaw(url, method, body);
     if (!response.ok) {
       setError(payload.error || "Запрос не выполнен.");
       return null;
@@ -944,6 +1161,162 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       people: sortPeopleRecords(prev.people.map((person) => (person.id === personId ? payload.person : person)))
     }));
     setStatus(payload.message || "Данные человека обновлены.");
+  }
+
+  function updateMediaUploadItem(itemId: string, updates: Partial<MediaUploadQueueItem>) {
+    setMediaUploadItems((items) => items.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
+  }
+
+  async function uploadSelectedMediaFiles(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedPerson) {
+      setError("Сначала выберите человека, чтобы привязать к нему медиа.");
+      return;
+    }
+
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const files = form
+      .getAll("mediaFile")
+      .filter((item): item is File => item instanceof File && item.size > 0);
+
+    if (!files.length) {
+      setError("Сначала выберите хотя бы один файл.");
+      return;
+    }
+
+    if (files.length > MAX_MEDIA_FILES_PER_BATCH) {
+      setError(`За один раз можно загрузить не больше ${MAX_MEDIA_FILES_PER_BATCH} файлов.`);
+      return;
+    }
+
+    const oversizedFiles = files.filter((file) => file.size > MAX_MEDIA_FILE_SIZE_BYTES);
+    if (oversizedFiles.length) {
+      setError(
+        `Файл больше ${formatMediaUploadBytes(MAX_MEDIA_FILE_SIZE_BYTES)}: ${oversizedFiles
+          .slice(0, 3)
+          .map((file) => file.name)
+          .join(", ")}.`
+      );
+      return;
+    }
+
+    const uploadQueue = files.map((file) => ({
+      id: crypto.randomUUID(),
+      name: file.name,
+      kind: detectMediaUploadKind(file),
+      sizeBytes: file.size,
+      status: "queued" as const,
+      uploadedBytes: 0,
+      progressPercent: 0,
+      speedBytesPerSecond: null,
+      remainingMs: null,
+      message: null
+    }));
+
+    setError(null);
+    setStatus(null);
+    setIsUploadingMedia(true);
+    setMediaUploadItems(uploadQueue);
+
+    let uploadedCount = 0;
+    const failedFiles: string[] = [];
+
+    try {
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const queueItem = uploadQueue[index];
+
+        try {
+          updateMediaUploadItem(queueItem.id, {
+            status: "uploading",
+            message: "Загружается..."
+          });
+
+          const baseTitle = String(form.get("title") || "").trim();
+          const resolvedTitle = baseTitle
+            ? files.length === 1
+              ? baseTitle
+              : `${baseTitle} · ${index + 1}`
+            : file.name;
+
+          const request = await requestJsonOrThrow("/api/media/upload-intent", "POST", {
+            treeId: currentSnapshotRef.current.tree.id,
+            personId: selectedPerson.id,
+            filename: file.name,
+            mimeType: file.type,
+            visibility: String(form.get("visibility") || "public"),
+            title: resolvedTitle,
+            caption: String(form.get("caption") || "")
+          });
+
+          await uploadFileToMediaTarget(request, file, (progress) => {
+            updateMediaUploadItem(queueItem.id, {
+              status: "uploading",
+              uploadedBytes: progress.uploadedBytes,
+              progressPercent: progress.percent,
+              speedBytesPerSecond: progress.speedBytesPerSecond,
+              remainingMs: progress.remainingMs,
+              message: "Загружается..."
+            });
+          });
+
+          updateMediaUploadItem(queueItem.id, {
+            status: "finalizing",
+            progressPercent: 100,
+            uploadedBytes: file.size,
+            speedBytesPerSecond: null,
+            remainingMs: null,
+            message: "Сохраняется..."
+          });
+
+          await requestJsonOrThrow("/api/media/complete", "POST", {
+            treeId: currentSnapshotRef.current.tree.id,
+            personId: selectedPerson.id,
+            mediaId: request.mediaId,
+            storagePath: request.path,
+            visibility: String(form.get("visibility") || "public"),
+            title: resolvedTitle,
+            caption: String(form.get("caption") || ""),
+            mimeType: file.type,
+            sizeBytes: file.size
+          });
+
+          uploadedCount += 1;
+          updateMediaUploadItem(queueItem.id, {
+            status: "done",
+            progressPercent: 100,
+            uploadedBytes: file.size,
+            message: "Загружено"
+          });
+        } catch (uploadError) {
+          failedFiles.push(file.name);
+          updateMediaUploadItem(queueItem.id, {
+            status: "error",
+            message: uploadError instanceof Error ? uploadError.message : "Файл не загрузился."
+          });
+        }
+      }
+
+      if (uploadedCount > 0) {
+        await reloadSnapshot();
+        formElement.reset();
+      }
+
+      if (uploadedCount > 0) {
+        setStatus(
+          failedFiles.length
+            ? `Загружено ${uploadedCount} из ${files.length} файлов.`
+            : `Загружено ${uploadedCount} ${uploadedCount === 1 ? "файл" : uploadedCount < 5 ? "файла" : "файлов"}.`
+        );
+      }
+
+      if (failedFiles.length) {
+        setError(`Не удалось загрузить: ${failedFiles.slice(0, 3).join(", ")}${failedFiles.length > 3 ? "..." : ""}.`);
+      }
+    } finally {
+      setIsUploadingMedia(false);
+    }
   }
 
   function handleCanvasAction(personId: string, action: FamilyTreeCanvasAction) {
@@ -1391,73 +1764,48 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                   <p className="muted-copy">Материалы привязываются к выбранному человеку и сразу попадают в список ниже.</p>
                 </div>
 
+                <div className="builder-media-summary-grid">
+                  {selectedMediaSummary.map((item) => (
+                    <article key={item.label} className="builder-media-summary-card">
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                      <p>{item.note}</p>
+                    </article>
+                  ))}
+                </div>
+
+                {selectedMedia.length ? (
+                  <div className="builder-section-block">
+                    <div className="builder-block-heading">
+                      <strong>Просмотр</strong>
+                      <p className="muted-copy">Фото и локально загруженные видео можно смотреть прямо в приложении. Лента ниже переключает материалы выбранного человека.</p>
+                    </div>
+                    <PersonMediaGallery media={selectedMedia} />
+                  </div>
+                ) : null}
+
                 <div className="builder-section-block">
                   <div className="builder-block-heading">
-                    <strong>Файлы</strong>
-                    <p className="muted-copy">Фото, видео и документы загружаются одним потоком и сразу привязываются к выбранному человеку.</p>
+                    <strong>Файлы из storage</strong>
+                    <p className="muted-copy">Фото, видео из storage и документы загружаются одним потоком и сразу привязываются к выбранному человеку.</p>
                   </div>
                   <form
                     className="stack-form builder-form-grid"
-                    onSubmit={async (event) => {
-                      event.preventDefault();
-                      const form = new FormData(event.currentTarget);
-                      const file = form.get("mediaFile") as File | null;
-                      if (!file || file.size === 0) {
-                        setError("Сначала выберите файл.");
-                        return;
-                      }
-
-                      const request = await requestJson("/api/media/upload-intent", "POST", {
-                        treeId: currentSnapshot.tree.id,
-                        personId: selectedPerson.id,
-                        filename: file.name,
-                        mimeType: file.type,
-                        visibility: String(form.get("visibility") || "public"),
-                        title: String(form.get("title") || ""),
-                        caption: String(form.get("caption") || "")
-                      });
-
-                      if (!request) {
-                        return;
-                      }
-
-                      const supabase = createBrowserSupabaseClient();
-                      const upload = await supabase.storage.from(getStorageBucket()).uploadToSignedUrl(request.path, request.token, file, {
-                        contentType: file.type
-                      });
-
-                      if (upload.error) {
-                        setError(upload.error.message);
-                        return;
-                      }
-
-                      await submitJson("/api/media/complete", "POST", {
-                        treeId: currentSnapshot.tree.id,
-                        personId: selectedPerson.id,
-                        mediaId: request.mediaId,
-                        storagePath: request.path,
-                        visibility: String(form.get("visibility") || "public"),
-                        title: String(form.get("title") || ""),
-                        caption: String(form.get("caption") || ""),
-                        mimeType: file.type,
-                        sizeBytes: file.size
-                      });
-
-                      event.currentTarget.reset();
-                    }}
+                    onSubmit={uploadSelectedMediaFiles}
                   >
                     <label className="builder-field-span">
-                      Файл
+                      Фото, видео и документы
                       <input
                         name="mediaFile"
                         type="file"
                         accept="image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx"
+                        multiple
                         required
                       />
                     </label>
                     <label>
-                      Название
-                      <input name="title" required placeholder="Свадебный портрет или архивный документ" />
+                      Название (необязательно)
+                      <input name="title" placeholder="Для одного файла или как общий префикс для пачки" />
                     </label>
                     <label>
                       Видимость
@@ -1468,44 +1816,163 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     </label>
                     <label className="builder-field-span">
                       Подпись
-                      <textarea name="caption" rows={3} placeholder="Необязательная подпись" />
+                      <textarea name="caption" rows={3} placeholder="Общая подпись для выбранных файлов, если она нужна" />
+                    </label>
+                    <button className="primary-button builder-field-span" type="submit" disabled={isUploadingMedia}>
+                      {mediaUploadButtonLabel}
+                    </button>
+                    {mediaUploadProgressLabel ? <p className="builder-media-progress-meta">{mediaUploadProgressLabel}</p> : null}
+                    <p className="builder-media-limits-note">
+                      За один раз: до {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(MAX_MEDIA_FILE_SIZE_BYTES)} на файл. Фото и видео с устройства загружаются через один общий поток.
+                    </p>
+                  </form>
+                  {mediaUploadItems.length ? (
+                    <div className="builder-upload-queue">
+                      {mediaUploadItems.map((item) => (
+                        <article key={item.id} className={`builder-upload-item builder-upload-item-${item.status}`}>
+                          <div className="builder-upload-item-top">
+                            <strong>{item.name}</strong>
+                            <span>{formatMediaUploadKindLabel(item.kind)}</span>
+                          </div>
+                          <div className="builder-upload-progress-bar">
+                            <span style={{ width: `${item.progressPercent}%` }} />
+                          </div>
+                          <div className="builder-upload-item-meta">
+                            <span>{item.progressPercent}%</span>
+                            <span>{formatMediaUploadBytes(item.uploadedBytes)} из {formatMediaUploadBytes(item.sizeBytes)}</span>
+                            <span>{item.speedBytesPerSecond ? formatMediaUploadSpeed(item.speedBytesPerSecond) : item.message || "Ожидание"}</span>
+                            <span>{item.remainingMs ? `Осталось ${formatMediaUploadRemaining(item.remainingMs)}` : item.message || ""}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="builder-section-block">
+                  <div className="builder-block-heading">
+                    <strong>Внешнее видео по ссылке</strong>
+                    <p className="muted-copy">Подходит для внешнего видео, которое уже хранится вне storage и должно открываться отдельной ссылкой без повторной загрузки файла.</p>
+                  </div>
+                  <form
+                    className="stack-form builder-form-grid"
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      const form = new FormData(event.currentTarget);
+                      await submitJson("/api/media/complete", "POST", {
+                        treeId: currentSnapshot.tree.id,
+                        personId: selectedPerson.id,
+                        mediaId: crypto.randomUUID(),
+                        provider: "yandex_disk",
+                        externalUrl: String(form.get("externalUrl") || "").trim(),
+                        visibility: String(form.get("visibility") || "public"),
+                        title: String(form.get("title") || "").trim(),
+                        caption: String(form.get("caption") || "").trim()
+                      });
+
+                      event.currentTarget.reset();
+                    }}
+                  >
+                    <label className="builder-field-span">
+                      Ссылка на видео
+                      <input name="externalUrl" type="url" required placeholder="https://disk.yandex.ru/..." />
+                    </label>
+                    <label>
+                      Название
+                      <input name="title" required placeholder="Семейная хроника" />
+                    </label>
+                    <label>
+                      Видимость
+                      <select name="visibility" defaultValue="public">
+                        <option value="public">Всем по ссылке</option>
+                        <option value="members">Только участникам</option>
+                      </select>
+                    </label>
+                    <label className="builder-field-span">
+                      Подпись
+                      <textarea name="caption" rows={3} placeholder="Например: оцифрованная запись, семейный архив или внешний видеоплеер" />
                     </label>
                     <button className="primary-button builder-field-span" type="submit">
-                      Загрузить файл
+                      Добавить видео по ссылке
                     </button>
                   </form>
                 </div>
 
-                <div className="builder-media-grid">
-                  {selectedMedia.length ? (
-                    selectedMedia.map((asset) => (
-                      <article key={asset.id} className="media-card builder-media-card">
-                        {asset.kind === "photo" ? <img src={`/api/media/${asset.id}`} alt={asset.title} className="media-photo" /> : null}
-                        <div className="media-meta">
-                          <span>{formatMediaKind(asset.kind)}</span>
-                          <span>{formatMediaVisibility(asset.visibility)}</span>
-                        </div>
-                        <h4>{asset.title}</h4>
-                        <p>{asset.caption || "Подпись не добавлена."}</p>
-                        {asset.kind !== "photo" ? (
-                          <a href={`/api/media/${asset.id}`} target="_blank" rel="noreferrer" className="ghost-button">
-                            {getMediaOpenLabel(asset.kind)}
-                          </a>
-                        ) : null}
-                        <button
-                          className="danger-button"
-                          type="button"
-                          onClick={async () => {
-                            await submitJson(`/api/media/${asset.id}`, "DELETE", {});
-                          }}
-                        >
-                          Удалить медиа
-                        </button>
-                      </article>
-                    ))
-                  ) : (
-                    <div className="empty-state">Для этого человека пока не загружены файлы.</div>
-                  )}
+                <div className="builder-media-library">
+                  <section className="builder-media-group">
+                    <div className="builder-block-heading">
+                      <strong>Файлы из storage</strong>
+                      <p className="muted-copy">Файлы, которые уже загружены в storage и выдаются через контролируемый route.</p>
+                    </div>
+                    <div className="builder-media-grid">
+                      {selectedStorageMedia.length ? (
+                        selectedStorageMedia.map((asset) => (
+                          <article key={asset.id} className="media-card builder-media-card">
+                            {asset.kind === "photo" ? <img src={`/api/media/${asset.id}`} alt={asset.title} className="media-photo" /> : null}
+                            <div className="media-meta">
+                              <span>{formatMediaKind(asset.kind)}</span>
+                              <span>{formatMediaVisibility(asset.visibility)}</span>
+                              <span>{getMediaSourceLabel(asset)}</span>
+                            </div>
+                            <h4>{asset.title}</h4>
+                            <p>{asset.caption || "Подпись не добавлена."}</p>
+                            {asset.kind !== "photo" ? (
+                              <a href={`/api/media/${asset.id}`} target="_blank" rel="noreferrer" className="ghost-button">
+                                {getMediaOpenLabel(asset.kind)}
+                              </a>
+                            ) : null}
+                            <button
+                              className="danger-button"
+                              type="button"
+                              onClick={async () => {
+                                await submitJson(`/api/media/${asset.id}`, "DELETE", {});
+                              }}
+                            >
+                              Удалить медиа
+                            </button>
+                          </article>
+                        ))
+                      ) : (
+                        <div className="builder-relation-empty">Storage-файлы для этого человека пока не загружены.</div>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="builder-media-group">
+                    <div className="builder-block-heading">
+                      <strong>Внешние видео</strong>
+                      <p className="muted-copy">Ссылки на видео, которые открываются во внешнем источнике и не занимают место в storage.</p>
+                    </div>
+                    <div className="builder-media-grid">
+                      {selectedExternalVideos.length ? (
+                        selectedExternalVideos.map((asset) => (
+                          <article key={asset.id} className="media-card builder-media-card">
+                            <div className="media-meta">
+                              <span>{formatMediaKind(asset.kind)}</span>
+                              <span>{formatMediaVisibility(asset.visibility)}</span>
+                              <span>{getMediaSourceLabel(asset)}</span>
+                            </div>
+                            <h4>{asset.title}</h4>
+                            <p>{asset.caption || "Подпись не добавлена."}</p>
+                            <a href={`/api/media/${asset.id}`} target="_blank" rel="noreferrer" className="ghost-button">
+                              Открыть видео
+                            </a>
+                            <button
+                              className="danger-button"
+                              type="button"
+                              onClick={async () => {
+                                await submitJson(`/api/media/${asset.id}`, "DELETE", {});
+                              }}
+                            >
+                              Удалить ссылку
+                            </button>
+                          </article>
+                        ))
+                      ) : (
+                        <div className="builder-relation-empty">Внешние видео по ссылке для этого человека пока не добавлены.</div>
+                      )}
+                    </div>
+                  </section>
                 </div>
               </>
             ) : (

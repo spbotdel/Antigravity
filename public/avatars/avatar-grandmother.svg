@@ -1,0 +1,21 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Grandmother avatar">
+  <defs>
+    <linearGradient id="grandmother-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#faeff6" />
+      <stop offset="100%" stop-color="#e7d7e3" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#grandmother-bg)" />
+  <path d="M14.5 57c0-10.5 8-17.3 17.5-17.3S49.5 46.5 49.5 57" fill="#9a7698" />
+  <circle cx="32" cy="12.4" r="5.2" fill="#9c8ba2" />
+  <path d="M16.2 32c0-11 7.1-18.4 15.8-18.4S47.8 21 47.8 32v7.3c0 7.3-7.1 12.6-15.8 12.6s-15.8-5.3-15.8-12.6V32z" fill="#9c8ba2" />
+  <circle cx="32" cy="34.5" r="13.1" fill="#f0d0bd" />
+  <g fill="none" stroke="#737d8f" stroke-width="1.4">
+    <circle cx="27.6" cy="34.2" r="2.9" />
+    <circle cx="36.4" cy="34.2" r="2.9" />
+    <path d="M30.5 34.2h3" />
+  </g>
+  <path d="M26 40.1c1.9 2.1 3.9 3.2 6 3.2s4.1-1.1 6-3.2" fill="none" stroke="#9e6045" stroke-width="2.1" stroke-linecap="round" />
+  <circle cx="21.5" cy="37.2" r="1.4" fill="#e8afca" />
+  <circle cx="42.5" cy="37.2" r="1.4" fill="#e8afca" />
+</svg>

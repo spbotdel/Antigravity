@@ -6,6 +6,20 @@
     ".claude/BACKLOG.md",
     ".claude/ARCHITECTURE.md"
   ],
+  "startup_context_paths": [
+    ".claude/SNAPSHOT.md",
+    ".claude/BACKLOG.md",
+    ".claude/ARCHITECTURE.md",
+    "README.md",
+    "PROJECT_SUMMARY.md",
+    "REPO_MAP.md",
+    "TREE_MODEL.md",
+    "TREE_ALGORITHMS.md",
+    "DATA_FLOW.md",
+    "ARCHITECTURE_RULES.md",
+    "DECISIONS.md",
+    "COMMON_BUGS.md"
+  ],
   "core_cli": {
     "cold_start": "python3 src/framework-core/main.py cold-start",
     "completion": "python3 src/framework-core/main.py completion"

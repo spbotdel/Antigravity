@@ -17,6 +17,9 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
   const router = useRouter();
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [shareLinkUrl, setShareLinkUrl] = useState<string | null>(null);
+  const [inviteRole, setInviteRole] = useState<"viewer" | "admin">("viewer");
+  const [inviteMethod, setInviteMethod] = useState<"link" | "email">("link");
+  const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const activeMemberships = memberships.filter((membership) => membership.status === "active");
   const managers = activeMemberships.filter((membership) => membership.role === "owner" || membership.role === "admin");
@@ -64,6 +67,32 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
     return "Имеет доступ к просмотру и может быть повышен до администратора прямо из этого списка.";
   }
 
+  function getInviteRoleHint() {
+    if (inviteRole === "admin") {
+      return "Подходит для родственника-помощника, который будет редактировать дерево и загружать файлы.";
+    }
+
+    return "Подходит для человека с постоянным доступом по аккаунту, но без редактирования дерева.";
+  }
+
+  function getInviteMethodHint() {
+    if (inviteMethod === "email") {
+      return "Почту можно сохранить сейчас, а саму ссылку отправить позже вручную.";
+    }
+
+    return "Самый быстрый путь: ссылка создается сразу, и ее можно тут же отправить человеку.";
+  }
+
+  async function copyText(value: string, successLabel: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedMessage(successLabel);
+      setError(null);
+    } catch {
+      setError("Не удалось скопировать ссылку автоматически. Скопируйте ее вручную.");
+    }
+  }
+
   async function refreshAfter(action: Promise<Response>) {
     const response = await action;
     const payload = await response.json().catch(() => ({}));
@@ -107,6 +136,21 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
         </article>
       </section>
 
+      <section className="members-guidance-grid">
+        <article className="surface-card members-guidance-card">
+          <p className="eyebrow">По аккаунту</p>
+          <strong>Приглашение участника</strong>
+          <p>Используйте, если человеку нужен постоянный доступ под своей ролью, а не просто просмотр по ссылке.</p>
+        </article>
+        <article className="surface-card members-guidance-card">
+          <p className="eyebrow">Без аккаунта</p>
+          <strong>Семейная ссылка</strong>
+          <p>Подходит для родственников, которым нужен только просмотр дерева и файлов без отдельной регистрации.</p>
+        </article>
+      </section>
+
+      {copiedMessage ? <p className="form-success">{copiedMessage}</p> : null}
+
       <section className="surface-card members-invite-card">
         <div className="members-section-heading">
           <p className="eyebrow">Приглашение</p>
@@ -146,14 +190,14 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
           <div className="field-grid field-grid-2">
             <label>
               Роль
-              <select name="role" defaultValue="viewer">
+              <select name="role" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "viewer" | "admin")}>
                 <option value="viewer">Участник</option>
                 <option value="admin">Администратор</option>
               </select>
             </label>
             <label>
               Способ приглашения
-              <select name="inviteMethod" defaultValue="link">
+              <select name="inviteMethod" value={inviteMethod} onChange={(event) => setInviteMethod(event.target.value as "link" | "email")}>
                 <option value="link">Защищенная ссылка</option>
                 <option value="email">Отправка на email позже</option>
               </select>
@@ -172,12 +216,34 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
           <button className="primary-button" type="submit">
             Создать приглашение
           </button>
+          <p className="members-helper-note">{getInviteRoleHint()}</p>
+          <p className="members-helper-note">{getInviteMethodHint()}</p>
         </form>
         {inviteLink ? (
           <div className="inline-feedback-card inline-feedback-card-success">
             <span className="inline-feedback-label">Приглашение готово</span>
             <strong>Скопируйте ссылку и отправьте ее участнику.</strong>
             <p>{inviteLink}</p>
+            <div className="card-actions members-inline-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  void copyText(inviteLink, "Ссылка приглашения скопирована.");
+                }}
+              >
+                Скопировать ссылку
+              </button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => {
+                  setInviteLink(null);
+                }}
+              >
+                Скрыть
+              </button>
+            </div>
           </div>
         ) : null}
         {error ? <p className="form-error">{error}</p> : null}
@@ -230,12 +296,33 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
           <button className="primary-button" type="submit">
             Создать ссылку для просмотра
           </button>
+          <p className="members-helper-note">Эта ссылка не выдает роль в дереве и подходит только для безопасного семейного read-only доступа.</p>
         </form>
         {shareLinkUrl ? (
           <div className="inline-feedback-card inline-feedback-card-success">
             <span className="inline-feedback-label">Ссылка готова</span>
             <strong>Скопируйте и отправьте родственнику.</strong>
             <p>{shareLinkUrl}</p>
+            <div className="card-actions members-inline-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  void copyText(shareLinkUrl, "Семейная ссылка скопирована.");
+                }}
+              >
+                Скопировать ссылку
+              </button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => {
+                  setShareLinkUrl(null);
+                }}
+              >
+                Скрыть
+              </button>
+            </div>
           </div>
         ) : null}
         {error ? <p className="form-error">{error}</p> : null}

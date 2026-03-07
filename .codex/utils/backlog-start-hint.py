@@ -7,13 +7,14 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 BACKLOG_PATH = Path(".claude/BACKLOG.md")
 CHECKBOX_RE = re.compile(r"^\s*-\s\[\s\]\s+(.+?)\s*$")
 H3_RE = re.compile(r"^\s*###\s+(.+?)\s*$")
 DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+UTC_DATETIME_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z)\b")
 DEFAULT_STALE_DAYS = 3
 
 
@@ -55,7 +56,10 @@ def _extract_next_action(markdown: str) -> Optional[str]:
 
 def _extract_manual_update_date(markdown: str) -> Optional[datetime]:
     for line in markdown.splitlines()[:60]:
-        if "updated" not in line.lower() and "refreshed" not in line.lower():
+        lowered = line.lower()
+        if "updated" not in lowered and "refreshed" not in lowered:
+            continue
+        if "utc" in lowered:
             continue
         match = DATE_RE.search(line)
         if not match:
@@ -68,10 +72,32 @@ def _extract_manual_update_date(markdown: str) -> Optional[datetime]:
     return None
 
 
+def _extract_embedded_timestamps(markdown: str) -> List[datetime]:
+    timestamps: List[datetime] = []
+    for line in markdown.splitlines():
+        if "updated at (utc)" not in line.lower() and "completed at (utc)" not in line.lower():
+            continue
+        for raw_value in UTC_DATETIME_RE.findall(line):
+            try:
+                parsed = datetime.strptime(raw_value, "%Y-%m-%d %H:%M:%SZ")
+            except ValueError:
+                continue
+            timestamps.append(parsed.replace(tzinfo=timezone.utc))
+    return timestamps
+
+
 def _resolve_update_timestamp(path: Path, markdown: str) -> Tuple[Optional[datetime], str]:
+    candidates: List[Tuple[datetime, str]] = []
+
     manual = _extract_manual_update_date(markdown)
     if manual:
-        return manual, "manual"
+        candidates.append((manual, "manual"))
+
+    for embedded_timestamp in _extract_embedded_timestamps(markdown):
+        candidates.append((embedded_timestamp, "embedded"))
+
+    if candidates:
+        return max(candidates, key=lambda item: item[0])
 
     try:
         stat_time = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
@@ -105,10 +131,14 @@ def main() -> int:
     age_days = max((today - updated_date).days, 0)
 
     if age_days >= stale_days:
-        source_label = "manual update" if source_kind == "manual" else "file update"
+        source_label = "embedded refresh"
+        if source_kind == "manual":
+            source_label = "manual review"
+        elif source_kind == "file_mtime":
+            source_label = "file update"
         print(
             "[codex] backlog stale: "
-            f"last {source_label} {updated_date.isoformat()} ({age_days} days ago). "
+            f"latest {source_label} {updated_date.isoformat()} ({age_days} days ago). "
             "refresh .claude/BACKLOG.md priorities."
         )
 
