@@ -25,8 +25,14 @@ function withShareToken(url: string, shareToken?: string | null) {
   return nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
 }
 
-function buildMediaAssetUrl(asset: MediaAsset, shareToken?: string | null) {
-  return withShareToken(`/api/media/${asset.id}`, shareToken);
+function buildMediaAssetUrl(asset: MediaAsset, shareToken?: string | null, variant?: "thumb" | "small" | "medium") {
+  const params = new URLSearchParams();
+  if (variant) {
+    params.set("variant", variant);
+  }
+
+  const baseUrl = params.size ? `/api/media/${asset.id}?${params.toString()}` : `/api/media/${asset.id}`;
+  return withShareToken(baseUrl, shareToken);
 }
 
 function isPhotoAsset(asset: MediaAsset) {
@@ -42,7 +48,7 @@ function isInlineRenderableAsset(asset: MediaAsset) {
 }
 
 function getMediaSourceLabel(asset: MediaAsset) {
-  return asset.provider === "yandex_disk" ? "Внешняя ссылка" : "Storage";
+  return asset.provider === "yandex_disk" ? "По ссылке" : "Файл";
 }
 
 function getMediaThumbBadge(asset: MediaAsset) {
@@ -51,7 +57,7 @@ function getMediaThumbBadge(asset: MediaAsset) {
   }
 
   if (asset.kind === "video" && asset.provider === "yandex_disk") {
-    return "Видео по ссылке";
+    return "Ссылка";
   }
 
   if (asset.kind === "video") {
@@ -63,14 +69,14 @@ function getMediaThumbBadge(asset: MediaAsset) {
 
 function getMediaPlaceholderTitle(asset: MediaAsset) {
   if (asset.kind === "document") {
-    return "Документ доступен по ссылке";
+    return "Документ открывается по ссылке";
   }
 
   if (asset.provider === "yandex_disk") {
-    return "Внешнее видео";
+    return "Видео по ссылке";
   }
 
-  return "Файл доступен по ссылке";
+  return "Файл открывается по ссылке";
 }
 
 function getMediaOpenLabel(asset: MediaAsset) {
@@ -102,7 +108,7 @@ function MediaThumb({
   onSelect: () => void;
   index: number;
 }) {
-  const mediaUrl = buildMediaAssetUrl(asset, shareToken);
+  const mediaUrl = buildMediaAssetUrl(asset, shareToken, isPhotoAsset(asset) ? "thumb" : undefined);
 
   return (
     <button
@@ -138,7 +144,7 @@ function MediaPreview({
   shareToken?: string | null;
   expanded?: boolean;
 }) {
-  const mediaUrl = buildMediaAssetUrl(asset, shareToken);
+  const mediaUrl = buildMediaAssetUrl(asset, shareToken, isPhotoAsset(asset) ? (expanded ? "medium" : "small") : undefined);
 
   if (isPhotoAsset(asset)) {
     return (

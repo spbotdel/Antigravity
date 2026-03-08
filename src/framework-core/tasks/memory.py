@@ -6,7 +6,7 @@ import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from tasks.config import _detect_branch, _detect_stack, _top_level_structure
 from utils.parallel import time_task
@@ -138,6 +138,233 @@ def _upsert_marked_block(path: Path, marker_id: str, content: str) -> bool:
 def _build_markdown_lines(rows: Iterable[str]) -> str:
     values = [item for item in rows if item]
     return "\n".join(values) if values else "- `<none>`"
+
+
+def _read_text_or_empty(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def _replace_line(content: str, pattern: str, replacement: str) -> Tuple[str, bool]:
+    updated, count = re.subn(pattern, replacement, content, count=1, flags=re.MULTILINE)
+    return updated, count > 0 and updated != content
+
+
+def _replace_top_level_section(content: str, heading: str, body: str) -> Tuple[str, bool]:
+    pattern = re.compile(
+        rf"(^## {re.escape(heading)}\n\n)(.*?)(?=^## |\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+
+    def _replacement(match: re.Match[str]) -> str:
+        return f"{match.group(1)}{body.rstrip()}\n\n"
+
+    updated, count = pattern.subn(_replacement, content, count=1)
+    if count > 0:
+        return updated, updated != content
+
+    suffix = "" if content.endswith("\n") else "\n"
+    appended = f"{content}{suffix}\n## {heading}\n\n{body.rstrip()}\n"
+    return appended, True
+
+
+def _write_if_changed(path: Path, next_content: str, previous_content: str) -> bool:
+    if next_content == previous_content:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(next_content, encoding="utf-8")
+    return True
+
+
+def _is_antigravity_repo(root: Path) -> bool:
+    return (
+        root.joinpath(".claude", "SNAPSHOT.md").exists()
+        and root.joinpath("components", "tree", "builder-workspace.tsx").exists()
+        and root.joinpath("tests", "media-storage-e2e.mjs").exists()
+    )
+
+
+def _detect_antigravity_media_status(root: Path) -> Dict[str, bool]:
+    builder_text = _read_text_or_empty(root / "components" / "tree" / "builder-workspace.tsx")
+    viewer_text = _read_text_or_empty(root / "components" / "tree" / "tree-viewer-client.tsx")
+    gallery_text = _read_text_or_empty(root / "components" / "tree" / "person-media-gallery.tsx")
+    smoke_text = _read_text_or_empty(root / "tests" / "media-storage-e2e.mjs")
+    media_route_text = _read_text_or_empty(root / "app" / "api" / "media" / "[mediaId]" / "route.ts")
+    display_text = _read_text_or_empty(root / "lib" / "tree" / "display.ts")
+
+    has_multi_file_upload = "MAX_MEDIA_FILES_PER_BATCH" in builder_text and "multiple" in builder_text
+    has_device_video_upload = 'accept="image/*,video/*' in builder_text and "smoke-video.webm" in smoke_text
+    has_limits_copy = "builder-media-limits-note" in builder_text
+    has_progress_ui = "builder-media-progress-meta" in builder_text and "XMLHttpRequest" in builder_text
+    has_media_gallery = (
+        gallery_text != ""
+        and "PersonMediaGallery" in builder_text
+        and "PersonMediaGallery" in viewer_text
+    )
+    has_smoke_report = "media-storage-report-" in smoke_text and "fs.writeFileSync(reportPath" in smoke_text
+    has_variant_delivery = (
+        "variant" in media_route_text
+        and any(token in media_route_text or token in display_text for token in ("thumb", "small", "medium"))
+    )
+
+    return {
+        "has_multi_file_upload": has_multi_file_upload,
+        "has_device_video_upload": has_device_video_upload,
+        "has_limits_copy": has_limits_copy,
+        "has_progress_ui": has_progress_ui,
+        "has_media_gallery": has_media_gallery,
+        "has_smoke_report": has_smoke_report,
+        "has_variant_delivery": has_variant_delivery,
+        "upload_flow_complete": all(
+            (
+                has_multi_file_upload,
+                has_device_video_upload,
+                has_limits_copy,
+                has_progress_ui,
+            )
+        ),
+    }
+
+
+def _build_antigravity_snapshot_sections(branch: str, status: Dict[str, bool]) -> Dict[str, str]:
+    current_workstream = (
+        "media upload and in-app viewing are largely stabilized; next media step is thumbnail variants, alongside tree canvas polish and builder/members QA"
+        if status.get("upload_flow_complete") and status.get("has_media_gallery")
+        else "media upload redesign v2, thumbnail planning, tree canvas polish, and builder/members stabilization"
+    )
+
+    current_state = "\n".join(
+        [
+            "- Framework mode: active",
+            f"- Active branch: `{branch}`",
+            "- Runtime application: `Next.js 16 + React 19 + TypeScript`",
+            "- Backend/data layer: `Supabase` auth, database, RLS + S3-compatible object storage",
+            "- Dev environment: linked to Supabase project `untwxmiqqwepopeepzqe`",
+            "- Legacy static viewer: preserved in `legacy/` and old `index.html`, but no longer the main runtime",
+            f"- Current workstream: {current_workstream}",
+        ]
+    )
+
+    blockers = [
+        "- [ ] Preview architecture still lacks thumbnail variants, so originals remain too heavy for large family archives.",
+        "- [ ] Builder canvas resize and overlay inspector still need practical QA on desktop, tablet and mobile widths.",
+        "- [ ] Members/invite/share-link flows need end-to-end validation against live API responses and clipboard behavior.",
+        "- [ ] Manual memory notes must stay aligned with the actual workstream after each `/fi`.",
+        "- [ ] Landing/dashboard cleanup is no longer the primary blocker, but still needs a secondary calm pass after tree/member flows stabilize.",
+    ]
+    if not status.get("upload_flow_complete"):
+        blockers.insert(
+            0,
+            "- [ ] Current media upload UX is still not archive-ready: single flow, multi-file batches, device video, limits and progress need to be confirmed end-to-end.",
+        )
+
+    focus = [
+        "- [x] Unified local-file upload now covers photos and videos from device in one flow.",
+        "- [x] Multi-file batches, visible limits copy, and human-readable progress feedback are in place in the builder.",
+        "- [x] Viewer and builder now expose an in-app media gallery with inline playback for file-backed video.",
+        "- [x] `smoke:media` now persists a JSON report artifact in `tests/artifacts/`.",
+        "- [ ] Add thumbnail variants (`thumb/small/medium`) so previews stop loading originals by default.",
+        "- [ ] Finish the current `family-tree-canvas` interaction and visual pass.",
+        "- [ ] Validate `Участники`, invites and share links as one coherent access-management flow.",
+        "- [ ] QA the reworked builder layout so the tree keeps visual priority on desktop and mobile.",
+        "- [ ] Keep startup context, task capsules and memory files aligned with the current sprint.",
+    ]
+    if not status.get("has_media_gallery"):
+        focus.insert(
+            2,
+            "- [ ] Add an in-app media gallery so uploaded photos and videos can be viewed without leaving the product.",
+        )
+
+    next_steps = [
+        "- [ ] Implement variant-aware media delivery for `thumb/small/medium`, keeping originals only for explicit full view.",
+        "- [ ] Switch tree cards, side rails and media galleries to preview variants instead of originals.",
+        "- [ ] Run targeted QA for viewer, builder and members after the current media UI pass.",
+        "- [ ] Review `Участники` end-to-end with invite, copy and revoke flows.",
+        "- [ ] Revisit landing and dashboard only after tree/member workflows are stable.",
+        "- [ ] Close each concrete work cycle with `/fi`; completion now needs to keep manual memory sections current as well.",
+    ]
+
+    return {
+        "Current State": current_state,
+        "Active Blockers": "\n".join(blockers),
+        "Current Focus": "\n".join(focus),
+        "Next Steps": "\n".join(next_steps),
+    }
+
+
+def _build_antigravity_backlog_active_sprint(status: Dict[str, bool]) -> str:
+    high_priority = [
+        "- [ ] Завершить media stream через thumbnail/variant architecture: `thumb/small/medium` для preview, оригинал только для full view, CDN позже.",
+        "- [ ] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.",
+        "- [ ] Завершить текущий pass по `family-tree-canvas`: age-aware avatars, fallback badge states, читаемость карточек и стабильное выделение выбранного узла в viewer и builder.",
+        "- [ ] Стабилизировать layout конструктора: resizable canvas shell, overlay inspector на desktop и предсказуемое поведение на tablet/mobile без потери приоритета дерева.",
+        "- [ ] Довести экран `Участники`: приглашения по аккаунту и read-only share links должны быть самодостаточными, с понятными подсказками, копированием ссылок и безопасным отзывом доступа.",
+        "- [ ] Провести целевой QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.",
+        "- [ ] Держать startup context, task capsules и memory-файлы актуальными: `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.",
+    ]
+    if not status.get("upload_flow_complete"):
+        high_priority.insert(
+            0,
+            "- [ ] Подтвердить, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий.",
+        )
+
+    medium_priority = [
+        "- [ ] Подготовить отдельный exploratory stream для `Cloudflare R2`, не ломая текущий `Yandex Object Storage` path.",
+        "- [ ] Вернуться к calm pass для landing и dashboard после стабилизации builder/members: сократить лишний copy, выровнять ритм заголовков и CTA.",
+        "- [ ] Добить единый light visual system для `Настройки`, `Журнал`, `Участники`, builder и viewer.",
+        "- [ ] Проверить аватары и карточки дерева на кейсах без фото, с кириллицей в gender, с детьми и пожилыми, чтобы визуальные fallback-и были предсказуемыми.",
+        "- [ ] Уточнить, какие из новых проектных документов должны оставаться обязательным startup context, а какие достаточно держать как справочные.",
+        "- [ ] Подготовить следующий smoke cycle после текущих UI правок и обновления memory-файлов.",
+    ]
+
+    low_priority = [
+        "- [ ] Добавлять motion-акценты только после стабилизации canvas/layout/access flows.",
+        "- [ ] Возвращаться к бренд-деталям landing только если это не конфликтует с коротким utilitarian тоном продукта.",
+    ]
+
+    return (
+        "### High Priority\n\n"
+        f"{_build_markdown_lines(high_priority)}\n\n"
+        "### Medium Priority\n\n"
+        f"{_build_markdown_lines(medium_priority)}\n\n"
+        "### Low Priority\n\n"
+        f"{_build_markdown_lines(low_priority)}"
+    )
+
+
+def _sync_antigravity_manual_memory(root: Path, timestamp_utc: str, branch: str) -> List[str]:
+    if not _is_antigravity_repo(root):
+        return []
+
+    status = _detect_antigravity_media_status(root)
+    date_label = timestamp_utc.split(" ")[0]
+    updated_files: List[str] = []
+
+    snapshot_path = root / ".claude" / "SNAPSHOT.md"
+    snapshot_content = _read_text_or_empty(snapshot_path)
+    snapshot_sections = _build_antigravity_snapshot_sections(branch, status)
+    next_snapshot = snapshot_content
+    next_snapshot, _ = _replace_line(next_snapshot, r"^\*Last updated: .*?\*$", f"*Last updated: {date_label}*")
+    for heading, body in snapshot_sections.items():
+        next_snapshot, _ = _replace_top_level_section(next_snapshot, heading, body)
+    if _write_if_changed(snapshot_path, next_snapshot, snapshot_content):
+        updated_files.append(snapshot_path.as_posix())
+
+    backlog_path = root / ".claude" / "BACKLOG.md"
+    backlog_content = _read_text_or_empty(backlog_path)
+    next_backlog = backlog_content
+    next_backlog, _ = _replace_line(next_backlog, r"^\*Updated: .*?\*$", f"*Updated: {date_label}*")
+    next_backlog, _ = _replace_top_level_section(
+        next_backlog,
+        "Active Sprint",
+        _build_antigravity_backlog_active_sprint(status),
+    )
+    if _write_if_changed(backlog_path, next_backlog, backlog_content):
+        updated_files.append(backlog_path.as_posix())
+
+    return updated_files
 
 
 def _read_package_manifest(root: Path) -> Dict[str, object]:
@@ -446,7 +673,7 @@ def sync_shared_memory_task(
             root / STATE_FILES[2]: architecture_auto,
         }
 
-        updated_files = 0
+        updated_paths = set()
         for path, auto_content in targets.items():
             architecture_changed = False
             if path == root / STATE_FILES[2]:
@@ -454,7 +681,7 @@ def sync_shared_memory_task(
             auto_changed = _upsert_marked_block(path, "FRAMEWORK:AUTO", auto_content)
             session_changed = _upsert_marked_block(path, "FRAMEWORK:SESSION", session_block)
             if architecture_changed or auto_changed or session_changed:
-                updated_files += 1
+                updated_paths.add(path.as_posix())
             logging.info(
                 "memory_sync: file=%s architecture_changed=%s auto_changed=%s session_changed=%s",
                 path.as_posix(),
@@ -463,15 +690,20 @@ def sync_shared_memory_task(
                 session_changed,
             )
 
+        manual_updates = _sync_antigravity_manual_memory(root, timestamp_utc, branch)
+        if manual_updates:
+            updated_paths.update(manual_updates)
+            logging.info("memory_sync: antigravity manual sections updated files=%s", manual_updates)
+
         logging.info(
             "memory_sync: completed updated_files=%s branch=%s status=%s diff=%s",
-            updated_files,
+            len(updated_paths),
             branch,
             git_status_result,
             git_diff_result,
         )
 
-        return create_task_result("memory_sync", "success", f"MEMORY:updated:{updated_files}")
+        return create_task_result("memory_sync", "success", f"MEMORY:updated:{len(updated_paths)}")
     except Exception as error:
         logging.exception("memory_sync: failed")
         return create_task_result("memory_sync", "error", "", error=str(error))

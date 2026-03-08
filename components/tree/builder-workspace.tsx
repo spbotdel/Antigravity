@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type PointerEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type PointerEvent, type SetStateAction } from "react";
 
 import {
   FamilyTreeCanvas,
@@ -43,6 +43,11 @@ type MediaUploadStatus = "queued" | "uploading" | "finalizing" | "done" | "error
 interface MediaUploadTargetRequest {
   signedUrl: string;
   uploadProvider?: "supabase_storage" | "object_storage";
+  variantTargets?: Array<{
+    variant: "thumb" | "small" | "medium";
+    path: string;
+    signedUrl: string;
+  }>;
 }
 
 interface MediaUploadProgressSnapshot {
@@ -108,18 +113,10 @@ function getMediaOpenLabel(kind: TreeSnapshot["media"][number]["kind"]) {
 
 function getMediaSourceLabel(asset: TreeSnapshot["media"][number]) {
   if (asset.provider === "yandex_disk") {
-    return "Внешняя ссылка";
+    return "По ссылке";
   }
 
-  return "Storage";
-}
-
-function formatMediaUploadKindLabel(kind: MediaUploadKind) {
-  if (kind === "unknown") {
-    return "Файл";
-  }
-
-  return formatMediaKind(kind);
+  return "Файл";
 }
 
 function detectMediaUploadKind(file: File): MediaUploadKind {
@@ -166,28 +163,70 @@ function formatMediaUploadBytes(value: number | null) {
   return `${Math.round(value)} Б`;
 }
 
-function formatMediaUploadSpeed(value: number | null) {
-  if (!value || !Number.isFinite(value) || value <= 0) {
-    return "Скорость...";
+function formatSelectedMediaFilesSummary(files: File[]) {
+  if (!files.length) {
+    return "Файлы не выбраны";
   }
 
-  return `${formatMediaUploadBytes(value)}/с`;
+  if (files.length === 1) {
+    return `${files[0].name} · ${formatMediaUploadBytes(files[0].size)}`;
+  }
+
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  return `Выбрано ${files.length} файлов · ${formatMediaUploadBytes(totalBytes)}`;
 }
 
-function formatMediaUploadRemaining(value: number | null) {
-  if (!value || !Number.isFinite(value) || value <= 0) {
-    return "Осталось...";
+function formatSelectedMediaFilesHint(files: File[]) {
+  if (!files.length) {
+    return "Фото, видео и документы можно выбрать одним действием.";
   }
 
-  const totalSeconds = Math.max(1, Math.round(value / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes > 0) {
-    return `${minutes} мин ${seconds} с`;
+  const names = files.slice(0, 3).map((file) => file.name);
+  if (files.length > 3) {
+    names.push(`и еще ${files.length - 3}`);
   }
 
-  return `${seconds} с`;
+  return names.join(", ");
+}
+
+function formatMediaUploadQueueStatus(item: MediaUploadQueueItem) {
+  if (item.status === "error") {
+    return item.message || "Файл не загрузился";
+  }
+
+  if (item.status === "done") {
+    return "Готово";
+  }
+
+  if (item.status === "finalizing") {
+    return "Сохраняем файл";
+  }
+
+  if (item.status === "queued") {
+    return "Файл ждет очереди";
+  }
+
+  return "Файл загружается";
+}
+
+function formatMediaBatchProgressLabel(input: {
+  uploadedBytes: number;
+  totalBytes: number;
+  activeItem: MediaUploadQueueItem | null;
+  activeIndex: number | null;
+  totalItems: number;
+}) {
+  const uploadedLabel = `${formatMediaUploadBytes(input.uploadedBytes)} из ${formatMediaUploadBytes(input.totalBytes)}`;
+
+  if (!input.activeItem || !input.activeIndex) {
+    return `Подготавливаем загрузку. Уже отправили ${uploadedLabel}.`;
+  }
+
+  if (input.activeItem.status === "finalizing") {
+    return `Сохраняем файл ${input.activeIndex} из ${input.totalItems}. Уже отправили ${uploadedLabel}.`;
+  }
+
+  return `Загружаем файл ${input.activeIndex} из ${input.totalItems}. Уже отправили ${uploadedLabel}.`;
 }
 
 function buildMediaUploadProgress(loadedBytes: number, totalBytes: number, startedAtMs: number): MediaUploadProgressSnapshot {
@@ -215,6 +254,9 @@ async function uploadFileToMediaTarget(
   formData.set("signedUrl", request.signedUrl);
   formData.set("contentType", file.type);
   formData.set("file", file);
+  if (request.variantTargets?.length) {
+    formData.set("variantTargets", JSON.stringify(request.variantTargets));
+  }
 
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -391,12 +433,14 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [error, setError] = useState<string | null>(null);
   const [mediaUploadItems, setMediaUploadItems] = useState<MediaUploadQueueItem[]>([]);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [selectedMediaFiles, setSelectedMediaFiles] = useState<File[]>([]);
   const [canvasHeight, setCanvasHeight] = useState(980);
   const currentSnapshotRef = useRef(currentSnapshot);
   const resizeSessionRef = useRef<{ startHeight: number; startY: number } | null>(null);
   const tempPersonResolutionPromisesRef = useRef(new Map<string, Promise<string | null>>());
   const tempPersonResolutionResolversRef = useRef(new Map<string, (personId: string | null) => void>());
   const resolvedTempPersonIdsRef = useRef(new Map<string, string | null>());
+  const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const peopleById = useMemo(() => new Map(currentSnapshot.people.map((person) => [person.id, person])), [currentSnapshot.people]);
   const effectiveSnapshot = useMemo(
     () => ({
@@ -439,8 +483,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const selectedMediaSummary = selectedPerson
     ? [
         { label: "Всего", value: String(selectedMedia.length), note: "Все привязанные материалы" },
-        { label: "Storage", value: String(selectedStorageMedia.length), note: "Фото, видео и документы в хранилище" },
-        { label: "Внешние", value: String(selectedExternalVideos.length), note: "Видео по внешним ссылкам" }
+        { label: "Файлы", value: String(selectedStorageMedia.length), note: "Фото, видео и документы, загруженные в архив" },
+        { label: "Ссылки", value: String(selectedExternalVideos.length), note: "Видео, которые открываются по ссылке" }
       ]
     : [];
   const totalQueuedMediaBytes = mediaUploadItems.reduce((sum, item) => sum + item.sizeBytes, 0);
@@ -451,19 +495,21 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
     return sum + Math.min(item.uploadedBytes, item.sizeBytes);
   }, 0);
-  const mediaBatchProgressPercent =
-    totalQueuedMediaBytes > 0 ? Math.min(100, Math.round((uploadedMediaBytes / totalQueuedMediaBytes) * 100)) : 0;
   const activeMediaUploadItem =
     mediaUploadItems.find((item) => item.status === "uploading" || item.status === "finalizing") || null;
   const activeMediaUploadIndex = activeMediaUploadItem ? mediaUploadItems.findIndex((item) => item.id === activeMediaUploadItem.id) + 1 : null;
-  const mediaUploadButtonLabel = isUploadingMedia
-    ? activeMediaUploadIndex
-      ? `Загрузка ${activeMediaUploadIndex}/${mediaUploadItems.length} · ${mediaBatchProgressPercent}%`
-      : `Подготавливаю ${mediaUploadItems.length} файлов`
-    : "Загрузить файлы";
+  const mediaUploadButtonLabel = isUploadingMedia ? "Загружаем файлы..." : "Загрузить файлы";
   const mediaUploadProgressLabel = isUploadingMedia
-    ? `${formatMediaUploadBytes(uploadedMediaBytes)} из ${formatMediaUploadBytes(totalQueuedMediaBytes)} · ${formatMediaUploadSpeed(activeMediaUploadItem?.speedBytesPerSecond ?? null)} · ${formatMediaUploadRemaining(activeMediaUploadItem?.remainingMs ?? null)}`
+    ? formatMediaBatchProgressLabel({
+        uploadedBytes: uploadedMediaBytes,
+        totalBytes: totalQueuedMediaBytes,
+        activeItem: activeMediaUploadItem,
+        activeIndex: activeMediaUploadIndex,
+        totalItems: mediaUploadItems.length
+      })
     : null;
+  const selectedMediaFilesSummary = formatSelectedMediaFilesSummary(selectedMediaFiles);
+  const selectedMediaFilesHint = formatSelectedMediaFilesHint(selectedMediaFiles);
   const inspectorTitle = createModeActive ? createHeading.title : selectedPerson ? selectedPerson.full_name : "Выберите человека";
   const inspectorDescription = createModeActive
     ? "Заполните поля справа и сохраните новый блок."
@@ -570,6 +616,13 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   useEffect(() => {
     currentSnapshotRef.current = currentSnapshot;
   }, [currentSnapshot]);
+
+  useEffect(() => {
+    setSelectedMediaFiles([]);
+    if (mediaFileInputRef.current) {
+      mediaFileInputRef.current.value = "";
+    }
+  }, [selectedPersonId]);
 
   useEffect(() => {
     if (selectedPersonId && peopleById.has(selectedPersonId)) {
@@ -1167,6 +1220,14 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setMediaUploadItems((items) => items.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
   }
 
+  function handleMediaFileSelection(event: ChangeEvent<HTMLInputElement>) {
+    const nextFiles = Array.from(event.target.files || []);
+    setSelectedMediaFiles(nextFiles);
+    if (nextFiles.length) {
+      setError(null);
+    }
+  }
+
   async function uploadSelectedMediaFiles(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedPerson) {
@@ -1176,9 +1237,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const files = form
-      .getAll("mediaFile")
-      .filter((item): item is File => item instanceof File && item.size > 0);
+    const files = selectedMediaFiles.filter((file) => file.size > 0);
 
     if (!files.length) {
       setError("Сначала выберите хотя бы один файл.");
@@ -1275,6 +1334,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             personId: selectedPerson.id,
             mediaId: request.mediaId,
             storagePath: request.path,
+            variantPaths: request.variantTargets?.map((item: { variant: "thumb" | "small" | "medium"; path: string }) => ({
+              variant: item.variant,
+              storagePath: item.path
+            })),
             visibility: String(form.get("visibility") || "public"),
             title: resolvedTitle,
             caption: String(form.get("caption") || ""),
@@ -1301,6 +1364,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       if (uploadedCount > 0) {
         await reloadSnapshot();
         formElement.reset();
+        setSelectedMediaFiles([]);
+        if (mediaFileInputRef.current) {
+          mediaFileInputRef.current.value = "";
+        }
       }
 
       if (uploadedCount > 0) {
@@ -1786,23 +1853,44 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
                 <div className="builder-section-block">
                   <div className="builder-block-heading">
-                    <strong>Файлы из storage</strong>
-                    <p className="muted-copy">Фото, видео из storage и документы загружаются одним потоком и сразу привязываются к выбранному человеку.</p>
+                    <strong>Файлы</strong>
+                    <p className="muted-copy">Фото, видео и документы загружаются одним потоком и сразу привязываются к выбранному человеку.</p>
                   </div>
                   <form
                     className="stack-form builder-form-grid"
                     onSubmit={uploadSelectedMediaFiles}
                   >
-                    <label className="builder-field-span">
-                      Фото, видео и документы
+                    <div className="builder-field-span builder-file-picker">
+                      <label className="builder-file-picker-label" htmlFor="builder-media-file-input">
+                        Фото, видео и документы
+                      </label>
                       <input
+                        id="builder-media-file-input"
+                        ref={mediaFileInputRef}
+                        className="builder-native-file-input"
                         name="mediaFile"
                         type="file"
                         accept="image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx"
                         multiple
-                        required
+                        onChange={handleMediaFileSelection}
                       />
-                    </label>
+                      <div className="builder-file-picker-shell">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={isUploadingMedia}
+                          onClick={() => {
+                            mediaFileInputRef.current?.click();
+                          }}
+                        >
+                          Выбрать файлы
+                        </button>
+                        <div className="builder-file-picker-copy">
+                          <strong>{selectedMediaFilesSummary}</strong>
+                          <span>{selectedMediaFilesHint}</span>
+                        </div>
+                      </div>
+                    </div>
                     <label>
                       Название (необязательно)
                       <input name="title" placeholder="Для одного файла или как общий префикс для пачки" />
@@ -1821,38 +1909,19 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     <button className="primary-button builder-field-span" type="submit" disabled={isUploadingMedia}>
                       {mediaUploadButtonLabel}
                     </button>
-                    {mediaUploadProgressLabel ? <p className="builder-media-progress-meta">{mediaUploadProgressLabel}</p> : null}
-                    <p className="builder-media-limits-note">
-                      За один раз: до {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(MAX_MEDIA_FILE_SIZE_BYTES)} на файл. Фото и видео с устройства загружаются через один общий поток.
-                    </p>
-                  </form>
-                  {mediaUploadItems.length ? (
-                    <div className="builder-upload-queue">
-                      {mediaUploadItems.map((item) => (
-                        <article key={item.id} className={`builder-upload-item builder-upload-item-${item.status}`}>
-                          <div className="builder-upload-item-top">
-                            <strong>{item.name}</strong>
-                            <span>{formatMediaUploadKindLabel(item.kind)}</span>
-                          </div>
-                          <div className="builder-upload-progress-bar">
-                            <span style={{ width: `${item.progressPercent}%` }} />
-                          </div>
-                          <div className="builder-upload-item-meta">
-                            <span>{item.progressPercent}%</span>
-                            <span>{formatMediaUploadBytes(item.uploadedBytes)} из {formatMediaUploadBytes(item.sizeBytes)}</span>
-                            <span>{item.speedBytesPerSecond ? formatMediaUploadSpeed(item.speedBytesPerSecond) : item.message || "Ожидание"}</span>
-                            <span>{item.remainingMs ? `Осталось ${formatMediaUploadRemaining(item.remainingMs)}` : item.message || ""}</span>
-                          </div>
-                        </article>
-                      ))}
+                    <div className="builder-upload-feedback builder-field-span">
+                      {mediaUploadProgressLabel ? <p className="builder-media-progress-meta">{mediaUploadProgressLabel}</p> : null}
+                      <p className="builder-media-limits-note">
+                        За один раз: до {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(MAX_MEDIA_FILE_SIZE_BYTES)} на файл. Фото и видео с устройства загружаются через один общий поток.
+                      </p>
                     </div>
-                  ) : null}
+                  </form>
                 </div>
 
                 <div className="builder-section-block">
                   <div className="builder-block-heading">
-                    <strong>Внешнее видео по ссылке</strong>
-                    <p className="muted-copy">Подходит для внешнего видео, которое уже хранится вне storage и должно открываться отдельной ссылкой без повторной загрузки файла.</p>
+                    <strong>Видео по ссылке</strong>
+                    <p className="muted-copy">Подходит для видео, которое уже лежит в другом сервисе и должно открываться по ссылке без повторной загрузки файла.</p>
                   </div>
                   <form
                     className="stack-form builder-form-grid"
@@ -1901,14 +1970,14 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                 <div className="builder-media-library">
                   <section className="builder-media-group">
                     <div className="builder-block-heading">
-                      <strong>Файлы из storage</strong>
-                      <p className="muted-copy">Файлы, которые уже загружены в storage и выдаются через контролируемый route.</p>
+                      <strong>Загруженные файлы</strong>
+                      <p className="muted-copy">Фото, видео и документы, которые уже добавлены этому человеку.</p>
                     </div>
                     <div className="builder-media-grid">
                       {selectedStorageMedia.length ? (
                         selectedStorageMedia.map((asset) => (
                           <article key={asset.id} className="media-card builder-media-card">
-                            {asset.kind === "photo" ? <img src={`/api/media/${asset.id}`} alt={asset.title} className="media-photo" /> : null}
+                            {asset.kind === "photo" ? <img src={`/api/media/${asset.id}?variant=small`} alt={asset.title} className="media-photo" /> : null}
                             <div className="media-meta">
                               <span>{formatMediaKind(asset.kind)}</span>
                               <span>{formatMediaVisibility(asset.visibility)}</span>
@@ -1933,15 +2002,15 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                           </article>
                         ))
                       ) : (
-                        <div className="builder-relation-empty">Storage-файлы для этого человека пока не загружены.</div>
+                        <div className="builder-relation-empty">Для этого человека пока нет загруженных файлов.</div>
                       )}
                     </div>
                   </section>
 
                   <section className="builder-media-group">
                     <div className="builder-block-heading">
-                      <strong>Внешние видео</strong>
-                      <p className="muted-copy">Ссылки на видео, которые открываются во внешнем источнике и не занимают место в storage.</p>
+                      <strong>Видео по ссылке</strong>
+                      <p className="muted-copy">Видео, которые открываются в другом источнике и не загружаются в архив.</p>
                     </div>
                     <div className="builder-media-grid">
                       {selectedExternalVideos.length ? (
@@ -1969,7 +2038,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                           </article>
                         ))
                       ) : (
-                        <div className="builder-relation-empty">Внешние видео по ссылке для этого человека пока не добавлены.</div>
+                        <div className="builder-relation-empty">Для этого человека пока не добавлены видео по ссылке.</div>
                       )}
                     </div>
                   </section>

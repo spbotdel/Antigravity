@@ -10,8 +10,11 @@ interface Params {
 export async function GET(request: Request, { params }: Params) {
   try {
     const { mediaId } = await params;
-    const shareToken = new URL(request.url).searchParams.get("share");
-    const result = await resolveMediaAccess(mediaId, shareToken);
+    const searchParams = new URL(request.url).searchParams;
+    const shareToken = searchParams.get("share");
+    const rawVariant = searchParams.get("variant");
+    const variant = rawVariant === "thumb" || rawVariant === "small" || rawVariant === "medium" ? rawVariant : null;
+    const result = await resolveMediaAccess(mediaId, shareToken, variant);
     return NextResponse.redirect(result.url);
   } catch (error) {
     return toErrorResponse(error);

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import type {
@@ -12,6 +12,8 @@ import type {
   AuditEntryView,
   InviteRecord,
   MediaAssetRecord,
+  MediaAssetVariantRecord,
+  MediaVariantName,
   MembershipRecord,
   PaginatedAuditEntryView,
   PersonMediaRecord,
@@ -38,9 +40,11 @@ const admin = () => createAdminSupabaseClient();
 let objectStorageClient: S3Client | null = null;
 const execFileAsync = promisify(execFile);
 const OBJECT_STORAGE_HTTP_MAX_BUFFER = 1024 * 1024 * 4;
+const PHOTO_VARIANT_NAMES: MediaVariantName[] = ["thumb", "small", "medium"];
 
 const REPOSITORY_NETWORK_ERROR_MARKERS = ["SUPABASE_UNAVAILABLE", "fetch failed", "connect timeout", "timed out", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"];
 const SHARE_LINKS_SCHEMA_CACHE_MARKERS = ["tree_share_links", "schema cache"];
+const MEDIA_VARIANTS_SCHEMA_CACHE_MARKERS = ["media_asset_variants", "schema cache"];
 
 function toRepositoryReadError(error: unknown, fallbackMessage: string) {
   if (error instanceof AppError) {
@@ -58,6 +62,11 @@ function toRepositoryReadError(error: unknown, fallbackMessage: string) {
 function isShareLinksSchemaUnavailableError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return SHARE_LINKS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
+}
+
+function isMediaVariantsSchemaUnavailableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return MEDIA_VARIANTS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
 }
 
 function buildUuidInFilter(values: string[]) {
@@ -312,6 +321,30 @@ async function createObjectStorageSignedUploadUrl(storagePath: string, mimeType:
   };
 }
 
+async function createSignedUploadTargetForPath(storagePath: string, mimeType: string) {
+  if (getMediaStorageBackend() === "object_storage") {
+    return createObjectStorageSignedUploadUrl(storagePath, mimeType);
+  }
+
+  const { data, error } = await admin().storage.from(getStorageBucket()).createSignedUploadUrl(storagePath, { upsert: false });
+  if (error || !data) {
+    throw new AppError(400, error?.message || "Не удалось создать ссылку для загрузки.");
+  }
+
+  return {
+    bucket: getStorageBucket(),
+    signedUrl: data.signedUrl,
+    token: data.token,
+    uploadProvider: "supabase_storage" as const
+  };
+}
+
+function buildPhotoVariantStoragePath(storagePath: string, variant: MediaVariantName) {
+  const lastSlashIndex = storagePath.lastIndexOf("/");
+  const baseDirectory = lastSlashIndex >= 0 ? storagePath.slice(0, lastSlashIndex) : storagePath;
+  return `${baseDirectory}/variants/${variant}.webp`;
+}
+
 async function createObjectStorageSignedReadUrl(storagePath: string) {
   const config = getObjectStorageEnv();
   return getSignedUrl(
@@ -322,6 +355,35 @@ async function createObjectStorageSignedReadUrl(storagePath: string) {
     }),
     { expiresIn: 60 }
   );
+}
+
+async function objectStorageObjectExists(storagePath: string) {
+  const config = getObjectStorageEnv();
+  try {
+    await getObjectStorageClient().send(
+      new HeadObjectCommand({
+        Bucket: config.bucket,
+        Key: storagePath
+      })
+    );
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      message.includes("NotFound")
+      || message.includes("404")
+      || message.includes("NoSuchKey")
+    ) {
+      return false;
+    }
+
+    const metadata = typeof error === "object" && error && "$metadata" in error ? (error as { $metadata?: { httpStatusCode?: number } }).$metadata : null;
+    if (metadata?.httpStatusCode === 404) {
+      return false;
+    }
+
+    throw error;
+  }
 }
 
 async function runSignedHttpRequest(input: {
@@ -1364,33 +1426,33 @@ export async function createMediaUploadTarget(input: {
   const kind = resolveMediaKindFromMimeType(input.mimeType);
   const safeName = input.filename.replace(/[^a-zA-Z0-9._-]/g, "-");
   const storagePath = `trees/${input.treeId}/media/${kind}/${mediaId}/${safeName}`;
-
-  if (getMediaStorageBackend() === "object_storage") {
-    const objectStorageTarget = await createObjectStorageSignedUploadUrl(storagePath, input.mimeType);
-    return {
-      mediaId,
-      kind,
-      path: storagePath,
-      bucket: objectStorageTarget.bucket,
-      signedUrl: objectStorageTarget.signedUrl,
-      token: objectStorageTarget.token,
-      uploadProvider: objectStorageTarget.uploadProvider
-    };
-  }
-
-  const { data, error } = await admin().storage.from(getStorageBucket()).createSignedUploadUrl(storagePath, { upsert: false });
-  if (error || !data) {
-    throw new AppError(400, error?.message || "Не удалось создать ссылку для загрузки.");
-  }
+  const uploadTarget = await createSignedUploadTargetForPath(storagePath, input.mimeType);
+  const variantTargets =
+    kind === "photo"
+      ? await Promise.all(
+          PHOTO_VARIANT_NAMES.map(async (variant) => {
+            const variantPath = buildPhotoVariantStoragePath(storagePath, variant);
+            const variantUploadTarget = await createSignedUploadTargetForPath(variantPath, "image/webp");
+            return {
+              variant,
+              path: variantPath,
+              signedUrl: variantUploadTarget.signedUrl,
+              token: variantUploadTarget.token,
+              uploadProvider: variantUploadTarget.uploadProvider
+            };
+          })
+        )
+      : [];
 
   return {
     mediaId,
     kind,
     path: storagePath,
-    bucket: getStorageBucket(),
-    signedUrl: data.signedUrl,
-    token: data.token,
-    uploadProvider: "supabase_storage" as const
+    bucket: uploadTarget.bucket,
+    signedUrl: uploadTarget.signedUrl,
+    token: uploadTarget.token,
+    uploadProvider: uploadTarget.uploadProvider,
+    variantTargets
   };
 }
 
@@ -1399,6 +1461,10 @@ export async function completePhotoUpload(input: {
   personId: string;
   mediaId: string;
   storagePath: string;
+  variantPaths?: Array<{
+    variant: MediaVariantName;
+    storagePath: string;
+  }>;
   title: string;
   caption?: string | null;
   visibility: "public" | "members";
@@ -1413,6 +1479,10 @@ type CompletedStoredMediaInput = {
   personId: string;
   mediaId: string;
   storagePath: string;
+  variantPaths?: Array<{
+    variant: MediaVariantName;
+    storagePath: string;
+  }>;
   title: string;
   caption?: string | null;
   visibility: "public" | "members";
@@ -1443,6 +1513,10 @@ export async function completeMediaUpload(input: {
   personId: string;
   mediaId: string;
   storagePath: string;
+  variantPaths?: Array<{
+    variant: MediaVariantName;
+    storagePath: string;
+  }>;
   title: string;
   caption?: string | null;
   visibility: "public" | "members";
@@ -1463,6 +1537,7 @@ export async function completeMediaUpload(input: {
   const kind = isExternalVideoCompletionInput(input) ? "video" : resolveMediaKindFromMimeType(input.mimeType);
   const provider = isExternalVideoCompletionInput(input) ? "yandex_disk" : getFileBackedMediaProvider();
   const storagePath = isExternalVideoCompletionInput(input) ? null : input.storagePath;
+  const variantPaths = isExternalVideoCompletionInput(input) ? [] : input.variantPaths || [];
   const externalUrl = isExternalVideoCompletionInput(input) ? input.externalUrl : null;
   const mimeType = isExternalVideoCompletionInput(input) ? null : input.mimeType;
   const sizeBytes = isExternalVideoCompletionInput(input) ? null : input.sizeBytes || null;
@@ -1489,6 +1564,31 @@ export async function completeMediaUpload(input: {
 
   if (!data) {
     throw new AppError(400, "Не удалось завершить загрузку файла.");
+  }
+
+  if (variantPaths.length) {
+    try {
+      await mutateAdminRows<MediaAssetVariantRecord>(
+        "media_asset_variants",
+        "POST",
+        variantPaths.map((item) => ({
+          media_id: input.mediaId,
+          variant: item.variant,
+          storage_path: item.storagePath
+        })),
+        "Не удалось сохранить варианты медиа."
+      );
+    } catch (error) {
+      if (!isMediaVariantsSchemaUnavailableError(error)) {
+        await mutateAdminRows<never>(
+          `media_assets?id=eq.${encodeURIComponent(input.mediaId)}`,
+          "DELETE",
+          undefined,
+          "Не удалось откатить незавершенное медиа."
+        ).catch(() => {});
+        throw toRepositoryReadError(error, "Не удалось сохранить варианты медиа.");
+      }
+    }
   }
 
   try {
@@ -1519,7 +1619,7 @@ export async function completeMediaUpload(input: {
   return data;
 }
 
-export async function resolveMediaAccess(mediaId: string, shareToken?: string | null) {
+export async function resolveMediaAccess(mediaId: string, shareToken?: string | null, variant?: MediaVariantName | null) {
   const media = await fetchAdminFirst<MediaAssetRecord>(
     `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,
     "Не удалось загрузить медиа."
@@ -1541,9 +1641,42 @@ export async function resolveMediaAccess(mediaId: string, shareToken?: string | 
     throw new AppError(404, "Файл медиа отсутствует.");
   }
 
+  let resolvedVariantPath: string | null = null;
+  if (variant && media.kind === "photo") {
+    try {
+      const mediaVariant = await fetchAdminFirst<MediaAssetVariantRecord>(
+        `media_asset_variants?select=*&media_id=eq.${encodeURIComponent(mediaId)}&variant=eq.${encodeURIComponent(variant)}`,
+        "Не удалось загрузить вариант медиа."
+      );
+      if (mediaVariant?.storage_path) {
+        resolvedVariantPath = mediaVariant.storage_path;
+      }
+    } catch (error) {
+      if (!isMediaVariantsSchemaUnavailableError(error)) {
+        throw error;
+      }
+    }
+
+    if (!resolvedVariantPath) {
+      resolvedVariantPath = buildPhotoVariantStoragePath(media.storage_path, variant);
+    }
+  }
+
   if (media.provider === "object_storage") {
-    const signedUrl = await createObjectStorageSignedReadUrl(media.storage_path);
+    let resolvedStoragePath = media.storage_path;
+    if (resolvedVariantPath && await objectStorageObjectExists(resolvedVariantPath)) {
+      resolvedStoragePath = resolvedVariantPath;
+    }
+
+    const signedUrl = await createObjectStorageSignedReadUrl(resolvedStoragePath);
     return { kind: media.kind, url: signedUrl };
+  }
+
+  if (resolvedVariantPath) {
+    const { data: variantSigned, error: variantSignedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(resolvedVariantPath, 60);
+    if (!variantSignedError && variantSigned) {
+      return { kind: media.kind, url: variantSigned.signedUrl };
+    }
   }
 
   const { data: signed, error: signedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(media.storage_path, 60);
@@ -1560,15 +1693,40 @@ export async function deleteMedia(mediaId: string) {
   if (!before) throw new AppError(404, "Медиа не найдено.");
 
   const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
+  let variants: MediaAssetVariantRecord[] = [];
+  try {
+    variants = await fetchAdminRows<MediaAssetVariantRecord>(
+      `media_asset_variants?select=*&media_id=eq.${encodeURIComponent(mediaId)}`,
+      "Не удалось загрузить варианты медиа."
+    );
+  } catch (error) {
+    if (!isMediaVariantsSchemaUnavailableError(error)) {
+      throw error;
+    }
+  }
+  const variantStoragePaths = variants.length
+    ? variants.map((item) => item.storage_path)
+    : before.kind === "photo" && before.storage_path
+      ? PHOTO_VARIANT_NAMES.map((variant) => buildPhotoVariantStoragePath(before.storage_path as string, variant))
+      : [];
+
   if (before.storage_path) {
     if (before.provider === "object_storage") {
       try {
         await deleteObjectStorageObject(before.storage_path);
+        for (const variantStoragePath of variantStoragePaths) {
+          if (await objectStorageObjectExists(variantStoragePath)) {
+            await deleteObjectStorageObject(variantStoragePath);
+          }
+        }
       } catch (error) {
         throw toObjectStorageError(error, "Не удалось удалить файл из object storage.");
       }
     } else {
       await admin().storage.from(getStorageBucket()).remove([before.storage_path]);
+      if (variantStoragePaths.length) {
+        await admin().storage.from(getStorageBucket()).remove(variantStoragePaths);
+      }
     }
   }
 

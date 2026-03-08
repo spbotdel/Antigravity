@@ -3,6 +3,7 @@ export type TreeVisibility = "public" | "private";
 export type MediaVisibility = "public" | "members";
 export type MediaKind = "photo" | "video" | "document";
 export type MediaProvider = "supabase_storage" | "object_storage" | "yandex_disk";
+export type MediaVariantName = "thumb" | "small" | "medium";
 export type InviteMethod = "link" | "email";
 export type MembershipStatus = "active" | "revoked";
 export type ViewerAccessSource = "membership" | "share_link" | "public" | "anonymous";
@@ -92,6 +93,14 @@ export interface PersonMediaRecord {
   person_id: string;
   media_id: string;
   is_primary: boolean;
+}
+
+export interface MediaAssetVariantRecord {
+  id: string;
+  media_id: string;
+  variant: MediaVariantName;
+  storage_path: string;
+  created_at: string;
 }
 
 export interface InviteRecord {

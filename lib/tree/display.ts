@@ -267,7 +267,7 @@ export function buildPersonPhotoPreviewUrls(snapshot: Pick<TreeSnapshot, "media"
       continue;
     }
 
-    result[relation.person_id] = `/api/media/${relation.media_id}`;
+    result[relation.person_id] = `/api/media/${relation.media_id}?variant=thumb`;
   }
 
   return result;

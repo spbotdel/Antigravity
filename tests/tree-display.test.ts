@@ -335,7 +335,7 @@ describe("tree display helpers", () => {
     });
 
     expect(urls).toMatchObject({
-      "person-1": "/api/media/media-1"
+      "person-1": "/api/media/media-1?variant=thumb"
     });
     expect(urls["person-2"]).toBeUndefined();
   });

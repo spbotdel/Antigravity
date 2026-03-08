@@ -1,24 +1,21 @@
 # BACKLOG — Antigravity
 
-*Updated: 2026-03-07*
+*Updated: 2026-03-08*
 
 ## Active Sprint
 
 ### High Priority
 
-- [ ] Пересобрать media upload flow под реальный архивный сценарий: единый upload для фото и видео с устройства, multi-file, прогресс, лимиты и устранение `spawn ENAMETOOLONG`.
-  Capsule: `tasks/active/media-upload-flow-v2/`
-- [ ] Поднять thumbnail/variant architecture в ближайший следующий этап: `thumb/small/medium` для preview, оригинал только для full view, CDN позже.
-  Capsule: `tasks/active/media-upload-flow-v2/`
+- [ ] Завершить media stream через thumbnail/variant architecture: `thumb/small/medium` для preview, оригинал только для full view, CDN позже.
+- [ ] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
 - [ ] Завершить текущий pass по `family-tree-canvas`: age-aware avatars, fallback badge states, читаемость карточек и стабильное выделение выбранного узла в viewer и builder.
 - [ ] Стабилизировать layout конструктора: resizable canvas shell, overlay inspector на desktop и предсказуемое поведение на tablet/mobile без потери приоритета дерева.
 - [ ] Довести экран `Участники`: приглашения по аккаунту и read-only share links должны быть самодостаточными, с понятными подсказками, копированием ссылок и безопасным отзывом доступа.
 - [ ] Провести целевой QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.
-- [ ] Держать startup context и memory-файлы актуальными: `startup_context_paths`, structured docs, `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.
+- [ ] Держать startup context, task capsules и memory-файлы актуальными: `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.
 
 ### Medium Priority
 
-- [ ] Дожать UX-polish media panel в viewer и builder: спокойнее copy, понятнее источники медиа, лучше пустые состояния и иерархия карточек.
 - [ ] Подготовить отдельный exploratory stream для `Cloudflare R2`, не ломая текущий `Yandex Object Storage` path.
 - [ ] Вернуться к calm pass для landing и dashboard после стабилизации builder/members: сократить лишний copy, выровнять ритм заголовков и CTA.
 - [ ] Добить единый light visual system для `Настройки`, `Журнал`, `Участники`, builder и viewer.
@@ -74,14 +71,14 @@
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-03-07 13:48:38Z`
+- Updated at (UTC): `2026-03-08 06:54:26Z`
 - Active branch: `main`
-- Git status: `STATUS:57 files`
-- Git diff: `DIFF:8744 lines`
+- Git status: `STATUS:20 files`
+- Git diff: `DIFF:1994 lines`
 
 ### Suggested Focus
 
-- [ ] Review changed files summary (`57` files, `8744` diff lines).
+- [ ] Review changed files summary (`20` files, `1994` diff lines).
 - [ ] Confirm manual notes in this file still match current sprint priorities.
 - [ ] Close stale TODOs that are no longer relevant after the latest completion.
 
@@ -90,13 +87,13 @@
 - `.claude/ARCHITECTURE.md`
 - `.claude/BACKLOG.md`
 - `.claude/SNAPSHOT.md`
-- `.codex/commands/start.md`
-- `.codex/commands/start.sh`
-- `.codex/config/framework-adapter.json`
-- `.codex/utils/backlog-start-hint.py`
-- `.env.example`
-- `AGENTS.md`
-- `README.md`
+- `app/api/media/[mediaId]/route.ts`
+- `app/api/media/upload-file/route.ts`
+- `app/globals.css`
+- `components/tree/builder-workspace.tsx`
+- `components/tree/person-media-gallery.tsx`
+- `lib/server/repository.ts`
+- `lib/tree/display.ts`
 
 ### Detected Stack
 
@@ -129,12 +126,12 @@
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-03-07 13:48:38Z`
+- Completed at (UTC): `2026-03-08 06:54:26Z`
 - Branch: `main`
-- Git status summary: `STATUS:57 files`
-- Git diff summary: `DIFF:8744 lines`
+- Git status summary: `STATUS:20 files`
+- Git diff summary: `DIFF:1994 lines`
 
-- Session summary: `57` changed files, `8744` diff lines, `10` tracked changed paths.
+- Session summary: `20` changed files, `1994` diff lines, `10` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -142,6 +139,6 @@
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:57 files`)
-- `git_diff`: `success` (`DIFF:8744 lines`)
+- `git_status`: `success` (`STATUS:20 files`)
+- `git_diff`: `success` (`DIFF:1994 lines`)
 <!-- FRAMEWORK:SESSION:END -->

@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-03-07 13:48:38Z`
+- Generated at (UTC): `2026-03-08 06:54:26Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -129,10 +129,10 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-03-07 13:48:38Z`
+- Updated at (UTC): `2026-03-08 06:54:26Z`
 - Active branch: `main`
-- Git status: `STATUS:57 files`
-- Git diff: `DIFF:8744 lines`
+- Git status: `STATUS:20 files`
+- Git diff: `DIFF:1994 lines`
 
 ### Detected Stack
 
@@ -166,24 +166,24 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `.claude/ARCHITECTURE.md`
 - `.claude/BACKLOG.md`
 - `.claude/SNAPSHOT.md`
-- `.codex/commands/start.md`
-- `.codex/commands/start.sh`
-- `.codex/config/framework-adapter.json`
-- `.codex/utils/backlog-start-hint.py`
-- `.env.example`
-- `AGENTS.md`
-- `README.md`
+- `app/api/media/[mediaId]/route.ts`
+- `app/api/media/upload-file/route.ts`
+- `app/globals.css`
+- `components/tree/builder-workspace.tsx`
+- `components/tree/person-media-gallery.tsx`
+- `lib/server/repository.ts`
+- `lib/tree/display.ts`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-03-07 13:48:38Z`
+- Completed at (UTC): `2026-03-08 06:54:26Z`
 - Branch: `main`
-- Git status summary: `STATUS:57 files`
-- Git diff summary: `DIFF:8744 lines`
+- Git status summary: `STATUS:20 files`
+- Git diff summary: `DIFF:1994 lines`
 
-- Session summary: `57` changed files, `8744` diff lines, `10` tracked changed paths.
+- Session summary: `20` changed files, `1994` diff lines, `10` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -191,6 +191,6 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:57 files`)
-- `git_diff`: `success` (`DIFF:8744 lines`)
+- `git_status`: `success` (`STATUS:20 files`)
+- `git_diff`: `success` (`DIFF:1994 lines`)
 <!-- FRAMEWORK:SESSION:END -->

@@ -21,10 +21,14 @@ BACKLOG_HINT_SPEC.loader.exec_module(backlog_start_hint)
 
 from tasks.config import get_context_files  # noqa: E402
 from tasks.memory import (  # noqa: E402
+    _build_antigravity_backlog_active_sprint,
     _build_architecture_state_block,
     _build_architecture_auto_block,
     _build_backlog_auto_block,
     _build_latest_session_block,
+    _build_antigravity_snapshot_sections,
+    _detect_antigravity_media_status,
+    _sync_antigravity_manual_memory,
     _build_snapshot_auto_block,
     _upsert_marked_block,
 )
@@ -172,6 +176,128 @@ class BuildBlockTests(unittest.TestCase):
         self.assertIn("git_diff", session)
         self.assertIn("not_run", session)
         self.assertIn("Session summary", session)
+
+    def test_detect_antigravity_media_status_tracks_completed_upload_flow(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".claude").mkdir()
+            (root / "components" / "tree").mkdir(parents=True)
+            (root / "tests").mkdir()
+            (root / "app" / "api" / "media" / "[mediaId]").mkdir(parents=True)
+            (root / "lib" / "tree").mkdir(parents=True)
+
+            (root / ".claude" / "SNAPSHOT.md").write_text("# SNAPSHOT — Antigravity\n", encoding="utf-8")
+            (root / "components" / "tree" / "builder-workspace.tsx").write_text(
+                (
+                    'const MAX_MEDIA_FILES_PER_BATCH = 12;\n'
+                    'const a = "builder-media-limits-note";\n'
+                    'const b = "builder-media-progress-meta";\n'
+                    'const c = "XMLHttpRequest";\n'
+                    'const d = "PersonMediaGallery";\n'
+                    'const accept = \'accept="image/*,video/*"\';\n'
+                    'const multiple = "multiple";\n'
+                ),
+                encoding="utf-8",
+            )
+            (root / "components" / "tree" / "tree-viewer-client.tsx").write_text("PersonMediaGallery\n", encoding="utf-8")
+            (root / "components" / "tree" / "person-media-gallery.tsx").write_text("gallery\n", encoding="utf-8")
+            (root / "tests" / "media-storage-e2e.mjs").write_text(
+                'const a = "smoke-video.webm"; const b = "media-storage-report-"; fs.writeFileSync(reportPath, "{}");\n',
+                encoding="utf-8",
+            )
+            (root / "app" / "api" / "media" / "[mediaId]" / "route.ts").write_text("redirect(result.url)\n", encoding="utf-8")
+            (root / "lib" / "tree" / "display.ts").write_text("buildPersonPhotoPreviewUrls\n", encoding="utf-8")
+
+            status = _detect_antigravity_media_status(root)
+
+            self.assertTrue(status["has_multi_file_upload"])
+            self.assertTrue(status["has_device_video_upload"])
+            self.assertTrue(status["has_limits_copy"])
+            self.assertTrue(status["has_progress_ui"])
+            self.assertTrue(status["has_media_gallery"])
+            self.assertTrue(status["has_smoke_report"])
+            self.assertTrue(status["upload_flow_complete"])
+            self.assertFalse(status["has_variant_delivery"])
+
+    def test_sync_antigravity_manual_memory_rewrites_stale_snapshot_and_backlog(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / ".claude").mkdir()
+            (root / "components" / "tree").mkdir(parents=True)
+            (root / "tests").mkdir()
+            (root / "app" / "api" / "media" / "[mediaId]").mkdir(parents=True)
+            (root / "lib" / "tree").mkdir(parents=True)
+
+            (root / "components" / "tree" / "builder-workspace.tsx").write_text(
+                (
+                    'const MAX_MEDIA_FILES_PER_BATCH = 12;\n'
+                    'const a = "builder-media-limits-note";\n'
+                    'const b = "builder-media-progress-meta";\n'
+                    'const c = "XMLHttpRequest";\n'
+                    'const d = "PersonMediaGallery";\n'
+                    'const accept = \'accept="image/*,video/*"\';\n'
+                    'const multiple = "multiple";\n'
+                ),
+                encoding="utf-8",
+            )
+            (root / "components" / "tree" / "tree-viewer-client.tsx").write_text("PersonMediaGallery\n", encoding="utf-8")
+            (root / "components" / "tree" / "person-media-gallery.tsx").write_text("gallery\n", encoding="utf-8")
+            (root / "tests" / "media-storage-e2e.mjs").write_text(
+                'const a = "smoke-video.webm"; const b = "media-storage-report-"; fs.writeFileSync(reportPath, "{}");\n',
+                encoding="utf-8",
+            )
+            (root / "app" / "api" / "media" / "[mediaId]" / "route.ts").write_text("redirect(result.url)\n", encoding="utf-8")
+            (root / "lib" / "tree" / "display.ts").write_text("buildPersonPhotoPreviewUrls\n", encoding="utf-8")
+
+            snapshot_path = root / ".claude" / "SNAPSHOT.md"
+            backlog_path = root / ".claude" / "BACKLOG.md"
+            snapshot_path.write_text(
+                (
+                    "# SNAPSHOT — Antigravity\n\n"
+                    "*Last updated: 2026-03-07*\n\n"
+                    "## Current State\n\n"
+                    "- Current workstream: stale\n\n"
+                    "## Active Blockers\n\n"
+                    "- [ ] Current media upload UX is still not archive-ready: no multi-file flow, no device video upload in the main path, no progress, no limits copy.\n\n"
+                    "## Current Focus\n\n"
+                    "- [ ] Rebuild the media upload UX around one human-friendly local-file flow for photos and videos.\n\n"
+                    "## Next Steps\n\n"
+                    "- [ ] Fix `spawn ENAMETOOLONG` in the upload path and confirm a stable multi-file upload loop.\n"
+                ),
+                encoding="utf-8",
+            )
+            backlog_path.write_text(
+                (
+                    "# BACKLOG — Antigravity\n\n"
+                    "*Updated: 2026-03-07*\n\n"
+                    "## Active Sprint\n\n"
+                    "### High Priority\n\n"
+                    "- [ ] Пересобрать media upload flow под реальный архивный сценарий: единый upload для фото и видео с устройства, multi-file, прогресс, лимиты и устранение `spawn ENAMETOOLONG`.\n\n"
+                    "### Medium Priority\n\n"
+                    "- [ ] Medium\n\n"
+                    "### Low Priority\n\n"
+                    "- [ ] Low\n"
+                ),
+                encoding="utf-8",
+            )
+
+            updated = _sync_antigravity_manual_memory(root, "2026-03-08 06:00:00Z", "main")
+
+            self.assertIn(snapshot_path.as_posix(), updated)
+            self.assertIn(backlog_path.as_posix(), updated)
+
+            snapshot = snapshot_path.read_text(encoding="utf-8")
+            backlog = backlog_path.read_text(encoding="utf-8")
+
+            self.assertIn("*Last updated: 2026-03-08*", snapshot)
+            self.assertIn("Unified local-file upload now covers photos and videos from device in one flow.", snapshot)
+            self.assertIn("Viewer and builder now expose an in-app media gallery", snapshot)
+            self.assertNotIn("no multi-file flow", snapshot)
+            self.assertNotIn("Fix `spawn ENAMETOOLONG` in the upload path", snapshot)
+
+            self.assertIn("*Updated: 2026-03-08*", backlog)
+            self.assertIn("thumbnail/variant architecture", backlog)
+            self.assertNotIn("Пересобрать media upload flow", backlog)
 
 
 class StartupContextTests(unittest.TestCase):

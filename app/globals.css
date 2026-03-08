@@ -2805,6 +2805,66 @@ textarea {
   line-height: 1.45;
 }
 
+.builder-file-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.builder-file-picker-label {
+  font-weight: 700;
+}
+
+.builder-native-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(100%);
+  white-space: nowrap;
+}
+
+.builder-file-picker-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(240, 109, 61, 0.18);
+  background: rgba(255, 250, 247, 0.94);
+}
+
+.builder-file-picker-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.builder-file-picker-copy strong,
+.builder-file-picker-copy span {
+  overflow-wrap: anywhere;
+}
+
+.builder-file-picker-copy strong {
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.builder-file-picker-copy span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.builder-upload-feedback {
+  display: grid;
+  gap: 6px;
+ }
+
 .builder-media-limits-note,
 .builder-media-progress-meta {
   margin: 0;
@@ -2830,7 +2890,7 @@ textarea {
 .builder-upload-item-top,
 .builder-upload-item-meta {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
@@ -2841,6 +2901,7 @@ textarea {
   line-height: 1.35;
   color: var(--text);
   overflow-wrap: anywhere;
+  flex: 1 1 auto;
 }
 
 .builder-upload-item-top span,
@@ -2848,6 +2909,10 @@ textarea {
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.4;
+}
+
+.builder-upload-item-meta span:last-child {
+  color: var(--text);
 }
 
 .builder-upload-progress-bar {

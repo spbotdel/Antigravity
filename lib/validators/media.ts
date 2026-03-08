@@ -1,6 +1,11 @@
 import { z } from "zod";
 
 const mediaVisibilitySchema = z.enum(["public", "members"]);
+const mediaVariantSchema = z.enum(["thumb", "small", "medium"]);
+const mediaVariantPathSchema = z.object({
+  variant: mediaVariantSchema,
+  storagePath: z.string().trim().min(1)
+});
 const mediaUploadBaseSchema = {
   treeId: z.string().uuid(),
   personId: z.string().uuid(),
@@ -24,7 +29,8 @@ export const completePhotoSchema = z.object({
   ...mediaUploadBaseSchema,
   storagePath: z.string().trim().min(1),
   mimeType: z.string().trim().min(3).max(120),
-  sizeBytes: z.number().int().positive().optional()
+  sizeBytes: z.number().int().positive().optional(),
+  variantPaths: z.array(mediaVariantPathSchema).max(3).optional()
 });
 
 export const mediaUploadIntentSchema = z.object({
@@ -42,6 +48,7 @@ export const completeMediaSchema = z.object({
   storagePath: z.string().trim().min(1),
   mimeType: z.string().trim().min(3).max(120),
   sizeBytes: z.number().int().positive().optional(),
+  variantPaths: z.array(mediaVariantPathSchema).max(3).optional(),
   provider: z.literal("supabase_storage").optional()
 }).or(
   z.object({

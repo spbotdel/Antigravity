@@ -1,6 +1,6 @@
 # SNAPSHOT — Antigravity
 
-*Last updated: 2026-03-07*
+*Last updated: 2026-03-08*
 
 ## Current State
 
@@ -10,7 +10,7 @@
 - Backend/data layer: `Supabase` auth, database, RLS + S3-compatible object storage
 - Dev environment: linked to Supabase project `untwxmiqqwepopeepzqe`
 - Legacy static viewer: preserved in `legacy/` and old `index.html`, but no longer the main runtime
-- Current workstream: media upload redesign v2, thumbnail planning, tree canvas polish, and builder/members stabilization
+- Current workstream: media upload and in-app viewing are largely stabilized; next media step is thumbnail variants, alongside tree canvas polish and builder/members QA
 
 ## Project Overview
 
@@ -42,34 +42,32 @@ The core product baseline already exists in this repository. The near-term work 
 
 ## Active Blockers
 
-- [ ] Current media upload UX is still not archive-ready: no multi-file flow, no device video upload in the main path, no progress, no limits copy.
 - [ ] Preview architecture still lacks thumbnail variants, so originals remain too heavy for large family archives.
 - [ ] Builder canvas resize and overlay inspector still need practical QA on desktop, tablet and mobile widths.
 - [ ] Members/invite/share-link flows need end-to-end validation against live API responses and clipboard behavior.
-- [ ] Manual memory notes had drifted away from the real workstream and need to stay fresh after each cycle.
+- [ ] Manual memory notes must stay aligned with the actual workstream after each `/fi`.
 - [ ] Landing/dashboard cleanup is no longer the primary blocker, but still needs a secondary calm pass after tree/member flows stabilize.
 
 ## Current Focus
 
-- [ ] Rebuild the media upload UX around one human-friendly local-file flow for photos and videos.
-- [ ] Add multi-file upload, visible limits, and upload progress states.
-- [ ] Plan thumbnail variants (`thumb/small/medium`) as the next media architecture step, with CDN later.
+- [x] Unified local-file upload now covers photos and videos from device in one flow.
+- [x] Multi-file batches, visible limits copy, and human-readable progress feedback are in place in the builder.
+- [x] Viewer and builder now expose an in-app media gallery with inline playback for file-backed video.
+- [x] `smoke:media` now persists a JSON report artifact in `tests/artifacts/`.
+- [ ] Add thumbnail variants (`thumb/small/medium`) so previews stop loading originals by default.
 - [ ] Finish the current `family-tree-canvas` interaction and visual pass.
 - [ ] Validate `Участники`, invites and share links as one coherent access-management flow.
 - [ ] QA the reworked builder layout so the tree keeps visual priority on desktop and mobile.
-- [ ] Keep startup context, structured docs and memory files aligned with the current sprint.
+- [ ] Keep startup context, task capsules and memory files aligned with the current sprint.
 
 ## Next Steps
 
-- [ ] Fix `spawn ENAMETOOLONG` in the upload path and confirm a stable multi-file upload loop.
-- [ ] Allow file-backed video upload from device in the same primary flow as photos.
-- [ ] Add limits copy and per-file progress UX near the upload action.
-- [ ] Start the additive thumbnail/variant design after the upload flow is stable.
-- [ ] Smoke-check `family-tree-canvas` scenarios with tests plus manual review on key widths.
+- [ ] Implement variant-aware media delivery for `thumb/small/medium`, keeping originals only for explicit full view.
+- [ ] Switch tree cards, side rails and media galleries to preview variants instead of originals.
+- [ ] Run targeted QA for viewer, builder and members after the current media UI pass.
 - [ ] Review `Участники` end-to-end with invite, copy and revoke flows.
-- [ ] Decide when to start the `Cloudflare R2` exploratory follow-up without destabilizing the current object-storage path.
 - [ ] Revisit landing and dashboard only after tree/member workflows are stable.
-- [ ] Close each concrete work cycle with `/fi` so memory sync keeps the plan current.
+- [ ] Close each concrete work cycle with `/fi`; completion now needs to keep manual memory sections current as well.
 
 ## Working Cycle
 
@@ -81,23 +79,23 @@ The core product baseline already exists in this repository. The near-term work 
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-03-07 13:48:38Z`
+- Updated at (UTC): `2026-03-08 06:54:26Z`
 - Active branch: `main`
-- Git status: `STATUS:57 files`
-- Git diff: `DIFF:8744 lines`
+- Git status: `STATUS:20 files`
+- Git diff: `DIFF:1994 lines`
 
 ### Top Changed Paths
 
 - `.claude/ARCHITECTURE.md`
 - `.claude/BACKLOG.md`
 - `.claude/SNAPSHOT.md`
-- `.codex/commands/start.md`
-- `.codex/commands/start.sh`
-- `.codex/config/framework-adapter.json`
-- `.codex/utils/backlog-start-hint.py`
-- `.env.example`
-- `AGENTS.md`
-- `README.md`
+- `app/api/media/[mediaId]/route.ts`
+- `app/api/media/upload-file/route.ts`
+- `app/globals.css`
+- `components/tree/builder-workspace.tsx`
+- `components/tree/person-media-gallery.tsx`
+- `lib/server/repository.ts`
+- `lib/tree/display.ts`
 
 ### Detected Stack
 
@@ -130,12 +128,12 @@ The core product baseline already exists in this repository. The near-term work 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-03-07 13:48:38Z`
+- Completed at (UTC): `2026-03-08 06:54:26Z`
 - Branch: `main`
-- Git status summary: `STATUS:57 files`
-- Git diff summary: `DIFF:8744 lines`
+- Git status summary: `STATUS:20 files`
+- Git diff summary: `DIFF:1994 lines`
 
-- Session summary: `57` changed files, `8744` diff lines, `10` tracked changed paths.
+- Session summary: `20` changed files, `1994` diff lines, `10` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -143,6 +141,6 @@ The core product baseline already exists in this repository. The near-term work 
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:57 files`)
-- `git_diff`: `success` (`DIFF:8744 lines`)
+- `git_status`: `success` (`STATUS:20 files`)
+- `git_diff`: `success` (`DIFF:1994 lines`)
 <!-- FRAMEWORK:SESSION:END -->

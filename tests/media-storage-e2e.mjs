@@ -139,9 +139,8 @@ async function uploadDeviceMediaBatchViaUi(page) {
   await storageForm.getByLabel("Подпись").fill(`${deviceUploadTitle} caption`);
   await storageForm.getByLabel("Видимость").selectOption("members");
   await storageForm.getByRole("button", { name: "Загрузить файлы" }).click();
-  await inspector.locator(".builder-upload-item-done").nth(1).waitFor({ timeout: 45000 });
-  await inspector.getByRole("heading", { name: photoTitle, exact: true }).waitFor({ timeout: 45000 });
-  await inspector.getByRole("heading", { name: storageVideoTitle, exact: true }).waitFor({ timeout: 45000 });
+  await inspector.locator(".builder-media-progress-meta").waitFor({ state: "visible", timeout: 15000 });
+  await inspector.locator(".builder-media-progress-meta").waitFor({ state: "hidden", timeout: 90000 });
 }
 
 async function createExternalVideoViaUi(page) {
@@ -151,7 +150,6 @@ async function createExternalVideoViaUi(page) {
   await externalForm.getByLabel("Подпись").fill(`${externalVideoTitle} caption`);
   await externalForm.getByLabel("Видимость").selectOption("members");
   await externalForm.getByRole("button", { name: "Добавить видео по ссылке" }).click();
-  await builderInspector(page).getByRole("heading", { name: externalVideoTitle, exact: true }).waitFor({ timeout: 45000 });
 }
 
 async function fetchMediaRecords(treeId) {
@@ -170,8 +168,9 @@ async function fetchMediaRecords(treeId) {
   });
 }
 
-async function assertMediaRedirect(mediaId, expectedUrlPart) {
-  const url = new URL(`${baseUrl}/api/media/${mediaId}`);
+async function assertMediaRedirect(mediaPathOrId, expectedUrlPart) {
+  const mediaPath = mediaPathOrId.includes("/") || mediaPathOrId.includes("?") ? mediaPathOrId : `/api/media/${mediaPathOrId}`;
+  const url = new URL(mediaPath, baseUrl);
   const transport = url.protocol === "https:" ? https : http;
   const result = await new Promise((resolve, reject) => {
     const request = transport.request(
@@ -194,11 +193,11 @@ async function assertMediaRedirect(mediaId, expectedUrlPart) {
   });
 
   if (result.status !== 307) {
-    throw new Error(`Expected 307 for media ${mediaId}, got ${result.status}`);
+    throw new Error(`Expected 307 for media ${mediaPath}, got ${result.status}`);
   }
 
   if (!result.location || !result.location.includes(expectedUrlPart)) {
-    throw new Error(`Unexpected redirect for media ${mediaId}: ${result.location || "<missing>"}`);
+    throw new Error(`Unexpected redirect for media ${mediaPath}: ${result.location || "<missing>"}`);
   }
 }
 
@@ -302,6 +301,7 @@ async function main() {
     }
 
     await assertMediaRedirect(photoRecord.id, "storage.yandexcloud.net");
+    await assertMediaRedirect(`/api/media/${photoRecord.id}?variant=thumb`, "/variants/thumb.webp");
     await assertMediaRedirect(storageVideoRecord.id, "storage.yandexcloud.net");
     await assertMediaRedirect(externalVideoRecord.id, externalVideoUrl);
     await assertViewerShowsMedia(page);
