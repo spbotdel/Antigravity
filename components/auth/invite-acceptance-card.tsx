@@ -38,8 +38,7 @@ export function InviteAcceptanceCard() {
             return;
           }
 
-          router.push(`/tree/${payload.slug}`);
-          router.refresh();
+          window.location.assign(`/tree/${payload.slug}`);
         }}
       >
         {loading ? "Подтверждаю..." : "Принять приглашение"}

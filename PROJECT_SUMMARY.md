@@ -1,5 +1,7 @@
 # PROJECT_SUMMARY
 
+Navigation and reading order live in `REPO_MAP.md`. This file explains what the product is, not how to traverse the repo.
+
 ## What This Project Is
 
 `Antigravity` is a private family tree application built with:

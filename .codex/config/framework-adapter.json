@@ -17,6 +17,7 @@
     "TREE_ALGORITHMS.md",
     "DATA_FLOW.md",
     "ARCHITECTURE_RULES.md",
+    "SYSTEM_INVARIANTS.md",
     "DECISIONS.md",
     "COMMON_BUGS.md"
   ],

@@ -1,5 +1,17 @@
 # Codex Adapter Entry
 
+## Scope Note
+
+This is a framework/internal tooling document for Codex session orchestration.
+
+Do not use it as the source of truth for the product architecture or documentation reading order.
+
+For the application itself, start with:
+- `REPO_MAP.md`
+- `PROJECT_SUMMARY.md`
+- `ARCHITECTURE_RULES.md`
+- `DECISIONS.md`
+
 ## Purpose
 
 This file is the Codex entry orchestrator for projects that use the framework.
@@ -57,11 +69,13 @@ Output contract:
 - `.codex/contracts/core-cli-contract.md`
 
 
-## Project overview
+## Template Project Overview (Not Source Of Truth For Antigravity)
 - Backend: FastAPI
 - DB: PostgreSQL
 - Queue: Celery
 - Frontend: React
+
+This section comes from framework scaffolding and is not the real product stack for this repository.
 
 ## Architecture rules
 - API routes call services only

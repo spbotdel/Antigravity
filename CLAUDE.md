@@ -3,6 +3,14 @@
 **Framework:** Claude Code Starter v4.0.2
 **Type:** Meta-framework extending Claude Code capabilities
 
+**Scope note:** This is a framework/tooling document. It is not the source of truth for the Antigravity application architecture, reading order, or runtime boundaries.
+
+For product understanding, start with:
+- `REPO_MAP.md`
+- `PROJECT_SUMMARY.md`
+- `ARCHITECTURE_RULES.md`
+- `DECISIONS.md`
+
 ---
 
 ## Architecture: Python Framework Core + Silent Mode Protocols

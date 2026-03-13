@@ -8,6 +8,7 @@ import { getSupabaseRequestTimeoutMs } from "@/lib/supabase/fetch";
 const execFileAsync = promisify(execFile);
 const SERVER_FETCH_MAX_BUFFER = 1024 * 1024 * 8;
 const DEFAULT_SERVER_SUPABASE_TIMEOUT_MS = 15000;
+const SERVER_SUPABASE_NATIVE_FALLBACK_COOLDOWN_MS = 60000;
 const FALLBACK_ERROR_CODES = new Set([
   "UND_ERR_CONNECT_TIMEOUT",
   "ETIMEDOUT",
@@ -15,6 +16,7 @@ const FALLBACK_ERROR_CODES = new Set([
   "EAI_AGAIN",
   "ENOTFOUND"
 ]);
+let nativeServerFetchFallbackUntil = 0;
 
 function createUnavailableResponse(status: number) {
   return new Response(
@@ -55,6 +57,18 @@ function shouldUsePowerShellFallback(error: unknown) {
   return error.message.includes("fetch failed") || (cause?.code ? FALLBACK_ERROR_CODES.has(cause.code) : false);
 }
 
+function shouldPreferPowerShellFallbackNow() {
+  return Date.now() < nativeServerFetchFallbackUntil;
+}
+
+function noteNativeServerFetchFallback() {
+  nativeServerFetchFallbackUntil = Date.now() + SERVER_SUPABASE_NATIVE_FALLBACK_COOLDOWN_MS;
+}
+
+export function resetServerSupabaseFetchFallbackCooldownForTests() {
+  nativeServerFetchFallbackUntil = 0;
+}
+
 function getRequestUrl(input: RequestInfo | URL) {
   if (typeof input === "string") {
     return input;
@@ -65,6 +79,31 @@ function getRequestUrl(input: RequestInfo | URL) {
   }
 
   return input.url;
+}
+
+function sanitizeJsonText(rawText: string) {
+  const withoutBom = rawText.replace(/^\uFEFF/, "");
+  const withoutNulls = withoutBom.replace(/\u0000/g, "");
+  const trimmed = withoutNulls.trim();
+  const firstBrace = trimmed.search(/[\[{]/);
+  const lastObject = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
+  return firstBrace >= 0 && lastObject >= firstBrace
+    ? trimmed.slice(firstBrace, lastObject + 1)
+    : trimmed;
+}
+
+async function normalizeJsonResponse(response: Response) {
+  const responseHeaders = new Headers(response.headers);
+  const contentType = responseHeaders.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return response;
+  }
+
+  const rawText = await response.text();
+  return new Response(sanitizeJsonText(rawText), {
+    status: response.status,
+    headers: responseHeaders
+  });
 }
 
 async function getBodyBase64(body: BodyInit | null | undefined) {
@@ -120,15 +159,37 @@ async function powerShellFetch(input: RequestInfo | URL, init: RequestInit | und
     headers?: Record<string, string>;
     bodyBase64?: string;
   }>(stdout);
+  const rawBody = Buffer.from(result.bodyBase64 || "", "base64");
+  const responseHeaders = new Headers(result.headers || {});
+  const contentType = responseHeaders.get("content-type") || "";
+  const body =
+    contentType.includes("application/json")
+      ? Buffer.from(sanitizeJsonText(rawBody.toString("utf8")), "utf8")
+      : rawBody;
 
-  return new Response(Buffer.from(result.bodyBase64 || "", "base64"), {
+  return new Response(body, {
     status: result.status,
-    headers: result.headers
+    headers: responseHeaders
   });
 }
 
 export function createServerSupabaseFetch(timeoutMs = getServerSupabaseRequestTimeoutMs()): typeof fetch {
   return async (input, init) => {
+    if (shouldPreferPowerShellFallbackNow()) {
+      try {
+        return await powerShellFetch(
+          input,
+          {
+            ...init,
+            signal: undefined
+          },
+          timeoutMs
+        );
+      } catch {
+        return createUnavailableResponse(503);
+      }
+    }
+
     const controller = new AbortController();
     const externalSignal = init?.signal;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -152,16 +213,18 @@ export function createServerSupabaseFetch(timeoutMs = getServerSupabaseRequestTi
     }, timeoutMs);
 
     try {
-      return await fetch(input, {
+      const response = await fetch(input, {
         ...init,
         signal: controller.signal
       });
+      return await normalizeJsonResponse(response);
     } catch (error) {
       if (externalSignal?.aborted) {
         throw error;
       }
 
       if (timedOut || shouldUsePowerShellFallback(error)) {
+        noteNativeServerFetchFallback();
         try {
           return await powerShellFetch(
             input,

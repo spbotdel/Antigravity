@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
 import { getSupabaseEnv } from "@/lib/env";
-import { createSupabaseFetch } from "@/lib/supabase/fetch";
+import { createServerSupabaseFetch } from "@/lib/supabase/server-fetch";
 import type { Database } from "@/lib/types";
 
 export async function createRouteSupabaseClient() {
@@ -11,7 +11,7 @@ export async function createRouteSupabaseClient() {
 
   return createServerClient<Database>(url, anonKey, {
     global: {
-      fetch: createSupabaseFetch()
+      fetch: createServerSupabaseFetch()
     },
     cookies: {
       getAll() {

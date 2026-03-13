@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 
 import type { PersonRecord, TreeRecord } from "@/lib/types";
 import { formatTreeVisibility } from "@/lib/ui-text";
@@ -10,16 +10,35 @@ import { cn } from "@/lib/utils";
 interface TreeSettingsFormProps {
   tree: TreeRecord;
   people: PersonRecord[];
+  initialBaseUrl: string;
 }
 
-export function TreeSettingsForm({ tree, people }: TreeSettingsFormProps) {
+function normalizeBaseUrl(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function buildTreeUrl(baseUrl: string, slug: string) {
+  return `${normalizeBaseUrl(baseUrl)}/tree/${slug}`;
+}
+
+export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [currentVisibility, setCurrentVisibility] = useState<TreeRecord["visibility"]>(tree.visibility);
   const [draftSlug, setDraftSlug] = useState(tree.slug);
+  const [resolvedBaseUrl, setResolvedBaseUrl] = useState(() => normalizeBaseUrl(initialBaseUrl || "http://localhost:3000"));
   const [pendingAction, setPendingAction] = useState<"identity" | "public" | "private" | null>(null);
   const currentRootPerson = people.find((person) => person.id === tree.root_person_id) || null;
+  const treeUrl = buildTreeUrl(resolvedBaseUrl, draftSlug || tree.slug);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.location?.origin) {
+      return;
+    }
+
+    setResolvedBaseUrl(normalizeBaseUrl(window.location.origin));
+  }, []);
 
   async function send(url: string, body: unknown) {
     const response = await fetch(url, {
@@ -65,6 +84,17 @@ export function TreeSettingsForm({ tree, people }: TreeSettingsFormProps) {
     setPendingAction(null);
   }
 
+  async function copyTreeUrl() {
+    try {
+      await navigator.clipboard.writeText(treeUrl);
+      setError(null);
+      setSuccess("Ссылка на дерево скопирована.");
+    } catch {
+      setSuccess(null);
+      setError("Не удалось скопировать ссылку автоматически. Скопируйте ее вручную.");
+    }
+  }
+
   return (
     <div className="settings-grid">
       <section className="surface-card settings-card settings-card-wide">
@@ -79,7 +109,12 @@ export function TreeSettingsForm({ tree, people }: TreeSettingsFormProps) {
         <div className="settings-meta-grid">
           <div className="settings-meta-card">
             <span>Ссылка на дерево</span>
-            <strong>/tree/{draftSlug || tree.slug}</strong>
+            <strong>{treeUrl}</strong>
+            <div className="card-actions settings-meta-actions">
+              <button type="button" className="ghost-button ghost-button-compact" onClick={() => void copyTreeUrl()}>
+                Скопировать ссылку
+              </button>
+            </div>
             <p>Этот адрес можно отправлять родственникам и участникам.</p>
           </div>
           <div className="settings-meta-card">

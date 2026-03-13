@@ -4,6 +4,49 @@
 
 `Antigravity` is a `Next.js 16 + React 19 + TypeScript + Supabase` family tree application.
 
+## Canonical Documentation Entrypoint
+
+This file is the canonical navigation entrypoint for understanding the repository.
+
+Use the documentation hierarchy below:
+
+- Core project understanding:
+  - `REPO_MAP.md`
+  - `PROJECT_SUMMARY.md`
+  - `ARCHITECTURE_RULES.md`
+  - `DECISIONS.md`
+- Operational memory:
+  - `.claude/SNAPSHOT.md`
+  - `.claude/BACKLOG.md`
+- Domain documentation, read only when relevant:
+  - `TREE_MODEL.md`
+  - `TREE_ALGORITHMS.md`
+  - `DATA_FLOW.md`
+  - `SYSTEM_INVARIANTS.md`
+- Framework / tooling docs:
+  - `CLAUDE.md`
+  - `AGENTS.md`
+  - `FRAMEWORK_GUIDE.md`
+
+### Documentation Roles
+
+| Document | Role | Read when | Source of truth |
+| --- | --- | --- | --- |
+| `REPO_MAP.md` | navigation | always | yes |
+| `PROJECT_SUMMARY.md` | product overview | onboarding | yes |
+| `ARCHITECTURE_RULES.md` | constraints | before code changes | yes |
+| `DECISIONS.md` | rationale | architecture or risky work | yes |
+| `.claude/SNAPSHOT.md` | current state | active work | no |
+| `.claude/BACKLOG.md` | current tasks | planning | no |
+| `TREE_MODEL.md` | domain model | domain changes | yes |
+| `TREE_ALGORITHMS.md` | rendering algorithms | builder/viewer work | yes |
+| `DATA_FLOW.md` | runtime flow | API / loading / media flow work | yes |
+| `SYSTEM_INVARIANTS.md` | invariants | risky domain or rendering changes | yes |
+| `COMMON_BUGS.md` | debugging map | bugfixes | no |
+| `AGENTS.md` | Codex adapter | framework workflow only | no |
+| `CLAUDE.md` | framework protocols | framework workflow only | no |
+| `FRAMEWORK_GUIDE.md` | framework overview | framework workflow only | no |
+
 Current product shape:
 - private/public family trees
 - roles: `owner`, `admin`, `viewer`
@@ -14,27 +57,28 @@ Current product shape:
 - object-storage-backed file media plus external video links
 - owner audit log
 
-## Current Source Of Truth
+## Primary References
 
-Use these first when reloading context:
-- [README.md](./README.md)
+Use these first for product understanding:
+- [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md)
+- [ARCHITECTURE_RULES.md](./ARCHITECTURE_RULES.md)
 - [DECISIONS.md](./DECISIONS.md)
+
+Operational memory for the current work cycle:
+- [.claude/SNAPSHOT.md](./.claude/SNAPSHOT.md)
+- [.claude/BACKLOG.md](./.claude/BACKLOG.md)
+
+Secondary planning / historical references:
 - [docs/research/gpt-5.4-handoff-context-2026-03-06.md](./docs/research/gpt-5.4-handoff-context-2026-03-06.md)
 - [docs/research/family-tree-v1-slava-edition-plan-2026-03-06.md](./docs/research/family-tree-v1-slava-edition-plan-2026-03-06.md)
 - [docs/research/family-tree-v1-slava-edition-implementation-plan-2026-03-06.md](./docs/research/family-tree-v1-slava-edition-implementation-plan-2026-03-06.md)
 - [docs/research/family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md](./docs/research/family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md)
 
-Shared session memory:
-- [.claude/SNAPSHOT.md](./.claude/SNAPSHOT.md)
-- [.claude/BACKLOG.md](./.claude/BACKLOG.md)
-- [.claude/ARCHITECTURE.md](./.claude/ARCHITECTURE.md)
-
-Long-lived architectural decisions:
-- [DECISIONS.md](./DECISIONS.md)
-
 ## Important Note
 
-[AGENTS.md](./AGENTS.md) contains framework/runtime instructions that are useful, but its generic "Project overview" section is stale and does not match the real app stack. The actual runtime is the Next.js/Supabase app described in [README.md](./README.md).
+[README.md](./README.md) is the human-friendly project introduction, not the navigation authority.
+
+[AGENTS.md](./AGENTS.md), [CLAUDE.md](./CLAUDE.md), and [FRAMEWORK_GUIDE.md](./FRAMEWORK_GUIDE.md) are framework/internal tooling docs. They are useful for agent workflow, but they are not the source of truth for the application architecture.
 
 ## Top-Level Layout
 
@@ -80,6 +124,11 @@ Long-lived architectural decisions:
   Tree settings.
 - `app/tree/[slug]/audit/page.tsx`
   Owner audit log.
+
+Important loader rule for tree pages:
+- viewer page and snapshot APIs may use `getTreeSnapshot(...)`
+- builder page may use `getBuilderSnapshot(...)`
+- pages such as `audit`, `members`, `media`, and `settings` should prefer specialized page-data loaders instead of pulling a full snapshot by default
 
 ### API routes
 
@@ -197,8 +246,14 @@ Long-lived architectural decisions:
 - `lib/supabase/admin.ts`
 - `lib/supabase/admin-rest.ts`
   Admin REST wrapper used by the repository.
+  Important operational rule:
+  - default transport is `native Node fetch`
+  - `PowerShell` bridge is fallback-only unless `SUPABASE_ADMIN_REST_TRANSPORT=powershell`
+- `lib/supabase/server-fetch.ts`
+  Shared native-first fetch wrapper with PowerShell fallback for unstable Windows/network environments.
 - `scripts/supabase-http.ps1`
   PowerShell bridge for REST requests from the server environment.
+  This is a resilience/debugging fallback, not the preferred steady-state transport.
 
 ## Database and Migrations
 
@@ -287,6 +342,12 @@ Follow these rules when modifying the codebase:
 - In development, `DEV_IMPERSONATE_USER_ID` can make pages work even when live auth/network is unstable.
 - The current linked remote Supabase project ref is stored in `supabase/.temp/project-ref`.
 - GitHub and Supabase network access may be intermittently unstable in this environment; distinguish product bugs from transport issues before changing logic.
+- On Windows, project helper commands under `.codex/commands/*.sh` assume a real Bash runtime.
+  If `bash` resolves to the WSL stub and no distro is installed, use Git Bash instead of assuming the project command itself is broken.
+- For server-side Supabase REST:
+  - prefer reading `lib/supabase/admin-rest.ts` and `lib/supabase/server-fetch.ts` before changing transport behavior
+  - do not assume the PowerShell bridge is the primary path
+  - `SUPABASE_ADMIN_REST_TRANSPORT=auto` is the intended default
 
 ## Dependency Map
 
@@ -307,16 +368,6 @@ Usually not part of product runtime changes:
 - `tests/artifacts/`
 - `legacy/` unless explicitly working on preserved old viewer files
 - `src/framework-core/` unless changing framework/memory tooling
-## Dependency Map
-
-Typical dependency chain:
-
-UI components
-→ API routes in `app/api/*`
-→ validators in `lib/validators/*`
-→ business logic in `lib/server/repository.ts`
-→ Supabase clients in `lib/supabase/*`
-→ database tables defined in `supabase/migrations/*`
 
 ## Suggested First Reads For New Work
 

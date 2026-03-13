@@ -1,5 +1,27 @@
 # Family Tree V1.0 "Slava Edition" Plan (2026-03-06)
 
+<!-- FRAMEWORK:PLAN:START -->
+## Current Plan Sync
+
+- Updated at (UTC): `2026-03-12 18:00:28Z`
+- This document remains the long-lived product frame; the current execution order below is the active launch path.
+- Current launch rule: `Cloudflare R2` rollout is mandatory for `Slava edition` release readiness.
+- Current primary workstream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
+- Current execution order:
+1. Verify gated `Cloudflare R2` readiness: `CF_R2_*`, bucket CORS, upload-intent metadata, `smoke:media`, and `smoke:media:direct`.
+2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
+3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
+4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
+5. Complete backup/restore rehearsal and the final launch checklist before release decision.
+
+### Validation Baseline
+
+- `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
+- `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
+- Latest `smoke:media` artifact `media-storage-report-1773322585848.json` is green.
+- Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
+<!-- FRAMEWORK:PLAN:END -->
+
 ## 1. Контекст
 
 1. У проекта есть конкретный первый заказчик.
@@ -145,17 +167,17 @@
 ### 6.3 Рекомендация по media storage для V1
 
 1. Для `Slava edition` важнее надежная кросс-региональная доступность и низкая стоимость, чем гипермасштаб.
-2. Практический кандидат для первой production-версии: `Yandex Object Storage` или `Selectel Object Storage`.
-3. Причины:
-- S3-compatible API,
-- приватные signed URL,
-- низкая стоимость для маленького семейного архива,
-- более естественный RF-friendly сценарий, чем consumer video platforms.
-4. Архитектурное правило:
+2. Для текущего проекта `Cloudflare R2` rollout для новых upload является обязательной частью `Slava edition`, а не пост-launch улучшением.
+3. `Yandex Object Storage` в текущем execution path остается transitional compatibility/read path для уже загруженных файлов до явного завершения migration.
+4. Причины:
+- в репозитории уже есть `R2` foundation, rollout metadata и direct-upload validation path,
+- запуск не должен оставлять продукт в half-migrated состоянии,
+- новая binary plane должна быть закрыта в рамках `Slava edition`, а не вынесена в "потом".
+5. Архитектурное правило:
 - приложение должно работать через storage adapter,
 - vendor не должен быть жестко зашит в бизнес-логику,
 - смена провайдера в V2 должна быть возможна без полной переделки media-domain.
-5. Если UAT покажет, что текущий managed stack стабильно доступен из Европы и РФ, не нужно усложнять инфраструктуру сильнее необходимого.
+6. `Cloudflare Stream`, `Queues` и self-managed `FFmpeg/HLS` не являются обязательной частью запуска, пока `R2/private delivery` закрывает реальные сценарии.
 
 ### 6.4 Приватность для V1
 
@@ -211,7 +233,25 @@
 3. Viewer или получатель share-link видит только разрешенные файлы.
 4. Медиа открываются и в Европе, и в РФ.
 
-### 7.4 Этап D - Production hardening
+### 7.4 Этап D - Mandatory Cloudflare rollout
+
+1. Проверить gated-конфигурацию `Cloudflare R2`:
+- `CF_R2_*`,
+- bucket CORS,
+- upload-intent metadata,
+- `smoke:media`,
+- `smoke:media:direct`.
+2. Активировать rollout через `CF_R2_ROLLOUT_AT`.
+3. Подтвердить, что новые upload идут в `cloudflare_r2`.
+4. Подтвердить, что legacy Yandex-backed медиа продолжают читаться.
+5. Зафиксировать rollout как обязательную часть launch checklist.
+
+**Acceptance criteria**
+1. Новые upload больше не зависят от legacy Yandex path.
+2. Legacy media остается читаемой в transition.
+3. Rollout state наблюдаем через код, smoke и operational notes, а не через догадки по env.
+
+### 7.5 Этап E - Production hardening
 
 1. Настроить production env, backup и базовые операционные процедуры.
 2. Пройти smoke/regression для ключевых маршрутов.
@@ -241,9 +281,10 @@
 3. Владелец сам отправляет read-only ссылки родственникам.
 4. Можно добавлять людей, связи и медиа без участия разработчика.
 5. Медиа приватны и не опираются на публичные consumer-links.
-6. Приложение открывается и работает для владельца в Европе и для родственников в РФ.
-7. Есть backup/restore дисциплина.
-8. Продукт решает задачу одной семьи без явных "заглушек для будущего SaaS".
+6. Новые upload проходят через `Cloudflare R2`, а legacy Yandex-backed медиа остаются читаемыми в transition.
+7. Приложение открывается и работает для владельца в Европе и для родственников в РФ.
+8. Есть backup/restore дисциплина.
+9. Продукт решает задачу одной семьи без явных "заглушек для будущего SaaS".
 
 ## 10. Что переносится в V2 mass-market
 
@@ -263,5 +304,6 @@
 - поддержку нескольких партнерств,
 - приватную media-модель,
 - owner/admin/viewer permission model,
-- контролируемый family sharing по приглашениям и ссылкам.
+- контролируемый family sharing по приглашениям и ссылкам,
+- обязательный `Cloudflare R2` rollout для нового upload path в рамках `Slava edition`.
 3. Все остальное, что не помогает конкретному владельцу вести семейное дерево в production сегодня, должно быть отложено до V2.

@@ -70,10 +70,11 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const signedUrl = String(formData.get("signedUrl") || "").trim();
     const contentType = String(formData.get("contentType") || "").trim() || undefined;
+    const skipPrimaryUpload = String(formData.get("skipPrimaryUpload") || "").trim().toLowerCase() === "true";
     const file = formData.get("file");
     const variantTargets = parseVariantTargets(formData.get("variantTargets"));
 
-    if (!signedUrl) {
+    if (!skipPrimaryUpload && !signedUrl) {
       return Response.json({ error: "Не передан signed URL для загрузки." }, { status: 400 });
     }
 
@@ -91,11 +92,13 @@ export async function POST(request: Request) {
     }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
-    await uploadFileToSignedUrl({
-      signedUrl,
-      contentType,
-      fileBuffer
-    });
+    if (!skipPrimaryUpload) {
+      await uploadFileToSignedUrl({
+        signedUrl,
+        contentType,
+        fileBuffer
+      });
+    }
 
     if (variantTargets.length && file.type.startsWith("image/")) {
       const variantBuffers = await buildPhotoVariantBuffers(fileBuffer, variantTargets);

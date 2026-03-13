@@ -20,6 +20,7 @@ __pycache__/
 .vercel/
 .tmp/
 .next*.log
+.next-*/
 
 .claude/logs/
 .claude/dist/

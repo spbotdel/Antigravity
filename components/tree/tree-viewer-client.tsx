@@ -35,6 +35,16 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   }, [shareToken, snapshot.media, snapshot.personMedia]);
   const selectedPerson = snapshot.people.find((person) => person.id === selectedPersonId) || null;
   const selectedMedia = selectedPerson ? collectPersonMedia(snapshot, selectedPerson.id) : [];
+  const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
+  const selectedAvatarMediaId =
+    selectedPerson
+      ? snapshot.personMedia.find(
+          (relation) =>
+            relation.person_id === selectedPerson.id &&
+            relation.is_primary &&
+            snapshot.media.some((asset) => asset.id === relation.media_id && asset.kind === "photo")
+        )?.media_id || null
+      : null;
 
   return (
     <div className="viewer-layout">
@@ -61,6 +71,11 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
       <aside className="surface-card info-rail">
         {selectedPerson ? (
           <>
+            {selectedAvatarUrl ? (
+              <div className="person-summary-avatar info-rail-avatar">
+                <img src={selectedAvatarUrl} alt={`Портрет: ${selectedPerson.full_name}`} />
+              </div>
+            ) : null}
             <p className="eyebrow">Выбранный человек</p>
             <h2>{selectedPerson.full_name}</h2>
             <div className="detail-list">
@@ -74,20 +89,22 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
               </div>
               <div>
                 <strong>Дата смерти</strong>
-                <span>{formatDate(selectedPerson.death_date) || "Жив(а) или не указано"}</span>
+                <span>{formatDate(selectedPerson.death_date) || "Не указана"}</span>
               </div>
               <div>
-                <strong>Место рождения</strong>
-                <span>{selectedPerson.birth_place || "Не указано"}</span>
-              </div>
-              <div>
-                <strong>История</strong>
-                <span>{selectedPerson.bio || "История пока не добавлена."}</span>
+                <strong>Био</strong>
+                <span>{selectedPerson.bio || "Био пока не добавлено."}</span>
               </div>
             </div>
 
             <div className="media-strip">
-              <PersonMediaGallery media={selectedMedia} shareToken={shareToken} />
+              <PersonMediaGallery
+                media={selectedMedia}
+                shareToken={shareToken}
+                avatarMediaId={selectedAvatarMediaId}
+                emptyTitle="Материалы еще не добавлены"
+                emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
+              />
             </div>
           </>
         ) : (

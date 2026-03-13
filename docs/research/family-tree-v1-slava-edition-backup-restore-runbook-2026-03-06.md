@@ -1,5 +1,17 @@
 # Family Tree V1.0 "Slava Edition" Backup and Restore Runbook (2026-03-06)
 
+<!-- FRAMEWORK:RECOVERY:START -->
+## Current Recovery Sync
+
+- Updated at (UTC): `2026-03-12 18:00:28Z`
+- Active binary-plane assumptions:
+  - new uploads must move to `Cloudflare R2` before release
+  - legacy Yandex-backed media must remain readable until migration is explicitly closed
+- Before any risky rollout step, capture a fresh backup before changing `CF_R2_ROLLOUT_AT`, storage policy, or bucket CORS.
+- Restore rehearsal must verify both the active `Cloudflare R2` path and any still-readable legacy compatibility path.
+- Runtime/config already exposes the `Cloudflare R2` foundation; backup notes must therefore track rollout state as operational data.
+<!-- FRAMEWORK:RECOVERY:END -->
+
 ## 1. Цель
 
 1. Этот документ фиксирует минимальную backup/restore дисциплину для `Slava edition`.
@@ -20,7 +32,10 @@
 - фото,
 - видео,
 - документы.
-3. Конфигурация:
+3. Во время текущего rollout учитывать два binary path:
+- `Cloudflare R2` как целевой path для новых upload,
+- legacy Yandex-backed path как transitional compatibility/read path для уже существующих объектов.
+4. Конфигурация:
 - `.env` / production secrets,
 - настройки storage,
 - URL продукта.
@@ -43,6 +58,10 @@
 - регулярной выгрузки списка объектов,
 - проверки, что storage lifecycle не удаляет файлы неожиданно,
 - отдельной процедуры восстановления бакета или его содержимого.
+4. До полного закрытия migration нужно явно понимать:
+- где лежит активный `Cloudflare R2` bucket,
+- как читаются legacy Yandex-backed объекты,
+- какой набор объектов еще не migrated и поэтому зависит от compatibility path.
 
 ### 3.3 Секреты и конфигурация
 
@@ -52,7 +71,7 @@
 ## 4. Когда делать контрольные точки
 
 1. Перед миграциями БД.
-2. Перед сменой storage-провайдера или bucket policy.
+2. Перед сменой storage-провайдера, bucket policy, CORS или rollout timestamp `CF_R2_ROLLOUT_AT`.
 3. Перед крупными UI/permission changes.
 4. Перед production rollout.
 
@@ -62,6 +81,9 @@
 2. Что файл/снимок можно открыть и он не пустой.
 3. Что есть понятная дата backup.
 4. Что хотя бы раз была проверена процедура restore на тестовом окружении.
+5. Что покрыты оба актуальных media path:
+- активный `Cloudflare R2`
+- legacy compatibility path, если он еще нужен для чтения старых объектов
 
 ## 6. Минимальный restore-сценарий
 
@@ -86,6 +108,7 @@
 - видео открываются,
 - документы открываются,
 - нет большого числа битых ссылок `/api/media/...`.
+4. Если rollout еще смешанный, проверить и новые `Cloudflare R2` объекты, и legacy Yandex-backed чтение.
 
 ### 6.3 Если потерялись и база, и storage
 
@@ -101,6 +124,8 @@
 4. Работает хотя бы одна семейная ссылка.
 5. Фото открываются через signed delivery.
 6. Загрузка нового файла проходит успешно.
+7. После загрузки новый объект приходит в активный `Cloudflare R2` path.
+8. Legacy Yandex-backed объект, если еще есть в данных, тоже читается.
 
 ## 8. Что нужно сделать до production launch
 
@@ -108,6 +133,12 @@
 2. Зафиксировать, где именно лежат backup storage или как они восстанавливаются.
 3. Проверить одну тестовую restore-процедуру на dev/staging-подобной среде.
 4. Убедиться, что ключи доступа к backup не завязаны на одного случайного человека.
+5. Зафиксировать текущий rollout state:
+- `MEDIA_STORAGE_BACKEND`
+- `CF_R2_BUCKET`
+- `CF_R2_ENDPOINT`
+- `CF_R2_ROLLOUT_AT`
+- описание legacy compatibility path, если он еще нужен
 
 ## 9. Практический вывод для V1
 

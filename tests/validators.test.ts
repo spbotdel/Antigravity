@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { completeMediaSchema, mediaUploadIntentSchema } from "@/lib/validators/media";
+import { archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeMediaAlbumSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema } from "@/lib/validators/media";
 import { createTreeSchema } from "@/lib/validators/tree";
+import { inviteSchema } from "@/lib/validators/invite";
 
 describe("validators", () => {
   it("accepts valid tree creation payloads", () => {
@@ -73,6 +74,80 @@ describe("validators", () => {
       visibility: "members",
       title: "Семейное фото",
       caption: "Архив"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts archive upload intent payloads", () => {
+    const result = archiveMediaUploadIntentSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      filename: "wedding-archive.jpg",
+      mimeType: "image/jpeg",
+      visibility: "members",
+      title: "Свадьба",
+      caption: "Общий архив"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts archive media completion payloads", () => {
+    const result = completeArchiveMediaSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      mediaId: crypto.randomUUID(),
+      storagePath: "trees/tree-1/media/photo/media-1/original.jpg",
+      variantPaths: [
+        { variant: "thumb", storagePath: "trees/tree-1/media/photo/media-1/variants/thumb.webp" }
+      ],
+      mimeType: "image/jpeg",
+      sizeBytes: 1024,
+      visibility: "members",
+      title: "Семейный архив",
+      caption: "Общие фото"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts tree media album creation payloads", () => {
+    const result = createTreeMediaAlbumSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      title: "День рождения тети Светы",
+      description: "Фото и видео из одного архива"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts avatar selection payloads for person media", () => {
+    const result = setPrimaryPersonMediaSchema.safeParse({
+      personId: crypto.randomUUID(),
+      setPrimary: true
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("requires email when invite delivery method is email", () => {
+    const result = inviteSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      role: "viewer",
+      inviteMethod: "email",
+      email: "",
+      expiresInDays: 7
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("allows link invites without an email address", () => {
+    const result = inviteSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      role: "viewer",
+      inviteMethod: "link",
+      email: "",
+      expiresInDays: 7
     });
 
     expect(result.success).toBe(true);

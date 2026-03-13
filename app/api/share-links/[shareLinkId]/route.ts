@@ -1,8 +1,18 @@
 import { toErrorResponse } from "@/lib/server/errors";
-import { revokeShareLink } from "@/lib/server/repository";
+import { revealShareLink, revokeShareLink } from "@/lib/server/repository";
 
 interface Params {
   params: Promise<{ shareLinkId: string }>;
+}
+
+export async function GET(_request: Request, { params }: Params) {
+  try {
+    const { shareLinkId } = await params;
+    const result = await revealShareLink(shareLinkId);
+    return Response.json(result);
+  } catch (error) {
+    return toErrorResponse(error);
+  }
 }
 
 export async function DELETE(_request: Request, { params }: Params) {

@@ -3,10 +3,22 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { getSupabaseServiceEnv } from "@/lib/env";
+import { getSupabaseRequestTimeoutMs } from "@/lib/supabase/fetch";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_ADMIN_REST_TIMEOUT_MS = 15000;
 const ADMIN_REST_MAX_BUFFER = 1024 * 1024 * 8;
+const ADMIN_REST_NATIVE_FALLBACK_COOLDOWN_MS = 60000;
+const FALLBACK_ERROR_CODES = new Set([
+  "UND_ERR_CONNECT_TIMEOUT",
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "EAI_AGAIN",
+  "ENOTFOUND"
+]);
+let nativeAdminRestFallbackUntil = 0;
+
+// FRAMEWORK_RULE: Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
 
 export function parsePowerShellJsonStdout<T>(rawStdout: string): T {
   const withoutBom = rawStdout.replace(/^\uFEFF/, "");
@@ -25,12 +37,12 @@ export function parsePowerShellJsonStdout<T>(rawStdout: string): T {
 function getAdminRestTimeoutMs() {
   const rawValue = process.env.SUPABASE_SERVER_REQUEST_TIMEOUT_MS || process.env.SUPABASE_REQUEST_TIMEOUT_MS;
   if (!rawValue) {
-    return DEFAULT_ADMIN_REST_TIMEOUT_MS;
+    return Math.max(getSupabaseRequestTimeoutMs(), DEFAULT_ADMIN_REST_TIMEOUT_MS);
   }
 
   const parsed = Number(rawValue);
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    return DEFAULT_ADMIN_REST_TIMEOUT_MS;
+    return Math.max(getSupabaseRequestTimeoutMs(), DEFAULT_ADMIN_REST_TIMEOUT_MS);
   }
 
   return parsed;
@@ -45,12 +57,77 @@ interface AdminRestPayload {
   timeoutMs: number;
 }
 
+interface AdminRestResult {
+  status: number;
+  headers?: Record<string, string>;
+  bodyBase64?: string;
+}
+
+class AdminRestFallbackError extends Error {
+  status: number;
+
+  constructor(status: number, message: string, cause?: unknown) {
+    super(message);
+    this.name = "AdminRestFallbackError";
+    this.status = status;
+    if (cause !== undefined) {
+      (this as Error & { cause?: unknown }).cause = cause;
+    }
+  }
+}
+
+function getAdminRestTransportMode() {
+  const rawValue = process.env.SUPABASE_ADMIN_REST_TRANSPORT?.trim().toLowerCase();
+  if (rawValue === "native" || rawValue === "powershell") {
+    return rawValue;
+  }
+
+  return "auto";
+}
+
+function shouldUsePowerShellFallback(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const cause = error.cause as { code?: string } | undefined;
+  return error.message.includes("fetch failed") || (cause?.code ? FALLBACK_ERROR_CODES.has(cause.code) : false);
+}
+
+function shouldPreferPowerShellAdminRestNow() {
+  return Date.now() < nativeAdminRestFallbackUntil;
+}
+
+function noteNativeAdminRestFallback() {
+  nativeAdminRestFallbackUntil = Date.now() + ADMIN_REST_NATIVE_FALLBACK_COOLDOWN_MS;
+}
+
+export function resetAdminRestFallbackCooldownForTests() {
+  nativeAdminRestFallbackUntil = 0;
+}
+
+function createUnavailableAdminRestResult(status: number): AdminRestResult {
+  const body = JSON.stringify({
+    error: "fetch failed",
+    message: "fetch failed",
+    code: "SUPABASE_UNAVAILABLE"
+  });
+
+  return {
+    status,
+    headers: {
+      "content-type": "application/json"
+    },
+    bodyBase64: Buffer.from(body, "utf8").toString("base64")
+  };
+}
+
 async function runAdminRestRequest(payload: AdminRestPayload) {
   const [result] = await runAdminRestRequests([payload]);
   return result;
 }
 
-async function runAdminRestRequests(payloads: AdminRestPayload[]) {
+async function runPowerShellAdminRestRequests(payloads: AdminRestPayload[]) {
   const encodedPayload = Buffer.from(JSON.stringify(payloads), "utf8").toString("base64");
   const scriptPath = path.join(process.cwd(), "scripts", "supabase-http.ps1");
   const maxTimeoutMs = payloads.reduce((maxValue, payload) => Math.max(maxValue, payload.timeoutMs), 0);
@@ -60,18 +137,89 @@ async function runAdminRestRequests(payloads: AdminRestPayload[]) {
     timeout: maxTimeoutMs + 5000
   });
 
-  const parsed = parsePowerShellJsonStdout<
-    | {
-        status: number;
-        bodyBase64?: string;
-      }
-    | Array<{
-        status: number;
-        bodyBase64?: string;
-      }>
-  >(stdout);
+  const parsed = parsePowerShellJsonStdout<AdminRestResult | AdminRestResult[]>(stdout);
 
   return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+async function runNativeAdminRestRequest(payload: AdminRestPayload): Promise<AdminRestResult> {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let timedOut = false;
+
+  timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, payload.timeoutMs);
+
+  try {
+    const response = await fetch(payload.url, {
+      method: payload.method,
+      headers: payload.headers,
+      body: payload.bodyBase64 ? Buffer.from(payload.bodyBase64, "base64") : undefined,
+      signal: controller.signal
+    });
+    const bodyBuffer = Buffer.from(await response.arrayBuffer());
+
+    return {
+      status: response.status,
+      headers: payload.includeHeaders ? Object.fromEntries(response.headers.entries()) : {},
+      bodyBase64: bodyBuffer.toString("base64")
+    };
+  } catch (error) {
+    if (timedOut) {
+      throw new AdminRestFallbackError(504, "Native Supabase admin REST request timed out.", error);
+    }
+
+    if (shouldUsePowerShellFallback(error)) {
+      throw new AdminRestFallbackError(503, "Native Supabase admin REST request failed.", error);
+    }
+
+    return createUnavailableAdminRestResult(503);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function runNativeAdminRestRequests(payloads: AdminRestPayload[]) {
+  return Promise.all(payloads.map((payload) => runNativeAdminRestRequest(payload)));
+}
+
+async function runAdminRestRequests(payloads: AdminRestPayload[]) {
+  const transportMode = getAdminRestTransportMode();
+
+  if (transportMode === "powershell") {
+    return runPowerShellAdminRestRequests(payloads);
+  }
+
+  if (transportMode === "auto" && shouldPreferPowerShellAdminRestNow()) {
+    try {
+      return await runPowerShellAdminRestRequests(payloads);
+    } catch {
+      return payloads.map(() => createUnavailableAdminRestResult(503));
+    }
+  }
+
+  try {
+    return await runNativeAdminRestRequests(payloads);
+  } catch (error) {
+    if (transportMode === "auto" && error instanceof AdminRestFallbackError) {
+      noteNativeAdminRestFallback();
+      try {
+        return await runPowerShellAdminRestRequests(payloads);
+      } catch {
+        return payloads.map(() => createUnavailableAdminRestResult(error.status));
+      }
+    }
+
+    if (error instanceof AdminRestFallbackError) {
+      return payloads.map(() => createUnavailableAdminRestResult(error.status));
+    }
+
+    throw error;
+  }
 }
 
 function buildAdminRestPayload(url: string, serviceRoleKey: string, timeoutMs: number, init?: { method?: string; body?: unknown }) {

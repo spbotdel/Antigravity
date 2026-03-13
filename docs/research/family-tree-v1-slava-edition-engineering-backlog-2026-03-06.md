@@ -1,5 +1,42 @@
 # Family Tree V1.0 "Slava Edition" Engineering Backlog (2026-03-06)
 
+<!-- FRAMEWORK:ENGINEERING:START -->
+## Current Engineering Sync
+
+- Updated at (UTC): `2026-03-13 07:30:00Z`
+- Treat the historical phases below as reference coverage. The execution order in this sync block is the current engineering queue.
+- Active engineering stream: `Post-UAT launch hardening` inside `Media Upload Flow V2` (`in_progress`).
+
+### Current Wave Order
+
+1. `Wave 1` - access correctness, share-link reveal, and the builder/media/archive cleanup from the live pass.
+2. `Wave 2` - hosted staging on `OpenNext -> Cloudflare Workers`, real staged UAT, and invite email delivery through `Resend`.
+3. `Wave 3` - `shadcn` / unified visual-system migration after launch-critical fixes and hosted validation.
+
+### Current Immediate Order
+
+1. Implement Wave 1 fixes locally.
+2. Deploy hosted staging and disable `DEV_IMPERSONATE_*` there.
+3. Run staged `Owner EU / Helper RF / Relative RF` validation and record perceived speed from staging routes.
+4. Add `Resend` invite delivery with manual-copy fallback.
+5. Complete backup/restore rehearsal and the final launch checklist before release decision.
+
+### Current P0 Gaps
+
+- Local `next dev` with `DEV_IMPERSONATE_*` is not a trustworthy surface for real invite-role or performance conclusions.
+- The invite acceptance flow still needs a role-preserving fix and regression coverage.
+- Family share links still need a revealable owner/admin UX instead of create-once-then-lose-the-URL behavior.
+- Hosted `EU + RF` UAT is still a launch gate.
+- Backup/restore rehearsal and final launch checklist remain part of release readiness.
+
+### Current Validation Baseline
+
+- `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
+- `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
+- Latest `smoke:media` artifact `media-storage-report-1773322585848.json` is green.
+- Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
+<!-- FRAMEWORK:ENGINEERING:END -->
+
 ## 1. Цель
 
 1. Этот документ раскладывает `Slava edition` в инженерный backlog по текущему репозиторию.
@@ -26,14 +63,18 @@
 10. Панель участников: `components/members/member-management-panel.tsx`
 11. Workspace редактора: `components/tree/builder-workspace.tsx`
 12. Viewer UI: `components/tree/tree-viewer-client.tsx`
+13. Tree-level media archive: `app/tree/[slug]/media/page.tsx` + `components/media/tree-media-archive-client.tsx`
+14. Share-link API: `app/api/share-links/**`
+15. Unified media routes and archive routes: `app/api/media/**`
+16. `Cloudflare R2` rollout foundation in env/runtime config and smoke coverage
 
 ### 2.2 Что сейчас не закрывает V1
 
-1. `public/private` у дерева слишком грубое для семейного read-only sharing.
-2. Есть `invite flow`, но нет отдельной модели `share links`.
-3. Фото уже грузятся приватно, а видео пока завязаны на `public Yandex Disk link`.
-4. `MediaKind` и `MediaProvider` сейчас узкие: нет `document`, нет единой object-storage модели.
-5. Нет отдельного engineering backlog, который связывает product-план с конкретными файлами и тестами.
+1. Обязательный `Cloudflare R2` rollout еще не активирован и не закрыт как steady-state upload path.
+2. Post-activation regression для archive/viewer/builder/members и preview variants еще не закрыт.
+3. Live UAT `EU + RF` еще не зафиксирован как complete.
+4. Backup/restore rehearsal и launch checklist execution еще не закрыты.
+5. Startup memory и operational docs должны оставаться синхронизированными с текущим launch path.
 
 ## 3. Ключевые инженерные решения V1
 
@@ -57,9 +98,34 @@
 1. Уйти от split-модели `photo private + video public link`.
 2. Привести `photo/video/document` к одному upload/access contract.
 3. Binary layer вынести в object storage через adapter.
-4. `Yandex Object Storage` или `Selectel` считать целевыми V1 кандидатами, но без жесткого зашивания провайдера в доменную логику.
+4. `Cloudflare R2` rollout для новых upload считать обязательной частью `Slava edition`.
+5. Yandex-backed path считать transitional compatibility/read path для already-uploaded assets до явного закрытия migration.
+
+### 3.4 Текущий execution order из состояния репозитория
+
+1. Wave 1 локально:
+- исправить invite acceptance так, чтобы существующая membership не понижалась
+- закрыть потерю owner-only вкладок после invite flow
+- добавить reveal/copy UX для family share links
+- применить согласованный builder/media/archive cleanup из живого прохода
+2. Поднять hosted staging:
+- `OpenNext -> Cloudflare Workers`
+- без `DEV_IMPERSONATE_*`
+- с отдельными тестовыми аккаунтами и staging URL как truth surface
+3. Пройти hosted UAT:
+- owner `EU`
+- helper `RF`
+- read-only relative `RF`
+- зафиксировать реальные speed/auth observations именно с staging
+4. Добавить email delivery:
+- `Resend`
+- текущие app-level invite URLs остаются source of truth
+- manual-copy fallback остается обязательным
+5. После staged validation выполнить backup/restore rehearsal и final launch checklist.
 
 ## 4. Бэклог по этапам
+
+Phases `A-D` below are now largely implemented in the current repository. For the actual next-step execution order, use section `3.4` first.
 
 ## 4.1 Phase A - Access foundation
 
@@ -386,13 +452,11 @@
 
 ### P0 - блокирует запуск
 
-1. `tree_share_links`
-2. share-link access в viewer/snapshot
-3. обновленный members screen
-4. owner/admin collaboration flow
-5. unified private media
-6. revoke semantics
-7. UAT EU + RF
+1. `Cloudflare R2` rollout activation и подтверждение steady-state upload path
+2. provider-aware legacy Yandex reads после activation
+3. post-activation regression для archive/viewer/builder/members
+4. live UAT `EU + RF`
+5. backup/restore rehearsal и launch checklist
 
 ### P1 - желательно в том же цикле
 
@@ -410,16 +474,12 @@
 
 ## 7. Предлагаемый порядок реализации
 
-1. `Phase A`
-2. `Phase B`
-3. `Phase C`
-4. `Phase D`
-5. `Phase E`
+1. Сначала section `3.4` как текущий launch order
+2. Затем использовать historical phases `A-E` только как reference для проверки покрытия
 
 Примечание:
-1. `A` нельзя пропускать, потому что без него семейный link-sharing остается недоопределенным.
-2. `D` нельзя откладывать "на потом", потому что текущая media-модель не production-ready для вашей семьи.
-3. После завершения `Phase A` и `Phase B` уже можно запускать ранний family UAT, даже если media migration еще в работе.
+1. Historical phases ниже полезны для навигации по коду и тестам, но не как текущий day-to-day launch plan.
+2. Текущий day-to-day plan теперь определяется Cloudflare activation, post-activation QA и live UAT.
 
 ## 8. Definition of Done
 
@@ -429,4 +489,5 @@
 4. Помощник сам загружает медиа и помогает редактировать.
 5. Read-only родственник не может случайно редактировать дерево.
 6. Медиа не завязаны на public Yandex Disk workaround.
-7. Основные сценарии подтверждены между Европой и РФ.
+7. Новые upload идут через `Cloudflare R2`, а legacy Yandex-backed медиа остаются читаемыми в transition.
+8. Основные сценарии подтверждены между Европой и РФ.

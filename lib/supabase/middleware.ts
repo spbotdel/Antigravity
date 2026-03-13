@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 import { getSupabaseEnv } from "@/lib/env";
-import { createSupabaseFetch } from "@/lib/supabase/fetch";
+import { createServerSupabaseFetch } from "@/lib/supabase/server-fetch";
 import type { Database } from "@/lib/types";
 
 export async function updateSession(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function updateSession(request: NextRequest) {
 
   const supabase = createServerClient<Database>(url, anonKey, {
     global: {
-      fetch: createSupabaseFetch()
+      fetch: createServerSupabaseFetch()
     },
     cookies: {
       getAll() {
@@ -25,7 +25,7 @@ export async function updateSession(request: NextRequest) {
     }
   });
 
-  await supabase.auth.getSession();
+  await supabase.auth.getUser();
 
   return response;
 }

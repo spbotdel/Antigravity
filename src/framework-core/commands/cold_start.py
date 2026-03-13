@@ -96,7 +96,6 @@ def run_cold_start():
     ]
 
     task_results.extend(run_tasks_parallel(tasks))
-    task_results.append(mark_active())
 
     # Check for errors
     errors = [
@@ -138,6 +137,8 @@ def run_cold_start():
             errors=errors,
             duration_ms=duration_ms
         )
+
+    task_results.append(mark_active())
 
     return create_result(
         status="success",

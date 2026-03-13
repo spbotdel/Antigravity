@@ -43,6 +43,15 @@ export const mediaUploadIntentSchema = z.object({
   caption: z.string().trim().max(400).optional().or(z.literal(""))
 });
 
+export const archiveMediaUploadIntentSchema = z.object({
+  treeId: z.string().uuid(),
+  filename: z.string().trim().min(1).max(180),
+  mimeType: z.string().trim().min(3).max(120),
+  visibility: mediaVisibilitySchema,
+  title: z.string().trim().min(1).max(120),
+  caption: z.string().trim().max(400).optional().or(z.literal(""))
+});
+
 export const completeMediaSchema = z.object({
   ...mediaUploadBaseSchema,
   storagePath: z.string().trim().min(1),
@@ -57,4 +66,39 @@ export const completeMediaSchema = z.object({
     externalUrl: z.string().trim().url().max(2000)
   })
 );
+
+const archiveMediaUploadBaseSchema = {
+  treeId: z.string().uuid(),
+  mediaId: z.string().uuid(),
+  visibility: mediaVisibilitySchema,
+  title: z.string().trim().min(1).max(120),
+  caption: z.string().trim().max(400).optional().or(z.literal("")),
+  albumId: z.string().uuid().optional()
+} as const;
+
+export const completeArchiveMediaSchema = z.object({
+  ...archiveMediaUploadBaseSchema,
+  storagePath: z.string().trim().min(1),
+  mimeType: z.string().trim().min(3).max(120),
+  sizeBytes: z.number().int().positive().optional(),
+  variantPaths: z.array(mediaVariantPathSchema).max(3).optional(),
+  provider: z.literal("supabase_storage").optional()
+}).or(
+  z.object({
+    ...archiveMediaUploadBaseSchema,
+    provider: z.literal("yandex_disk"),
+    externalUrl: z.string().trim().url().max(2000)
+  })
+);
+
+export const createTreeMediaAlbumSchema = z.object({
+  treeId: z.string().uuid(),
+  title: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(512).optional().or(z.literal(""))
+});
+
+export const setPrimaryPersonMediaSchema = z.object({
+  personId: z.string().uuid(),
+  setPrimary: z.literal(true)
+});
 

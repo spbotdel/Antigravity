@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 
 import { AuditLogTable } from "@/components/audit/audit-log-table";
 import { TreeNav } from "@/components/layout/tree-nav";
-import { getTreeSnapshot, listAudit } from "@/lib/server/repository";
+import { AppError } from "@/lib/server/errors";
+import { getTreeAuditPageContext, listAudit } from "@/lib/server/repository";
 
 export const dynamic = "force-dynamic";
 
@@ -45,13 +46,22 @@ export default async function AuditPage({ params, searchParams }: AuditPageProps
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const shareToken = getSearchParam(resolvedSearchParams.share);
   const page = getPositiveInteger(getSearchParam(resolvedSearchParams.page), 1);
-  const snapshot = await getTreeSnapshot(slug, { shareToken });
+  let treeContext;
+  try {
+    treeContext = await getTreeAuditPageContext(slug, { shareToken });
+  } catch (error) {
+    if (error instanceof AppError && error.status === 403) {
+      redirect(buildViewerHref(slug, shareToken));
+    }
 
-  if (!snapshot.actor.canReadAudit) {
+    throw error;
+  }
+
+  if (!treeContext.actor.canReadAudit) {
     redirect(buildViewerHref(slug, shareToken));
   }
 
-  const audit = await listAudit(snapshot.tree.id, { page, pageSize: 50 });
+  const audit = await listAudit(treeContext.tree.id, { page, pageSize: 50 });
 
   return (
     <main className="page-shell workspace-page">
@@ -63,16 +73,16 @@ export default async function AuditPage({ params, searchParams }: AuditPageProps
             <span className="workspace-meta-chip">Страница {audit.page}</span>
             <span className="workspace-meta-chip">МСК</span>
           </div>
-          <h1>{snapshot.tree.title}</h1>
+          <h1>{treeContext.tree.title}</h1>
           <p className="muted-copy">История действий по дереву собрана в одну спокойную ленту без технического шума и лишних полей.</p>
         </div>
         <TreeNav
           slug={slug}
           shareToken={shareToken}
-          canEdit={snapshot.actor.canEdit}
-          canManageMembers={snapshot.actor.canManageMembers}
-          canReadAudit={snapshot.actor.canReadAudit}
-          canManageSettings={snapshot.actor.canManageSettings}
+          canEdit={treeContext.actor.canEdit}
+          canManageMembers={treeContext.actor.canManageMembers}
+          canReadAudit={treeContext.actor.canReadAudit}
+          canManageSettings={treeContext.actor.canManageSettings}
         />
       </section>
       <AuditLogTable entries={audit.entries} total={audit.total} page={audit.page} pageSize={audit.pageSize} slug={slug} />

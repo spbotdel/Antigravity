@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildBuilderDisplayTree, buildDisplayTree, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildDerivedUploaderAlbumSummaries, buildDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPersistedTreeMediaAlbumMediaMap, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, collectPersonMedia, collectTreeMedia, collectUnlinkedTreeMedia } from "@/lib/tree/display";
 import type { TreeSnapshot } from "@/lib/types";
 
 const snapshot: TreeSnapshot = {
@@ -292,6 +292,214 @@ describe("tree display helpers", () => {
     expect(media[0]?.title).toBe("Portrait");
   });
 
+  it("collects tree-level media that is not linked to any person", () => {
+    const media = collectUnlinkedTreeMedia({
+      media: [
+        ...snapshot.media,
+        {
+          id: "media-archive",
+          tree_id: "tree-1",
+          kind: "photo",
+          provider: "supabase_storage",
+          visibility: "public",
+          storage_path: "trees/tree-1/photos/media-archive/archive.jpg",
+          external_url: null,
+          title: "Archive",
+          caption: null,
+          mime_type: "image/jpeg",
+          size_bytes: 2048,
+          created_by: null,
+          created_at: new Date().toISOString()
+        }
+      ],
+      personMedia: snapshot.personMedia
+    });
+
+    expect(media).toHaveLength(1);
+    expect(media[0]?.id).toBe("media-archive");
+  });
+
+  it("collects tree-level media by kind", () => {
+    const media = collectTreeMedia(
+      {
+        media: [
+          ...snapshot.media,
+          {
+            id: "media-video",
+            tree_id: "tree-1",
+            kind: "video",
+            provider: "yandex_disk",
+            visibility: "public",
+            storage_path: null,
+            external_url: "https://example.com/video",
+            title: "Video",
+            caption: null,
+            mime_type: null,
+            size_bytes: null,
+            created_by: null,
+            created_at: new Date().toISOString()
+          }
+        ]
+      },
+      "video"
+    );
+
+    expect(media).toHaveLength(1);
+    expect(media[0]?.id).toBe("media-video");
+  });
+
+  it("builds album summaries filtered by media kind", () => {
+    const summaries = buildTreeMediaAlbumSummaries({
+      media: [
+        ...snapshot.media,
+        {
+          id: "media-video",
+          tree_id: "tree-1",
+          kind: "video",
+          provider: "yandex_disk",
+          visibility: "public",
+          storage_path: null,
+          external_url: "https://example.com/video",
+          title: "Video",
+          caption: null,
+          mime_type: null,
+          size_bytes: null,
+          created_by: null,
+          created_at: new Date().toISOString()
+        }
+      ],
+      albums: [
+        {
+          id: "album-1",
+          tree_id: "tree-1",
+          title: "От Виктора Петровича",
+          description: null,
+          album_kind: "uploader",
+          uploader_user_id: "user-1",
+          created_by: "user-1",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ],
+      items: [
+        { id: "item-1", album_id: "album-1", media_id: "media-1", created_at: new Date().toISOString() },
+        { id: "item-2", album_id: "album-1", media_id: "media-video", created_at: new Date().toISOString() }
+      ],
+      kind: "photo"
+    });
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({
+      id: "album-1",
+      title: "От Виктора Петровича",
+      uploaderUserId: "user-1",
+      count: 1,
+      coverMediaId: "media-1"
+    });
+  });
+
+  it("builds derived uploader album summaries from existing media", () => {
+    const summaries = buildDerivedUploaderAlbumSummaries({
+      media: [
+        {
+          ...snapshot.media[0],
+          created_by: "user-1"
+        },
+        {
+          id: "media-video",
+          tree_id: "tree-1",
+          kind: "video",
+          provider: "yandex_disk",
+          visibility: "public",
+          storage_path: null,
+          external_url: "https://example.com/video",
+          title: "Video",
+          caption: null,
+          mime_type: null,
+          size_bytes: null,
+          created_by: "user-1",
+          created_at: new Date().toISOString()
+        }
+      ],
+      kind: "photo",
+      uploaderLabelsById: new Map([["user-1", "От Виктора Петровича"]])
+    });
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({
+      id: "uploader-user-1",
+      title: "От Виктора Петровича",
+      albumKind: "uploader",
+      uploaderUserId: "user-1",
+      count: 1,
+      coverMediaId: "media-1"
+    });
+  });
+
+  it("builds a persisted album media map", () => {
+    const map = buildPersistedTreeMediaAlbumMediaMap({
+      media: [
+        ...snapshot.media,
+        {
+          id: "media-video",
+          tree_id: "tree-1",
+          kind: "video",
+          provider: "yandex_disk",
+          visibility: "public",
+          storage_path: null,
+          external_url: "https://example.com/video",
+          title: "Video",
+          caption: null,
+          mime_type: null,
+          size_bytes: null,
+          created_by: "user-1",
+          created_at: new Date().toISOString()
+        }
+      ],
+      items: [
+        { id: "item-1", album_id: "album-1", media_id: "media-1", created_at: new Date().toISOString() },
+        { id: "item-2", album_id: "album-1", media_id: "media-video", created_at: new Date().toISOString() }
+      ]
+    });
+
+    expect(map["album-1"]).toHaveLength(2);
+    expect(map["album-1"]?.[0]?.id).toBe("media-1");
+  });
+
+  it("keeps manual albums visible in filtered mode even when the current mode has zero items", () => {
+    const summaries = buildTreeMediaAlbumSummaries({
+      media: [
+        {
+          ...snapshot.media[0],
+          created_by: "user-1"
+        }
+      ],
+      albums: [
+        {
+          id: "album-1",
+          tree_id: "tree-1",
+          title: "Семейный альбом",
+          description: null,
+          album_kind: "manual",
+          uploader_user_id: null,
+          created_by: "user-1",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ],
+      items: [{ id: "item-1", album_id: "album-1", media_id: "media-1", created_at: new Date().toISOString() }],
+      kind: "video"
+    });
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({
+      id: "album-1",
+      title: "Семейный альбом",
+      count: 0,
+      coverMediaId: "media-1"
+    });
+  });
+
   it("builds preview photo URLs per person and prefers primary photos", () => {
     const urls = buildPersonPhotoPreviewUrls({
       media: [
@@ -338,5 +546,34 @@ describe("tree display helpers", () => {
       "person-1": "/api/media/media-1?variant=thumb"
     });
     expect(urls["person-2"]).toBeUndefined();
+  });
+
+  it("builds preview and explicit-open URLs with consistent variant semantics", () => {
+    const freshPhoto = {
+      id: "media-fresh",
+      tree_id: "tree-1",
+      kind: "photo" as const,
+      provider: "object_storage" as const,
+      visibility: "public" as const,
+      storage_path: "trees/tree-1/media/photo/media-fresh/original.jpg",
+      external_url: null,
+      title: "Fresh photo",
+      caption: null,
+      mime_type: "image/jpeg",
+      size_bytes: 2048,
+      created_by: null,
+      created_at: "2026-03-09T00:00:00.000Z"
+    };
+    const legacyPhoto = {
+      ...freshPhoto,
+      id: "media-legacy",
+      created_at: "2026-03-07T00:00:00.000Z"
+    };
+
+    expect(buildPhotoPreviewRouteUrl(freshPhoto, "small")).toBe("/api/media/media-fresh?variant=small");
+    expect(buildPhotoPreviewRouteUrl(freshPhoto, "thumb", "share-token")).toBe("/api/media/media-fresh?variant=thumb&share=share-token");
+    expect(buildPhotoPreviewRouteUrl(legacyPhoto, "small")).toBe("/api/media/media-legacy");
+    expect(buildMediaOpenRouteUrl(freshPhoto)).toBe("/api/media/media-fresh");
+    expect(buildMediaOpenRouteUrl(freshPhoto, "share-token")).toBe("/api/media/media-fresh?share=share-token");
   });
 });

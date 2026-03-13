@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import type {
@@ -12,6 +12,7 @@ import type {
   AuditEntryView,
   InviteRecord,
   MediaAssetRecord,
+  MediaUploadTargetResponse,
   MediaAssetVariantRecord,
   MediaVariantName,
   MembershipRecord,
@@ -23,28 +24,42 @@ import type {
   Profile,
   ShareLinkRecord,
   TreeRecord,
+  TreeMediaAlbumItemRecord,
+  TreeMediaAlbumRecord,
   TreeSnapshot,
   UserRole,
   ViewerActor
 } from "@/lib/types";
 import { buildAuditEntryViews } from "@/lib/audit-presenter";
 import { buildViewerActor, canSeeMedia, canViewTree, hasRequiredRole } from "@/lib/permissions";
-import { getBaseUrl, getFileBackedMediaProvider, getMediaStorageBackend, getObjectStorageEnv, getStorageBucket } from "@/lib/env";
+import { getBaseUrl, getFileBackedMediaProvider, getObjectStorageEnv, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, getResendEmailEnv, getShareLinkTokenEncryptionSecret, getStorageBucket, isObjectStorageLikeBackend, resolveMediaUploadPlan, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson, fetchSupabaseAdminRestJsonWithHeaders, parsePowerShellJsonStdout } from "@/lib/supabase/admin-rest";
 import { getCurrentUser, requireAuthenticatedUserId } from "@/lib/server/auth";
 import { AppError } from "@/lib/server/errors";
-import { createInviteToken, createOpaqueToken, hashInviteToken, hashOpaqueToken } from "@/lib/server/invite-token";
+import { createInviteToken, createOpaqueToken, decryptOpaqueToken, encryptOpaqueToken, hashInviteToken, hashOpaqueToken } from "@/lib/server/invite-token";
+import { shouldUsePhotoVariants } from "@/lib/tree/display";
 
 const admin = () => createAdminSupabaseClient();
-let objectStorageClient: S3Client | null = null;
+const objectStorageClients = new Map<string, S3Client>();
 const execFileAsync = promisify(execFile);
 const OBJECT_STORAGE_HTTP_MAX_BUFFER = 1024 * 1024 * 4;
 const PHOTO_VARIANT_NAMES: MediaVariantName[] = ["thumb", "small", "medium"];
 
 const REPOSITORY_NETWORK_ERROR_MARKERS = ["SUPABASE_UNAVAILABLE", "fetch failed", "connect timeout", "timed out", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"];
 const SHARE_LINKS_SCHEMA_CACHE_MARKERS = ["tree_share_links", "schema cache"];
+const SHARE_LINK_REVEAL_COLUMN_MARKERS = ["token_ciphertext"];
 const MEDIA_VARIANTS_SCHEMA_CACHE_MARKERS = ["media_asset_variants", "schema cache"];
+const MEDIA_ALBUMS_SCHEMA_CACHE_MARKERS = ["tree_media_albums", "schema cache"];
+const MEDIA_ALBUM_ITEMS_SCHEMA_CACHE_MARKERS = ["tree_media_album_items", "schema cache"];
+const SHARE_LINK_PUBLIC_SELECT = "id,tree_id,label,token_hash,expires_at,revoked_at,last_accessed_at,created_by,created_at";
+const SHARE_LINK_REVEAL_SELECT = `${SHARE_LINK_PUBLIC_SELECT},token_ciphertext,tree:trees!inner(id,slug)`;
+const RESEND_SEND_EMAIL_URL = "https://api.resend.com/emails";
+const USER_ROLE_STRENGTH: Record<UserRole, number> = {
+  viewer: 0,
+  admin: 1,
+  owner: 2
+};
 
 function toRepositoryReadError(error: unknown, fallbackMessage: string) {
   if (error instanceof AppError) {
@@ -64,9 +79,127 @@ function isShareLinksSchemaUnavailableError(error: unknown) {
   return SHARE_LINKS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
 }
 
+function isShareLinkRevealColumnUnavailableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return SHARE_LINK_REVEAL_COLUMN_MARKERS.every((marker) => message.includes(marker));
+}
+
 function isMediaVariantsSchemaUnavailableError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return MEDIA_VARIANTS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
+}
+
+function isMediaAlbumsSchemaUnavailableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return MEDIA_ALBUMS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
+}
+
+function mergeInviteAcceptanceRole(currentRole: UserRole | null, inviteRole: UserRole) {
+  if (!currentRole) {
+    return inviteRole;
+  }
+
+  return USER_ROLE_STRENGTH[currentRole] >= USER_ROLE_STRENGTH[inviteRole] ? currentRole : inviteRole;
+}
+
+interface ShareLinkRevealRecord extends ShareLinkRecord {
+  tree?: Pick<TreeRecord, "id" | "slug"> | null;
+}
+
+function toPublicShareLinkRecord(shareLink: ShareLinkRecord | ShareLinkRevealRecord) {
+  const { token_ciphertext: _tokenCiphertext, tree: _tree, ...publicShareLink } = shareLink as ShareLinkRevealRecord;
+  return publicShareLink;
+}
+
+function buildShareLinkUrl(treeSlug: string, token: string) {
+  return `${getBaseUrl()}/tree/${treeSlug}?share=${encodeURIComponent(token)}`;
+}
+
+async function sendInviteEmailIfConfigured(input: {
+  inviteMethod: "link" | "email";
+  email: string | null;
+  inviteUrl: string;
+  treeTitle: string;
+  role: UserRole;
+  expiresAt: string;
+}) {
+  if (input.inviteMethod !== "email" || !input.email) {
+    return {
+      deliveryStatus: "skipped" as const,
+      deliveryMessage: null,
+    };
+  }
+
+  const resendEnv = getResendEmailEnv();
+  if (!resendEnv) {
+    return {
+      deliveryStatus: "skipped" as const,
+      deliveryMessage: "Resend пока не настроен. Ссылка приглашения сохранена, ее можно отправить вручную."
+    };
+  }
+
+  const expiresLabel = new Date(input.expiresAt).toLocaleString("ru-RU");
+  const roleLabel = input.role === "admin" ? "администратор" : "участник";
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#182130">
+      <h2 style="margin:0 0 12px">Приглашение в семейное дерево "${input.treeTitle}"</h2>
+      <p style="margin:0 0 12px">Вам открыт доступ в роли: <strong>${roleLabel}</strong>.</p>
+      <p style="margin:0 0 12px">Срок действия приглашения: <strong>${expiresLabel}</strong>.</p>
+      <p style="margin:0 0 18px">Нажмите на кнопку ниже, чтобы принять приглашение.</p>
+      <p style="margin:0 0 18px">
+        <a href="${input.inviteUrl}" style="display:inline-block;padding:10px 16px;border-radius:10px;background:#f06d3d;color:#fff8f3;text-decoration:none;font-weight:700">
+          Открыть приглашение
+        </a>
+      </p>
+      <p style="margin:0;color:#5d6e8a">Если кнопка не работает, откройте ссылку вручную:</p>
+      <p style="margin:6px 0 0;word-break:break-word">${input.inviteUrl}</p>
+    </div>
+  `.trim();
+
+  const response = await fetch(RESEND_SEND_EMAIL_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendEnv.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: resendEnv.fromEmail,
+      to: [input.email],
+      reply_to: resendEnv.replyTo || undefined,
+      subject: `Приглашение в семейное дерево "${input.treeTitle}"`,
+      html,
+      text: `Вам открыт доступ в семейное дерево "${input.treeTitle}" в роли "${roleLabel}".\n\nСрок действия: ${expiresLabel}.\n\nПримите приглашение по ссылке: ${input.inviteUrl}`
+    }),
+  }).catch((error) => {
+    console.error("[invite-email] resend request failed", error);
+    return null;
+  });
+
+  if (!response) {
+    return {
+      deliveryStatus: "failed" as const,
+      deliveryMessage: "Письмо не отправлено из-за сетевой ошибки. Ссылка приглашения сохранена, ее можно отправить вручную."
+    };
+  }
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    console.error("[invite-email] resend returned non-ok response", payload);
+    return {
+      deliveryStatus: "failed" as const,
+      deliveryMessage: "Письмо не отправлено. Ссылка приглашения сохранена, ее можно отправить вручную."
+    };
+  }
+
+  return {
+    deliveryStatus: "sent" as const,
+    deliveryMessage: `Письмо отправлено на ${input.email}.`
+  };
+}
+
+function isMediaAlbumItemsSchemaUnavailableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return MEDIA_ALBUM_ITEMS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
 }
 
 function buildUuidInFilter(values: string[]) {
@@ -150,6 +283,8 @@ export async function getTreeById(treeId: string) {
   return data;
 }
 
+// FRAMEWORK_RULE: Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
+
 export async function getMembership(treeId: string, userId: string) {
   return fetchAdminFirst<MembershipRecord>(
     `tree_memberships?select=*&tree_id=eq.${encodeURIComponent(treeId)}&user_id=eq.${encodeURIComponent(userId)}&status=eq.active`,
@@ -187,7 +322,7 @@ async function getValidShareLink(treeId: string, shareToken?: string | null) {
   let shareLink: ShareLinkRecord | null = null;
   try {
     shareLink = await fetchAdminFirst<ShareLinkRecord>(
-      `tree_share_links?select=*&tree_id=eq.${encodeURIComponent(treeId)}&token_hash=eq.${encodeURIComponent(tokenHash)}`,
+      `tree_share_links?select=${SHARE_LINK_PUBLIC_SELECT}&tree_id=eq.${encodeURIComponent(treeId)}&token_hash=eq.${encodeURIComponent(tokenHash)}`,
       "Не удалось проверить семейную ссылку."
     );
   } catch (error) {
@@ -227,9 +362,12 @@ function queueShareLinkAccessTouch(shareLinkId: string) {
   });
 }
 
-async function getTreeReadAccess(tree: TreeRecord, shareToken?: string | null) {
-  const [user, shareLink] = await Promise.all([getCurrentUser(), getValidShareLink(tree.id, shareToken)]);
-  const membership = user ? await getMembership(tree.id, user.id) : null;
+async function getTreeReadAccess(tree: TreeRecord, shareToken?: string | null, resolvedUser?: Awaited<ReturnType<typeof getCurrentUser>>) {
+  const user = resolvedUser === undefined ? await getCurrentUser() : resolvedUser;
+  const [membership, shareLink] = await Promise.all([
+    user ? getMembership(tree.id, user.id) : Promise.resolve(null),
+    getValidShareLink(tree.id, shareToken)
+  ]);
   const hasShareLinkAccess = Boolean(shareLink);
 
   if (!canViewTree(tree.visibility, membership, hasShareLinkAccess)) {
@@ -282,13 +420,14 @@ function resolveMediaKindFromMimeType(mimeType: string): MediaAssetRecord["kind"
   throw new AppError(400, "Этот тип файла пока не поддерживается.");
 }
 
-function getObjectStorageClient() {
-  if (objectStorageClient) {
-    return objectStorageClient;
+function getObjectStorageClient(config = getObjectStorageEnv()) {
+  const cacheKey = [config.endpoint, config.region, config.accessKeyId, String(config.forcePathStyle)].join("|");
+  const existing = objectStorageClients.get(cacheKey);
+  if (existing) {
+    return existing;
   }
 
-  const config = getObjectStorageEnv();
-  objectStorageClient = new S3Client({
+  const client = new S3Client({
     region: config.region,
     endpoint: config.endpoint,
     forcePathStyle: config.forcePathStyle,
@@ -298,13 +437,13 @@ function getObjectStorageClient() {
     }
   });
 
-  return objectStorageClient;
+  objectStorageClients.set(cacheKey, client);
+  return client;
 }
 
-async function createObjectStorageSignedUploadUrl(storagePath: string, mimeType: string) {
-  const config = getObjectStorageEnv();
+async function createObjectStorageSignedUploadUrl(storagePath: string, mimeType: string, config = getObjectStorageEnvForNewMedia()) {
   const signedUrl = await getSignedUrl(
-    getObjectStorageClient(),
+    getObjectStorageClient(config),
     new PutObjectCommand({
       Bucket: config.bucket,
       Key: storagePath,
@@ -322,8 +461,8 @@ async function createObjectStorageSignedUploadUrl(storagePath: string, mimeType:
 }
 
 async function createSignedUploadTargetForPath(storagePath: string, mimeType: string) {
-  if (getMediaStorageBackend() === "object_storage") {
-    return createObjectStorageSignedUploadUrl(storagePath, mimeType);
+  if (isObjectStorageLikeBackend()) {
+    return createObjectStorageSignedUploadUrl(storagePath, mimeType, getObjectStorageEnvForNewMedia());
   }
 
   const { data, error } = await admin().storage.from(getStorageBucket()).createSignedUploadUrl(storagePath, { upsert: false });
@@ -345,45 +484,15 @@ function buildPhotoVariantStoragePath(storagePath: string, variant: MediaVariant
   return `${baseDirectory}/variants/${variant}.webp`;
 }
 
-async function createObjectStorageSignedReadUrl(storagePath: string) {
-  const config = getObjectStorageEnv();
+async function createObjectStorageSignedReadUrl(storagePath: string, config = getObjectStorageEnv()) {
   return getSignedUrl(
-    getObjectStorageClient(),
+    getObjectStorageClient(config),
     new GetObjectCommand({
       Bucket: config.bucket,
       Key: storagePath
     }),
     { expiresIn: 60 }
   );
-}
-
-async function objectStorageObjectExists(storagePath: string) {
-  const config = getObjectStorageEnv();
-  try {
-    await getObjectStorageClient().send(
-      new HeadObjectCommand({
-        Bucket: config.bucket,
-        Key: storagePath
-      })
-    );
-    return true;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (
-      message.includes("NotFound")
-      || message.includes("404")
-      || message.includes("NoSuchKey")
-    ) {
-      return false;
-    }
-
-    const metadata = typeof error === "object" && error && "$metadata" in error ? (error as { $metadata?: { httpStatusCode?: number } }).$metadata : null;
-    if (metadata?.httpStatusCode === 404) {
-      return false;
-    }
-
-    throw error;
-  }
 }
 
 async function runSignedHttpRequest(input: {
@@ -449,10 +558,9 @@ export async function uploadFileToSignedUrl(input: {
   }
 }
 
-async function deleteObjectStorageObject(storagePath: string) {
-  const config = getObjectStorageEnv();
+async function deleteObjectStorageObject(storagePath: string, config = getObjectStorageEnv()) {
   const deleteUrl = await getSignedUrl(
-    getObjectStorageClient(),
+    getObjectStorageClient(config),
     new DeleteObjectCommand({
       Bucket: config.bucket,
       Key: storagePath
@@ -483,35 +591,28 @@ function toObjectStorageError(error: unknown, fallbackMessage: string) {
 }
 
 export async function listUserTrees(userId: string) {
-  const { data: memberships, error: membershipError } = await admin()
-    .from("tree_memberships")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .order("created_at", { ascending: true })
-    .returns<MembershipRecord[]>();
+  const membershipRows = await fetchAdminRows<MembershipRecord & { tree?: TreeRecord | null }>(
+    `tree_memberships?select=*,tree:trees!inner(*)&user_id=eq.${encodeURIComponent(userId)}&status=eq.active&order=created_at.asc`,
+    "Не удалось загрузить список деревьев."
+  );
 
-  if (membershipError) {
-    throw new AppError(500, membershipError.message);
-  }
-
-  if (!memberships?.length) {
+  if (!membershipRows.length) {
     return [];
   }
 
-  const treeIds = memberships.map((item) => item.tree_id);
-  const { data: trees, error: treesError } = await admin().from("trees").select("*").in("id", treeIds).returns<TreeRecord[]>();
+  return membershipRows
+    .map((row) => {
+      const { tree, ...membership } = row;
+      if (!tree) {
+        return null;
+      }
 
-  if (treesError) {
-    throw new AppError(500, treesError.message);
-  }
-
-  return memberships
-    .map((membership) => ({
-      membership,
-      tree: trees?.find((tree) => tree.id === membership.tree_id) ?? null
-    }))
-    .filter((item) => item.tree !== null);
+      return {
+        membership,
+        tree
+      };
+    })
+    .filter((item): item is { membership: MembershipRecord; tree: TreeRecord } => item !== null);
 }
 
 async function insertAuditLog(input: {
@@ -671,12 +772,7 @@ export async function updateTreeVisibility(treeId: string, visibility: TreeRecor
 
 async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean; shareToken?: string | null }): Promise<TreeSnapshot> {
   const includeMedia = options?.includeMedia ?? true;
-  const tree = await getTreeBySlug(slug);
-  const { actor, hasShareLinkAccess, shareLink } = await getTreeReadAccess(tree, options?.shareToken);
-
-  if (shareLink) {
-    queueShareLinkAccessTouch(shareLink.id);
-  }
+  const { tree, actor, hasShareLinkAccess } = await getTreeAccessContext(slug, options?.shareToken);
 
   const batchedRequests: Array<{ key: string; pathWithQuery: string }> = [
     {
@@ -698,6 +794,12 @@ async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean
       key: "media",
       pathWithQuery: `media_assets?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=created_at.desc`
     });
+    batchedRequests.push({
+      key: "personMedia",
+      pathWithQuery:
+        `person_media?select=id,person_id,media_id,is_primary,persons!inner(tree_id)` +
+        `&persons.tree_id=eq.${encodeURIComponent(tree.id)}`
+    });
   }
 
   const batchedResults = await fetchSupabaseAdminRestBatchJson<unknown>(batchedRequests);
@@ -706,16 +808,19 @@ async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean
   const parentLinks = (batchedRowsByKey.get("parentLinks") as ParentLinkRecord[] | undefined) || [];
   const partnerships = (batchedRowsByKey.get("partnerships") as PartnershipRecord[] | undefined) || [];
   const allMedia = includeMedia ? ((batchedRowsByKey.get("media") as MediaAssetRecord[] | undefined) || []) : [];
+  const allPersonMedia =
+    includeMedia
+      ? (((batchedRowsByKey.get("personMedia") as Array<PersonMediaRecord & { persons?: unknown }> | undefined) || []).map((item) => ({
+          id: item.id,
+          person_id: item.person_id,
+          media_id: item.media_id,
+          is_primary: item.is_primary
+        })) as PersonMediaRecord[])
+      : [];
 
   const media = allMedia.filter((item) => canSeeMedia(actor.role, item.visibility, hasShareLinkAccess));
-  const visibleMediaIds = media.map((item) => item.id);
-  const personMedia =
-    includeMedia && visibleMediaIds.length > 0
-      ? await fetchAdminRows<PersonMediaRecord>(
-          `person_media?select=id,person_id,media_id,is_primary&media_id=in.${buildUuidInFilter(visibleMediaIds)}`,
-          "Не удалось загрузить связи людей с медиафайлами."
-        )
-      : [];
+  const visibleMediaIds = new Set(media.map((item) => item.id));
+  const personMedia = includeMedia ? allPersonMedia.filter((item) => visibleMediaIds.has(item.media_id)) : [];
 
   return {
     tree,
@@ -739,6 +844,45 @@ export async function getBuilderSnapshot(slug: string, options?: { includeMedia?
   });
 }
 
+async function getTreeAccessContext(slug: string, shareToken?: string | null) {
+  const [tree, user] = await Promise.all([getTreeBySlug(slug), getCurrentUser()]);
+  const { actor, hasShareLinkAccess, shareLink } = await getTreeReadAccess(tree, shareToken, user);
+
+  if (shareLink) {
+    queueShareLinkAccessTouch(shareLink.id);
+  }
+
+  return {
+    tree,
+    actor,
+    hasShareLinkAccess
+  };
+}
+
+export async function getTreeAuditPageContext(slug: string, options?: { shareToken?: string | null }) {
+  const { tree, actor } = await getTreeAccessContext(slug, options?.shareToken);
+
+  return {
+    tree,
+    actor
+  };
+}
+
+async function listShareLinksForTree(treeId: string) {
+  try {
+    return await fetchAdminRows<ShareLinkRecord>(
+      `tree_share_links?select=${SHARE_LINK_PUBLIC_SELECT}&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
+      "Не удалось загрузить семейные ссылки."
+    );
+  } catch (error) {
+    if (isShareLinksSchemaUnavailableError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
 export async function listMemberships(treeId: string) {
   await requireTreeRole(treeId, ["owner", "admin"]);
   return fetchAdminRows<MembershipRecord>(
@@ -757,55 +901,129 @@ export async function listInvites(treeId: string) {
 
 export async function listShareLinks(treeId: string) {
   await requireTreeRole(treeId, ["owner", "admin"]);
-  try {
-    return await fetchAdminRows<ShareLinkRecord>(
-      `tree_share_links?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
-      "Не удалось загрузить семейные ссылки."
-    );
-  } catch (error) {
-    if (isShareLinksSchemaUnavailableError(error)) {
-      return [];
-    }
-
-    throw error;
-  }
+  return listShareLinksForTree(treeId);
 }
 
-export async function createShareLink(input: { treeId: string; label?: string | null; expiresInDays: number }) {
+export async function getTreeMembersPageData(slug: string, options?: { shareToken?: string | null }) {
+  const { tree, actor } = await getTreeAccessContext(slug, options?.shareToken);
+
+  if (!actor.canManageMembers) {
+    return {
+      tree,
+      actor,
+      memberships: [] as MembershipRecord[],
+      invites: [] as InviteRecord[],
+      shareLinks: [] as ShareLinkRecord[]
+    };
+  }
+
+  const memberDataRequests = [
+    {
+      pathWithQuery: `tree_memberships?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=created_at.asc`
+    },
+    {
+      pathWithQuery: `tree_invites?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=created_at.desc`
+    }
+  ];
+  let results: unknown[] = [];
+  let shareLinks: ShareLinkRecord[] = [];
+
+  try {
+    const batchedResults = await fetchSupabaseAdminRestBatchJson<unknown>([
+      ...memberDataRequests,
+      {
+        pathWithQuery: `tree_share_links?select=${SHARE_LINK_PUBLIC_SELECT}&tree_id=eq.${encodeURIComponent(tree.id)}&order=created_at.desc`
+      }
+    ]);
+    results = batchedResults;
+    shareLinks = (batchedResults[2] as ShareLinkRecord[] | undefined) || [];
+  } catch (error) {
+    if (!isShareLinksSchemaUnavailableError(error)) {
+      throw toRepositoryReadError(error, "Не удалось загрузить данные участников.");
+    }
+
+    results = await fetchSupabaseAdminRestBatchJson<unknown>(memberDataRequests).catch((fallbackError) => {
+      throw toRepositoryReadError(fallbackError, "Не удалось загрузить данные участников.");
+    });
+  }
+
+  const memberships = (results[0] as MembershipRecord[] | undefined) || [];
+  const invites = (results[1] as InviteRecord[] | undefined) || [];
+
+  return {
+    tree,
+    actor,
+    memberships,
+    invites,
+    shareLinks
+  };
+}
+
+export async function getTreeSettingsPageData(slug: string, options?: { shareToken?: string | null }) {
+  const { tree, actor } = await getTreeAccessContext(slug, options?.shareToken);
+  const people = await fetchAdminRows<PersonRecord>(
+    `persons?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=full_name.asc`,
+    "Не удалось загрузить список людей для настроек дерева."
+  );
+
+  return {
+    tree,
+    actor,
+    people
+  };
+}
+
+export async function createShareLink(input: { treeId: string; treeSlug?: string | null; label?: string | null; expiresInDays: number }) {
   const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
-  const tree = await getTreeById(input.treeId);
   const token = createOpaqueToken();
   const tokenHash = hashOpaqueToken(token);
+  const tokenCiphertext = encryptOpaqueToken(token, getShareLinkTokenEncryptionSecret());
   const expiresAt = new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString();
   const label = input.label?.trim() || "Семейный просмотр";
 
   let data: ShareLinkRecord | null = null;
   try {
     data = await mutateAdminFirst<ShareLinkRecord>(
-      "tree_share_links",
+      `tree_share_links?select=${SHARE_LINK_PUBLIC_SELECT}`,
       "POST",
       {
         tree_id: input.treeId,
         label,
         token_hash: tokenHash,
+        token_ciphertext: tokenCiphertext,
         expires_at: expiresAt,
         created_by: userId
       },
       "Не удалось создать семейную ссылку."
     );
   } catch (error) {
-    if (isShareLinksSchemaUnavailableError(error)) {
+    if (isShareLinkRevealColumnUnavailableError(error)) {
+      data = await mutateAdminFirst<ShareLinkRecord>(
+        `tree_share_links?select=${SHARE_LINK_PUBLIC_SELECT}`,
+        "POST",
+        {
+          tree_id: input.treeId,
+          label,
+          token_hash: tokenHash,
+          expires_at: expiresAt,
+          created_by: userId
+        },
+        "Не удалось создать семейную ссылку."
+      );
+    } else if (isShareLinksSchemaUnavailableError(error)) {
       throw new AppError(503, "Семейные ссылки пока недоступны: миграция базы данных еще не применена.");
+    } else {
+      throw error;
     }
-
-    throw error;
   }
 
   if (!data) {
     throw new AppError(400, "Не удалось создать семейную ссылку.");
   }
 
-  await insertAuditLog({
+  const treeSlug = input.treeSlug?.trim() || (await getTreeById(input.treeId)).slug;
+
+  queueAuditLog({
     treeId: input.treeId,
     actorUserId: userId,
     entityType: "share_link",
@@ -818,23 +1036,112 @@ export async function createShareLink(input: { treeId: string; label?: string | 
   return {
     shareLink: data,
     token,
-    url: `${getBaseUrl()}/tree/${tree.slug}?share=${encodeURIComponent(token)}`
+    url: buildShareLinkUrl(treeSlug, token)
   };
 }
 
-export async function revokeShareLink(shareLinkId: string) {
-  let before: ShareLinkRecord | null = null;
-  try {
-    before = await fetchAdminFirst<ShareLinkRecord>(
-      `tree_share_links?select=*&id=eq.${encodeURIComponent(shareLinkId)}`,
-      "Не удалось загрузить семейную ссылку."
-    );
-  } catch (error) {
-    if (isShareLinksSchemaUnavailableError(error)) {
-      throw new AppError(503, "Семейные ссылки пока недоступны: миграция базы данных еще не применена.");
-    }
+export async function revealShareLink(shareLinkId: string) {
+  const [shareLink, user] = await Promise.all([
+    (async () => {
+      try {
+        return await fetchAdminFirst<ShareLinkRevealRecord>(
+          `tree_share_links?select=${SHARE_LINK_REVEAL_SELECT}&id=eq.${encodeURIComponent(shareLinkId)}`,
+          "Не удалось загрузить семейную ссылку."
+        );
+      } catch (error) {
+        if (isShareLinkRevealColumnUnavailableError(error)) {
+          return await fetchAdminFirst<ShareLinkRevealRecord>(
+            `tree_share_links?select=${SHARE_LINK_PUBLIC_SELECT},tree:trees!inner(id,slug)&id=eq.${encodeURIComponent(shareLinkId)}`,
+            "Не удалось загрузить семейную ссылку."
+          );
+        }
 
-    throw error;
+        if (isShareLinksSchemaUnavailableError(error)) {
+          throw new AppError(503, "Семейные ссылки пока недоступны: миграция базы данных еще не применена.");
+        }
+
+        throw error;
+      }
+    })(),
+    getCurrentUser()
+  ]);
+
+  if (!user) {
+    throw new AppError(401, "Требуется авторизация.");
+  }
+
+  if (!shareLink) {
+    throw new AppError(404, "Семейная ссылка не найдена.");
+  }
+
+  const membership = await getMembership(shareLink.tree_id, user.id).catch((error) => {
+    throw toRepositoryReadError(error, "Не удалось проверить права доступа к семейной ссылке.");
+  });
+
+  if (!membership || !hasRequiredRole(membership.role, ["owner", "admin"])) {
+    throw new AppError(403, "У вас нет доступа к этому действию в дереве.");
+  }
+
+  const publicShareLink = toPublicShareLinkRecord(shareLink);
+  if (!shareLink.token_ciphertext) {
+    return {
+      shareLink: publicShareLink,
+      canReveal: false,
+      url: null,
+      message: "Эту ссылку нельзя показать повторно: база еще не обновлена под защищенное хранение адреса или ссылка создана до включения нового режима."
+    };
+  }
+
+  try {
+    const token = decryptOpaqueToken(shareLink.token_ciphertext, getShareLinkTokenEncryptionSecret());
+    const treeSlug = shareLink.tree?.slug || (await getTreeById(shareLink.tree_id)).slug;
+
+    return {
+      shareLink: publicShareLink,
+      canReveal: true,
+      url: buildShareLinkUrl(treeSlug, token),
+      message: "Семейная ссылка загружена."
+    };
+  } catch {
+    return {
+      shareLink: publicShareLink,
+      canReveal: false,
+      url: null,
+      message: "Эту ссылку больше нельзя показать повторно. Выпустите новую ссылку, если нужен новый адрес."
+    };
+  }
+}
+
+export async function revokeShareLink(shareLinkId: string) {
+  const [before, user] = await Promise.all([
+    (async () => {
+      try {
+        return await fetchAdminFirst<ShareLinkRecord>(
+          `tree_share_links?select=${SHARE_LINK_PUBLIC_SELECT}&id=eq.${encodeURIComponent(shareLinkId)}`,
+          "Не удалось загрузить семейную ссылку."
+        );
+      } catch (error) {
+        if (isShareLinksSchemaUnavailableError(error)) {
+          throw new AppError(503, "Семейные ссылки пока недоступны: миграция базы данных еще не применена.");
+        }
+
+        throw error;
+      }
+    })(),
+    getCurrentUser()
+  ]);
+
+  if (!user) {
+    throw new AppError(401, "Требуется авторизация.");
+  }
+
+  let membership: MembershipRecord | null = null;
+  try {
+    if (before) {
+      membership = await getMembership(before.tree_id, user.id);
+    }
+  } catch (error) {
+    throw toRepositoryReadError(error, "Не удалось проверить права доступа к семейной ссылке.");
   }
 
   if (!before) {
@@ -845,12 +1152,16 @@ export async function revokeShareLink(shareLinkId: string) {
     throw new AppError(409, "Семейная ссылка уже отозвана.");
   }
 
-  const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
+  if (!membership || !hasRequiredRole(membership.role, ["owner", "admin"])) {
+    throw new AppError(403, "У вас нет доступа к этому действию в дереве.");
+  }
+
+  const userId = user.id;
   const revokedAt = new Date().toISOString();
   let data: ShareLinkRecord | null = null;
   try {
     data = await mutateAdminFirst<ShareLinkRecord>(
-      `tree_share_links?id=eq.${encodeURIComponent(shareLinkId)}&select=*`,
+      `tree_share_links?id=eq.${encodeURIComponent(shareLinkId)}&select=${SHARE_LINK_PUBLIC_SELECT}`,
       "PATCH",
       { revoked_at: revokedAt },
       "Не удалось отозвать семейную ссылку."
@@ -867,7 +1178,7 @@ export async function revokeShareLink(shareLinkId: string) {
     throw new AppError(400, "Не удалось отозвать семейную ссылку.");
   }
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: before.tree_id,
     actorUserId: userId,
     entityType: "share_link",
@@ -878,6 +1189,219 @@ export async function revokeShareLink(shareLinkId: string) {
   });
 
   return data;
+}
+
+async function listTreeMediaAlbumsForTree(treeId: string) {
+  let albums: TreeMediaAlbumRecord[] = [];
+  try {
+    albums = await fetchAdminRows<TreeMediaAlbumRecord>(
+      `tree_media_albums?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
+      "Не удалось загрузить альбомы семейного архива."
+    );
+  } catch (error) {
+    if (isMediaAlbumsSchemaUnavailableError(error)) {
+      return {
+        albums: [] as TreeMediaAlbumRecord[],
+        items: [] as TreeMediaAlbumItemRecord[]
+      };
+    }
+
+    throw error;
+  }
+
+  const albumIds = albums.map((album) => album.id);
+  let items: TreeMediaAlbumItemRecord[] = [];
+  if (albumIds.length > 0) {
+    try {
+      items = await fetchAdminRows<TreeMediaAlbumItemRecord>(
+        `tree_media_album_items?select=*&album_id=in.${buildUuidInFilter(albumIds)}`,
+        "Не удалось загрузить связи альбомов с материалами."
+      );
+    } catch (error) {
+      if (!isMediaAlbumItemsSchemaUnavailableError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  return {
+    albums,
+    items
+  };
+}
+
+export async function listTreeMediaAlbums(treeId: string, shareToken?: string | null) {
+  const tree = await getTreeById(treeId);
+  await getTreeReadAccess(tree, shareToken);
+  return listTreeMediaAlbumsForTree(treeId);
+}
+
+async function listTreeMediaUploaderLabelsForUserIds(userIds: string[]) {
+  const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+  if (!uniqueUserIds.length) {
+    return new Map<string, string>();
+  }
+
+  const profiles = await fetchAdminRows<Pick<Profile, "id" | "email" | "display_name">>(
+    `profiles?select=id,email,display_name&id=in.${buildUuidInFilter(uniqueUserIds)}`,
+    "Не удалось загрузить имена загрузивших участников."
+  );
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile] as const));
+
+  return new Map(
+    uniqueUserIds.map((userId) => {
+      const profile = profilesById.get(userId) || null;
+      return [
+        userId,
+        formatUploaderAlbumTitle({
+          email: profile?.email || null,
+          displayName: profile?.display_name || null
+        })
+      ] as const;
+    })
+  );
+}
+
+export async function listTreeMediaUploaderLabels(treeId: string, userIds: string[], shareToken?: string | null) {
+  const tree = await getTreeById(treeId);
+  await getTreeReadAccess(tree, shareToken);
+  return listTreeMediaUploaderLabelsForUserIds(userIds);
+}
+
+export async function getTreeMediaPageData(slug: string, options?: { shareToken?: string | null }) {
+  const { tree, actor, hasShareLinkAccess } = await getTreeAccessContext(slug, options?.shareToken);
+  const [allMedia, albumData] = await Promise.all([
+    fetchAdminRows<MediaAssetRecord>(
+      `media_assets?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=created_at.desc`,
+      "Не удалось загрузить медиаархив дерева."
+    ),
+    listTreeMediaAlbumsForTree(tree.id)
+  ]);
+  const media = allMedia.filter((item) => canSeeMedia(actor.role, item.visibility, hasShareLinkAccess));
+  const uploaderLabelsById = await listTreeMediaUploaderLabelsForUserIds(
+    media.map((asset) => asset.created_by).filter((value): value is string => Boolean(value))
+  );
+
+  return {
+    tree,
+    actor,
+    media,
+    albums: albumData.albums,
+    items: albumData.items,
+    uploaderLabelsById
+  };
+}
+
+function formatUploaderAlbumTitle(input: { email: string | null; displayName: string | null }) {
+  const displayName = input.displayName?.trim();
+  if (displayName) {
+    return `От ${displayName}`;
+  }
+
+  const emailPrefix = input.email?.split("@")[0]?.trim();
+  if (emailPrefix) {
+    return `От ${emailPrefix}`;
+  }
+
+  return "От участника";
+}
+
+async function getProfileForUser(userId: string) {
+  try {
+    return await fetchAdminFirst<Pick<Profile, "id" | "email" | "display_name">>(
+      `profiles?select=id,email,display_name&id=eq.${encodeURIComponent(userId)}`,
+      "Не удалось загрузить профиль участника."
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function createTreeMediaAlbum(input: {
+  treeId: string;
+  title: string;
+  description?: string | null;
+  albumKind?: TreeMediaAlbumRecord["album_kind"];
+  uploaderUserId?: string | null;
+}) {
+  const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
+  let data: TreeMediaAlbumRecord | null = null;
+  try {
+    data = await mutateAdminFirst<TreeMediaAlbumRecord>(
+      "tree_media_albums",
+      "POST",
+      {
+        tree_id: input.treeId,
+        title: input.title,
+        description: input.description || null,
+        album_kind: input.albumKind || "manual",
+        uploader_user_id: input.uploaderUserId || null,
+        created_by: userId
+      },
+      "Не удалось создать альбом."
+    );
+  } catch (error) {
+    if (isMediaAlbumsSchemaUnavailableError(error)) {
+      throw new AppError(503, "Альбомы пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    throw error;
+  }
+
+  if (!data) {
+    throw new AppError(400, "Не удалось создать альбом.");
+  }
+
+  queueAuditLog({
+    treeId: input.treeId,
+    actorUserId: userId,
+    entityType: "media_album",
+    entityId: data.id,
+    action: "media_album.created",
+    beforeJson: null,
+    afterJson: data
+  });
+
+  return data;
+}
+
+async function ensureUploaderTreeMediaAlbum(treeId: string, userId: string, email: string | null) {
+  const existing = await fetchAdminFirst<TreeMediaAlbumRecord>(
+    `tree_media_albums?select=*&tree_id=eq.${encodeURIComponent(treeId)}&album_kind=eq.uploader&uploader_user_id=eq.${encodeURIComponent(userId)}`,
+    "Не удалось загрузить автоальбом загрузившего."
+  );
+
+  if (existing) {
+    return existing;
+  }
+
+  const profile = await getProfileForUser(userId);
+  return createTreeMediaAlbum({
+    treeId,
+    title: formatUploaderAlbumTitle({
+      email,
+      displayName: profile?.display_name || null
+    }),
+    albumKind: "uploader",
+    uploaderUserId: userId
+  });
+}
+
+async function addMediaToTreeMediaAlbums(albumIds: string[], mediaId: string) {
+  const uniqueAlbumIds = [...new Set(albumIds.filter(Boolean))];
+  if (!uniqueAlbumIds.length) {
+    return [];
+  }
+
+  return mutateAdminRows<TreeMediaAlbumItemRecord>(
+    "tree_media_album_items",
+    "POST",
+    uniqueAlbumIds.map((albumId) => ({
+      album_id: albumId,
+      media_id: mediaId
+    })),
+    "Не удалось добавить материал в альбом."
+  );
 }
 
 export async function listAudit(treeId: string, options?: { page?: number; pageSize?: number }): Promise<PaginatedAuditEntryView> {
@@ -935,31 +1459,47 @@ export async function listAudit(treeId: string, options?: { page?: number; pageS
 
   const userIds = [...relatedUserIds];
   const personIds = [...relatedPersonIds];
+  const contextRequests: Array<{ key: string; pathWithQuery: string }> = [];
 
-  const [profilesRes, membershipsRes, personsRes] = await Promise.all([
-    userIds.length
-      ? fetchAdminRows<Profile>(
-          `profiles?select=id,email,display_name,created_at&id=in.${buildUuidInFilter(userIds)}`,
-          "Не удалось загрузить профили участников."
-        )
-      : Promise.resolve([] as Profile[]),
-    userIds.length
-      ? fetchAdminRows<MembershipRecord>(
-          `tree_memberships?select=*&tree_id=eq.${encodeURIComponent(treeId)}&user_id=in.${buildUuidInFilter(userIds)}`,
-          "Не удалось загрузить роли участников."
-        )
-      : Promise.resolve([] as MembershipRecord[]),
-    personIds.length
-      ? fetchAdminRows<Pick<PersonRecord, "id" | "full_name">>(
-          `persons?select=id,full_name&id=in.${buildUuidInFilter(personIds)}`,
-          "Не удалось загрузить имена людей из журнала."
-        )
-      : Promise.resolve([] as Array<Pick<PersonRecord, "id" | "full_name">>)
-  ]);
+  if (userIds.length) {
+    contextRequests.push(
+      {
+        key: "profiles",
+        pathWithQuery: `profiles?select=id,email,display_name,created_at&id=in.${buildUuidInFilter(userIds)}`
+      },
+      {
+        key: "memberships",
+        pathWithQuery: `tree_memberships?select=*&tree_id=eq.${encodeURIComponent(treeId)}&user_id=in.${buildUuidInFilter(userIds)}`
+      }
+    );
+  }
 
-  const profiles = profilesRes || [];
-  const memberships = membershipsRes || [];
-  const persons = personsRes || [];
+  if (personIds.length) {
+    contextRequests.push({
+      key: "persons",
+      pathWithQuery: `persons?select=id,full_name&id=in.${buildUuidInFilter(personIds)}`
+    });
+  }
+
+  const batchedContextRows = new Map<string, unknown>();
+  if (contextRequests.length) {
+    try {
+      const contextResults = await fetchSupabaseAdminRestBatchJson<unknown>(
+        contextRequests.map((request) => ({
+          pathWithQuery: request.pathWithQuery
+        }))
+      );
+      contextRequests.forEach((request, index) => {
+        batchedContextRows.set(request.key, contextResults[index]);
+      });
+    } catch (error) {
+      throw toRepositoryReadError(error, "Не удалось загрузить контекст журнала изменений.");
+    }
+  }
+
+  const profiles = (batchedContextRows.get("profiles") as Profile[] | undefined) || [];
+  const memberships = (batchedContextRows.get("memberships") as MembershipRecord[] | undefined) || [];
+  const persons = (batchedContextRows.get("persons") as Array<Pick<PersonRecord, "id" | "full_name">> | undefined) || [];
 
   const profileById = new Map(profiles.map((profile) => [profile.id, profile] as const));
   const membershipByUserId = new Map(memberships.map((membership) => [membership.user_id, membership] as const));
@@ -1270,9 +1810,10 @@ export async function createInvite(input: { treeId: string; role: UserRole; invi
   const tokenHash = hashInviteToken(token);
   const expiresAt = new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await admin()
-    .from("tree_invites")
-    .insert({
+  const data = await mutateAdminFirst<InviteRecord>(
+    "tree_invites",
+    "POST",
+    {
       tree_id: input.treeId,
       email: input.email || null,
       role: input.role,
@@ -1280,13 +1821,13 @@ export async function createInvite(input: { treeId: string; role: UserRole; invi
       token_hash: tokenHash,
       expires_at: expiresAt,
       created_by: userId
-    })
-    .select("*")
-    .single<InviteRecord>();
+    },
+    "Не удалось создать приглашение."
+  );
 
-  if (error || !data) throw new AppError(400, error?.message || "Не удалось создать приглашение.");
+  if (!data) throw new AppError(400, "Не удалось создать приглашение.");
 
-  await insertAuditLog({
+  queueAuditLog({
     treeId: input.treeId,
     actorUserId: userId,
     entityType: "invite",
@@ -1296,57 +1837,141 @@ export async function createInvite(input: { treeId: string; role: UserRole; invi
     afterJson: data
   });
 
+  const treeTitle = (await getTreeById(input.treeId)).title;
+  const inviteUrl = `${getBaseUrl()}/auth/accept-invite?token=${token}`;
+  const delivery = await sendInviteEmailIfConfigured({
+    inviteMethod: input.inviteMethod,
+    email: input.email || null,
+    inviteUrl,
+    treeTitle,
+    role: input.role,
+    expiresAt,
+  });
+
   return {
     invite: data,
     token,
-    url: `${getBaseUrl()}/auth/accept-invite?token=${token}`
+    url: inviteUrl,
+    ...delivery
   };
+}
+
+interface InviteWithTreeSlugRecord extends InviteRecord {
+  tree?: Pick<TreeRecord, "id" | "slug"> | null;
 }
 
 export async function acceptInvite(token: string) {
   const userId = await getAuthenticatedUserId();
   const tokenHash = hashInviteToken(token);
 
-  const { data: invite, error: inviteError } = await admin().from("tree_invites").select("*").eq("token_hash", tokenHash).maybeSingle<InviteRecord>();
-  if (inviteError || !invite) throw new AppError(404, "Приглашение не найдено.");
+  const invite = await fetchAdminFirst<InviteWithTreeSlugRecord>(
+    `tree_invites?select=*,tree:trees!inner(id,slug)&token_hash=eq.${encodeURIComponent(tokenHash)}`,
+    "Не удалось загрузить приглашение."
+  );
+  if (!invite) throw new AppError(404, "Приглашение не найдено.");
   if (invite.accepted_at) throw new AppError(409, "Это приглашение уже использовано.");
   if (new Date(invite.expires_at).getTime() < Date.now()) throw new AppError(410, "Срок действия приглашения истек.");
-
-  const { data: existingMembership } = await admin().from("tree_memberships").select("*").eq("tree_id", invite.tree_id).eq("user_id", userId).maybeSingle<MembershipRecord>();
-
-  if (existingMembership) {
-    await admin().from("tree_memberships").update({ role: invite.role, status: "active" }).eq("id", existingMembership.id);
-  } else {
-    const { error: membershipError } = await admin().from("tree_memberships").insert({
-      tree_id: invite.tree_id,
-      user_id: userId,
-      role: invite.role,
-      status: "active"
-    });
-
-    if (membershipError) {
-      throw new AppError(400, membershipError.message);
-    }
-  }
+  const treeSlug = invite.tree?.slug || null;
+  const { tree: _inviteTree, ...inviteRecord } = invite;
+  const currentMembership = await getMembership(inviteRecord.tree_id, userId).catch((error) => {
+    throw toRepositoryReadError(error, "Не удалось проверить текущее членство перед принятием приглашения.");
+  });
+  const acceptedRole = mergeInviteAcceptanceRole(currentMembership?.role ?? null, inviteRecord.role);
 
   const acceptedAt = new Date().toISOString();
-  const { error: inviteUpdateError } = await admin().from("tree_invites").update({ accepted_at: acceptedAt }).eq("id", invite.id);
-  if (inviteUpdateError) {
-    throw new AppError(500, inviteUpdateError.message);
+  const [membershipResult, updatedInvite] = await Promise.all([
+    fetchSupabaseAdminRestJsonWithHeaders<MembershipRecord[] | MembershipRecord | null>(
+      "tree_memberships?on_conflict=tree_id,user_id",
+      {
+        method: "POST",
+        body: {
+          tree_id: inviteRecord.tree_id,
+          user_id: userId,
+          role: acceptedRole,
+          status: "active"
+        },
+        headers: {
+          prefer: "resolution=merge-duplicates,return=representation"
+        }
+      }
+    )
+      .then(({ data }) => {
+        const rows = Array.isArray(data) ? data : data ? [data] : [];
+        return rows[0] ?? null;
+      })
+      .catch((error) => {
+        throw toRepositoryReadError(error, "Не удалось сохранить членство.");
+      }),
+    mutateAdminFirst<InviteRecord>(
+      `tree_invites?id=eq.${encodeURIComponent(inviteRecord.id)}&select=*`,
+      "PATCH",
+      { accepted_at: acceptedAt },
+      "Не удалось отметить приглашение принятым."
+    )
+  ]);
+
+  if (!membershipResult) {
+    throw new AppError(400, "Не удалось сохранить членство.");
+  }
+  if (!updatedInvite) {
+    throw new AppError(500, "Не удалось отметить приглашение принятым.");
   }
 
-  await insertAuditLog({
-    treeId: invite.tree_id,
+  queueAuditLog({
+    treeId: inviteRecord.tree_id,
     actorUserId: userId,
     entityType: "invite",
-    entityId: invite.id,
+    entityId: inviteRecord.id,
     action: "invite.accepted",
-    beforeJson: invite,
-    afterJson: { ...invite, accepted_at: acceptedAt }
+    beforeJson: inviteRecord,
+    afterJson: { ...inviteRecord, accepted_at: acceptedAt }
   });
 
-  const tree = await getTreeById(invite.tree_id);
-  return tree;
+  return {
+    slug: treeSlug || (await getTreeById(inviteRecord.tree_id)).slug
+  };
+}
+
+export async function revokeInvite(inviteId: string) {
+  const [before, user] = await Promise.all([
+    fetchAdminFirst<InviteRecord>(
+      `tree_invites?select=*&id=eq.${encodeURIComponent(inviteId)}`,
+      "Не удалось загрузить приглашение."
+    ),
+    getCurrentUser()
+  ]);
+  if (!user) {
+    throw new AppError(401, "Требуется авторизация.");
+  }
+  if (!before) {
+    throw new AppError(404, "Приглашение не найдено.");
+  }
+
+  if (before.accepted_at) {
+    throw new AppError(409, "Принятое приглашение нельзя отозвать.");
+  }
+
+  const membership = await getMembership(before.tree_id, user.id);
+  if (!membership || !hasRequiredRole(membership.role, ["owner", "admin"])) {
+    throw new AppError(403, "У вас нет доступа к этому действию в дереве.");
+  }
+  const userId = user.id;
+  await mutateAdminRows<never>(
+    `tree_invites?id=eq.${encodeURIComponent(inviteId)}`,
+    "DELETE",
+    undefined,
+    "Не удалось отозвать приглашение."
+  );
+
+  queueAuditLog({
+    treeId: before.tree_id,
+    actorUserId: userId,
+    entityType: "invite",
+    entityId: inviteId,
+    action: "invite.revoked",
+    beforeJson: before,
+    afterJson: null
+  });
 }
 
 export async function updateMembershipRole(membershipId: string, role: UserRole) {
@@ -1412,16 +2037,14 @@ export async function createPhotoUploadTarget(input: {
   return createMediaUploadTarget(input);
 }
 
-export async function createMediaUploadTarget(input: {
+async function buildMediaUploadTarget(input: {
   treeId: string;
-  personId: string;
   filename: string;
   mimeType: string;
   visibility: "public" | "members";
   title: string;
   caption?: string | null;
-}) {
-  await requireTreeRole(input.treeId, ["owner", "admin"]);
+}): Promise<MediaUploadTargetResponse> {
   const mediaId = crypto.randomUUID();
   const kind = resolveMediaKindFromMimeType(input.mimeType);
   const safeName = input.filename.replace(/[^a-zA-Z0-9._-]/g, "-");
@@ -1443,6 +2066,10 @@ export async function createMediaUploadTarget(input: {
           })
         )
       : [];
+  const transport = resolveMediaUploadPlan({
+    useCloudflareForNewMedia: shouldUseCloudflareR2ForNewMedia(),
+    hasVariants: variantTargets.length > 0,
+  });
 
   return {
     mediaId,
@@ -1452,8 +2079,39 @@ export async function createMediaUploadTarget(input: {
     signedUrl: uploadTarget.signedUrl,
     token: uploadTarget.token,
     uploadProvider: uploadTarget.uploadProvider,
+    configuredBackend: transport.configuredBackend,
+    resolvedUploadBackend: transport.resolvedUploadBackend,
+    rolloutState: transport.rolloutState,
+    forceProxyUpload: transport.forceProxyUpload,
+    uploadMode: transport.uploadMode,
+    variantUploadMode: transport.variantUploadMode,
     variantTargets
   };
+}
+
+export async function createMediaUploadTarget(input: {
+  treeId: string;
+  personId: string;
+  filename: string;
+  mimeType: string;
+  visibility: "public" | "members";
+  title: string;
+  caption?: string | null;
+}): Promise<MediaUploadTargetResponse> {
+  await requireTreeRole(input.treeId, ["owner", "admin"]);
+  return buildMediaUploadTarget(input);
+}
+
+export async function createArchiveMediaUploadTarget(input: {
+  treeId: string;
+  filename: string;
+  mimeType: string;
+  visibility: "public" | "members";
+  title: string;
+  caption?: string | null;
+}): Promise<MediaUploadTargetResponse> {
+  await requireTreeRole(input.treeId, ["owner", "admin"]);
+  return buildMediaUploadTarget(input);
 }
 
 export async function completePhotoUpload(input: {
@@ -1505,6 +2163,40 @@ type CompletedExternalVideoInput = {
 function isExternalVideoCompletionInput(
   input: CompletedStoredMediaInput | CompletedExternalVideoInput
 ): input is CompletedExternalVideoInput {
+  return input.provider === "yandex_disk";
+}
+
+type CompletedStoredArchiveMediaInput = {
+  treeId: string;
+  mediaId: string;
+  albumId?: string;
+  storagePath: string;
+  variantPaths?: Array<{
+    variant: MediaVariantName;
+    storagePath: string;
+  }>;
+  title: string;
+  caption?: string | null;
+  visibility: "public" | "members";
+  mimeType: string;
+  sizeBytes?: number | null;
+  provider?: "supabase_storage" | "object_storage";
+};
+
+type CompletedExternalArchiveVideoInput = {
+  treeId: string;
+  mediaId: string;
+  albumId?: string;
+  title: string;
+  caption?: string | null;
+  visibility: "public" | "members";
+  provider: "yandex_disk";
+  externalUrl: string;
+};
+
+function isExternalArchiveVideoCompletionInput(
+  input: CompletedStoredArchiveMediaInput | CompletedExternalArchiveVideoInput
+): input is CompletedExternalArchiveVideoInput {
   return input.provider === "yandex_disk";
 }
 
@@ -1619,6 +2311,165 @@ export async function completeMediaUpload(input: {
   return data;
 }
 
+export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMediaInput | CompletedExternalArchiveVideoInput) {
+  const user = await getCurrentUser();
+  const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
+  const kind = isExternalArchiveVideoCompletionInput(input) ? "video" : resolveMediaKindFromMimeType(input.mimeType);
+  const provider = isExternalArchiveVideoCompletionInput(input) ? "yandex_disk" : getFileBackedMediaProvider();
+  const storagePath = isExternalArchiveVideoCompletionInput(input) ? null : input.storagePath;
+  const variantPaths = isExternalArchiveVideoCompletionInput(input) ? [] : input.variantPaths || [];
+  const externalUrl = isExternalArchiveVideoCompletionInput(input) ? input.externalUrl : null;
+  const mimeType = isExternalArchiveVideoCompletionInput(input) ? null : input.mimeType;
+  const sizeBytes = isExternalArchiveVideoCompletionInput(input) ? null : input.sizeBytes || null;
+
+  const data = await mutateAdminFirst<MediaAssetRecord>(
+    "media_assets",
+    "POST",
+    {
+      id: input.mediaId,
+      tree_id: input.treeId,
+      kind,
+      provider,
+      visibility: input.visibility,
+      storage_path: storagePath,
+      external_url: externalUrl,
+      title: input.title,
+      caption: input.caption || null,
+      mime_type: mimeType,
+      size_bytes: sizeBytes,
+      created_by: userId
+    },
+    "Не удалось сохранить файл в семейный архив."
+  );
+
+  if (!data) {
+    throw new AppError(400, "Не удалось сохранить файл в семейный архив.");
+  }
+
+  if (variantPaths.length) {
+    try {
+      await mutateAdminRows<MediaAssetVariantRecord>(
+        "media_asset_variants",
+        "POST",
+        variantPaths.map((item: { variant: MediaVariantName; storagePath: string }) => ({
+          media_id: input.mediaId,
+          variant: item.variant,
+          storage_path: item.storagePath
+        })),
+        "Не удалось сохранить варианты медиа."
+      );
+    } catch (error) {
+      if (!isMediaVariantsSchemaUnavailableError(error)) {
+        await mutateAdminRows<never>(
+          `media_assets?id=eq.${encodeURIComponent(input.mediaId)}`,
+          "DELETE",
+          undefined,
+          "Не удалось откатить незавершенное медиа."
+        ).catch(() => {});
+        throw toRepositoryReadError(error, "Не удалось сохранить варианты медиа.");
+      }
+    }
+  }
+
+  const uploaderAlbum = await ensureUploaderTreeMediaAlbum(input.treeId, userId, user?.email || null);
+  const albumIds = [uploaderAlbum.id];
+  if ("albumId" in input && input.albumId && input.albumId !== uploaderAlbum.id) {
+    albumIds.push(input.albumId);
+  }
+
+  try {
+    await addMediaToTreeMediaAlbums(albumIds, input.mediaId);
+  } catch (error) {
+    throw toRepositoryReadError(error, "Не удалось добавить материал в семейный архив.");
+  }
+
+  await insertAuditLog({
+    treeId: input.treeId,
+    actorUserId: userId,
+    entityType: "media",
+    entityId: input.mediaId,
+    action: `${kind}.created`,
+    beforeJson: null,
+    afterJson: data
+  });
+
+  return {
+    media: data,
+    uploaderAlbumId: uploaderAlbum.id
+  };
+}
+
+export async function setPrimaryPersonMedia(mediaId: string, personId: string) {
+  const relation = await fetchAdminFirst<PersonMediaRecord>(
+    `person_media?select=*&person_id=eq.${encodeURIComponent(personId)}&media_id=eq.${encodeURIComponent(mediaId)}`,
+    "Не удалось загрузить связь человека с медиа."
+  );
+  if (!relation) {
+    throw new AppError(404, "Связь человека с фото не найдена.");
+  }
+
+  const media = await fetchAdminFirst<MediaAssetRecord>(
+    `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,
+    "Не удалось загрузить медиа."
+  );
+  if (!media) {
+    throw new AppError(404, "Медиа не найдено.");
+  }
+  if (media.kind !== "photo") {
+    throw new AppError(400, "Аватаром можно сделать только фотографию.");
+  }
+
+  const { userId } = await requireTreeRole(media.tree_id, ["owner", "admin"]);
+  const previousPrimary = await fetchAdminFirst<PersonMediaRecord>(
+    `person_media?select=*&person_id=eq.${encodeURIComponent(personId)}&is_primary=eq.true`,
+    "Не удалось загрузить текущий аватар."
+  );
+
+  if (relation.is_primary) {
+    return relation;
+  }
+
+  await mutateAdminRows<never>(
+    `person_media?person_id=eq.${encodeURIComponent(personId)}&is_primary=eq.true`,
+    "PATCH",
+    { is_primary: false },
+    "Не удалось снять текущий аватар."
+  );
+
+  const updatedRelation = await mutateAdminFirst<PersonMediaRecord>(
+    `person_media?person_id=eq.${encodeURIComponent(personId)}&media_id=eq.${encodeURIComponent(mediaId)}&select=*`,
+    "PATCH",
+    { is_primary: true },
+    "Не удалось назначить фотографию аватаром."
+  );
+
+  if (!updatedRelation) {
+    throw new AppError(400, "Не удалось назначить фотографию аватаром.");
+  }
+
+  queueAuditLog({
+    treeId: media.tree_id,
+    actorUserId: userId,
+    entityType: "person_media",
+    entityId: relation.id,
+    action: "person.avatar_selected",
+    beforeJson: previousPrimary
+      ? {
+          person_id: previousPrimary.person_id,
+          media_id: previousPrimary.media_id,
+          is_primary: previousPrimary.is_primary
+        }
+      : null,
+    afterJson: {
+      person_id: updatedRelation.person_id,
+      media_id: updatedRelation.media_id,
+      is_primary: updatedRelation.is_primary
+    }
+  });
+
+  return updatedRelation;
+}
+
 export async function resolveMediaAccess(mediaId: string, shareToken?: string | null, variant?: MediaVariantName | null) {
   const media = await fetchAdminFirst<MediaAssetRecord>(
     `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,
@@ -1642,7 +2493,7 @@ export async function resolveMediaAccess(mediaId: string, shareToken?: string | 
   }
 
   let resolvedVariantPath: string | null = null;
-  if (variant && media.kind === "photo") {
+  if (variant && media.kind === "photo" && shouldUsePhotoVariants(media.created_at)) {
     try {
       const mediaVariant = await fetchAdminFirst<MediaAssetVariantRecord>(
         `media_asset_variants?select=*&media_id=eq.${encodeURIComponent(mediaId)}&variant=eq.${encodeURIComponent(variant)}`,
@@ -1663,12 +2514,9 @@ export async function resolveMediaAccess(mediaId: string, shareToken?: string | 
   }
 
   if (media.provider === "object_storage") {
-    let resolvedStoragePath = media.storage_path;
-    if (resolvedVariantPath && await objectStorageObjectExists(resolvedVariantPath)) {
-      resolvedStoragePath = resolvedVariantPath;
-    }
-
-    const signedUrl = await createObjectStorageSignedReadUrl(resolvedStoragePath);
+    const storageEnv = getObjectStorageEnvForMedia(media.created_at);
+    const resolvedStoragePath = resolvedVariantPath || media.storage_path;
+    const signedUrl = await createObjectStorageSignedReadUrl(resolvedStoragePath, storageEnv);
     return { kind: media.kind, url: signedUrl };
   }
 
@@ -1706,18 +2554,17 @@ export async function deleteMedia(mediaId: string) {
   }
   const variantStoragePaths = variants.length
     ? variants.map((item) => item.storage_path)
-    : before.kind === "photo" && before.storage_path
+    : before.kind === "photo" && before.storage_path && shouldUsePhotoVariants(before.created_at)
       ? PHOTO_VARIANT_NAMES.map((variant) => buildPhotoVariantStoragePath(before.storage_path as string, variant))
       : [];
 
   if (before.storage_path) {
     if (before.provider === "object_storage") {
+      const storageEnv = getObjectStorageEnvForMedia(before.created_at);
       try {
-        await deleteObjectStorageObject(before.storage_path);
+        await deleteObjectStorageObject(before.storage_path, storageEnv);
         for (const variantStoragePath of variantStoragePaths) {
-          if (await objectStorageObjectExists(variantStoragePath)) {
-            await deleteObjectStorageObject(variantStoragePath);
-          }
+          await deleteObjectStorageObject(variantStoragePath, storageEnv).catch(() => {});
         }
       } catch (error) {
         throw toObjectStorageError(error, "Не удалось удалить файл из object storage.");

@@ -29,6 +29,7 @@ export function TreeNav({ slug, shareToken, canEdit, canManageMembers, canReadAu
   const items = [
     { href: withShareToken(`/tree/${slug}`, shareToken), pathname: `/tree/${slug}`, label: "Просмотр", visible: true },
     { href: withShareToken(`/tree/${slug}/builder`, shareToken), pathname: `/tree/${slug}/builder`, label: "Конструктор", visible: Boolean(canEdit) },
+    { href: withShareToken(`/tree/${slug}/media`, shareToken), pathname: `/tree/${slug}/media`, label: "Медиа", visible: true },
     { href: withShareToken(`/tree/${slug}/members`, shareToken), pathname: `/tree/${slug}/members`, label: "Участники", visible: Boolean(canManageMembers) },
     { href: withShareToken(`/tree/${slug}/settings`, shareToken), pathname: `/tree/${slug}/settings`, label: "Настройки", visible: Boolean(canManageSettings) },
     { href: withShareToken(`/tree/${slug}/audit`, shareToken), pathname: `/tree/${slug}/audit`, label: "Журнал", visible: Boolean(canReadAudit) }

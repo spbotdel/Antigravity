@@ -29,15 +29,15 @@ export async function getCurrentUser(): Promise<ServerAuthUser | null> {
 
   try {
     const supabase = await createServerSupabaseClient();
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await supabase.auth.getUser();
 
-    if (error || !data.session?.user) {
+    if (error || !data.user) {
       return null;
     }
 
     return {
-      id: data.session.user.id,
-      email: data.session.user.email ?? null
+      id: data.user.id,
+      email: data.user.email ?? null
     };
   } catch {
     return null;

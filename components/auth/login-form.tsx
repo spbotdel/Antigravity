@@ -1,13 +1,12 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { translateAuthError } from "@/lib/auth-error";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,8 +33,7 @@ export function LoginForm() {
             return;
           }
 
-          router.push(searchParams.get("next") || "/dashboard");
-          router.refresh();
+          window.location.assign(searchParams.get("next") || "/dashboard");
         } catch (submitError) {
           setLoading(false);
           setError(translateAuthError(submitError instanceof Error ? submitError.message : "fetch failed"));

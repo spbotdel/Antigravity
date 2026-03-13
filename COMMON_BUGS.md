@@ -366,7 +366,53 @@ Use a valid `sbp_...` personal access token or apply migrations via Supabase SQL
 
 ---
 
-# 10. Git Push Fails Even Though Local Commit Works
+# 10. Server-Side Supabase Reads Are Slow Or Highly Jittery
+
+### Symptom
+
+Pages or API routes intermittently jump between:
+
+- normal `4s-7s` responses
+- much slower `20s+` responses
+- occasional transport-style failures such as `fetch failed`, `ConnectTimeoutError`, or `SUPABASE_UNAVAILABLE`
+
+### Likely Cause
+
+Often caused by transport instability between the local Windows runtime and Supabase, not by the product logic itself.
+
+Important current rule:
+
+- `lib/supabase/admin-rest.ts` is `native-first`
+- `scripts/supabase-http.ps1` is fallback-only, not the intended steady-state path
+
+### First Checks
+
+1. Confirm whether the issue affects many pages at once, not just one route.
+2. Inspect `lib/supabase/admin-rest.ts` and `lib/supabase/server-fetch.ts` before changing repository logic.
+3. Check whether `SUPABASE_ADMIN_REST_TRANSPORT` was forced to `powershell`.
+4. Compare warm-route behavior with repeated requests before assuming a domain bug.
+
+### Typical Fix
+
+Do not revert to `PowerShell-only` transport by default.
+
+Instead:
+
+- keep `native-first` transport
+- use PowerShell only as fallback or temporary debugging override
+- optimize repository/page loaders only after transport behavior is understood
+
+### Relevant Files
+
+- `lib/supabase/admin-rest.ts`
+- `lib/supabase/server-fetch.ts`
+- `scripts/supabase-http.ps1`
+- `.env.example`
+- `README.md`
+
+---
+
+# 11. Git Push Fails Even Though Local Commit Works
 
 ### Symptom
 
@@ -389,7 +435,7 @@ Retry push later from a working network environment.
 
 ---
 
-# 11. Dev Impersonation Hides Real Auth Problems
+# 12. Dev Impersonation Hides Real Auth Problems
 
 ### Symptom
 
@@ -411,7 +457,7 @@ Do not diagnose production auth behavior through impersonated sessions.
 
 ---
 
-# 12. Legacy Media Behavior Conflicts With Unified Media Model
+# 13. Legacy Media Behavior Conflicts With Unified Media Model
 
 ### Symptom
 
@@ -445,7 +491,7 @@ Treat `external_url` as legacy compatibility only.
 
 ---
 
-# 13. Test Tree Is Dirty From Previous Runs
+# 14. Test Tree Is Dirty From Previous Runs
 
 ### Symptom
 
@@ -473,7 +519,7 @@ Clean the fixture tree before rerunning regression scenarios.
 
 ---
 
-# 14. Page Fails After Code Change But Logic Appears Correct
+# 15. Page Fails After Code Change But Logic Appears Correct
 
 ### Symptom
 
@@ -496,6 +542,52 @@ Often caused by:
 ### Typical Fix
 
 Reset the local runtime environment before modifying logic.
+
+---
+
+# 16. Tree Page Is Slow Because It Uses Full Snapshot By Habit
+
+### Symptom
+
+Pages such as:
+
+- `audit`
+- `members`
+- `media`
+- `settings`
+
+feel much slower than expected even when their own UI is simple.
+
+### Likely Cause
+
+The page loads `getTreeSnapshot(...)` even though it only needs:
+
+- `tree`
+- `actor`
+- a narrower page-specific dataset
+
+### First Checks
+
+1. Inspect the page loader before touching UI code.
+2. Check whether the page actually consumes:
+   - `people`
+   - `parentLinks`
+   - `partnerships`
+   - `media`
+   - `personMedia`
+3. If not, replace the full snapshot with a specialized page-data loader in the repository.
+
+### Typical Fix
+
+Prefer page-specific repository loaders over full snapshot loading when the page is not a real snapshot consumer.
+
+### Relevant Files
+
+- `app/tree/[slug]/audit/page.tsx`
+- `app/tree/[slug]/members/page.tsx`
+- `app/tree/[slug]/media/page.tsx`
+- `app/tree/[slug]/settings/page.tsx`
+- `lib/server/repository.ts`
 
 ---
 

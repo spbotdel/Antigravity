@@ -280,6 +280,18 @@ function describeInvite(entry: AuditEntry, before: JsonRecord | null, after: Jso
   const role = (getValue(snapshot, "role") as UserRole | null) || null;
   const email = getString(snapshot, "email");
 
+  if (entry.action === "invite.revoked") {
+    return {
+      summary: email ? `Отозвано приглашение для ${email}.` : `Отозвано приглашение на роль ${formatRole(role)}.`,
+      details: [
+        `Роль: ${formatRole(role)}.`,
+        `Способ: ${formatInviteMethod((getValue(snapshot, "invite_method") as "link" | "email") || "link")}.`,
+        email ? `Почта: ${email}.` : "Приглашение без привязки к почте.",
+        `Первоначально действовало до: ${formatMoscowDateTime(getValue(snapshot, "expires_at"))}.`
+      ]
+    };
+  }
+
   if (entry.action === "invite.accepted") {
     return {
       summary: "Приглашение принято.",
@@ -348,6 +360,46 @@ function describeMedia(entry: AuditEntry, before: JsonRecord | null, after: Json
       { key: "visibility", label: "Видимость", format: (value) => formatMediaVisibility((value as "public" | "members") || "public") },
       { key: "caption", label: "Подпись" }
     ])
+  };
+}
+
+function describeMediaAlbum(entry: AuditEntry, before: JsonRecord | null, after: JsonRecord | null) {
+  const snapshot = after || before;
+  const title = fallbackName(getString(snapshot, "title"), "без названия");
+  const albumKind = getString(snapshot, "album_kind");
+  const diffDetails = buildDiffDetails(before, after, [
+    { key: "title", label: "Название" },
+    { key: "description", label: "Описание" },
+    {
+      key: "album_kind",
+      label: "Тип альбома",
+      format: (value) => (value === "uploader" ? "Автоальбом загрузившего" : value ? "Пользовательский" : EMPTY_VALUE)
+    }
+  ]);
+
+  if (entry.action === "media_album.created") {
+    return {
+      summary: `Создан альбом: "${title}".`,
+      details: buildFilledDetails(snapshot, [
+        { key: "title", label: "Название" },
+        { key: "description", label: "Описание" },
+        {
+          key: "album_kind",
+          label: "Тип альбома",
+          format: (value) => (value === "uploader" ? "Автоальбом загрузившего" : "Пользовательский")
+        }
+      ])
+    };
+  }
+
+  return {
+    summary: `Обновлен альбом: "${title}".`,
+    details: diffDetails.length
+      ? diffDetails
+      : [
+          `Название: ${title}.`,
+          albumKind === "uploader" ? "Тип альбома: Автоальбом загрузившего." : "Тип альбома: Пользовательский."
+        ]
   };
 }
 
@@ -464,6 +516,10 @@ function buildPresentation(entry: AuditEntry, context: AuditPresentationContext)
 
   if (entry.action.startsWith("photo.") || entry.action.startsWith("video.") || entry.action.startsWith("document.")) {
     return describeMedia(entry, before, after);
+  }
+
+  if (entry.action.startsWith("media_album.")) {
+    return describeMediaAlbum(entry, before, after);
   }
 
   return {

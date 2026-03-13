@@ -6,6 +6,14 @@ export const inviteSchema = z.object({
   inviteMethod: z.enum(["link", "email"]),
   email: z.string().email().optional().or(z.literal("")),
   expiresInDays: z.number().int().min(1).max(30).default(7)
+}).superRefine((value, ctx) => {
+  if (value.inviteMethod === "email" && !value.email) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["email"],
+      message: "Для отправки на email укажите адрес получателя."
+    });
+  }
 });
 
 export const acceptInviteSchema = z.object({

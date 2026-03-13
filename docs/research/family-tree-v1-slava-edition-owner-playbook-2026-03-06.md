@@ -1,5 +1,33 @@
 # Family Tree V1.0 "Slava Edition" Owner Playbook (2026-03-06)
 
+<!-- FRAMEWORK:PLAYBOOK:START -->
+## Current Operational Sync
+
+- Updated at (UTC): `2026-03-12 18:00:28Z`
+- Current launch rule: `Cloudflare R2` rollout is mandatory for `Slava edition`; legacy Yandex-backed media remains compatibility/read path only until migration is closed.
+- Current person-media UI:
+  - `Инфо` for person data and documents
+  - `Фото` for photo gallery/upload
+  - `Видео` for video gallery/upload
+- Current shared-media UI:
+  - tree-level `Медиа` is the family archive for shared materials
+  - archive upload uses review/confirm before save
+- Person media upload now uses a review/confirm step before final save.
+- Current execution order:
+1. Verify gated `Cloudflare R2` readiness: `CF_R2_*`, bucket CORS, upload-intent metadata, `smoke:media`, and `smoke:media:direct`.
+2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
+3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
+4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
+5. Complete backup/restore rehearsal and the final launch checklist before release decision.
+
+### Validation Baseline
+
+- `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
+- `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
+- Latest `smoke:media` artifact `media-storage-report-1773322585848.json` is green.
+- Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
+<!-- FRAMEWORK:PLAYBOOK:END -->
+
 ## 1. Для кого этот документ
 
 1. Для владельца дерева.
@@ -64,17 +92,28 @@
 4. Отправьте ссылку родственнику.
 5. Если доступ больше не нужен, отзовите ссылку на том же экране.
 
-### 4.4 Загрузить файл
+### 4.4 Загрузить файл для конкретного человека
 
 1. Откройте `Конструктор`.
 2. Выберите человека.
-3. Откройте вкладку `Медиа`.
-4. Выберите файл:
-- фото,
-- видео,
-- документ.
-5. Укажите название и нужную видимость.
-6. Загрузите файл.
+3. Используйте нужную вкладку:
+- `Фото` для фотографий,
+- `Видео` для видео,
+- `Инфо` для документов и общих данных о человеке.
+4. Выберите локальные файлы.
+5. На экране проверки:
+- удалите лишнее,
+- при необходимости добавьте еще файлы,
+- подтвердите сохранение кнопкой `Сохранить`.
+6. Дождитесь завершения загрузки.
+
+### 4.5 Загрузить файл в общий семейный архив
+
+1. Откройте раздел `Медиа` в навигации дерева.
+2. Выберите режим `Фото` или `Видео`.
+3. При необходимости выберите существующий альбом или создайте новый.
+4. Выберите файлы и подтвердите пакет после экрана проверки.
+5. Используйте этот раздел для материалов, которые не нужно сразу привязывать к одному человеку.
 
 ## 5. Рекомендуемая практика видимости
 
@@ -103,7 +142,7 @@
 3. Если ошибка повторяется, зафиксируйте:
 - кто загружал,
 - какой файл,
-- в каком разделе это произошло,
+- где это произошло: `Фото`, `Видео`, `Инфо` или tree-level `Медиа`,
 - текст ошибки на экране.
 
 ## 7. Что видно в журнале
@@ -111,7 +150,7 @@
 1. Создание и отзыв семейных ссылок.
 2. Приглашения и изменения ролей.
 3. Создание, изменение и удаление людей.
-4. Создание и удаление файлов.
+4. Создание и удаление файлов в person media и tree-level archive.
 5. Для семейных ссылок в V1 достаточно видеть `когда создана/отозвана` и `last accessed`, без шумного логирования каждого открытия.
 
 ## 8. Простое правило эксплуатации
@@ -119,4 +158,6 @@
 1. Для просмотра без регистрации используйте `семейную ссылку`.
 2. Для постоянного доступа используйте `приглашение`.
 3. Для реальной помощи с деревом используйте роль `Администратора`.
-4. Если доступ больше не нужен, лучше отозвать его сразу, чем оставлять открытым.
+4. Для person media используйте вкладки `Фото`, `Видео` и `Инфо`.
+5. Для общесемейных материалов используйте tree-level раздел `Медиа`.
+6. Если доступ больше не нужен, лучше отозвать его сразу, чем оставлять открытым.

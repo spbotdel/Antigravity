@@ -18,10 +18,13 @@ Minimum docs for this task:
 
 * components/tree/builder-workspace.tsx
 * components/tree/tree-viewer-client.tsx
+* components/layout/tree-nav.tsx
 * app/api/media/upload-intent/route.ts
 * app/api/media/upload-file/route.ts
 * app/api/media/complete/route.ts
 * app/api/media/[mediaId]/route.ts
+* app/tree/[slug]/media/page.tsx
+* components/media/tree-media-archive-client.tsx
 * lib/server/repository.ts
 * lib/validators/media.ts
 * lib/tree/display.ts
@@ -30,13 +33,16 @@ Minimum docs for this task:
 
 ## Suspected area
 
-The current builder media panel and upload pipeline are too narrow for real archive usage.
-The next change touches:
+The current task is no longer only the gallery redesign. The launch-critical area now touches:
 
 - upload UX in builder
 - local file upload batching/progress
 - server-side upload orchestration
-- media preview/delivery architecture for future thumbnail variants
+- media preview/delivery architecture for current thumbnail variants
+- family archive browsing for media that is not attached to a person yet
+- tree navigation and tree-level media read surface
+- mandatory `Cloudflare R2` rollout for new uploads
+- provider-aware reads for legacy Yandex-backed media
 
 ## Constraints
 
@@ -44,5 +50,6 @@ The next change touches:
 * media access must remain server-controlled
 * share-link access must stay read-only
 * current `Yandex Object Storage` path must keep working while the flow is redesigned
+* `Cloudflare R2` rollout is launch-critical for `Slava edition`
 * thumbnail/variant architecture should be additive and must not break existing originals
-* CDN is a later layer; variant generation should come first
+* existing person-linked media must coexist with a tree-level family archive

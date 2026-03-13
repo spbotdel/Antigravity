@@ -1,0 +1,24 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "http://localhost:3000"
+        ],
+        "methods": [
+          "GET",
+          "HEAD",
+          "PUT"
+        ],
+        "headers": [
+          "content-type",
+          "x-amz-*"
+        ]
+      },
+      "expose": [
+        "etag"
+      ],
+      "maxAgeSeconds": 3600
+    }
+  ]
+}

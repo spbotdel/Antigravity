@@ -3,7 +3,12 @@ export type TreeVisibility = "public" | "private";
 export type MediaVisibility = "public" | "members";
 export type MediaKind = "photo" | "video" | "document";
 export type MediaProvider = "supabase_storage" | "object_storage" | "yandex_disk";
+export type MediaStorageBackend = "supabase" | "object_storage" | "cloudflare_r2";
+export type MediaUploadRolloutState = "steady_state" | "cloudflare_rollout_gated" | "cloudflare_rollout_active";
 export type MediaVariantName = "thumb" | "small" | "medium";
+export type TreeMediaAlbumKind = "manual" | "uploader";
+export type UploadMode = "direct" | "proxy";
+export type VariantUploadMode = "server_proxy" | "none";
 export type InviteMethod = "link" | "email";
 export type MembershipStatus = "active" | "revoked";
 export type ViewerAccessSource = "membership" | "share_link" | "public" | "anonymous";
@@ -103,6 +108,50 @@ export interface MediaAssetVariantRecord {
   created_at: string;
 }
 
+export interface MediaUploadVariantTarget {
+  variant: MediaVariantName;
+  path: string;
+  signedUrl: string;
+  token: string | null;
+  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage">;
+}
+
+export interface MediaUploadTargetResponse {
+  mediaId: string;
+  kind: MediaKind;
+  path: string;
+  bucket: string;
+  signedUrl: string;
+  token: string | null;
+  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage">;
+  configuredBackend: MediaStorageBackend;
+  resolvedUploadBackend: MediaStorageBackend;
+  rolloutState: MediaUploadRolloutState;
+  forceProxyUpload: boolean;
+  uploadMode: UploadMode;
+  variantUploadMode: VariantUploadMode;
+  variantTargets: MediaUploadVariantTarget[];
+}
+
+export interface TreeMediaAlbumRecord {
+  id: string;
+  tree_id: string;
+  title: string;
+  description: string | null;
+  album_kind: TreeMediaAlbumKind;
+  uploader_user_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TreeMediaAlbumItemRecord {
+  id: string;
+  album_id: string;
+  media_id: string;
+  created_at: string;
+}
+
 export interface InviteRecord {
   id: string;
   tree_id: string;
@@ -121,6 +170,7 @@ export interface ShareLinkRecord {
   tree_id: string;
   label: string;
   token_hash: string;
+  token_ciphertext?: string | null;
   expires_at: string;
   revoked_at: string | null;
   last_accessed_at: string | null;

@@ -152,4 +152,85 @@ describe("audit presenter", () => {
     expect(views[1]?.summary).toBe('Отозвана семейная ссылка "Родные из РФ".');
     expect(views[1]?.event_tone).toBe("delete");
   });
+
+  it("builds human-readable media album events", () => {
+    const entries: AuditEntry[] = [
+      {
+        id: "audit-5",
+        tree_id: "tree-1",
+        actor_user_id: "user-1",
+        entity_type: "media_album",
+        entity_id: "album-1",
+        action: "media_album.created",
+        before_json: null,
+        after_json: {
+          id: "album-1",
+          title: "От Виктора Петровича",
+          description: "Общий семейный архив",
+          album_kind: "uploader"
+        },
+        created_at: "2026-03-08T12:00:00.000Z"
+      }
+    ];
+
+    const views = buildAuditEntryViews(entries, {
+      usersById: new Map([
+        [
+          "user-1",
+          {
+            name: "Слава",
+            email: "slava@example.com",
+            role: "owner",
+            status: "active"
+          }
+        ]
+      ]),
+      personNamesById: new Map()
+    });
+
+    expect(views[0]?.summary).toBe('Создан альбом: "От Виктора Петровича".');
+    expect(views[0]?.event_tone).toBe("create");
+    expect(views[0]?.details).toContain("Тип альбома: Автоальбом загрузившего.");
+  });
+
+  it("builds human-readable invite revoke events", () => {
+    const entries: AuditEntry[] = [
+      {
+        id: "audit-6",
+        tree_id: "tree-1",
+        actor_user_id: "user-1",
+        entity_type: "invite",
+        entity_id: "invite-1",
+        action: "invite.revoked",
+        before_json: {
+          id: "invite-1",
+          role: "viewer",
+          invite_method: "link",
+          email: "relative@example.com",
+          expires_at: "2026-03-20T12:00:00.000Z"
+        },
+        after_json: null,
+        created_at: "2026-03-08T10:00:00.000Z"
+      }
+    ];
+
+    const views = buildAuditEntryViews(entries, {
+      usersById: new Map([
+        [
+          "user-1",
+          {
+            name: "Слава",
+            email: "slava@example.com",
+            role: "owner",
+            status: "active"
+          }
+        ]
+      ]),
+      personNamesById: new Map()
+    });
+
+    expect(views[0]?.summary).toBe("Отозвано приглашение для relative@example.com.");
+    expect(views[0]?.event_tone).toBe("delete");
+    expect(views[0]?.details).toContain("Роль: Участник.");
+  });
 });

@@ -2,6 +2,8 @@
 
 Antigravity is now a `Next.js + TypeScript + Supabase` family tree platform.
 
+For project navigation and reading order, start with [REPO_MAP.md](./REPO_MAP.md).
+
 ## What is in this repo
 
 The active app supports:
@@ -12,7 +14,7 @@ The active app supports:
 - secure invite links
 - family share links for read-only viewing
 - private file media with signed delivery
-- S3-compatible object storage for private media, currently verified with `Yandex Object Storage`
+- S3-compatible object storage for private media, with transitional legacy compatibility verified on `Yandex Object Storage`
 - file-backed video and external video-link flows
 - owner-only audit log
 
@@ -39,155 +41,15 @@ The old static genealogy viewer is preserved in [`legacy/`](./legacy).
 
 ## Project documentation
 
-The repository includes a set of structured documentation files that describe the architecture, domain model, algorithms, and operational behavior of the system.
+The repository uses a small documentation hierarchy:
 
-These documents are primarily intended to help:
+- canonical navigation entrypoint: [REPO_MAP.md](./REPO_MAP.md)
+- core project understanding: [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md), [ARCHITECTURE_RULES.md](./ARCHITECTURE_RULES.md), [DECISIONS.md](./DECISIONS.md)
+- operational memory: [`.claude/SNAPSHOT.md`](./.claude/SNAPSHOT.md), [`.claude/BACKLOG.md`](./.claude/BACKLOG.md)
+- domain details when relevant: [TREE_MODEL.md](./TREE_MODEL.md), [TREE_ALGORITHMS.md](./TREE_ALGORITHMS.md), [DATA_FLOW.md](./DATA_FLOW.md), [SYSTEM_INVARIANTS.md](./SYSTEM_INVARIANTS.md)
+- framework/internal tooling docs: [AGENTS.md](./AGENTS.md), [CLAUDE.md](./CLAUDE.md), [FRAMEWORK_GUIDE.md](./FRAMEWORK_GUIDE.md)
 
-- developers quickly understand the project
-- AI coding agents safely modify the system
-- avoid accidental architectural regressions
-
-The source code remains the ultimate source of truth, but these documents explain how the system is intended to work.
-
-## Documentation files
-
-The runtime startup-context list for Codex is defined in [`.codex/config/framework-adapter.json`](./.codex/config/framework-adapter.json) under `startup_context_paths`.
-
-### [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md)
-
-High-level overview of the Antigravity project.
-
-Describes:
-
-- the product purpose
-- the current development phase (`Slava edition`)
-- the technology stack
-- the current scope and constraints
-- overall system architecture
-
-Recommended starting point for understanding the project.
-
-### [REPO_MAP.md](./REPO_MAP.md)
-
-Navigation map of the repository.
-
-Explains:
-
-- the purpose of each major directory
-- where the core runtime logic lives
-- where the most important files are located
-- which parts of the repo are legacy artifacts
-
-Useful for quickly locating relevant code.
-
-### [TREE_MODEL.md](./TREE_MODEL.md)
-
-Defines the core domain model of the family tree.
-
-Explains:
-
-- trees
-- persons
-- parent-child links
-- partnerships
-- media
-- memberships and share links
-
-Important rule:
-
-The family tree is modeled as a graph, not a strict binary tree.
-
-This document describes the canonical domain structure stored in the database.
-
-### [TREE_ALGORITHMS.md](./TREE_ALGORITHMS.md)
-
-Describes how the application converts domain data into visual tree structures.
-
-Covers:
-
-- viewer tree projection
-- builder tree projection
-- shared-child grouping
-- display node generation
-- canvas layout algorithms
-- selection and interaction behavior
-
-Important distinction:
-
-Domain data is stored in the database, while display structures are derived projections.
-
-### [DATA_FLOW.md](./DATA_FLOW.md)
-
-Explains how data moves through the runtime.
-
-Covers:
-
-- page rendering flow
-- snapshot loading
-- mutation flow
-- builder interaction flow
-- media upload and delivery across object storage and external video links
-- invite and share link flows
-- permission enforcement
-- audit logging
-
-This document describes the runtime request pipeline.
-
-### [ARCHITECTURE_RULES.md](./ARCHITECTURE_RULES.md)
-
-Defines practical architectural constraints for the system.
-
-Examples:
-
-- repository layer owns domain mutations
-- API routes should remain thin
-- permission logic must be centralized
-- domain model must remain separate from display model
-
-These rules help prevent architectural drift during development.
-
-### [DECISIONS.md](./DECISIONS.md)
-
-Long-lived architectural decisions and constraints.
-
-Covers decisions such as:
-
-- graph-based family model
-- separation of domain model and display model
-- thin API routes
-- repository-owned mutations
-- snapshot-based rendering
-- media and share-link constraints
-
-Use this file to understand why important architectural constraints exist and what must not be accidentally refactored.
-
-### [COMMON_BUGS.md](./COMMON_BUGS.md)
-
-Operational debugging guide for recurring issues.
-
-Covers common failure patterns such as:
-
-- missing Supabase migrations
-- schema cache mismatches
-- builder state bugs
-- hydration errors
-- network issues with Supabase or GitHub
-- test fixture pollution
-
-The file helps diagnose issues before modifying production code.
-
-## Recommended reading order
-
-For understanding the project:
-
-1. [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md)
-2. [REPO_MAP.md](./REPO_MAP.md)
-3. [TREE_MODEL.md](./TREE_MODEL.md)
-4. [TREE_ALGORITHMS.md](./TREE_ALGORITHMS.md)
-5. [DATA_FLOW.md](./DATA_FLOW.md)
-6. [ARCHITECTURE_RULES.md](./ARCHITECTURE_RULES.md)
-7. [DECISIONS.md](./DECISIONS.md)
-8. [COMMON_BUGS.md](./COMMON_BUGS.md)
+The runtime startup-context list for Codex is defined in [`.codex/config/framework-adapter.json`](./.codex/config/framework-adapter.json).
 
 ## Local setup
 
@@ -208,6 +70,11 @@ Required env vars:
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_SERVER_REQUEST_TIMEOUT_MS` optional, defaults to `15000`
+- `SUPABASE_ADMIN_REST_TRANSPORT` optional, defaults to `auto`
+- `SUPABASE_ADMIN_REST_TRANSPORT=auto` uses native Node fetch first and falls back to PowerShell only on transport-level failures
+- `SUPABASE_ADMIN_REST_TRANSPORT=native` disables the PowerShell fallback and forces native fetch only
+- `SUPABASE_ADMIN_REST_TRANSPORT=powershell` forces the legacy PowerShell bridge for debugging or environment isolation
 - `NEXT_PUBLIC_SITE_URL`
 - `MEDIA_STORAGE_BACKEND` optional, defaults to `supabase`
 - `NEXT_PUBLIC_STORAGE_BUCKET` optional for Supabase Storage, defaults to `tree-photos`
@@ -216,15 +83,106 @@ Required env vars:
 - `OBJECT_STORAGE_REGION` optional, defaults to `ru-central1`
 - `OBJECT_STORAGE_ACCESS_KEY_ID` required for object storage
 - `OBJECT_STORAGE_SECRET_ACCESS_KEY` required for object storage
+- `CF_ACCOUNT_ID` required when `MEDIA_STORAGE_BACKEND=cloudflare_r2`
+- `CF_R2_BUCKET` required when `MEDIA_STORAGE_BACKEND=cloudflare_r2`
+- `CF_R2_ACCESS_KEY_ID` required when `MEDIA_STORAGE_BACKEND=cloudflare_r2`
+- `CF_R2_SECRET_ACCESS_KEY` required when `MEDIA_STORAGE_BACKEND=cloudflare_r2`
+- `CF_R2_ENDPOINT` optional for Cloudflare R2, defaults to `https://<CF_ACCOUNT_ID>.r2.cloudflarestorage.com`
+- `CF_R2_REGION` optional, defaults to `auto`
+- `CF_R2_ROLLOUT_AT` optional UTC timestamp for migration gating; before this moment new uploads remain on the legacy object-storage path even if `MEDIA_STORAGE_BACKEND=cloudflare_r2`
 
-Current verified object-storage path:
+Current transitional compatibility path:
 
 - `MEDIA_STORAGE_BACKEND=object_storage`
 - `OBJECT_STORAGE_ENDPOINT=https://storage.yandexcloud.net`
 - `OBJECT_STORAGE_REGION=ru-central1`
 - backend validated with `Yandex Object Storage`
+- keep this path readable for already-uploaded assets during rollout, but do not treat it as the final launch upload path
+
+Mandatory `Slava edition` Cloudflare rollout path:
+
+- `MEDIA_STORAGE_BACKEND=cloudflare_r2`
+- `CF_R2_BUCKET=<bucket>`
+- `CF_R2_ENDPOINT=https://<CF_ACCOUNT_ID>.r2.cloudflarestorage.com`
+- `CF_R2_ROLLOUT_AT=2026-03-15T00:00:00Z` optional when migration should begin at a controlled time instead of immediately
+- browser direct-upload rollout requires bucket CORS configuration
+
+For the current project plan, `Cloudflare R2` rollout is part of the `Slava edition` definition of done. Launch should not be called complete while new uploads still depend on the legacy Yandex path.
+
+Mandatory rollout sequence for `Slava edition`:
+
+1. Configure `MEDIA_STORAGE_BACKEND=cloudflare_r2` together with valid `CF_R2_*` credentials, but keep `CF_R2_ROLLOUT_AT` in the future.
+2. Verify the pre-rollout state:
+   - upload-intent says `configuredBackend=cloudflare_r2`
+   - `resolvedUploadBackend=object_storage`
+   - `rolloutState=cloudflare_rollout_gated`
+   - existing media reads still work
+3. Enable bucket CORS and validate browser direct-upload prerequisites before changing rollout time.
+4. Run both smoke paths before activation:
+   - `npm run smoke:media`
+   - `npm run smoke:media:direct`
+5. Move `CF_R2_ROLLOUT_AT` to the current UTC time or remove it only after both smoke paths are green.
+6. Verify the active rollout state:
+   - upload-intent says `resolvedUploadBackend=cloudflare_r2`
+   - `rolloutState=cloudflare_rollout_active`
+   - photo uploads still produce preview variants
+   - file-backed video still reads correctly
+7. Keep old Yandex-backed media readable through provider-aware reads; migration remains additive instead of big-bang.
+8. Treat release readiness as blocked until:
+   - targeted archive/viewer/builder/members QA is green
+   - live `EU + RF` UAT is complete
+   - backup/restore rehearsal is complete
+
+Controlled rollout checklist:
+
+- Phase 1. Config readiness
+  - `CF_ACCOUNT_ID`, `CF_R2_BUCKET`, `CF_R2_ACCESS_KEY_ID`, `CF_R2_SECRET_ACCESS_KEY`, and `CF_R2_ENDPOINT` resolve correctly
+  - `MEDIA_STORAGE_BACKEND=cloudflare_r2`
+  - `CF_R2_ROLLOUT_AT` is still in the future
+- Phase 2. Gated verification
+  - `npm run smoke:media` stays green on the legacy upload path
+  - `npm run smoke:media:direct` stays green against the direct browser path from the allowed local origin
+  - upload-intent metadata matches the gated path, so rollout status is observable without guesswork
+- Phase 3. Activation
+  - move `CF_R2_ROLLOUT_AT` to now
+  - confirm new uploads switch to `cloudflare_r2`
+  - confirm legacy reads still resolve
+- Phase 4. Post-activation stabilization
+  - keep `Cloudflare Stream` deferred unless playback problems are proven
+  - keep `Queues` as the next async-processing boundary after the core upload/read path is stable
+  - keep a self-managed `FFmpeg/HLS` fallback out of scope unless `R2/private delivery` is still insufficient
+- Phase 5. Launch hardening
+  - targeted archive/viewer/builder/members QA is green
+  - live `EU + RF` UAT is complete
+  - backup/restore rehearsal and launch checklist are complete
+
+Current transition detail:
+
+- for new Cloudflare-backed uploads, the original binary may already go browser -> R2 directly
+- photo preview variants (`thumb/small/medium`) can still be generated through the app route during the transition
+- this keeps the migration additive while preserving the current variant pipeline
+- upload-intent responses expose `configuredBackend`, `resolvedUploadBackend`, `rolloutState`, and `forceProxyUpload` so rollout debugging does not depend on guessing from env alone
+- file-backed private video playback remains the default near-term path; `Cloudflare Stream` is deferred unless real playback problems justify the extra service
+- a self-managed `FFmpeg -> mp4/HLS/poster/thumbnail` pipeline is also deferred to the very end and should be introduced only if playback compatibility or delivery quality is still insufficient after `R2/private delivery`
+- `npm run smoke:media:direct` reuses the current `http://localhost:3000` dev server so browser direct uploads originate from an R2 CORS-allowed local origin
+
+Current validation baseline as of `2026-03-12`:
+
+- `npm run typecheck` is green
+- `npm test` is green
+- `npm run build` is green
+- `npm run smoke:e2e` is green
+- `npm run smoke:media` is green
+- `npm run smoke:media:direct` is green
+- `smoke:auth` core flow is green, but cleanup remains sensitive to intermittent network timeouts
 
 3. Apply the current SQL migrations in `supabase/migrations/` to your Supabase project.
+
+### Windows note
+
+Project helper commands under `.codex/commands/*.sh` expect a real Bash runtime.
+
+If `bash` on Windows resolves to the WSL stub and no WSL distro is installed, use Git Bash instead of assuming `start` is broken.
 
 For the current media/object-storage path this includes at least:
 
@@ -250,6 +208,7 @@ npm run dev
 - `npm run typecheck`
 - `npm test`
 - `npm run smoke:media`
+- `npm run smoke:media:direct`
 
 ## Product routes
 
@@ -279,4 +238,5 @@ Implemented and verified locally:
 - `npm run typecheck`
 - `npm test`
 - `npm run smoke:media`
+- `npm run smoke:media:direct`
 - `npm run build`

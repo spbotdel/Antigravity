@@ -46,6 +46,7 @@ const auditActionLabels: Record<string, string> = {
   "relationship.partnership_deleted": "Удалена пара",
   "invite.created": "Создано приглашение",
   "invite.accepted": "Приглашение принято",
+  "invite.revoked": "Приглашение отозвано",
   "membership.role_updated": "Изменена роль участника",
   "membership.revoked": "Доступ участника отозван",
   "photo.created": "Добавлено фото",

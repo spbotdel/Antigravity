@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { TreeNav } from "@/components/layout/tree-nav";
 import { BuilderWorkspace } from "@/components/tree/builder-workspace";
+import { AppError } from "@/lib/server/errors";
 import { getBuilderSnapshot } from "@/lib/server/repository";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,16 @@ export default async function BuilderPage({ params, searchParams }: BuilderPageP
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const shareToken = getSearchParam(resolvedSearchParams.share);
-  const snapshot = await getBuilderSnapshot(slug, { shareToken });
+  let snapshot;
+  try {
+    snapshot = await getBuilderSnapshot(slug, { shareToken });
+  } catch (error) {
+    if (error instanceof AppError && error.status === 403) {
+      redirect(buildViewerHref(slug, shareToken));
+    }
+
+    throw error;
+  }
 
   if (!snapshot.actor.canEdit) {
     redirect(buildViewerHref(slug, shareToken));
