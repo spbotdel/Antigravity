@@ -2821,6 +2821,21 @@ textarea {
   box-shadow: 0 14px 28px rgba(22, 38, 69, 0.12);
 }
 
+.builder-status-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 40;
+  max-width: min(360px, calc(100vw - 28px));
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(31, 130, 92, 0.16);
+  background: rgba(247, 252, 249, 0.96);
+  color: var(--success);
+  box-shadow: 0 14px 32px rgba(22, 38, 69, 0.12);
+  pointer-events: none;
+}
+
 .builder-person-summary {
   display: grid;
   gap: 10px;
@@ -4040,11 +4055,11 @@ textarea {
     min-height: auto;
   }
 
-  .builder-inspector {
+  .builder-main {
     order: 1;
   }
 
-  .builder-main {
+  .builder-inspector {
     order: 2;
   }
 
@@ -4122,6 +4137,13 @@ textarea {
   .builder-stage-gallery-shell {
     min-height: auto;
     padding: 14px 10px 10px;
+  }
+
+  .builder-status-toast {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    max-width: none;
   }
 }
 
