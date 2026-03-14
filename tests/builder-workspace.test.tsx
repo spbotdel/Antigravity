@@ -226,6 +226,44 @@ describe("builder workspace", () => {
     expect(screen.queryByText("Здесь редактируются данные, связи и документы выбранного человека.")).not.toBeInTheDocument();
   });
 
+  it("shows a transient toast after saving a person instead of an inline success block", async () => {
+    const snapshot = createSnapshot();
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+      if (url.endsWith("/api/persons/person-1") && init?.method === "PATCH") {
+        return Response.json(
+          {
+            person: {
+              ...snapshot.people[0],
+              full_name: "Обновленное имя",
+            },
+            message: "Данные человека обновлены."
+          },
+          { status: 200 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Demo Person")).toBeInTheDocument();
+    });
+
+    const nameInput = screen.getByDisplayValue("Demo Person");
+    fireEvent.change(nameInput, { target: { value: "Обновленное имя" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent("Данные человека обновлены.");
+    });
+    expect(screen.queryByText("Данные человека обновлены.", { selector: ".form-success" })).not.toBeInTheDocument();
+  });
+
   it("shows an explicit proxy-override hint for Cloudflare uploads", async () => {
     const snapshot = createSnapshot();
 

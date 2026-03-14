@@ -604,9 +604,23 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       : "Видео вынесены на основную сцену: здесь удобнее смотреть локальные ролики и переходить к внешним ссылкам."
     : createModeActive
       ? "Создайте новый отдельный блок. Для существующих карточек используйте +, чтобы сразу добавлять родственников в схему."
-      : selectedPerson
+    : selectedPerson
         ? "Выберите блок, чтобы он подсветился. Кнопка + открывает меню связей, корзина удаляет выбранного человека."
         : "Выберите карточку на схеме или добавьте первого человека, чтобы начать собирать структуру семьи.";
+
+  useEffect(() => {
+    if (!status || status.endsWith("...")) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setStatus((currentStatus) => (currentStatus === status ? null : currentStatus));
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [status]);
 
   useEffect(() => {
     setIsClientReady(true);
@@ -2012,7 +2026,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         )}
 
         {error ? <p className="form-error">{error}</p> : null}
-        {status ? <p className="form-success">{status}</p> : null}
 
         {activePanel === "person" ? (
           <section className="builder-panel-stack">
@@ -2656,6 +2669,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {status ? (
+        <div className="builder-status-toast" role="status" aria-live="polite">
+          {status}
         </div>
       ) : null}
     </>
