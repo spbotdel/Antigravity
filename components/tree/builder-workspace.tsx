@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
 
 import {
   FamilyTreeCanvas,
@@ -131,8 +131,7 @@ function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
       description: "Фотографии добавляются в галерею человека и сразу доступны для выбора аватара и полного просмотра.",
       inputLabel: "Фотографии с устройства",
       accept: "image/*",
-      chooseButtonLabel: "Выбрать фото",
-      submitButtonLabel: "Проверить фото перед загрузкой"
+      chooseButtonLabel: "Загрузить фото"
     };
   }
 
@@ -142,8 +141,7 @@ function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
       description: "Локальные видео загружаются отдельным потоком, а ссылки на внешний плеер остаются ниже как дополнительный сценарий.",
       inputLabel: "Видео с устройства",
       accept: "video/*",
-      chooseButtonLabel: "Выбрать видео",
-      submitButtonLabel: "Проверить видео перед загрузкой"
+      chooseButtonLabel: "Загрузить видео"
     };
   }
 
@@ -152,8 +150,7 @@ function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
     description: "Сканы, письма и другие документы остаются рядом с биографией и открываются отдельной ссылкой.",
     inputLabel: "Документы",
     accept: ".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx",
-    chooseButtonLabel: "Выбрать документы",
-    submitButtonLabel: "Проверить документы перед загрузкой"
+    chooseButtonLabel: "Загрузить документы"
   };
 }
 
@@ -266,26 +263,6 @@ function formatMediaUploadQueueStatus(item: MediaUploadQueueItem) {
   }
 
   return "Файл загружается";
-}
-
-function formatMediaBatchProgressLabel(input: {
-  uploadedBytes: number;
-  totalBytes: number;
-  activeItem: MediaUploadQueueItem | null;
-  activeIndex: number | null;
-  totalItems: number;
-}) {
-  const uploadedLabel = `${formatMediaUploadBytes(input.uploadedBytes)} из ${formatMediaUploadBytes(input.totalBytes)}`;
-
-  if (!input.activeItem || !input.activeIndex) {
-    return `Подготавливаем загрузку. Уже отправили ${uploadedLabel}.`;
-  }
-
-  if (input.activeItem.status === "finalizing") {
-    return `Сохраняем файл ${input.activeIndex} из ${input.totalItems}. Уже отправили ${uploadedLabel}.`;
-  }
-
-  return `Загружаем файл ${input.activeIndex} из ${input.totalItems}. Уже отправили ${uploadedLabel}.`;
 }
 
 function buildMediaUploadProgress(loadedBytes: number, totalBytes: number, startedAtMs: number): MediaUploadProgressSnapshot {
@@ -569,30 +546,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     ? renderSnapshot.partnerships.filter((partnership) => partnership.person_a_id === selectedPerson.id || partnership.person_b_id === selectedPerson.id)
     : [];
   const isSelectedRoot = Boolean(selectedPerson && visualRootPersonId === selectedPerson.id);
-  const totalQueuedMediaBytes = mediaUploadItems.reduce((sum, item) => sum + item.sizeBytes, 0);
-  const uploadedMediaBytes = mediaUploadItems.reduce((sum, item) => {
-    if (item.status === "done") {
-      return sum + item.sizeBytes;
-    }
-
-    return sum + Math.min(item.uploadedBytes, item.sizeBytes);
-  }, 0);
-  const activeMediaUploadItem =
-    mediaUploadItems.find((item) => item.status === "uploading" || item.status === "finalizing") || null;
-  const activeMediaUploadIndex = activeMediaUploadItem ? mediaUploadItems.findIndex((item) => item.id === activeMediaUploadItem.id) + 1 : null;
-  const mediaUploadProgressPercent =
-    isUploadingMedia && totalQueuedMediaBytes > 0 ? Math.min(100, Math.round((uploadedMediaBytes / totalQueuedMediaBytes) * 100)) : 0;
   const selectedMediaFiles = pendingMediaUploads.map((item) => item.file);
-  const mediaUploadButtonLabel = isUploadingMedia ? `Загружаем ${mediaUploadProgressPercent}%` : activeUploadConfig.submitButtonLabel;
-  const mediaUploadProgressLabel = isUploadingMedia
-    ? formatMediaBatchProgressLabel({
-        uploadedBytes: uploadedMediaBytes,
-        totalBytes: totalQueuedMediaBytes,
-        activeItem: activeMediaUploadItem,
-        activeIndex: activeMediaUploadIndex,
-        totalItems: mediaUploadItems.length
-      })
-    : null;
   const selectedMediaFilesSummary = formatSelectedMediaFilesSummary(selectedMediaFiles);
   const selectedMediaFilesHint = formatSelectedMediaFilesHint(selectedMediaFiles, activeUploadScope);
   const inspectorTitle = createModeActive ? createHeading.title : selectedPerson ? selectedPerson.full_name : "Выберите человека";
@@ -1552,6 +1506,16 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     event.target.value = "";
   }
 
+  function openMediaPickerOrReview() {
+    if (pendingMediaUploadsRef.current.length) {
+      setError(null);
+      setIsMediaUploadReviewOpen(true);
+      return;
+    }
+
+    mediaFileInputRef.current?.click();
+  }
+
   function removePendingMediaUpload(itemId: string) {
     setPendingMediaUploads((items) => {
       const item = items.find((entry) => entry.id === itemId);
@@ -1591,26 +1555,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
   function discardPendingMediaUploads() {
     clearPendingMediaUploads();
-  }
-
-  function openMediaUploadReview() {
-    if (!selectedPerson) {
-      setError("Сначала выберите человека, чтобы привязать к нему медиа.");
-      return;
-    }
-
-    if (!pendingMediaUploadsRef.current.length) {
-      setError("Сначала выберите хотя бы один файл.");
-      return;
-    }
-
-    setError(null);
-    setIsMediaUploadReviewOpen(true);
-  }
-
-  function handleMediaUploadFormSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    openMediaUploadReview();
   }
 
   function handleSubmitOnEnter(event: KeyboardEvent<HTMLInputElement>) {
@@ -1802,13 +1746,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           <button type="button" className="ghost-button" onClick={closeExpandedGallery}>
             Вернуться к дереву
           </button>
-          {pendingMediaUploads.length ? (
-            <button type="button" className="ghost-button" onClick={() => setIsMediaUploadReviewOpen(true)}>
-              Проверить набор
-            </button>
-          ) : null}
-          <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
-            {mode === "photo" ? "Выбрать фото" : "Выбрать видео"}
+          <button type="button" className="secondary-button" onClick={openMediaPickerOrReview}>
+            {mode === "photo" ? "Загрузить фото" : "Загрузить видео"}
           </button>
         </div>
       </div>
@@ -1824,7 +1763,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           <strong>{config.heading}</strong>
           <p className="muted-copy">{config.description}</p>
         </div>
-        <form ref={mediaUploadFormRef} className="stack-form builder-form-grid" onSubmit={handleMediaUploadFormSubmit}>
+        <form ref={mediaUploadFormRef} className="stack-form builder-form-grid">
           <div className="builder-field-span builder-file-picker">
             <label className="builder-file-picker-label" htmlFor="builder-media-file-input">
               {config.inputLabel}
@@ -1845,9 +1784,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                 type="button"
                 className="secondary-button"
                 disabled={isUploadingMedia}
-                onClick={() => {
-                  mediaFileInputRef.current?.click();
-                }}
+                onClick={openMediaPickerOrReview}
               >
                 {config.chooseButtonLabel}
               </button>
@@ -1868,14 +1805,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             Подпись
             <textarea name="caption" rows={3} placeholder="Общая подпись для выбранных файлов, если она нужна" />
           </label>
-          <button
-            className={`primary-button builder-field-span${isUploadingMedia ? " builder-upload-submit-button" : ""}`}
-            type="submit"
-            disabled={isUploadingMedia}
-            style={isUploadingMedia ? ({ ["--upload-progress" as string]: `${mediaUploadProgressPercent}%` } as CSSProperties) : undefined}
-          >
-            <span className="builder-upload-submit-button-label">{mediaUploadButtonLabel}</span>
-          </button>
           <div className="builder-upload-feedback builder-field-span">
             <p className="builder-media-limits-note">
               За один раз: до {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(getBuilderUploadScopeFileSizeLimit(scope))} на файл.
@@ -2372,8 +2301,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         emptyTitle="Фотографий пока нет"
                         emptyMessage="Для этого человека пока нет фотографий."
                         emptyActions={
-                          <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
-                            Выбрать фото
+                          <button type="button" className="secondary-button" onClick={openMediaPickerOrReview}>
+                            Загрузить фото
                           </button>
                         }
                         avatarMediaId={selectedPrimaryPhotoMediaId}
@@ -2394,7 +2323,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         <strong>{formatPhotoUploadCountLabel(selectedPhotoMedia.length)}</strong>
                       </div>
                       <div className="archive-action-bar">
-                        <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
+                        <button type="button" className="secondary-button" onClick={openMediaPickerOrReview}>
                           Загрузить фото
                         </button>
                         <a href={buildSelectedPhotoArchiveHref()} className="ghost-button">
@@ -2415,8 +2344,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         emptyTitle="Видео пока нет"
                         emptyMessage="Для этого человека пока нет видео."
                         emptyActions={
-                          <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
-                            Выбрать видео
+                          <button type="button" className="secondary-button" onClick={openMediaPickerOrReview}>
+                            Загрузить видео
                           </button>
                         }
                         showStickyFooter={false}

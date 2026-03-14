@@ -3324,26 +3324,6 @@ textarea {
   background: linear-gradient(90deg, rgba(240, 109, 61, 0.94), rgba(220, 90, 43, 0.9));
 }
 
-.builder-upload-submit-button {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.builder-upload-submit-button::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  width: var(--upload-progress, 0%);
-  background: rgba(18, 27, 43, 0.18);
-  z-index: 0;
-}
-
-.builder-upload-submit-button-label {
-  position: relative;
-  z-index: 1;
-}
-
 .builder-upload-item-done .builder-upload-progress-bar span {
   background: rgba(31, 130, 92, 0.9);
 }

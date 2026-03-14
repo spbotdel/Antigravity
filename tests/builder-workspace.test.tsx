@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { uploadFileWithTransportContract } = vi.hoisted(() => ({
@@ -167,7 +167,7 @@ describe("builder workspace", () => {
       expect(screen.getByRole("button", { name: "Инфо" })).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("button", { name: "Выбрать документы" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Загрузить документы" })).toBeInTheDocument();
     expect(screen.getByText("Demo Document")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Видео" }));
@@ -328,6 +328,7 @@ describe("builder workspace", () => {
     fireEvent.change(input);
 
     expect(screen.getByRole("dialog", { name: "Проверка файлов перед загрузкой" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Проверить фото перед загрузкой" })).not.toBeInTheDocument();
     expect(uploadFileWithTransportContract).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Сохранить 1" }));
@@ -400,9 +401,10 @@ describe("builder workspace", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Фото" }));
-    expect(screen.getByText("1 фото загружено")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Загрузить фото" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Перейти в альбом" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
+    const footer = screen.getByText("1 фото загружено").closest(".builder-photo-footer");
+    expect(footer).not.toBeNull();
+    expect(within(footer as HTMLElement).getByRole("button", { name: "Загрузить фото" })).toBeInTheDocument();
+    expect(within(footer as HTMLElement).getByRole("link", { name: "Перейти в альбом" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
   });
 
   it("renders the shared person photo gallery inside the builder photo tab", async () => {
