@@ -34,7 +34,9 @@ interface TreeMediaArchiveClientProps {
 }
 
 const INITIAL_TILE_LIMIT = 18;
-const MAX_MEDIA_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
+const MAX_DEFAULT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
 type ArchiveUploadTarget = Pick<
   MediaUploadTargetResponse,
@@ -48,6 +50,18 @@ interface PendingArchiveUploadItem {
 }
 
 type ArchiveUploadStatus = "queued" | "uploading" | "finalizing" | "done" | "error";
+
+function getArchiveMaxMediaFileSizeBytes(file: File) {
+  if (file.type.startsWith("video/")) {
+    return MAX_VIDEO_FILE_SIZE_BYTES;
+  }
+
+  if (file.type.startsWith("image/")) {
+    return MAX_PHOTO_FILE_SIZE_BYTES;
+  }
+
+  return MAX_DEFAULT_FILE_SIZE_BYTES;
+}
 
 interface ActiveArchiveUploadItem {
   id: string;
@@ -650,9 +664,9 @@ export function TreeMediaArchiveClient({
       return;
     }
 
-    const oversized = files.find((file) => file.size > MAX_MEDIA_FILE_SIZE_BYTES);
+    const oversized = files.find((file) => file.size > getArchiveMaxMediaFileSizeBytes(file));
     if (oversized) {
-      setError(`Файл больше 100 МБ: ${oversized.name}.`);
+      setError(`Файл больше ${Math.round(getArchiveMaxMediaFileSizeBytes(oversized) / (1024 * 1024))} МБ: ${oversized.name}.`);
       return;
     }
 

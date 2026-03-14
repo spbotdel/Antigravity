@@ -36,8 +36,10 @@ const PERSON_GENDER_OPTIONS = [
 
 const BUILDER_CANVAS_MIN_HEIGHT = 700;
 const BUILDER_CANVAS_MAX_HEIGHT = 1600;
-const MAX_MEDIA_FILES_PER_BATCH = 12;
-const MAX_MEDIA_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_MEDIA_FILES_PER_BATCH = 36;
+const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
+const MAX_DOCUMENT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
 type MediaUploadKind = "photo" | "video" | "document" | "unknown";
 type MediaUploadStatus = "queued" | "uploading" | "finalizing" | "done" | "error";
@@ -155,6 +157,18 @@ function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
   };
 }
 
+function getBuilderUploadScopeFileSizeLimit(scope: BuilderUploadScope) {
+  if (scope === "video") {
+    return MAX_VIDEO_FILE_SIZE_BYTES;
+  }
+
+  if (scope === "document") {
+    return MAX_DOCUMENT_FILE_SIZE_BYTES;
+  }
+
+  return MAX_PHOTO_FILE_SIZE_BYTES;
+}
+
 function detectMediaUploadKind(file: File): MediaUploadKind {
   if (file.type.startsWith("image/")) {
     return "photo";
@@ -228,6 +242,10 @@ function formatSelectedMediaFilesHint(files: File[], scope: BuilderUploadScope) 
   return scope === "document"
     ? "Проверьте выбранные файлы и сохраните набор."
     : "Проверьте превью выбранных файлов перед сохранением.";
+}
+
+function formatPhotoUploadCountLabel(count: number) {
+  return `${count} фото загружено`;
 }
 
 function formatMediaUploadQueueStatus(item: MediaUploadQueueItem) {
@@ -1458,6 +1476,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   }
 
   function validatePendingMediaFiles(files: File[]) {
+    const maxFileSizeBytes = getBuilderUploadScopeFileSizeLimit(activeUploadScope);
+
     if (!files.length) {
       return "Сначала выберите хотя бы один файл.";
     }
@@ -1466,9 +1486,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       return `За один раз можно загрузить не больше ${MAX_MEDIA_FILES_PER_BATCH} файлов.`;
     }
 
-    const oversizedFiles = files.filter((file) => file.size > MAX_MEDIA_FILE_SIZE_BYTES);
+    const oversizedFiles = files.filter((file) => file.size > maxFileSizeBytes);
     if (oversizedFiles.length) {
-      return `Файл больше ${formatMediaUploadBytes(MAX_MEDIA_FILE_SIZE_BYTES)}: ${oversizedFiles
+      return `Файл больше ${formatMediaUploadBytes(maxFileSizeBytes)}: ${oversizedFiles
         .slice(0, 3)
         .map((file) => file.name)
         .join(", ")}.`;
@@ -1858,7 +1878,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           </button>
           <div className="builder-upload-feedback builder-field-span">
             <p className="builder-media-limits-note">
-              За один раз: до {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(MAX_MEDIA_FILE_SIZE_BYTES)} на файл.
+              За один раз: до {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(getBuilderUploadScopeFileSizeLimit(scope))} на файл.
             </p>
             {pendingMediaUploads.length ? <p className="muted-copy">Набор подготовлен, но еще не сохранен. Перед отправкой можно убрать лишние файлы или добрать еще.</p> : null}
           </div>
@@ -2369,25 +2389,17 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
                     {renderMediaUploadForm("photo")}
 
-                    <div className="archive-sticky-footer">
+                    <div className="archive-sticky-footer builder-photo-footer">
                       <div className="archive-sticky-copy">
-                        <strong>Фото</strong>
-                        <span>{selectedPhotoMedia.length} фото в карточке человека</span>
+                        <strong>{formatPhotoUploadCountLabel(selectedPhotoMedia.length)}</strong>
                       </div>
                       <div className="archive-action-bar">
-                        {selectedPhotoMedia.length ? (
-                          <a href={buildSelectedPhotoArchiveHref()} className="ghost-button">
-                            Показать все
-                          </a>
-                        ) : null}
-                        {pendingMediaUploads.length ? (
-                          <button type="button" className="ghost-button" onClick={() => setIsMediaUploadReviewOpen(true)}>
-                            Проверить набор
-                          </button>
-                        ) : null}
                         <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
-                          Выбрать фото
+                          Загрузить фото
                         </button>
+                        <a href={buildSelectedPhotoArchiveHref()} className="ghost-button">
+                          Перейти в альбом
+                        </a>
                       </div>
                     </div>
                   </>

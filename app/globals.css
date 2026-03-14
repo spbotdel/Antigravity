@@ -2411,6 +2411,21 @@ textarea {
   line-height: 1.4;
 }
 
+.builder-photo-footer {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.builder-photo-footer .archive-action-bar {
+  justify-content: flex-start;
+}
+
+.builder-photo-footer .archive-action-bar > .ghost-button,
+.builder-photo-footer .archive-action-bar > .secondary-button {
+  min-width: 0;
+}
+
 .archive-album-grid {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }

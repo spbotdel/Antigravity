@@ -400,7 +400,9 @@ describe("builder workspace", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Фото" }));
-    expect(screen.getByRole("link", { name: "Показать все" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
+    expect(screen.getByText("1 фото загружено")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Загрузить фото" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Перейти в альбом" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
   });
 
   it("renders the shared person photo gallery inside the builder photo tab", async () => {
