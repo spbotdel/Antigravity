@@ -4040,11 +4040,11 @@ textarea {
     min-height: auto;
   }
 
-  .builder-main {
+  .builder-inspector {
     order: 1;
   }
 
-  .builder-inspector {
+  .builder-main {
     order: 2;
   }
 
