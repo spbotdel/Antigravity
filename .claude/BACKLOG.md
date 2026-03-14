@@ -16,20 +16,30 @@
 
 Status note:
 - local `Wave 1` validation is currently green on `npm test`, `npm run build`, `npm run smoke:media`, `npm run smoke:auth`, and `npm run smoke:e2e`
-- remaining next-step work has shifted from local correctness to hosted staging setup and real staged validation
+- remaining next-step work has shifted from local correctness to hosted validation on `Vercel`
 
 ## Wave 2 — Hosted Validation And Email
 
-- [ ] Deploy hosted staging on `Vercel`
+- [x] Deploy hosted staging on `Vercel`
 - [ ] Disable `DEV_IMPERSONATE_*` on staging and use hosted env as the truth surface for auth, invite/share-link behavior, and perceived speed
+- [x] Update hosted `NEXT_PUBLIC_SITE_URL` to the actual stable `Vercel` URL used for UAT links
+- [x] Apply the new share-link reveal migration remotely so hosted reveal works without fallback
 - [ ] Run hosted UAT for `Owner EU`, `Helper RF`, and `Relative RF`
 - [x] Add invite email delivery via `Resend` with manual-copy fallback
+- [ ] Finish `Resend` sender/domain setup and add `RESEND_FROM_EMAIL` plus optional `INVITE_EMAIL_REPLY_TO` to hosted env
 - [ ] Review staged UAT findings and fix any release-blocking defects
 
 Operational note:
 - app hosting target is now `Vercel`
 - `Cloudflare R2` is already client-owned and remains the storage plane
 - `Resend` sender/domain should be prepared directly on client-owned data
+- hosted validation URL is currently the `main` branch alias on `Vercel`
+- for real unauthenticated/manual UAT use the public production alias:
+  `https://antigravity-zeta-two.vercel.app`
+- hosted smoke signal is already green on:
+  - `SMOKE_BASE_URL=https://antigravity-zeta-two.vercel.app npm run smoke:auth`
+  - `SMOKE_BASE_URL=https://antigravity-zeta-two.vercel.app npm run smoke:e2e`
+  - hosted `smoke:e2e` now covers reveal/copy of an already created family share link after the remote migration
 
 ## Launch-Critical
 

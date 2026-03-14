@@ -21,7 +21,8 @@ function readEnv(filePath) {
 }
 
 const env = readEnv(path.resolve(".env.local"));
-let baseUrl = env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const baseUrlOverride = process.env.SMOKE_BASE_URL?.trim() || null;
+let baseUrl = baseUrlOverride || env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
 const storageBucket = env.NEXT_PUBLIC_STORAGE_BUCKET || "tree-photos";
 const adminKey = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY;
@@ -264,6 +265,13 @@ async function findAvailablePort(preferredPort) {
 }
 
 async function startIsolatedSmokeServerIfNeeded() {
+  if (baseUrlOverride) {
+    return {
+      baseUrl,
+      async stop() {}
+    };
+  }
+
   if (!env.DEV_IMPERSONATE_USER_ID && !env.DEV_IMPERSONATE_USER_EMAIL) {
     return {
       baseUrl,

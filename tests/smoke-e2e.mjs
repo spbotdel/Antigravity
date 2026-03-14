@@ -23,7 +23,8 @@ function readEnv(filePath) {
 }
 
 const env = readEnv(path.resolve(".env.local"));
-let baseUrl = env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const baseUrlOverride = process.env.SMOKE_BASE_URL?.trim() || null;
+let baseUrl = baseUrlOverride || env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
 const storageBucket = env.NEXT_PUBLIC_STORAGE_BUCKET || "tree-photos";
 const adminKey = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY;
@@ -226,6 +227,13 @@ async function findAvailablePort(preferredPort) {
 }
 
 async function startIsolatedSmokeServerIfNeeded() {
+  if (baseUrlOverride) {
+    return {
+      baseUrl,
+      async stop() {}
+    };
+  }
+
   if (!env.DEV_IMPERSONATE_USER_ID && !env.DEV_IMPERSONATE_USER_EMAIL) {
     return {
       baseUrl,
@@ -810,6 +818,35 @@ async function createShareLink(page, treeId, label, options = {}) {
   return payload;
 }
 
+async function revealExistingShareLink(page, label, expectedUrl) {
+  const shareListSection = page.locator("section").filter({ hasText: "Ссылки для семейного просмотра" }).last();
+  const shareCard = shareListSection.locator(".members-entry-card").filter({ hasText: label }).first();
+  await shareCard.waitFor({ timeout: 30_000 });
+
+  const revealResponsePromise = page.waitForResponse(
+    (response) => response.request().method() === "GET" && response.url().includes("/api/share-links/"),
+    { timeout: 90_000 }
+  );
+  await shareCard.getByRole("button", { name: "Показать ссылку", exact: true }).click();
+  const revealResponse = await revealResponsePromise;
+  const revealPayload = await revealResponse.json().catch(() => ({}));
+  if (!revealResponse.ok) {
+    throw new Error(`Share link reveal failed: ${revealPayload?.error || revealResponse.status}`);
+  }
+
+  const revealedUrl = ((await shareCard.locator("p").filter({ hasText: "/tree/" }).last().textContent()) || "").trim();
+  if (revealedUrl !== expectedUrl) {
+    throw new Error(`Share link reveal mismatch: expected ${expectedUrl}, got ${revealedUrl}`);
+  }
+
+  await shareCard.getByRole("button", { name: "Скопировать", exact: true }).click();
+  await page.getByText("Семейная ссылка скопирована.").waitFor({ timeout: 30_000 });
+  const clipboardValue = await page.evaluate(async () => navigator.clipboard.readText());
+  if (clipboardValue.trim() !== expectedUrl) {
+    throw new Error(`Revealed share link clipboard mismatch: expected ${expectedUrl}, got ${clipboardValue}`);
+  }
+}
+
 async function revokeShareLink(page, shareLinkId, label, options = {}) {
   if (options.navigate !== false) {
     await page.goto(`${baseUrl}/tree/${slug}/members`, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
@@ -1036,6 +1073,7 @@ async function main() {
 
     const shareResult = await createShareLink(ownerPage, treeId, `Smoke Share ${timestamp}`, { navigate: false });
     const shareUrl = shareResult.url;
+    await revealExistingShareLink(ownerPage, shareResult.shareLink.label, shareUrl);
     await assertPrivateTreeBlocked(browser);
     await assertShareLinkVisibility(browser, shareUrl);
     await revokeShareLink(ownerPage, shareResult.shareLink.id, shareResult.shareLink.label, { navigate: false });

@@ -3,21 +3,28 @@
 <!-- FRAMEWORK:LAUNCH:START -->
 ## Current Launch Sync
 
-- Updated at (UTC): `2026-03-13 07:30:00Z`
+- Updated at (UTC): `2026-03-13 13:55:00Z`
 - Launch is currently blocked by post-UAT hardening, hosted validation, and recovery checks.
 - Current execution order:
-1. Implement Wave 1 fixes locally: access correctness, share-link reveal, and the main builder/media/archive blockers from the live pass.
-2. Deploy hosted staging and disable `DEV_IMPERSONATE_*` there.
-3. Run staged UAT for owner `EU`, helper `RF`, and read-only relative `RF`, including perceived speed observations from staging.
-4. Add invite email delivery via `Resend` with manual-copy fallback.
-5. Complete backup/restore rehearsal and the final launch checklist before release decision.
+1. Keep the local Wave 1 baseline green while switching validation to the hosted `Vercel` environment.
+2. Update hosted `NEXT_PUBLIC_SITE_URL` to the stable `Vercel` UAT URL and keep `DEV_IMPERSONATE_*` disabled there.
+3. Apply the new share-link reveal migration remotely so hosted reveal works without fallback.
+4. Finish `Resend` sender/domain verification and add final hosted sender vars.
+5. Run staged UAT for owner `EU`, helper `RF`, and read-only relative `RF`, including perceived speed observations from staging.
+6. Complete backup/restore rehearsal and the final launch checklist before release decision.
 
 ### Current Validation Signal
 
 - `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
 - `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
-- Latest `smoke:media` artifact `media-storage-report-1773322585848.json` is green.
-- Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
+- Local validation is green on:
+  - `npm test`
+  - `npm run build`
+  - `npm run smoke:media`
+  - `npm run smoke:auth`
+  - `npm run smoke:e2e`
+- Hosted `Vercel` deployment for the latest `main` commit is live:
+  - `https://antigravity-git-main-spbotdel-4945s-projects.vercel.app`
 <!-- FRAMEWORK:LAUNCH:END -->
 
 ## 1. Цель

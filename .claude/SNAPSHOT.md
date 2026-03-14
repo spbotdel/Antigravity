@@ -12,6 +12,7 @@
 - Current workstream: `Media Upload Flow V2` has shifted into post-UAT launch hardening
 - `Cloudflare R2` rollout is confirmed active for new uploads
 - Legacy media paths remain readable as compatibility paths during transition
+- Hosted `Vercel` project `antigravity` is created and the latest `main` deployment is live
 - Local validation baseline is green:
   - `npm run typecheck`
   - `npm test`
@@ -38,11 +39,19 @@
 - Full `shadcn` migration is deferred to Wave 3
 - Invite email delivery is planned for Wave 2 through `Resend`, while app-level invite URLs remain the source of truth
 - Application hosting target is `Vercel`; Cloudflare remains the storage plane via `R2`, not the app runtime target
+- The current hosted validation URL is the `main` branch alias:
+  `https://antigravity-git-main-spbotdel-4945s-projects.vercel.app`
+- The current public hosted validation surface is the production alias:
+  `https://antigravity-zeta-two.vercel.app`
 
 ## Current Focus
 
 - Local `Wave 1` hardening is largely complete and validated against unit/component/build plus local smoke flows
-- The next execution step is hosted `Vercel` setup and real staged validation
+- Hosted `Vercel` deployment is live and ready for real staged validation
+- Hosted smoke signal is partially green:
+  - `smoke:auth` passes against `https://antigravity-zeta-two.vercel.app`
+  - `smoke:e2e` passes against `https://antigravity-zeta-two.vercel.app`
+  - hosted `smoke:e2e` now also exercises `Показать ссылку` / `Скопировать` for an existing family share link after the remote reveal migration
 - Keep operational docs aligned with the current ownership split:
   - app hosting on `Vercel`
   - storage on client-owned `Cloudflare R2`
@@ -50,15 +59,15 @@
 
 ## Active Blockers
 
-- Hosted `Vercel` validation environment is not deployed yet
+- `Resend` domain is still pending DNS verification, so real email delivery is not fully enabled yet
+- The branch alias on `Vercel` currently responds with `401 Authentication Required`, so hosted UAT should use the production alias unless protection settings are changed
 - Live UAT for `Owner EU`, `Helper RF`, and `Relative RF` is not completed yet
 - Full database restore rehearsal is still pending on a machine or environment with `pg_dump` / `psql` or a safe staging target
 
 ## Next Steps
 
-- Prepare `Vercel` project settings and production-like env mapping
-- Deploy hosted `Vercel` environment and disable `DEV_IMPERSONATE_*` there
-- Run live UAT from the hosted environment using the launch checklist
+- Run hosted UAT from the live `Vercel` deployment
+- Add final `Resend` sender vars after domain verification
 - Complete the full restore rehearsal in a suitable environment
 - Review UAT and recovery findings and update launch decision docs
 - Close the cycle with `/fi` after the next concrete operational pass

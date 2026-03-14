@@ -38,7 +38,8 @@ function readEnv(filePath) {
 
 const env = readEnv(path.resolve(".env.local"));
 const cliOptions = parseCliOptions(process.argv.slice(2));
-let baseUrl = env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const baseUrlOverride = process.env.SMOKE_BASE_URL?.trim() || null;
+let baseUrl = baseUrlOverride || env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const mediaStorageBackend = env.MEDIA_STORAGE_BACKEND || "supabase";
 const cloudflareRolloutAt = env.CF_R2_ROLLOUT_AT ? Date.parse(env.CF_R2_ROLLOUT_AT) : null;
 const shouldUseCloudflareForNewMedia =
@@ -180,6 +181,13 @@ async function findAvailablePort(preferredPort) {
 }
 
 async function startIsolatedMediaSmokeServer() {
+  if (baseUrlOverride) {
+    return {
+      baseUrl,
+      async stop() {}
+    };
+  }
+
   const smokeServerPort = await findAvailablePort(defaultSmokeServerPort);
   const nextBaseUrl = `http://127.0.0.1:${smokeServerPort}`;
   const nextBinPath = path.resolve("node_modules", "next", "dist", "bin", "next");
