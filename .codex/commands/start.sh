@@ -8,7 +8,61 @@ DEV_SERVER_PORT=3000
 DEV_SERVER_URL="http://localhost:${DEV_SERVER_PORT}/"
 DEV_SERVER_PID_FILE=".tmp/codex-dev-server.pid"
 
-is_port_open() {
+is_wsl() {
+  if [ -n "${WSL_DISTRO_NAME:-}" ]; then
+    return 0
+  fi
+
+  grep -qiE "(microsoft|wsl)" /proc/version 2>/dev/null
+}
+
+has_windows_powershell() {
+  command -v powershell.exe >/dev/null 2>&1
+}
+
+should_use_windows_host_checks() {
+  is_wsl && has_windows_powershell
+}
+
+encode_powershell_script() {
+  local script="$1"
+
+  python3 - "$script" <<'PY'
+import base64
+import sys
+
+print(base64.b64encode(sys.argv[1].encode("utf-16le")).decode("ascii"))
+PY
+}
+
+run_windows_powershell() {
+  local script="$1"
+  local encoded=""
+
+  if ! has_windows_powershell; then
+    return 1
+  fi
+
+  encoded="$(encode_powershell_script "$script")"
+  powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "$encoded"
+}
+
+ps_escape() {
+  printf "%s" "$1" | sed "s/'/''/g"
+}
+
+to_windows_path() {
+  local path="$1"
+
+  if command -v wslpath >/dev/null 2>&1; then
+    wslpath -w "$path"
+    return 0
+  fi
+
+  printf "%s" "$path"
+}
+
+is_port_open_local() {
   local port="$1"
 
   python3 - "$port" <<'PY'
@@ -24,6 +78,42 @@ finally:
     sock.close()
 sys.exit(0 if rc == 0 else 1)
 PY
+}
+
+is_port_open_windows() {
+  local port="$1"
+  local script=""
+
+  printf -v script '$port = %s; try { $client = New-Object System.Net.Sockets.TcpClient; $iar = $client.BeginConnect("127.0.0.1", $port, $null, $null); if (-not $iar.AsyncWaitHandle.WaitOne(500)) { $client.Close(); exit 1 }; $client.EndConnect($iar) | Out-Null; $client.Close(); exit 0 } catch { exit 1 }' "$port"
+  run_windows_powershell "$script" >/dev/null 2>&1
+}
+
+is_port_open() {
+  local port="$1"
+
+  if is_port_open_local "$port"; then
+    return 0
+  fi
+
+  if should_use_windows_host_checks && is_port_open_windows "$port"; then
+    return 0
+  fi
+
+  return 1
+}
+
+windows_host_server_only() {
+  local port="$1"
+
+  if ! should_use_windows_host_checks; then
+    return 1
+  fi
+
+  if is_port_open_local "$port"; then
+    return 1
+  fi
+
+  is_port_open_windows "$port"
 }
 
 wait_for_port() {
@@ -42,7 +132,7 @@ wait_for_port() {
   return 1
 }
 
-is_http_ready() {
+is_http_ready_local() {
   local url="$1"
 
   python3 - "$url" <<'PY'
@@ -64,6 +154,30 @@ except Exception:
 
 sys.exit(0)
 PY
+}
+
+is_http_ready_windows() {
+  local url="$1"
+  local script=""
+  local escaped_url=""
+
+  escaped_url="$(ps_escape "$url")"
+  script="\$ProgressPreference = 'SilentlyContinue'; \$url = '${escaped_url}'; try { Invoke-WebRequest -Uri \$url -UseBasicParsing -Method Get -TimeoutSec 2 | Out-Null; exit 0 } catch [System.Net.WebException] { if (\$_.Exception.Response) { exit 0 }; exit 1 } catch { exit 1 }"
+  run_windows_powershell "$script" >/dev/null 2>&1
+}
+
+is_http_ready() {
+  local url="$1"
+
+  if is_http_ready_local "$url"; then
+    return 0
+  fi
+
+  if should_use_windows_host_checks && is_http_ready_windows "$url"; then
+    return 0
+  fi
+
+  return 1
 }
 
 wait_for_http() {
@@ -89,7 +203,35 @@ process_alive() {
     return 1
   fi
 
-  kill -0 "$pid" >/dev/null 2>&1
+  if kill -0 "$pid" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if should_use_windows_host_checks; then
+    local script=""
+    printf -v script '$pid = %s; try { Get-Process -Id $pid -ErrorAction Stop | Out-Null; exit 0 } catch { exit 1 }' "$pid"
+    run_windows_powershell "$script" >/dev/null 2>&1
+    return $?
+  fi
+
+  return 1
+}
+
+tracked_pid_mismatches_windows_host() {
+  local pid="$1"
+
+  if ! windows_host_server_only "$DEV_SERVER_PORT"; then
+    return 1
+  fi
+
+  local script=""
+  printf -v script '$pid = %s; try { Get-Process -Id $pid -ErrorAction Stop | Out-Null; exit 0 } catch { exit 1 }' "$pid"
+
+  if run_windows_powershell "$script" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  return 0
 }
 
 read_dev_pid() {
@@ -148,13 +290,14 @@ print_dev_server_diagnostics() {
 
 ensure_local_dev_server() {
   local tracked_pid=""
+  local dev_pid=""
 
   if [ "${CODEX_AUTO_DEV_SERVER:-1}" = "0" ]; then
     return 0
   fi
 
   tracked_pid="$(read_dev_pid || true)"
-  if [ -n "$tracked_pid" ] && ! process_alive "$tracked_pid"; then
+  if [ -n "$tracked_pid" ] && { ! process_alive "$tracked_pid" || tracked_pid_mismatches_windows_host "$tracked_pid"; }; then
     clear_dev_pid
     tracked_pid=""
   fi
@@ -176,23 +319,39 @@ ensure_local_dev_server() {
   fi
 
   if ! command -v npm >/dev/null 2>&1; then
-    echo "[codex] warning: npm not found. cannot auto-start ${DEV_SERVER_URL}"
-    return 0
+    if ! should_use_windows_host_checks; then
+      echo "[codex] warning: npm not found. cannot auto-start ${DEV_SERVER_URL}"
+      return 0
+    fi
   fi
 
   echo "[codex] starting dev server at ${DEV_SERVER_URL}"
 
   set +e
-  if command -v nohup >/dev/null 2>&1; then
+  if should_use_windows_host_checks; then
+    local root_dir_win=""
+    local stdout_win=""
+    local stderr_win=""
+    local script=""
+
+    root_dir_win="$(ps_escape "$(to_windows_path "$ROOT_DIR")")"
+    stdout_win="$(ps_escape "$(to_windows_path "$ROOT_DIR/.next-dev.log")")"
+    stderr_win="$(ps_escape "$(to_windows_path "$ROOT_DIR/.next-dev.err.log")")"
+    script="\$wd = '${root_dir_win}'; \$stdout = '${stdout_win}'; \$stderr = '${stderr_win}'; \$proc = Start-Process -FilePath 'npm.cmd' -ArgumentList @('run', 'dev', '--', '--hostname', '0.0.0.0', '--port', '${DEV_SERVER_PORT}') -WorkingDirectory \$wd -RedirectStandardOutput \$stdout -RedirectStandardError \$stderr -PassThru; Write-Output \$proc.Id"
+    dev_pid="$(run_windows_powershell "$script" 2>/dev/null | tr -d '\r' | tail -n 1)"
+    START_EXIT=$?
+  elif command -v nohup >/dev/null 2>&1; then
     nohup npm run dev -- --hostname 0.0.0.0 --port "$DEV_SERVER_PORT" > .next-dev.log 2> .next-dev.err.log < /dev/null &
+    dev_pid="$!"
+    START_EXIT=$?
   else
     npm run dev -- --hostname 0.0.0.0 --port "$DEV_SERVER_PORT" > .next-dev.log 2> .next-dev.err.log &
+    dev_pid="$!"
+    START_EXIT=$?
   fi
-  DEV_PID="$!"
-  START_EXIT=$?
   set -e
 
-  if [ "$START_EXIT" -ne 0 ] || [ -z "$DEV_PID" ]; then
+  if [ "$START_EXIT" -ne 0 ] || [ -z "$dev_pid" ]; then
     echo "[codex] warning: failed to launch dev server."
     print_dev_server_diagnostics
     print_dev_server_recovery_hint
@@ -200,14 +359,14 @@ ensure_local_dev_server() {
     return 1
   fi
 
-  write_dev_pid "$DEV_PID"
+  write_dev_pid "$dev_pid"
 
   if wait_for_port "$DEV_SERVER_PORT" 20 && wait_for_http "$DEV_SERVER_URL" 60; then
-    echo "[codex] dev server ready at ${DEV_SERVER_URL} (pid ${DEV_PID})"
+    echo "[codex] dev server ready at ${DEV_SERVER_URL} (pid ${dev_pid})"
     return 0
   fi
 
-  if ! process_alive "$DEV_PID"; then
+  if ! process_alive "$dev_pid"; then
     clear_dev_pid
   fi
 

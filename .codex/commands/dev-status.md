@@ -10,7 +10,8 @@ What happens:
 1. Checks whether TCP port `3000` is open.
 2. Checks whether `http://localhost:3000/` responds.
 3. Validates the tracked PID in `.tmp/codex-dev-server.pid`.
-4. Prints the tail of `.next-dev.log` and `.next-dev.err.log` when unhealthy.
+4. When running from `WSL`, falls back to Windows-host port/HTTP/PID checks through `powershell.exe`.
+5. Prints the tail of `.next-dev.log` and `.next-dev.err.log` when unhealthy.
 
 Exit codes:
 - `0`: healthy dev server.
