@@ -44,6 +44,8 @@ const admin = () => createAdminSupabaseClient();
 const objectStorageClients = new Map<string, S3Client>();
 const execFileAsync = promisify(execFile);
 const OBJECT_STORAGE_HTTP_MAX_BUFFER = 1024 * 1024 * 4;
+const SIGNED_HTTP_TIMEOUT_MS = 15000;
+const SIGNED_HTTP_FALLBACK_ERROR_CODES = new Set(["UND_ERR_CONNECT_TIMEOUT", "ETIMEDOUT", "ECONNRESET", "EAI_AGAIN", "ENOTFOUND"]);
 const PHOTO_VARIANT_NAMES: MediaVariantName[] = ["thumb", "small", "medium"];
 
 const REPOSITORY_NETWORK_ERROR_MARKERS = ["SUPABASE_UNAVAILABLE", "fetch failed", "connect timeout", "timed out", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"];
@@ -529,7 +531,78 @@ async function createObjectStorageSignedReadUrl(storagePath: string, config = ge
   );
 }
 
-async function runSignedHttpRequest(input: {
+class SignedHttpFallbackError extends Error {
+  status: number;
+
+  constructor(status: number, message: string, cause?: unknown) {
+    super(message);
+    this.name = "SignedHttpFallbackError";
+    this.status = status;
+    if (cause !== undefined) {
+      (this as Error & { cause?: unknown }).cause = cause;
+    }
+  }
+}
+
+function shouldUsePowerShellSignedHttpFallback(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const cause = error.cause as { code?: string } | undefined;
+  return error.message.includes("fetch failed") || (cause?.code ? SIGNED_HTTP_FALLBACK_ERROR_CODES.has(cause.code) : false);
+}
+
+function canUsePowerShellSignedHttpFallback() {
+  return process.platform === "win32";
+}
+
+async function runNativeSignedHttpRequest(input: {
+  url: string;
+  method: "PUT" | "DELETE";
+  contentType?: string;
+  bodyBuffer?: Buffer;
+}) {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let timedOut = false;
+
+  timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, SIGNED_HTTP_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(input.url, {
+      method: input.method,
+      headers: input.contentType
+        ? {
+            "content-type": input.contentType
+          }
+        : undefined,
+      body: input.bodyBuffer ? new Uint8Array(input.bodyBuffer) : undefined,
+      signal: controller.signal
+    });
+
+    return { status: response.status };
+  } catch (error) {
+    if (timedOut) {
+      throw new SignedHttpFallbackError(504, "Signed upload request timed out.", error);
+    }
+
+    if (shouldUsePowerShellSignedHttpFallback(error)) {
+      throw new SignedHttpFallbackError(503, "Signed upload request failed.", error);
+    }
+
+    throw error;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function runPowerShellSignedHttpRequest(input: {
   url: string;
   method: "PUT" | "DELETE";
   contentType?: string;
@@ -544,7 +617,7 @@ async function runSignedHttpRequest(input: {
         }
       : {},
     bodyBase64: input.bodyBuffer ? input.bodyBuffer.toString("base64") : "",
-    timeoutMs: 15000
+    timeoutMs: SIGNED_HTTP_TIMEOUT_MS
   };
   const payloadJson = JSON.stringify(payload);
   let payloadInput = Buffer.from(payloadJson, "utf8").toString("base64");
@@ -563,7 +636,7 @@ async function runSignedHttpRequest(input: {
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, payloadInput],
       {
         maxBuffer: OBJECT_STORAGE_HTTP_MAX_BUFFER,
-        timeout: 20000
+        timeout: SIGNED_HTTP_TIMEOUT_MS + 5000
       }
     );
 
@@ -572,6 +645,31 @@ async function runSignedHttpRequest(input: {
     if (payloadFilePath) {
       await fs.unlink(payloadFilePath).catch(() => {});
     }
+  }
+}
+
+async function runSignedHttpRequest(input: {
+  url: string;
+  method: "PUT" | "DELETE";
+  contentType?: string;
+  bodyBuffer?: Buffer;
+}) {
+  try {
+    return await runNativeSignedHttpRequest(input);
+  } catch (error) {
+    if (canUsePowerShellSignedHttpFallback() && error instanceof SignedHttpFallbackError) {
+      try {
+        return await runPowerShellSignedHttpRequest(input);
+      } catch {
+        return { status: error.status };
+      }
+    }
+
+    if (error instanceof SignedHttpFallbackError) {
+      return { status: error.status };
+    }
+
+    throw error;
   }
 }
 
@@ -588,6 +686,9 @@ export async function uploadFileToSignedUrl(input: {
   });
 
   if (result.status < 200 || result.status >= 300) {
+    if (result.status >= 500) {
+      throw new AppError(503, "Сервер не смог связаться с object storage. Попробуйте еще раз.");
+    }
     throw new AppError(400, `Не удалось загрузить файл в storage (status ${result.status}).`);
   }
 }
