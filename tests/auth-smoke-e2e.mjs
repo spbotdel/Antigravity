@@ -446,15 +446,38 @@ async function ensureTreeExistsForOwner(ownerUserId) {
 }
 
 async function login(page, userEmail, userPassword, nextPath = "/dashboard") {
-  const nextUrl = new URL(`${baseUrl}/auth/login`);
-  nextUrl.searchParams.set("next", nextPath);
-  await page.goto(nextUrl.toString(), { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.getByRole("button", { name: "Войти" }).waitFor({ timeout: 30_000 });
-  await page.waitForTimeout(750);
-  await page.getByLabel("Почта").fill(userEmail);
-  await page.getByLabel("Пароль").fill(userPassword);
-  await page.getByRole("button", { name: "Войти" }).click();
-  await page.waitForURL(`**${nextPath}`, { timeout: 90_000, waitUntil: "domcontentloaded" });
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const nextUrl = new URL(`${baseUrl}/auth/login`);
+    nextUrl.searchParams.set("next", nextPath);
+    await page.goto(nextUrl.toString(), { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await page.getByRole("button", { name: "Войти" }).waitFor({ timeout: 30_000 });
+    await page.waitForTimeout(750);
+    await page.getByLabel("Почта").fill(userEmail);
+    await page.getByLabel("Пароль").fill(userPassword);
+    await page.getByRole("button", { name: "Войти" }).click();
+
+    try {
+      await page.waitForURL(`**${nextPath}`, { timeout: 90_000, waitUntil: "domcontentloaded" });
+      return;
+    } catch (error) {
+      lastError = error;
+      const errorText = ((await page.locator(".form-error").first().textContent().catch(() => "")) || "").trim();
+      const isOperationalAuthFailure =
+        errorText === "{}" ||
+        errorText.includes("Не удается связаться с Supabase") ||
+        errorText.includes("fetch failed") ||
+        errorText.includes("SUPABASE_UNAVAILABLE");
+      if (attempt === 3 || !isOperationalAuthFailure) {
+        throw error;
+      }
+      console.warn(`login retry ${attempt}/2`, errorText || "transient auth failure");
+      await page.waitForTimeout(attempt * 3000);
+    }
+  }
+
+  throw lastError;
 }
 
 async function signOut(page) {

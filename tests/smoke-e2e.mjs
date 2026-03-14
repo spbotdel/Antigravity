@@ -424,6 +424,15 @@ async function createUser(kind) {
   return { id: data.user.id, email, password };
 }
 
+function isOperationalAuthErrorText(errorText) {
+  return (
+    errorText === "{}" ||
+    errorText.includes("Не удается связаться с Supabase") ||
+    errorText.includes("fetch failed") ||
+    errorText.includes("SUPABASE_UNAVAILABLE")
+  );
+}
+
 async function provisionTreeForOwner(ownerUserId) {
   const treeRows = await adminRestJson("trees?select=id", {
     method: "POST",
@@ -610,15 +619,33 @@ async function deleteUserWithRetry(userId) {
 }
 
 async function login(page, email, password, nextPath = "/dashboard") {
-  const nextUrl = new URL(`${baseUrl}/auth/login`);
-  nextUrl.searchParams.set("next", nextPath);
-  await page.goto(nextUrl.toString(), { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
-  await page.getByRole("button", { name: "Войти" }).waitFor({ timeout: 30_000 });
-  await page.waitForTimeout(750);
-  await page.getByLabel("Почта").fill(email);
-  await page.getByLabel("Пароль").fill(password);
-  await page.getByRole("button", { name: "Войти" }).click();
-  await page.waitForURL(`**${nextPath}`, { timeout: NAVIGATION_TIMEOUT_MS, waitUntil: "domcontentloaded" });
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const nextUrl = new URL(`${baseUrl}/auth/login`);
+    nextUrl.searchParams.set("next", nextPath);
+    await page.goto(nextUrl.toString(), { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
+    await page.getByRole("button", { name: "Войти" }).waitFor({ timeout: 30_000 });
+    await page.waitForTimeout(750);
+    await page.getByLabel("Почта").fill(email);
+    await page.getByLabel("Пароль").fill(password);
+    await page.getByRole("button", { name: "Войти" }).click();
+
+    try {
+      await page.waitForURL(`**${nextPath}`, { timeout: NAVIGATION_TIMEOUT_MS, waitUntil: "domcontentloaded" });
+      return;
+    } catch (error) {
+      lastError = error;
+      const errorText = ((await page.locator(".form-error").first().textContent().catch(() => "")) || "").trim();
+      if (attempt === 3 || !isOperationalAuthErrorText(errorText)) {
+        throw error;
+      }
+      console.warn(`login retry ${attempt}/2`, errorText || "transient auth failure");
+      await page.waitForTimeout(attempt * 3000);
+    }
+  }
+
+  throw lastError;
 }
 
 async function createPerson(page, values) {
