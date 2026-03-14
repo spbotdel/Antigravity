@@ -214,6 +214,8 @@ export function TreeMediaArchiveClient({
   const [albumDescription, setAlbumDescription] = useState("");
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(initialView === "albums" ? initialAlbumId : null);
   const [reviewAlbumId, setReviewAlbumId] = useState<string>("");
+  const [reviewVisibility, setReviewVisibility] = useState<"public" | "members">("members");
+  const [reviewCaption, setReviewCaption] = useState("");
   const [pendingUploads, setPendingUploads] = useState<PendingArchiveUploadItem[]>([]);
   const [isUploadReviewOpen, setIsUploadReviewOpen] = useState(false);
   const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
@@ -270,6 +272,20 @@ export function TreeMediaArchiveClient({
       document.body.style.overflow = previousOverflow;
     };
   }, [isMediaViewerOpen]);
+
+  useEffect(() => {
+    if (!status) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setStatus((currentStatus) => (currentStatus === status ? null : currentStatus));
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [status]);
 
   const photoMedia = useMemo(() => archiveMedia.filter((asset) => asset.kind === "photo"), [archiveMedia]);
   const videoMedia = useMemo(() => archiveMedia.filter((asset) => asset.kind === "video"), [archiveMedia]);
@@ -545,7 +561,11 @@ export function TreeMediaArchiveClient({
     }
   }
 
-  async function uploadArchiveFiles(files: PendingArchiveUploadItem[], manualAlbumId?: string | null) {
+  async function uploadArchiveFiles(
+    files: PendingArchiveUploadItem[],
+    manualAlbumId?: string | null,
+    uploadOptions?: { visibility: "public" | "members"; caption: string }
+  ) {
     for (let index = 0; index < files.length; index += 1) {
       const uploadItem = files[index];
       const file = uploadItem.file;
@@ -554,9 +574,9 @@ export function TreeMediaArchiveClient({
         treeId,
         filename: file.name,
         mimeType: file.type,
-        visibility: "members",
+        visibility: uploadOptions?.visibility || "members",
         title,
-        caption: ""
+        caption: uploadOptions?.caption || ""
       })) as ArchiveUploadTarget;
 
       setActiveUploads((current) =>
@@ -612,9 +632,9 @@ export function TreeMediaArchiveClient({
           variant: item.variant,
           storagePath: item.path
         })),
-        visibility: "members",
+        visibility: uploadOptions?.visibility || "members",
         title,
-        caption: "",
+        caption: uploadOptions?.caption || "",
         mimeType: file.type,
         sizeBytes: file.size
       });
@@ -653,9 +673,10 @@ export function TreeMediaArchiveClient({
             : item
         )
       );
-      setStatus(completePayload.message || "Материал сохранен в семейный архив.");
       setError(null);
     }
+
+    setStatus(files.length === 1 ? "Материал сохранен в семейный архив." : `Материалы сохранены: ${files.length}.`);
   }
 
   async function handleArchiveFileSelection(event: ChangeEvent<HTMLInputElement>) {
@@ -714,6 +735,8 @@ export function TreeMediaArchiveClient({
     }
     setPendingUploads([]);
     setReviewAlbumId("");
+    setReviewVisibility("members");
+    setReviewCaption("");
     setIsDiscardConfirmOpen(false);
     setIsUploadReviewOpen(false);
   }
@@ -731,6 +754,10 @@ export function TreeMediaArchiveClient({
         file: item.file,
         previewUrl: item.previewUrl
       }));
+      const uploadOptions = {
+        visibility: reviewVisibility,
+        caption: reviewCaption.trim()
+      };
       setActiveUploads(
         uploads.map((item) => ({
           id: item.id,
@@ -749,16 +776,22 @@ export function TreeMediaArchiveClient({
       }
       setPendingUploads([]);
       setReviewAlbumId("");
+      setReviewVisibility("members");
+      setReviewCaption("");
       setIsUploadReviewOpen(false);
       setIsDiscardConfirmOpen(false);
-      setStatus(`Материалы поставлены в загрузку: ${uploads.length}.`);
+      setStatus(null);
       setError(null);
-      void uploadArchiveFiles(uploads, reviewTargetAlbumId).catch((uploadError) => {
+      void uploadArchiveFiles(uploads, reviewTargetAlbumId, uploadOptions).catch((uploadError) => {
+        setStatus(null);
         setError(uploadError instanceof Error ? uploadError.message : "Не удалось загрузить материалы в архив.");
       }).finally(() => {
         setIsSavingUploads(false);
+        setActiveUploads([]);
       });
     } catch (uploadError) {
+      setStatus(null);
+      setActiveUploads([]);
       setError(uploadError instanceof Error ? uploadError.message : "Не удалось загрузить материалы в архив.");
     }
 
@@ -811,7 +844,6 @@ export function TreeMediaArchiveClient({
       </div>
 
       {error ? <p className="form-error">{error}</p> : null}
-      {status ? <p className="form-success">{status}</p> : null}
       {activeUploads.length ? (
         <div className="archive-upload-panel">
           <strong>{activeUpload ? `Загрузка ${activeUpload.progressPercent}%` : "Загрузка завершена"}</strong>
@@ -1167,6 +1199,24 @@ export function TreeMediaArchiveClient({
                 </select>
               </label>
             ) : null}
+            <div className="builder-review-controls">
+              <label className="archive-field">
+                Видимость
+                <select value={reviewVisibility} onChange={(event) => setReviewVisibility(event.target.value as "public" | "members")}>
+                  <option value="members">Только участникам</option>
+                  <option value="public">Всем по ссылке</option>
+                </select>
+              </label>
+              <label className="archive-field">
+                Подпись
+                <textarea
+                  rows={3}
+                  value={reviewCaption}
+                  onChange={(event) => setReviewCaption(event.target.value)}
+                  placeholder="Общая подпись для выбранных файлов, если она нужна"
+                />
+              </label>
+            </div>
             <div className="archive-review-body">
               <div className={`archive-grid archive-review-grid${pendingUploads.length > 8 ? " archive-review-grid-dense" : ""}`}>
                 {pendingUploads.map((item) => (
@@ -1241,6 +1291,12 @@ export function TreeMediaArchiveClient({
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {status ? (
+        <div className="builder-status-toast" role="status" aria-live="polite">
+          {status}
         </div>
       ) : null}
     </section>

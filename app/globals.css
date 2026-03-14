@@ -3090,6 +3090,11 @@ textarea {
   flex-wrap: wrap;
 }
 
+.builder-review-controls {
+  display: grid;
+  gap: 12px;
+}
+
 .builder-create-context-card {
   display: flex;
   align-items: center;

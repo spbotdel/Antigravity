@@ -368,8 +368,6 @@ describe("builder workspace", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Проверка файлов перед загрузкой" })).not.toBeInTheDocument();
     });
-
-    expect(screen.getByText("Файлы не выбраны")).toBeInTheDocument();
   });
 
   it("shows a video preview tile in the upload review dialog for local video files", async () => {

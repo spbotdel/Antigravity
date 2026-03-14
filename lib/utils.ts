@@ -154,15 +154,28 @@ export async function uploadFileWithTransportContract(input: {
   const variantErrorMessage = input.variantErrorMessage || "Не удалось подготовить preview-варианты.";
 
   if (input.target.uploadMode === "direct") {
-    await uploadFileWithXhr({
-      url: input.target.signedUrl,
-      method: "PUT",
-      body: input.file,
-      contentType: input.file.type || undefined,
-      onProgress: input.onProgress,
-      errorMessage: directErrorMessage,
-      responseErrorMessage: directErrorMessage,
-    });
+    try {
+      await uploadFileWithXhr({
+        url: input.target.signedUrl,
+        method: "PUT",
+        body: input.file,
+        contentType: input.file.type || undefined,
+        onProgress: input.onProgress,
+        errorMessage: directErrorMessage,
+        responseErrorMessage: directErrorMessage,
+      });
+    } catch {
+      await proxyMediaUpload({
+        file: input.file,
+        signedUrl: input.target.signedUrl,
+        contentType: input.file.type,
+        variantTargets: input.target.variantTargets,
+        onProgress: input.onProgress,
+        errorMessage: proxyErrorMessage,
+        responseErrorMessage: proxyResponseErrorMessage,
+      });
+      return;
+    }
 
     if (input.target.variantUploadMode === "server_proxy" && input.target.variantTargets?.length) {
       await proxyMediaUpload({

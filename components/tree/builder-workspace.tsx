@@ -128,7 +128,6 @@ function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
   if (scope === "photo") {
     return {
       heading: "Фото",
-      description: "Фотографии добавляются в галерею человека и сразу доступны для выбора аватара и полного просмотра.",
       inputLabel: "Фотографии с устройства",
       accept: "image/*",
       chooseButtonLabel: "Загрузить фото"
@@ -138,7 +137,6 @@ function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
   if (scope === "video") {
     return {
       heading: "Видео",
-      description: "Локальные видео загружаются отдельным потоком, а ссылки на внешний плеер остаются ниже как дополнительный сценарий.",
       inputLabel: "Видео с устройства",
       accept: "video/*",
       chooseButtonLabel: "Загрузить видео"
@@ -147,7 +145,6 @@ function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
 
   return {
     heading: "Документы",
-    description: "Сканы, письма и другие документы остаются рядом с биографией и открываются отдельной ссылкой.",
     inputLabel: "Документы",
     accept: ".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx",
     chooseButtonLabel: "Загрузить документы"
@@ -208,37 +205,6 @@ function formatMediaUploadBytes(value: number | null) {
   }
 
   return `${Math.round(value)} Б`;
-}
-
-function formatSelectedMediaFilesSummary(files: File[]) {
-  if (!files.length) {
-    return "Файлы не выбраны";
-  }
-
-  if (files.length === 1) {
-    return `Выбран 1 файл · ${formatMediaUploadBytes(files[0].size)}`;
-  }
-
-  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
-  return `Выбрано ${files.length} файлов · ${formatMediaUploadBytes(totalBytes)}`;
-}
-
-function formatSelectedMediaFilesHint(files: File[], scope: BuilderUploadScope) {
-  if (!files.length) {
-    if (scope === "photo") {
-      return "Можно выбрать сразу несколько фотографий для карточки человека.";
-    }
-
-    if (scope === "video") {
-      return "Можно выбрать сразу несколько видео с устройства.";
-    }
-
-    return "Документы добавляются отдельным набором и остаются рядом с биографией.";
-  }
-
-  return scope === "document"
-    ? "Проверьте выбранные файлы и сохраните набор."
-    : "Проверьте превью выбранных файлов перед сохранением.";
 }
 
 function formatPhotoUploadCountLabel(count: number) {
@@ -465,6 +431,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [pendingMediaUploads, setPendingMediaUploads] = useState<PendingMediaUploadItem[]>([]);
   const [isMediaUploadReviewOpen, setIsMediaUploadReviewOpen] = useState(false);
   const [isMediaUploadDiscardConfirmOpen, setIsMediaUploadDiscardConfirmOpen] = useState(false);
+  const [reviewMediaVisibility, setReviewMediaVisibility] = useState<"public" | "members">("public");
+  const [reviewMediaCaption, setReviewMediaCaption] = useState("");
   const [expandedGalleryMode, setExpandedGalleryMode] = useState<"photo" | "video" | null>(null);
   const [canvasHeight, setCanvasHeight] = useState(980);
   const storageKeys = useMemo(
@@ -546,9 +514,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     ? renderSnapshot.partnerships.filter((partnership) => partnership.person_a_id === selectedPerson.id || partnership.person_b_id === selectedPerson.id)
     : [];
   const isSelectedRoot = Boolean(selectedPerson && visualRootPersonId === selectedPerson.id);
-  const selectedMediaFiles = pendingMediaUploads.map((item) => item.file);
-  const selectedMediaFilesSummary = formatSelectedMediaFilesSummary(selectedMediaFiles);
-  const selectedMediaFilesHint = formatSelectedMediaFilesHint(selectedMediaFiles, activeUploadScope);
   const inspectorTitle = createModeActive ? createHeading.title : selectedPerson ? selectedPerson.full_name : "Выберите человека";
   const inspectorDescription = createModeActive
     ? "Заполните поля и сохраните новый блок."
@@ -1413,19 +1378,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   }
 
   function getMediaUploadFormValues() {
-    const formElement = mediaUploadFormRef.current;
-    if (!formElement) {
-      return {
-        title: "",
-        visibility: "public",
-        caption: ""
-      };
-    }
-
-    const form = new FormData(formElement);
     return {
-      visibility: String(form.get("visibility") || "public"),
-      caption: String(form.get("caption") || "")
+      visibility: reviewMediaVisibility,
+      caption: reviewMediaCaption.trim()
     };
   }
 
@@ -1460,6 +1415,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setPendingMediaUploads([]);
     setIsMediaUploadReviewOpen(false);
     setIsMediaUploadDiscardConfirmOpen(false);
+    setReviewMediaVisibility("public");
+    setReviewMediaCaption("");
 
     if (mediaFileInputRef.current) {
       mediaFileInputRef.current.value = "";
@@ -1761,7 +1718,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       <div className="builder-section-block">
         <div className="builder-block-heading">
           <strong>{config.heading}</strong>
-          <p className="muted-copy">{config.description}</p>
         </div>
         <form ref={mediaUploadFormRef} className="stack-form builder-form-grid">
           <div className="builder-field-span builder-file-picker">
@@ -1788,28 +1744,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               >
                 {config.chooseButtonLabel}
               </button>
-              <div className="builder-file-picker-copy">
-                <strong>{selectedMediaFilesSummary}</strong>
-                <span>{selectedMediaFilesHint}</span>
-              </div>
             </div>
           </div>
-          <label>
-            Видимость
-            <select name="visibility" defaultValue="public">
-              <option value="public">Всем по ссылке</option>
-              <option value="members">Только участникам</option>
-            </select>
-          </label>
-          <label className="builder-field-span">
-            Подпись
-            <textarea name="caption" rows={3} placeholder="Общая подпись для выбранных файлов, если она нужна" />
-          </label>
           <div className="builder-upload-feedback builder-field-span">
             <p className="builder-media-limits-note">
               За один раз: до {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(getBuilderUploadScopeFileSizeLimit(scope))} на файл.
             </p>
-            {pendingMediaUploads.length ? <p className="muted-copy">Набор подготовлен, но еще не сохранен. Перед отправкой можно убрать лишние файлы или добрать еще.</p> : null}
           </div>
         </form>
       </div>
@@ -2556,6 +2496,25 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                   </article>
                 ))}
               </div>
+            </div>
+            <div className="builder-review-controls">
+              <label>
+                Видимость
+                <select value={reviewMediaVisibility} onChange={(event) => setReviewMediaVisibility(event.target.value as "public" | "members")} disabled={isUploadingMedia}>
+                  <option value="public">Всем по ссылке</option>
+                  <option value="members">Только участникам</option>
+                </select>
+              </label>
+              <label>
+                Подпись
+                <textarea
+                  rows={3}
+                  value={reviewMediaCaption}
+                  onChange={(event) => setReviewMediaCaption(event.target.value)}
+                  placeholder="Общая подпись для выбранных файлов, если она нужна"
+                  disabled={isUploadingMedia}
+                />
+              </label>
             </div>
             <div className="archive-action-bar archive-review-footer">
               <input

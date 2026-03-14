@@ -10,6 +10,7 @@ type MockProgressEvent = {
 
 class MockXMLHttpRequest {
   static requests: MockXMLHttpRequest[] = [];
+  static responders: Array<(request: MockXMLHttpRequest) => void> = [];
 
   method = "";
   url = "";
@@ -38,6 +39,12 @@ class MockXMLHttpRequest {
     this.body = body;
     MockXMLHttpRequest.requests.push(this);
 
+    const responder = MockXMLHttpRequest.responders.shift();
+    if (responder) {
+      responder(this);
+      return;
+    }
+
     if (body instanceof File && this.upload.onprogress) {
       this.upload.onprogress({
         lengthComputable: true,
@@ -58,6 +65,7 @@ const originalXmlHttpRequest = globalThis.XMLHttpRequest;
 describe("upload transport contract", () => {
   beforeEach(() => {
     MockXMLHttpRequest.requests = [];
+    MockXMLHttpRequest.responders = [];
     globalThis.XMLHttpRequest = MockXMLHttpRequest as unknown as typeof XMLHttpRequest;
   });
 
@@ -143,5 +151,41 @@ describe("upload transport contract", () => {
     expect(MockXMLHttpRequest.requests[0].method).toBe("PUT");
     expect(MockXMLHttpRequest.requests[0].url).toBe("https://example.com/video-original");
     expect(MockXMLHttpRequest.requests[0].body).toBe(file);
+  });
+
+  it("falls back to proxy upload when direct browser upload fails", async () => {
+    const file = new File([new Uint8Array([9, 8, 7])], "family-photo.png", { type: "image/png" });
+    MockXMLHttpRequest.responders.push((request) => {
+      request.onerror?.();
+    });
+
+    await uploadFileWithTransportContract({
+      target: {
+        signedUrl: "https://example.com/original",
+        configuredBackend: "cloudflare_r2",
+        resolvedUploadBackend: "cloudflare_r2",
+        rolloutState: "cloudflare_rollout_active",
+        forceProxyUpload: false,
+        uploadMode: "direct",
+        variantUploadMode: "server_proxy",
+        variantTargets: [
+          {
+            variant: "thumb",
+            path: "trees/tree-1/media/photo/media-1/variants/thumb.webp",
+            signedUrl: "https://example.com/thumb",
+          },
+        ],
+      },
+      file,
+    });
+
+    expect(MockXMLHttpRequest.requests).toHaveLength(2);
+    expect(MockXMLHttpRequest.requests[0].method).toBe("PUT");
+    expect(MockXMLHttpRequest.requests[1].method).toBe("POST");
+    expect(MockXMLHttpRequest.requests[1].url).toBe("/api/media/upload-file");
+
+    const formData = MockXMLHttpRequest.requests[1].body as FormData;
+    expect(formData.get("signedUrl")).toBe("https://example.com/original");
+    expect(formData.get("skipPrimaryUpload")).toBeNull();
   });
 });

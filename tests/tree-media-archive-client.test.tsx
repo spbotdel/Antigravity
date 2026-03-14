@@ -420,6 +420,8 @@ describe("tree media archive client", () => {
     fireEvent.change(input);
 
     await screen.findByRole("dialog", { name: "Подготовка загрузки" });
+    expect(screen.getByLabelText("Видимость")).toHaveValue("members");
+    expect(screen.getByLabelText("Подпись")).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: "Сохранить 1" }));
 
     await waitFor(() => {
@@ -427,7 +429,6 @@ describe("tree media archive client", () => {
     });
 
     expect(screen.getByText("Материал сохранен в семейный архив.")).toBeInTheDocument();
-    expect(screen.getByText("Загрузка завершена")).toBeInTheDocument();
   });
 
   it("shows a video preview tile in the archive upload review dialog for local video files", async () => {
