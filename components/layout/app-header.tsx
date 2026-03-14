@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
@@ -14,6 +15,7 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ initialUser }: AppHeaderProps) {
+  const pathname = usePathname();
   const [user, setUser] = useState(initialUser);
 
   function normalizeUser(
@@ -84,9 +86,15 @@ export function AppHeader({ initialUser }: AppHeaderProps) {
         {user ? (
           <>
             <span className="header-user">{user.email}</span>
-            <Link href="/dashboard" className="ghost-button">
-              Панель
-            </Link>
+            {pathname === "/dashboard" ? (
+              <span className="ghost-button ghost-button-current" aria-current="page">
+                Панель
+              </span>
+            ) : (
+              <Link href="/dashboard" className="ghost-button">
+                Панель
+              </Link>
+            )}
             <SignOutButton />
           </>
         ) : (

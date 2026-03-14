@@ -72,17 +72,6 @@ export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
         </section>
       ) : null}
 
-      {dashboard.canCreateOwnedTree ? (
-        <section className="surface-card dashboard-create-card">
-          <div className="dashboard-section-heading">
-            <p className="card-kicker">Новое дерево</p>
-            <h2>{createPanelCopy.title}</h2>
-            <p className="muted-copy">{createPanelCopy.description}</p>
-          </div>
-          <CreateTreeForm submitLabel={createPanelCopy.submitLabel} />
-        </section>
-      ) : null}
-
       {dashboard.secondaryItems.length ? (
         <section className="dashboard-secondary-section">
           <div className="dashboard-section-heading">
@@ -126,6 +115,17 @@ export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
               );
             })}
           </div>
+        </section>
+      ) : null}
+
+      {dashboard.canCreateOwnedTree ? (
+        <section className="surface-card dashboard-create-card">
+          <div className="dashboard-section-heading">
+            <p className="card-kicker">Новое дерево</p>
+            <h2>{createPanelCopy.title}</h2>
+            <p className="muted-copy">{createPanelCopy.description}</p>
+          </div>
+          <CreateTreeForm submitLabel={createPanelCopy.submitLabel} />
         </section>
       ) : null}
     </div>

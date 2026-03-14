@@ -579,15 +579,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const selectedMediaFilesHint = formatSelectedMediaFilesHint(selectedMediaFiles, activeUploadScope);
   const inspectorTitle = createModeActive ? createHeading.title : selectedPerson ? selectedPerson.full_name : "Выберите человека";
   const inspectorDescription = createModeActive
-    ? "Заполните поля справа и сохраните новый блок."
+    ? "Заполните поля и сохраните новый блок."
     : selectedPersonPending
       ? "Блок создается. Как только сервер подтвердит запись, справа откроется обычное редактирование."
       : selectedPerson
-      ? currentBuilderTab === "info"
-        ? "Здесь редактируются данные, связи и документы выбранного человека."
-        : currentBuilderTab === "photo"
-          ? "Фотографии собраны в отдельную галерею и не смешиваются с видео."
-          : "Видео человека собраны отдельно: локальные файлы и внешние ссылки открываются из одного места."
+      ? null
       : "Сначала выберите человека на схеме или в списке слева.";
   const stageTitle = expandedGalleryMode
     ? selectedPerson
@@ -984,7 +980,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       partnerships: optimisticPartnership ? [...prev.partnerships, optimisticPartnership] : prev.partnerships
     }));
     setSelectedPersonId(tempPersonId);
-    setStatus("Новый блок добавляется...");
+    setStatus(null);
 
     const created = await createPersonWithContext(
       {
@@ -1007,7 +1003,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       return;
     }
 
-    setStatus(`${created.createStatus} Заполните данные справа.`);
+    setStatus(null);
     updateSnapshot((prev) => {
       const promotedSnapshot = replacePersonIdInSnapshot(prev, tempPersonId, created.newPerson);
       return {
@@ -1970,7 +1966,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           <div className="builder-inspector-copy">
             <p className="eyebrow">{createModeActive ? "Новый блок" : "Карточка человека"}</p>
             <h2>{inspectorTitle}</h2>
-            <p className="muted-copy">{inspectorDescription}</p>
+            {inspectorDescription ? <p className="muted-copy">{inspectorDescription}</p> : null}
           </div>
           <div className="builder-panel-tabs" role="tablist" aria-label="Панели конструктора">
             <button
@@ -2008,44 +2004,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             <strong>{createHeading.title}</strong>
             <span>{createContext.type === "standalone" ? "Новый блок появится отдельно, а связи можно добавить позже." : "Новый блок сразу встанет в выбранную связь."}</span>
           </div>
-        ) : activePanel === "media" ? null : selectedPerson ? (
-          <div className="builder-person-summary">
-            <div className="builder-person-summary-topline">
-              {selectedAvatarUrl ? (
-                <button
-                  type="button"
-                  className="builder-person-summary-avatar-button"
-                  aria-label={`Открыть фотографии: ${selectedPerson.full_name}`}
-                  onClick={() => openExpandedGallery("photo")}
-                >
-                  <div className="person-summary-avatar builder-person-summary-avatar">
-                    <img src={selectedAvatarUrl} alt={`Портрет: ${selectedPerson.full_name}`} />
-                  </div>
-                </button>
-              ) : null}
-              <div className="builder-person-summary-main">
-                <strong>{selectedPerson.full_name}</strong>
-              </div>
-            </div>
-            <div className="builder-person-summary-meta">
-              <span>{formatDate(selectedPerson.birth_date) || "Дата рождения не указана"}</span>
-              {selectedPerson.death_date ? <span>{formatDate(selectedPerson.death_date)}</span> : null}
-            </div>
-            <div className="builder-person-summary-actions">
-              {!isSelectedRoot ? (
-                <button
-                  type="button"
-                  className="ghost-button ghost-button-compact"
-                  onClick={() => {
-                    void setRootPerson(selectedPerson.id);
-                  }}
-                >
-                  Сделать корнем
-                </button>
-              ) : null}
-            </div>
-          </div>
-        ) : (
+        ) : activePanel === "media" || selectedPerson ? null : (
           <div className="builder-person-summary builder-person-summary-empty">
             <strong>Выберите человека</strong>
             <span>После выбора справа откроются его данные, связи и медиа.</span>
@@ -2120,10 +2079,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               </div>
             ) : selectedPerson ? (
               <div className="builder-section-block">
-                <div className="builder-section-heading">
-                  <h3>Данные человека</h3>
-                  <p className="muted-copy">Изменения сохраняются по кнопке ниже.</p>
-                </div>
                 <form
                   key={`edit-${selectedPerson.id}`}
                   className="stack-form builder-form-grid"
@@ -2172,6 +2127,17 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     <button className="primary-button" type="submit">
                       Сохранить
                     </button>
+                    {!isSelectedRoot ? (
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => {
+                          void setRootPerson(selectedPerson.id);
+                        }}
+                      >
+                        Сделать корнем
+                      </button>
+                    ) : null}
                     <button
                       className="danger-button"
                       type="button"

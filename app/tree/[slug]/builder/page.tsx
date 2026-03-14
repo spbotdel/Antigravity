@@ -56,7 +56,7 @@ export default async function BuilderPage({ params, searchParams }: BuilderPageP
           <span className="workspace-meta-chip">Редактирование</span>
         </div>
         <h1>{snapshot.tree.title}</h1>
-        <p className="muted-copy">Люди, связи и медиа редактируются рядом со схемой. Выберите ветку на canvas, а детали уточняйте справа.</p>
+        <p className="muted-copy">Редактируйте людей, связи и медиа прямо рядом со схемой.</p>
       </div>
         <TreeNav
           slug={slug}

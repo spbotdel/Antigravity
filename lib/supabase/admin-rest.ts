@@ -9,6 +9,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_ADMIN_REST_TIMEOUT_MS = 15000;
 const ADMIN_REST_MAX_BUFFER = 1024 * 1024 * 8;
 const ADMIN_REST_NATIVE_FALLBACK_COOLDOWN_MS = 60000;
+const ADMIN_REST_NATIVE_MAX_ATTEMPTS = 2;
 const FALLBACK_ERROR_CODES = new Set([
   "UND_ERR_CONNECT_TIMEOUT",
   "ETIMEDOUT",
@@ -143,44 +144,53 @@ async function runPowerShellAdminRestRequests(payloads: AdminRestPayload[]) {
 }
 
 async function runNativeAdminRestRequest(payload: AdminRestPayload): Promise<AdminRestResult> {
-  const controller = new AbortController();
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  let timedOut = false;
+  for (let attempt = 1; attempt <= ADMIN_REST_NATIVE_MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let timedOut = false;
 
-  timeoutId = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, payload.timeoutMs);
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, payload.timeoutMs);
 
-  try {
-    const response = await fetch(payload.url, {
-      method: payload.method,
-      headers: payload.headers,
-      body: payload.bodyBase64 ? Buffer.from(payload.bodyBase64, "base64") : undefined,
-      signal: controller.signal
-    });
-    const bodyBuffer = Buffer.from(await response.arrayBuffer());
+    try {
+      const response = await fetch(payload.url, {
+        method: payload.method,
+        headers: payload.headers,
+        body: payload.bodyBase64 ? Buffer.from(payload.bodyBase64, "base64") : undefined,
+        signal: controller.signal
+      });
+      const bodyBuffer = Buffer.from(await response.arrayBuffer());
 
-    return {
-      status: response.status,
-      headers: payload.includeHeaders ? Object.fromEntries(response.headers.entries()) : {},
-      bodyBase64: bodyBuffer.toString("base64")
-    };
-  } catch (error) {
-    if (timedOut) {
-      throw new AdminRestFallbackError(504, "Native Supabase admin REST request timed out.", error);
-    }
+      return {
+        status: response.status,
+        headers: payload.includeHeaders ? Object.fromEntries(response.headers.entries()) : {},
+        bodyBase64: bodyBuffer.toString("base64")
+      };
+    } catch (error) {
+      const transientNativeFailure = timedOut || shouldUsePowerShellFallback(error);
+      if (transientNativeFailure && attempt < ADMIN_REST_NATIVE_MAX_ATTEMPTS) {
+        continue;
+      }
 
-    if (shouldUsePowerShellFallback(error)) {
-      throw new AdminRestFallbackError(503, "Native Supabase admin REST request failed.", error);
-    }
+      if (timedOut) {
+        throw new AdminRestFallbackError(504, "Native Supabase admin REST request timed out.", error);
+      }
 
-    return createUnavailableAdminRestResult(503);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
+      if (shouldUsePowerShellFallback(error)) {
+        throw new AdminRestFallbackError(503, "Native Supabase admin REST request failed.", error);
+      }
+
+      return createUnavailableAdminRestResult(503);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     }
   }
+
+  return createUnavailableAdminRestResult(503);
 }
 
 async function runNativeAdminRestRequests(payloads: AdminRestPayload[]) {

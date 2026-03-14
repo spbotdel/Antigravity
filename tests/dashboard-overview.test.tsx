@@ -85,5 +85,8 @@ describe("dashboard overview", () => {
     expect(screen.getByRole("heading", { name: "Доступ по приглашениям" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Создайте свое дерево" })).toBeInTheDocument();
     expect(screen.getByTestId("create-tree-form")).toHaveTextContent("Создать дерево");
+    const invitedHeading = screen.getByRole("heading", { name: "Доступ по приглашениям" });
+    const createHeading = screen.getByRole("heading", { name: "Создайте свое дерево" });
+    expect(invitedHeading.compareDocumentPosition(createHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

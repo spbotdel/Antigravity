@@ -103,6 +103,7 @@ describe("admin rest transport", () => {
 
     const result = await fetchSupabaseAdminRestJson<Array<{ id: string }>>("trees?select=id");
 
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(2);
     expect(mocks.execFileMock).toHaveBeenCalledTimes(1);
     expect(result).toEqual([{ id: "tree-1" }]);
   });
@@ -124,6 +125,7 @@ describe("admin rest transport", () => {
       { pathWithQuery: "persons?select=id&limit=1" }
     ]);
 
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(4);
     expect(mocks.execFileMock).toHaveBeenCalledTimes(1);
     expect(result).toEqual([[{ id: "tree-1" }], [{ id: "tree-2" }]]);
   });
@@ -145,7 +147,21 @@ describe("admin rest transport", () => {
 
     expect(first).toEqual([{ id: "tree-1" }]);
     expect(second).toEqual([{ id: "tree-1" }]);
-    expect(mocks.fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(2);
     expect(mocks.execFileMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a transient native failure once before falling back", async () => {
+    const timeoutError = new Error("fetch failed") as Error & { cause?: { code?: string } };
+    timeoutError.cause = { code: "ETIMEDOUT" };
+    mocks.fetchMock
+      .mockRejectedValueOnce(timeoutError)
+      .mockResolvedValueOnce(createJsonResponse([{ id: "tree-1" }]));
+
+    const result = await fetchSupabaseAdminRestJson<Array<{ id: string }>>("trees?select=id");
+
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(2);
+    expect(mocks.execFileMock).not.toHaveBeenCalled();
+    expect(result).toEqual([{ id: "tree-1" }]);
   });
 });

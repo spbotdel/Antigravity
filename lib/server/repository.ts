@@ -31,7 +31,7 @@ import type {
   ViewerActor
 } from "@/lib/types";
 import { buildAuditEntryViews } from "@/lib/audit-presenter";
-import { buildViewerActor, canSeeMedia, canViewTree, hasRequiredRole } from "@/lib/permissions";
+import { buildViewerActor, canSeeMedia, hasRequiredRole, normalizeMembershipRole, resolveTreeRole } from "@/lib/permissions";
 import { getBaseUrl, getFileBackedMediaProvider, getObjectStorageEnv, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, getResendEmailEnv, getShareLinkTokenEncryptionSecret, getStorageBucket, isObjectStorageLikeBackend, resolveMediaUploadPlan, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson, fetchSupabaseAdminRestJsonWithHeaders, parsePowerShellJsonStdout } from "@/lib/supabase/admin-rest";
@@ -292,15 +292,34 @@ export async function getMembership(treeId: string, userId: string) {
   );
 }
 
+function createSyntheticOwnerMembership(tree: TreeRecord, userId: string): MembershipRecord {
+  return {
+    id: `synthetic-owner-${tree.id}`,
+    tree_id: tree.id,
+    user_id: userId,
+    role: "owner",
+    status: "active",
+    created_at: tree.created_at
+  };
+}
+
 export async function requireTreeRole(treeId: string, allowedRoles: UserRole[]) {
   const userId = await getAuthenticatedUserId();
-  const membership = await getMembership(treeId, userId);
+  const [tree, membership] = await Promise.all([getTreeById(treeId), getMembership(treeId, userId)]);
+  const effectiveRole = resolveTreeRole({
+    userId,
+    treeOwnerUserId: tree.owner_user_id,
+    membershipRole: membership?.role ?? null
+  });
 
-  if (!membership || !hasRequiredRole(membership.role, allowedRoles)) {
+  if (!hasRequiredRole(effectiveRole, allowedRoles)) {
     throw new AppError(403, "У вас нет доступа к этому действию в дереве.");
   }
 
-  return { userId, membership };
+  return {
+    userId,
+    membership: membership ? normalizeMembershipRole(membership, tree.owner_user_id) : createSyntheticOwnerMembership(tree, userId)
+  };
 }
 
 export async function getActorForTree(treeId: string): Promise<ViewerActor> {
@@ -309,8 +328,15 @@ export async function getActorForTree(treeId: string): Promise<ViewerActor> {
     return buildViewerActor(null, null);
   }
 
-  const membership = await getMembership(treeId, user.id);
-  return buildViewerActor(user.id, membership?.role ?? null);
+  const [tree, membership] = await Promise.all([getTreeById(treeId), getMembership(treeId, user.id)]);
+  return buildViewerActor(
+    user.id,
+    resolveTreeRole({
+      userId: user.id,
+      treeOwnerUserId: tree.owner_user_id,
+      membershipRole: membership?.role ?? null
+    })
+  );
 }
 
 async function getValidShareLink(treeId: string, shareToken?: string | null) {
@@ -369,8 +395,16 @@ async function getTreeReadAccess(tree: TreeRecord, shareToken?: string | null, r
     getValidShareLink(tree.id, shareToken)
   ]);
   const hasShareLinkAccess = Boolean(shareLink);
+  const effectiveRole = resolveTreeRole({
+    userId: user?.id ?? null,
+    treeOwnerUserId: tree.owner_user_id,
+    membershipRole: membership?.role ?? null
+  });
+  const hasMembershipAccess = Boolean(
+    effectiveRole && (membership?.status === "active" || (user?.id ?? null) === tree.owner_user_id)
+  );
 
-  if (!canViewTree(tree.visibility, membership, hasShareLinkAccess)) {
+  if (!(tree.visibility === "public" || hasShareLinkAccess || hasMembershipAccess)) {
     if (shareToken) {
       throw new AppError(403, "Ссылка для семейного просмотра недействительна или истекла.");
     }
@@ -379,8 +413,8 @@ async function getTreeReadAccess(tree: TreeRecord, shareToken?: string | null, r
   }
 
   const accessSource =
-    membership?.role != null ? "membership" : hasShareLinkAccess ? "share_link" : tree.visibility === "public" ? "public" : "anonymous";
-  const actor = buildViewerActor(user?.id ?? null, membership?.role ?? null, {
+    effectiveRole != null ? "membership" : hasShareLinkAccess ? "share_link" : tree.visibility === "public" ? "public" : "anonymous";
+  const actor = buildViewerActor(user?.id ?? null, effectiveRole, {
     accessSource,
     shareLinkId: shareLink?.id ?? null
   });
@@ -388,7 +422,7 @@ async function getTreeReadAccess(tree: TreeRecord, shareToken?: string | null, r
   return {
     actor,
     hasShareLinkAccess,
-    membership,
+    membership: membership ? normalizeMembershipRole(membership, tree.owner_user_id) : null,
     shareLink,
     user
   };
@@ -595,12 +629,7 @@ export async function listUserTrees(userId: string) {
     `tree_memberships?select=*,tree:trees!inner(*)&user_id=eq.${encodeURIComponent(userId)}&status=eq.active&order=created_at.asc`,
     "Не удалось загрузить список деревьев."
   );
-
-  if (!membershipRows.length) {
-    return [];
-  }
-
-  return membershipRows
+  const membershipItems = membershipRows
     .map((row) => {
       const { tree, ...membership } = row;
       if (!tree) {
@@ -608,11 +637,27 @@ export async function listUserTrees(userId: string) {
       }
 
       return {
-        membership,
+        membership: normalizeMembershipRole(membership, tree.owner_user_id),
         tree
       };
     })
     .filter((item): item is { membership: MembershipRecord; tree: TreeRecord } => item !== null);
+
+  const ownedTrees = await fetchAdminRows<TreeRecord>(
+    `trees?select=*&owner_user_id=eq.${encodeURIComponent(userId)}&order=created_at.asc`,
+    "Не удалось загрузить список деревьев."
+  );
+  const knownTreeIds = new Set(membershipItems.map((item) => item.tree.id));
+  const syntheticOwnerItems = ownedTrees
+    .filter((tree) => !knownTreeIds.has(tree.id))
+    .map((tree) => ({
+      membership: createSyntheticOwnerMembership(tree, userId),
+      tree
+    }));
+
+  return [...membershipItems, ...syntheticOwnerItems].sort(
+    (left, right) => left.tree.created_at.localeCompare(right.tree.created_at) || left.tree.id.localeCompare(right.tree.id)
+  );
 }
 
 async function insertAuditLog(input: {
@@ -884,11 +929,13 @@ async function listShareLinksForTree(treeId: string) {
 }
 
 export async function listMemberships(treeId: string) {
+  const tree = await getTreeById(treeId);
   await requireTreeRole(treeId, ["owner", "admin"]);
-  return fetchAdminRows<MembershipRecord>(
+  const memberships = await fetchAdminRows<MembershipRecord>(
     `tree_memberships?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.asc`,
     "Не удалось загрузить список участников."
   );
+  return memberships.map((membership) => normalizeMembershipRole(membership, tree.owner_user_id));
 }
 
 export async function listInvites(treeId: string) {
@@ -947,7 +994,7 @@ export async function getTreeMembersPageData(slug: string, options?: { shareToke
     });
   }
 
-  const memberships = (results[0] as MembershipRecord[] | undefined) || [];
+  const memberships = ((results[0] as MembershipRecord[] | undefined) || []).map((membership) => normalizeMembershipRole(membership, tree.owner_user_id));
   const invites = (results[1] as InviteRecord[] | undefined) || [];
 
   return {
@@ -1857,7 +1904,7 @@ export async function createInvite(input: { treeId: string; role: UserRole; invi
 }
 
 interface InviteWithTreeSlugRecord extends InviteRecord {
-  tree?: Pick<TreeRecord, "id" | "slug"> | null;
+  tree?: Pick<TreeRecord, "id" | "slug" | "owner_user_id"> | null;
 }
 
 export async function acceptInvite(token: string) {
@@ -1865,7 +1912,7 @@ export async function acceptInvite(token: string) {
   const tokenHash = hashInviteToken(token);
 
   const invite = await fetchAdminFirst<InviteWithTreeSlugRecord>(
-    `tree_invites?select=*,tree:trees!inner(id,slug)&token_hash=eq.${encodeURIComponent(tokenHash)}`,
+    `tree_invites?select=*,tree:trees!inner(id,slug,owner_user_id)&token_hash=eq.${encodeURIComponent(tokenHash)}`,
     "Не удалось загрузить приглашение."
   );
   if (!invite) throw new AppError(404, "Приглашение не найдено.");
@@ -1876,7 +1923,12 @@ export async function acceptInvite(token: string) {
   const currentMembership = await getMembership(inviteRecord.tree_id, userId).catch((error) => {
     throw toRepositoryReadError(error, "Не удалось проверить текущее членство перед принятием приглашения.");
   });
-  const acceptedRole = mergeInviteAcceptanceRole(currentMembership?.role ?? null, inviteRecord.role);
+  const currentRole = resolveTreeRole({
+    userId,
+    treeOwnerUserId: invite.tree?.owner_user_id ?? null,
+    membershipRole: currentMembership?.role ?? null
+  });
+  const acceptedRole = mergeInviteAcceptanceRole(currentRole, inviteRecord.role);
 
   const acceptedAt = new Date().toISOString();
   const [membershipResult, updatedInvite] = await Promise.all([
@@ -1978,11 +2030,12 @@ export async function updateMembershipRole(membershipId: string, role: UserRole)
   const { data: before, error: beforeError } = await admin().from("tree_memberships").select("*").eq("id", membershipId).single<MembershipRecord>();
   if (beforeError || !before) throw new AppError(404, "Участник не найден.");
 
+  const tree = await getTreeById(before.tree_id);
   const { userId, membership } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
   if (membership.role === "admin" && role === "owner") {
     throw new AppError(403, "Администратор не может назначить владельца.");
   }
-  if (before.role === "owner") {
+  if (resolveTreeRole({ userId: before.user_id, treeOwnerUserId: tree.owner_user_id, membershipRole: before.role }) === "owner") {
     throw new AppError(403, "В версии v1 роль владельца нельзя переназначить.");
   }
 
@@ -2006,8 +2059,9 @@ export async function revokeMembership(membershipId: string) {
   const { data: before, error: beforeError } = await admin().from("tree_memberships").select("*").eq("id", membershipId).single<MembershipRecord>();
   if (beforeError || !before) throw new AppError(404, "Участник не найден.");
 
+  const tree = await getTreeById(before.tree_id);
   const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
-  if (before.role === "owner") {
+  if (resolveTreeRole({ userId: before.user_id, treeOwnerUserId: tree.owner_user_id, membershipRole: before.role }) === "owner") {
     throw new AppError(403, "В версии v1 нельзя отозвать доступ владельца.");
   }
 

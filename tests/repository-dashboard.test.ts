@@ -29,15 +29,30 @@ describe("dashboard repository helpers", () => {
   });
 
   it("loads user dashboard trees with one membership-to-tree relation query", async () => {
-    mocks.fetchSupabaseAdminRestJson.mockResolvedValue([
-      {
-        id: "membership-owner",
-        tree_id: "tree-1",
-        user_id: "user-1",
-        role: "owner",
-        status: "active",
-        created_at: "2026-03-09T00:00:00.000Z",
-        tree: {
+    mocks.fetchSupabaseAdminRestJson
+      .mockResolvedValueOnce([
+        {
+          id: "membership-owner",
+          tree_id: "tree-1",
+          user_id: "user-1",
+          role: "owner",
+          status: "active",
+          created_at: "2026-03-09T00:00:00.000Z",
+          tree: {
+            id: "tree-1",
+            owner_user_id: "user-1",
+            slug: "demo-family",
+            title: "Demo Family",
+            description: null,
+            visibility: "private",
+            root_person_id: null,
+            created_at: "2026-03-09T00:00:00.000Z",
+            updated_at: "2026-03-09T00:00:00.000Z",
+          },
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
           id: "tree-1",
           owner_user_id: "user-1",
           slug: "demo-family",
@@ -48,13 +63,13 @@ describe("dashboard repository helpers", () => {
           created_at: "2026-03-09T00:00:00.000Z",
           updated_at: "2026-03-09T00:00:00.000Z",
         },
-      },
-    ]);
+      ]);
 
     const items = await listUserTrees("user-1");
 
-    expect(mocks.fetchSupabaseAdminRestJson).toHaveBeenCalledTimes(1);
-    expect(mocks.fetchSupabaseAdminRestJson).toHaveBeenCalledWith(
+    expect(mocks.fetchSupabaseAdminRestJson).toHaveBeenCalledTimes(2);
+    expect(mocks.fetchSupabaseAdminRestJson).toHaveBeenNthCalledWith(
+      1,
       "tree_memberships?select=*,tree:trees!inner(*)&user_id=eq.user-1&status=eq.active&order=created_at.asc",
     );
     expect(items).toEqual([
@@ -82,20 +97,31 @@ describe("dashboard repository helpers", () => {
     ]);
   });
 
-  it("uses current user bootstrap and returns the preloaded tree items", async () => {
-    mocks.getCurrentUser.mockResolvedValue({
-      id: "user-1",
-      email: "owner@example.com",
-    });
-    mocks.fetchSupabaseAdminRestJson.mockResolvedValue([
-      {
-        id: "membership-owner",
-        tree_id: "tree-1",
-        user_id: "user-1",
-        role: "owner",
-        status: "active",
-        created_at: "2026-03-09T00:00:00.000Z",
-        tree: {
+  it("normalizes dashboard role to owner when tree ownership and membership role disagree", async () => {
+    mocks.fetchSupabaseAdminRestJson
+      .mockResolvedValueOnce([
+        {
+          id: "membership-admin",
+          tree_id: "tree-1",
+          user_id: "user-1",
+          role: "admin",
+          status: "active",
+          created_at: "2026-03-09T00:00:00.000Z",
+          tree: {
+            id: "tree-1",
+            owner_user_id: "user-1",
+            slug: "demo-family",
+            title: "Demo Family",
+            description: null,
+            visibility: "private",
+            root_person_id: null,
+            created_at: "2026-03-09T00:00:00.000Z",
+            updated_at: "2026-03-09T00:00:00.000Z",
+          },
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
           id: "tree-1",
           owner_user_id: "user-1",
           slug: "demo-family",
@@ -106,8 +132,54 @@ describe("dashboard repository helpers", () => {
           created_at: "2026-03-09T00:00:00.000Z",
           updated_at: "2026-03-09T00:00:00.000Z",
         },
-      },
-    ]);
+      ]);
+
+    const items = await listUserTrees("user-1");
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.membership.role).toBe("owner");
+  });
+
+  it("uses current user bootstrap and returns the preloaded tree items", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: "user-1",
+      email: "owner@example.com",
+    });
+    mocks.fetchSupabaseAdminRestJson
+      .mockResolvedValueOnce([
+        {
+          id: "membership-owner",
+          tree_id: "tree-1",
+          user_id: "user-1",
+          role: "owner",
+          status: "active",
+          created_at: "2026-03-09T00:00:00.000Z",
+          tree: {
+            id: "tree-1",
+            owner_user_id: "user-1",
+            slug: "demo-family",
+            title: "Demo Family",
+            description: null,
+            visibility: "private",
+            root_person_id: null,
+            created_at: "2026-03-09T00:00:00.000Z",
+            updated_at: "2026-03-09T00:00:00.000Z",
+          },
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "tree-1",
+          owner_user_id: "user-1",
+          slug: "demo-family",
+          title: "Demo Family",
+          description: null,
+          visibility: "private",
+          root_person_id: null,
+          created_at: "2026-03-09T00:00:00.000Z",
+          updated_at: "2026-03-09T00:00:00.000Z",
+        },
+      ]);
 
     const result = await getDashboardBootstrap();
 
