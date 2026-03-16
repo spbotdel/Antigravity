@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/select-field";
 import type { InviteRecord, MembershipRecord, ShareLinkRecord, TreeRecord } from "@/lib/types";
 import { formatInviteMethod, formatMembershipStatus, formatRole, formatTreeVisibility } from "@/lib/ui-text";
 
@@ -273,69 +278,75 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
 
   if (!isClientReady) {
     return (
-      <section className="surface-card members-loading-state" data-testid="member-management-panel-loading">
+      <Card className="members-loading-state p-6" data-testid="member-management-panel-loading">
         <p className="eyebrow">Участники</p>
-        <h2>Подготавливаю доступы и приглашения</h2>
+        <h2 className="card-heading">Подготавливаю доступы и приглашения</h2>
         <p className="muted-copy">Список участников, приглашений и семейных ссылок загрузится сразу после инициализации клиента.</p>
-      </section>
+      </Card>
     );
   }
 
   return (
     <div className="members-layout">
       <section className="members-summary-grid">
-        <article className="surface-card members-summary-card">
+        <Card className="members-summary-card">
           <span>Активные</span>
           <strong>{activeMemberships.length}</strong>
           <p>Уже имеют доступ к дереву.</p>
-        </article>
-        <article className="surface-card members-summary-card">
+        </Card>
+        <Card className="members-summary-card">
           <span>Ожидают</span>
           <strong>{pendingInvites.length}</strong>
           <p>Еще не приняли приглашение.</p>
-        </article>
-        <article className="surface-card members-summary-card">
+        </Card>
+        <Card className="members-summary-card">
           <span>Управляют</span>
           <strong>{managers.length}</strong>
           <p>Владелец и администраторы.</p>
-        </article>
-        <article className="surface-card members-summary-card">
+        </Card>
+        <Card className="members-summary-card">
           <span>Доступ</span>
           <strong>{formatTreeVisibility(tree.visibility)}</strong>
           <p>Текущий режим открытия дерева.</p>
-        </article>
-        <article className="surface-card members-summary-card">
+        </Card>
+        <Card className="members-summary-card">
           <span>Ссылки</span>
           <strong>{activeShareLinks.length}</strong>
           <p>Активные семейные ссылки для просмотра.</p>
-        </article>
+        </Card>
       </section>
 
       <section className="members-guidance-grid">
-        <article className="surface-card members-guidance-card">
+        <Card className="members-guidance-card">
           <p className="eyebrow">По аккаунту</p>
           <strong>Приглашение участника</strong>
           <p>Используйте, если человеку нужен постоянный доступ под своей ролью, а не просто просмотр по ссылке.</p>
-        </article>
-        <article className="surface-card members-guidance-card">
+        </Card>
+        <Card className="members-guidance-card">
           <p className="eyebrow">Без аккаунта</p>
           <strong>Семейная ссылка</strong>
           <p>Подходит для родственников, которым нужен только просмотр дерева и файлов без отдельной регистрации.</p>
-        </article>
+        </Card>
       </section>
 
       {copiedMessage ? <p className="form-success">{copiedMessage}</p> : null}
 
-      <section className="surface-card members-invite-card">
+      <Card className="members-invite-card p-6">
         <div className="members-section-heading">
           <p className="eyebrow">Приглашение</p>
-          <h2>Пригласите нового участника</h2>
+          <h2 className="card-heading">Пригласите нового участника</h2>
           <p className="muted-copy">Выберите роль, способ приглашения и срок действия. Готовую ссылку можно отправить сразу.</p>
         </div>
         <div className="members-context-row">
-          <span className="meta-pill meta-pill-muted">{formatTreeVisibility(tree.visibility)} дерево</span>
-          <span className="meta-pill meta-pill-muted">Ожидают: {pendingInvites.length}</span>
-          <span className="meta-pill meta-pill-muted">Приняли: {acceptedInvites.length}</span>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            {formatTreeVisibility(tree.visibility)} дерево
+          </Badge>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            Ожидают: {pendingInvites.length}
+          </Badge>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            Приняли: {acceptedInvites.length}
+          </Badge>
         </div>
         <form
           className="stack-form members-invite-form"
@@ -367,35 +378,35 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
             setCopiedMessage(null);
           }}
         >
-          <div className="field-grid field-grid-2">
-            <label>
+          <div className="form-grid form-grid-2">
+            <label className="form-field">
               Роль
-              <select name="role" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "viewer" | "admin")}>
+              <SelectField name="role" value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "viewer" | "admin")}>
                 <option value="viewer">Участник</option>
                 <option value="admin">Администратор</option>
-              </select>
+              </SelectField>
             </label>
-            <label>
+            <label className="form-field">
               Способ приглашения
-              <select name="inviteMethod" value={inviteMethod} onChange={(event) => setInviteMethod(event.target.value as "link" | "email")}>
+              <SelectField name="inviteMethod" value={inviteMethod} onChange={(event) => setInviteMethod(event.target.value as "link" | "email")}>
                 <option value="link">Защищенная ссылка</option>
                 <option value="email">Отправить на email</option>
-              </select>
+              </SelectField>
             </label>
           </div>
-          <div className="field-grid field-grid-2">
-            <label>
+          <div className="form-grid form-grid-2">
+            <label className="form-field">
               Почта
-              <input name="email" type="email" placeholder={inviteMethod === "email" ? "name@example.com" : "Необязательно для приглашения ссылкой"} />
+              <Input name="email" type="email" placeholder={inviteMethod === "email" ? "name@example.com" : "Необязательно для приглашения ссылкой"} />
             </label>
-            <label>
+            <label className="form-field">
               Срок действия, дней
-              <input name="expiresInDays" type="number" min={1} max={30} defaultValue={7} />
+              <Input name="expiresInDays" type="number" min={1} max={30} defaultValue={7} />
             </label>
           </div>
-          <button className="primary-button" type="submit">
+          <Button type="submit">
             Создать приглашение
-          </button>
+          </Button>
           <p className="members-helper-note">{getInviteRoleHint()}</p>
           <p className="members-helper-note">{getInviteMethodHint()}</p>
         </form>
@@ -405,18 +416,18 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
             <strong>Скопируйте ссылку и отправьте ее участнику.</strong>
             {inviteDeliveryMessage ? <p>{inviteDeliveryMessage}</p> : null}
             <p>{inviteLink}</p>
-            <div className="card-actions members-inline-actions">
-              <button
-                className="secondary-button"
+            <div className="action-row members-inline-actions">
+              <Button
+                variant="secondary"
                 type="button"
                 onClick={() => {
                   void copyText(inviteLink, "Ссылка приглашения скопирована.");
                 }}
               >
                 Скопировать ссылку
-              </button>
-              <button
-                className="ghost-button"
+              </Button>
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => {
                   setInviteLink(null);
@@ -424,22 +435,26 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                 }}
               >
                 Скрыть
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
         {error ? <p className="form-error">{error}</p> : null}
-      </section>
+      </Card>
 
-      <section className="surface-card members-invite-card">
+      <Card className="members-invite-card p-6">
         <div className="members-section-heading">
           <p className="eyebrow">Семейные ссылки</p>
-          <h2>Ссылка для просмотра без аккаунта</h2>
+          <h2 className="card-heading">Ссылка для просмотра без аккаунта</h2>
           <p className="muted-copy">Эта ссылка открывает дерево в режиме чтения. Подходит для родственников, которым нужен только просмотр.</p>
         </div>
         <div className="members-context-row">
-          <span className="meta-pill meta-pill-muted">Активны: {activeShareLinks.length}</span>
-          <span className="meta-pill meta-pill-muted">Всего: {shareLinks.length}</span>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            Активны: {activeShareLinks.length}
+          </Badge>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            Всего: {shareLinks.length}
+          </Badge>
         </div>
         <form
           className="stack-form members-invite-form"
@@ -474,19 +489,19 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
             setCopiedMessage(null);
           }}
         >
-          <div className="field-grid field-grid-2">
-            <label>
+          <div className="form-grid form-grid-2">
+            <label className="form-field">
               Название
-              <input name="label" type="text" maxLength={120} placeholder="Например: Родные из РФ" />
+              <Input name="label" type="text" maxLength={120} placeholder="Например: Родные из РФ" />
             </label>
-            <label>
+            <label className="form-field">
               Срок действия, дней
-              <input name="expiresInDays" type="number" min={1} max={30} defaultValue={14} />
+              <Input name="expiresInDays" type="number" min={1} max={30} defaultValue={14} />
             </label>
           </div>
-          <button className="primary-button" type="submit">
+          <Button type="submit">
             Создать ссылку для просмотра
-          </button>
+          </Button>
           <p className="members-helper-note">Эта ссылка не выдает роль в дереве и подходит только для безопасного семейного read-only доступа.</p>
         </form>
         {shareLinkUrl ? (
@@ -494,35 +509,35 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
             <span className="inline-feedback-label">Ссылка готова</span>
             <strong>Скопируйте и отправьте родственнику.</strong>
             <p>{shareLinkUrl}</p>
-            <div className="card-actions members-inline-actions">
-              <button
-                className="secondary-button"
+            <div className="action-row members-inline-actions">
+              <Button
+                variant="secondary"
                 type="button"
                 onClick={() => {
                   void copyText(shareLinkUrl, "Семейная ссылка скопирована.");
                 }}
               >
                 Скопировать ссылку
-              </button>
-              <button
-                className="ghost-button"
+              </Button>
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => {
                   setShareLinkUrl(null);
                 }}
               >
                 Скрыть
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
         {error ? <p className="form-error">{error}</p> : null}
-      </section>
+      </Card>
 
-      <section className="surface-card members-list-card">
+      <Card className="members-list-card p-6">
         <div className="members-section-heading">
           <p className="eyebrow">Участники дерева</p>
-          <h2>Кто уже имеет доступ</h2>
+          <h2 className="card-heading">Кто уже имеет доступ</h2>
           <p className="muted-copy">Каждая роль показана отдельно, а быстрые действия остаются прямо в карточке участника.</p>
         </div>
         <div className="members-card-list">
@@ -530,8 +545,10 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
             <article key={membership.id} className="members-entry-card">
               <div className="members-entry-topline">
                 <div className="meta-row meta-row-tight">
-                  <span className="meta-pill">{formatRole(membership.role)}</span>
-                  <span className="meta-pill meta-pill-muted">{formatMembershipStatus(membership.status)}</span>
+                  <Badge className="meta-pill">{formatRole(membership.role)}</Badge>
+                  <Badge className="meta-pill meta-pill-muted" variant="secondary">
+                    {formatMembershipStatus(membership.status)}
+                  </Badge>
                 </div>
                 <span className="members-entry-id">{membership.user_id}</span>
               </div>
@@ -539,11 +556,11 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                 <strong>{getMembershipTitle(membership)}</strong>
                 <p>{getMembershipDescription(membership)}</p>
               </div>
-              <div className="card-actions members-entry-actions">
+              <div className="action-row members-entry-actions">
                 {membership.role !== "owner" ? (
                   <>
-                    <button
-                      className="ghost-button"
+                    <Button
+                      variant="ghost"
                       type="button"
                       onClick={async () => {
                         await runAction(
@@ -562,9 +579,9 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                       }}
                     >
                       {membership.role === "viewer" ? "Сделать администратором" : "Сделать участником"}
-                    </button>
-                    <button
-                      className="danger-button"
+                    </Button>
+                    <Button
+                      variant="destructive"
                       type="button"
                       onClick={async () => {
                         const payload = await runAction(fetch(`/api/members/${membership.id}`, { method: "DELETE" }));
@@ -574,7 +591,7 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                       }}
                     >
                       Отозвать доступ
-                    </button>
+                    </Button>
                   </>
                 ) : (
                   <span className="members-static-note">Владелец закреплен за деревом</span>
@@ -583,18 +600,24 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
             </article>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <section className="surface-card members-list-card">
+      <Card className="members-list-card p-6">
         <div className="members-section-heading">
           <p className="eyebrow">Приглашения</p>
-          <h2>Что уже отправлено</h2>
+          <h2 className="card-heading">Что уже отправлено</h2>
           <p className="muted-copy">Здесь видны роль, способ отправки и текущее состояние каждого приглашения.</p>
         </div>
         <div className="members-context-row">
-          <span className="meta-pill meta-pill-muted">Всего: {invites.length}</span>
-          <span className="meta-pill meta-pill-muted">Ожидают: {pendingInvites.length}</span>
-          <span className="meta-pill meta-pill-muted">Приняты: {acceptedInvites.length}</span>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            Всего: {invites.length}
+          </Badge>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            Ожидают: {pendingInvites.length}
+          </Badge>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            Приняты: {acceptedInvites.length}
+          </Badge>
         </div>
         <div className="members-card-list">
           {inviteState.length ? (
@@ -602,8 +625,10 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
               <article key={invite.id} className="members-entry-card">
                 <div className="members-entry-topline">
                   <div className="meta-row meta-row-tight">
-                    <span className="meta-pill">{formatRole(invite.role)}</span>
-                    <span className="meta-pill meta-pill-muted">{formatInviteMethod(invite.invite_method)}</span>
+                    <Badge className="meta-pill">{formatRole(invite.role)}</Badge>
+                    <Badge className="meta-pill meta-pill-muted" variant="secondary">
+                      {formatInviteMethod(invite.invite_method)}
+                    </Badge>
                   </div>
                   <span className={invite.accepted_at ? "members-invite-status members-invite-status-accepted" : "members-invite-status"}>
                     {invite.accepted_at ? "Принято" : "Ожидает"}
@@ -613,20 +638,20 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                   <strong>{invite.email || "Приглашение только по защищенной ссылке"}</strong>
                   <p>{invite.accepted_at ? `Принято ${formatDateTime(invite.accepted_at)}.` : `Истекает ${formatDateTime(invite.expires_at)}.`}</p>
                 </div>
-                <div className="card-actions members-entry-actions">
+                <div className="action-row members-entry-actions">
                   {!invite.accepted_at ? (
                     <>
-                      <button
-                        className="ghost-button"
+                      <Button
+                        variant="ghost"
                         type="button"
                         onClick={async () => {
                           await reissueInvite(invite);
                         }}
                       >
                         Создать заново
-                      </button>
-                      <button
-                        className="danger-button"
+                      </Button>
+                      <Button
+                        variant="destructive"
                         type="button"
                         onClick={async () => {
                           const payload = await runAction(fetch(`/api/invites/${invite.id}`, { method: "DELETE" }));
@@ -636,7 +661,7 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                         }}
                       >
                         Отозвать приглашение
-                      </button>
+                      </Button>
                     </>
                   ) : (
                     <span className="members-static-note">Принятое приглашение уже превратилось в доступ участника</span>
@@ -651,17 +676,21 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
         {acceptedInvites.length ? (
           <p className="members-footnote">Принятых приглашений: {acceptedInvites.length}. Активный доступ после принятия уже отражается в списке участников.</p>
         ) : null}
-      </section>
+      </Card>
 
-      <section className="surface-card members-list-card">
+      <Card className="members-list-card p-6">
         <div className="members-section-heading">
           <p className="eyebrow">Семейные ссылки</p>
-          <h2>Ссылки для семейного просмотра</h2>
+          <h2 className="card-heading">Ссылки для семейного просмотра</h2>
           <p className="muted-copy">Эти ссылки не выдают роль в дереве и подходят только для просмотра. При необходимости их можно в любой момент отозвать.</p>
         </div>
         <div className="members-context-row">
-          <span className="meta-pill meta-pill-muted">Активны: {activeShareLinks.length}</span>
-          <span className="meta-pill meta-pill-muted">Всего: {shareLinks.length}</span>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            Активны: {activeShareLinks.length}
+          </Badge>
+          <Badge className="meta-pill meta-pill-muted" variant="secondary">
+            Всего: {shareLinks.length}
+          </Badge>
         </div>
         <div className="members-card-list">
           {shareLinkState.length ? (
@@ -675,8 +704,10 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                     <>
                 <div className="members-entry-topline">
                   <div className="meta-row meta-row-tight">
-                    <span className="meta-pill">Только просмотр</span>
-                    <span className="meta-pill meta-pill-muted">{getShareLinkStatus(shareLink)}</span>
+                    <Badge className="meta-pill">Только просмотр</Badge>
+                    <Badge className="meta-pill meta-pill-muted" variant="secondary">
+                      {getShareLinkStatus(shareLink)}
+                    </Badge>
                   </div>
                 </div>
                 <div className="members-entry-copy">
@@ -690,11 +721,11 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                   {revealedUrl ? <p>{revealedUrl}</p> : null}
                   {revealMessage ? <p>{revealMessage}</p> : null}
                 </div>
-                <div className="card-actions members-entry-actions">
+                <div className="action-row members-entry-actions">
                   {!shareLink.revoked_at ? (
                     <>
-                      <button
-                        className="ghost-button"
+                      <Button
+                        variant="ghost"
                         type="button"
                         disabled={revealingShareLinkId === shareLink.id}
                         onClick={async () => {
@@ -702,31 +733,32 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                         }}
                       >
                         {revealingShareLinkId === shareLink.id ? "Показываю..." : "Показать ссылку"}
-                      </button>
+                      </Button>
                       {revealedUrl ? (
-                        <button
-                          className="ghost-button ghost-button-compact"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           type="button"
                           onClick={async () => {
                             await copyText(revealedUrl, "Семейная ссылка скопирована.");
                           }}
                         >
                           Скопировать
-                        </button>
+                        </Button>
                       ) : null}
                       {revealMessage ? (
-                        <button
-                          className="ghost-button"
+                        <Button
+                          variant="ghost"
                           type="button"
                           onClick={async () => {
                             await reissueShareLink(shareLink);
                           }}
                         >
                           Создать новую ссылку
-                        </button>
+                        </Button>
                       ) : null}
-                      <button
-                        className="danger-button"
+                      <Button
+                        variant="destructive"
                         type="button"
                         onClick={async () => {
                           const payload = await runAction(fetch(`/api/share-links/${shareLink.id}`, { method: "DELETE" }));
@@ -755,20 +787,20 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
                         }}
                       >
                         Отозвать ссылку
-                      </button>
+                      </Button>
                     </>
                   ) : (
-                    <div className="card-actions members-entry-actions">
+                    <div className="action-row members-entry-actions">
                       <span className="members-static-note">Ссылка больше не действует</span>
-                      <button
-                        className="ghost-button"
+                      <Button
+                        variant="ghost"
                         type="button"
                         onClick={async () => {
                           await reissueShareLink(shareLink);
                         }}
                       >
                         Создать новую ссылку
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -782,7 +814,7 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
           )}
         </div>
         <p className="members-footnote">Для новых ссылок адрес можно показать повторно. Для старых ссылок без защищенного хранения адреса может понадобиться перевыпуск.</p>
-      </section>
+      </Card>
     </div>
   );
 }

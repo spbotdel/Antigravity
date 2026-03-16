@@ -2,9 +2,24 @@
 
 import { startTransition, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/select-field";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumRecord } from "@/lib/types";
+import { PlusIcon } from "lucide-react";
 
 type MediaMode = "photo" | "video" | "all";
 type ArchiveView = "all" | "albums";
@@ -37,6 +52,7 @@ const INITIAL_TILE_LIMIT = 18;
 const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
 const MAX_DEFAULT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const CREATE_ALBUM_OPTION_VALUE = "__create_album__";
 
 type ArchiveUploadTarget = Pick<
   MediaUploadTargetResponse,
@@ -219,6 +235,7 @@ export function TreeMediaArchiveClient({
   const [pendingUploads, setPendingUploads] = useState<PendingArchiveUploadItem[]>([]);
   const [isUploadReviewOpen, setIsUploadReviewOpen] = useState(false);
   const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
+  const [resumeUploadReviewAfterAlbumCreate, setResumeUploadReviewAfterAlbumCreate] = useState(false);
   const [isSavingUploads, setIsSavingUploads] = useState(false);
   const [activeUploads, setActiveUploads] = useState<ActiveArchiveUploadItem[]>([]);
   const [viewerMediaIds, setViewerMediaIds] = useState<string[]>([]);
@@ -549,9 +566,16 @@ export function TreeMediaArchiveClient({
       setPersistedAllAlbums((current) => [summary, ...current]);
       setAlbumTitle("");
       setAlbumDescription("");
+      const shouldResumeReview = resumeUploadReviewAfterAlbumCreate;
+      if (shouldResumeReview) {
+        setReviewAlbumId(album.id);
+        setIsUploadReviewOpen(true);
+        setResumeUploadReviewAfterAlbumCreate(false);
+      } else {
+        setView("albums");
+        setSelectedAlbumId(album.id);
+      }
       setIsCreateAlbumOpen(false);
-      setView("albums");
-      setSelectedAlbumId(album.id);
       setStatus(payload.message || "Альбом создан.");
       setError(null);
     } catch (albumError) {
@@ -714,6 +738,17 @@ export function TreeMediaArchiveClient({
     });
   }
 
+  function handleReviewAlbumChange(nextValue: string) {
+    if (nextValue === CREATE_ALBUM_OPTION_VALUE) {
+      setResumeUploadReviewAfterAlbumCreate(true);
+      setIsUploadReviewOpen(false);
+      setIsCreateAlbumOpen(true);
+      return;
+    }
+
+    setReviewAlbumId(nextValue);
+  }
+
   function closeUploadReview() {
     if (isSavingUploads) {
       return;
@@ -811,17 +846,17 @@ export function TreeMediaArchiveClient({
           <strong>{input.title}</strong>
           <p>{input.description}</p>
         </div>
-        {input.actions ? <div className="card-actions empty-state-actions">{input.actions}</div> : null}
+        {input.actions ? <div className="action-row empty-state-actions">{input.actions}</div> : null}
       </div>
     );
   }
 
   return (
-    <section className="surface-card archive-card">
+    <Card className="archive-card p-6">
       <div className="archive-header">
         <div className="archive-header-copy">
           <p className="eyebrow">Семейный архив</p>
-          <h2>{modeLabel}</h2>
+          <h2 className="card-heading">{modeLabel}</h2>
         </div>
         {canEdit ? (
           <div className="archive-action-bar archive-header-actions">
@@ -833,12 +868,13 @@ export function TreeMediaArchiveClient({
               accept={mode === "photo" ? "image/*" : mode === "video" ? "video/*" : "image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx"}
               onChange={handleArchiveFileSelection}
             />
-            <button type="button" className="secondary-button" onClick={() => fileInputRef.current?.click()}>
+            <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
               {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
-            </button>
-            <button type="button" className="ghost-button" onClick={() => setIsCreateAlbumOpen(true)}>
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setIsCreateAlbumOpen(true)}>
+              <PlusIcon />
               Создать альбом
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>
@@ -859,26 +895,30 @@ export function TreeMediaArchiveClient({
         </div>
       ) : null}
 
-      <div className="pill-nav">
-        <button type="button" className={`pill-link${mode === "photo" ? " pill-link-active" : ""}`} onClick={() => switchMode("photo")}>
-          Фото
-        </button>
-        <button type="button" className={`pill-link${mode === "video" ? " pill-link-active" : ""}`} onClick={() => switchMode("video")}>
-          Видео
-        </button>
-        <button type="button" className={`pill-link${mode === "all" ? " pill-link-active" : ""}`} onClick={() => switchMode("all")}>
-          Все медиа
-        </button>
-      </div>
+      <Tabs value={mode} onValueChange={(value) => switchMode(value as MediaMode)}>
+        <TabsList variant="line" aria-label="Режим архива">
+          <TabsTrigger className={`pill-link${mode === "photo" ? " pill-link-active" : ""}`} value="photo">
+            Фото
+          </TabsTrigger>
+          <TabsTrigger className={`pill-link${mode === "video" ? " pill-link-active" : ""}`} value="video">
+            Видео
+          </TabsTrigger>
+          <TabsTrigger className={`pill-link${mode === "all" ? " pill-link-active" : ""}`} value="all">
+            Все медиа
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      <div className="pill-nav">
-        <button type="button" className={`pill-link${view === "all" ? " pill-link-active" : ""}`} onClick={() => switchView("all")}>
-          Все
-        </button>
-        <button type="button" className={`pill-link${view === "albums" ? " pill-link-active" : ""}`} onClick={() => switchView("albums")}>
-          Альбомы
-        </button>
-      </div>
+      <Tabs value={view} onValueChange={(value) => switchView(value as ArchiveView)}>
+        <TabsList variant="line" aria-label="Режим просмотра архива">
+          <TabsTrigger className={`pill-link${view === "all" ? " pill-link-active" : ""}`} value="all">
+            Все
+          </TabsTrigger>
+          <TabsTrigger className={`pill-link${view === "albums" ? " pill-link-active" : ""}`} value="albums">
+            Альбомы
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {view === "all" ? (
         currentMedia.length ? (
@@ -888,10 +928,10 @@ export function TreeMediaArchiveClient({
             </div>
 
             {visibleItems < currentMedia.length ? (
-              <div className="card-actions archive-actions">
-                <button type="button" className="ghost-button" onClick={() => setVisibleItems((current) => current + INITIAL_TILE_LIMIT)}>
+              <div className="action-row archive-actions">
+                <Button type="button" variant="ghost" onClick={() => setVisibleItems((current) => current + INITIAL_TILE_LIMIT)}>
                   Показать еще
-                </button>
+                </Button>
                 <span className="members-static-note">
                   Показано {Math.min(visibleItems, currentMedia.length)} из {currentMedia.length} {itemLabel}
                 </span>
@@ -906,12 +946,13 @@ export function TreeMediaArchiveClient({
               : "Когда в архиве появятся материалы, они будут собраны здесь в спокойной галерее.",
             actions: canEdit ? (
               <>
-                <button type="button" className="secondary-button" onClick={() => fileInputRef.current?.click()}>
+                <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
                   {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
-                </button>
-                <button type="button" className="ghost-button" onClick={() => setIsCreateAlbumOpen(true)}>
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setIsCreateAlbumOpen(true)}>
+                  <PlusIcon />
                   Создать альбом
-                </button>
+                </Button>
               </>
             ) : null
           })
@@ -919,9 +960,9 @@ export function TreeMediaArchiveClient({
       ) : selectedAlbum ? (
         <>
           <div className="archive-subheader">
-            <button type="button" className="ghost-button archive-subheader-back" onClick={() => setSelectedAlbumId(null)}>
+            <Button type="button" variant="ghost" className="archive-subheader-back" onClick={() => setSelectedAlbumId(null)}>
               Назад к альбомам
-            </button>
+            </Button>
             <div className="archive-subheader-copy">
               <strong>{selectedAlbum.title}</strong>
               <span>{selectedAlbumMedia.length} {mode === "all" ? "материалов" : itemLabel}</span>
@@ -939,12 +980,12 @@ export function TreeMediaArchiveClient({
                 : "Когда в выбранном альбоме появятся материалы этого типа, они откроются здесь.",
               actions: canEdit ? (
                 <>
-                  <button type="button" className="secondary-button" onClick={() => fileInputRef.current?.click()}>
+                  <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
                     {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
-                  </button>
-                  <button type="button" className="ghost-button" onClick={() => setSelectedAlbumId(null)}>
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setSelectedAlbumId(null)}>
                     Назад к альбомам
-                  </button>
+                  </Button>
                 </>
               ) : null
             })
@@ -982,9 +1023,10 @@ export function TreeMediaArchiveClient({
             ? "Создайте первый альбом для семейной подборки, чтобы складывать туда поездки, праздники и другие общие серии."
             : "Когда владелец или редактор соберет альбомы, они появятся здесь.",
           actions: canEdit ? (
-            <button type="button" className="secondary-button" onClick={() => setIsCreateAlbumOpen(true)}>
+            <Button type="button" variant="secondary" onClick={() => setIsCreateAlbumOpen(true)}>
+              <PlusIcon />
               Создать альбом
-            </button>
+            </Button>
           ) : null
         })
       )}
@@ -1000,23 +1042,24 @@ export function TreeMediaArchiveClient({
         </div>
         <div className="archive-action-bar">
           {view === "albums" && activeContextAlbum ? (
-            <button type="button" className="ghost-button" onClick={() => setSelectedAlbumId(null)}>
+            <Button type="button" variant="ghost" onClick={() => setSelectedAlbumId(null)}>
               Назад к альбомам
-            </button>
+            </Button>
           ) : null}
           {view === "all" && visibleItems < currentMedia.length ? (
-            <button type="button" className="ghost-button" onClick={() => setVisibleItems((current) => current + INITIAL_TILE_LIMIT)}>
+            <Button type="button" variant="ghost" onClick={() => setVisibleItems((current) => current + INITIAL_TILE_LIMIT)}>
               Показать еще
-            </button>
+            </Button>
           ) : null}
           {canEdit ? (
             <>
-              <button type="button" className="secondary-button" onClick={() => fileInputRef.current?.click()}>
+              <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
                 {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
-              </button>
-              <button type="button" className="ghost-button" onClick={() => setIsCreateAlbumOpen(true)}>
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setIsCreateAlbumOpen(true)}>
+                <PlusIcon />
                 Создать альбом
-              </button>
+              </Button>
             </>
           ) : null}
         </div>
@@ -1046,12 +1089,12 @@ export function TreeMediaArchiveClient({
                 {activeViewerAsset.caption ? <p>{activeViewerAsset.caption}</p> : null}
               </div>
               <div className="media-lightbox-actions">
-                <a href={buildOpenUrl(activeViewerAsset, shareToken)} target="_blank" rel="noreferrer" className="ghost-button">
+                <a href={buildOpenUrl(activeViewerAsset, shareToken)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
                   {getArchiveOpenLabel(activeViewerAsset)}
                 </a>
-                <button type="button" className="ghost-button" onClick={() => setIsMediaViewerOpen(false)}>
+                <Button type="button" variant="ghost" onClick={() => setIsMediaViewerOpen(false)}>
                   Закрыть
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1080,7 +1123,7 @@ export function TreeMediaArchiveClient({
                   <div className="person-media-placeholder archive-media-placeholder">
                     <strong>{activeViewerAsset.provider === "yandex_disk" ? "Видео по ссылке" : "Файл открывается отдельно"}</strong>
                     <p>{activeViewerAsset.caption || "Для этого материала доступно только открытие по отдельной ссылке."}</p>
-                    <a href={buildOpenUrl(activeViewerAsset, shareToken)} target="_blank" rel="noreferrer" className="ghost-button">
+                    <a href={buildOpenUrl(activeViewerAsset, shareToken)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
                       {getArchiveOpenLabel(activeViewerAsset)}
                     </a>
                   </div>
@@ -1122,95 +1165,82 @@ export function TreeMediaArchiveClient({
         </div>
       ) : null}
 
-      {isCreateAlbumOpen ? (
-        <div
-          className="media-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Создать альбом"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setIsCreateAlbumOpen(false);
-            }
-          }}
-        >
-          <div className="media-lightbox-dialog archive-dialog">
-            <div className="media-lightbox-header">
-              <div className="media-lightbox-copy">
-                <h3>Создать альбом</h3>
-                <p>Сюда можно будет складывать отдельные семейные подборки: свадьбы, дни рождения, поездки и другие общие архивы.</p>
-              </div>
-            </div>
-            <form className="stack-form archive-album-form" onSubmit={handleCreateAlbum}>
-              <label>
-                Название
-                <input value={albumTitle} onChange={(event) => setAlbumTitle(event.target.value)} required maxLength={120} />
-              </label>
-              <label>
-                Описание
-                <textarea value={albumDescription} onChange={(event) => setAlbumDescription(event.target.value)} rows={4} maxLength={512} />
-              </label>
-              <div className="card-actions archive-actions">
-                <button type="button" className="ghost-button" disabled={isCreatingAlbum} onClick={() => setIsCreateAlbumOpen(false)}>
-                  Отмена
-                </button>
-                <button type="submit" className="primary-button" disabled={isCreatingAlbum}>
-                  {isCreatingAlbum ? "Создаю альбом..." : "Создать альбом"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
+      <Dialog
+        open={isCreateAlbumOpen}
+        onOpenChange={(open) => {
+          setIsCreateAlbumOpen(open);
+          if (!open && resumeUploadReviewAfterAlbumCreate && pendingUploads.length && !isCreatingAlbum) {
+            setIsUploadReviewOpen(true);
+            setResumeUploadReviewAfterAlbumCreate(false);
+          }
+        }}
+      >
+        <DialogContent className="archive-dialog" aria-label="Создать альбом" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Создать альбом</DialogTitle>
+            <DialogDescription>
+              Сюда можно будет складывать отдельные семейные подборки: свадьбы, дни рождения, поездки и другие общие архивы.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="stack-form archive-album-form" onSubmit={handleCreateAlbum}>
+            <label className="form-field">
+              Название
+              <Input value={albumTitle} onChange={(event) => setAlbumTitle(event.target.value)} required maxLength={120} />
+            </label>
+            <label className="form-field">
+              Описание
+              <Textarea value={albumDescription} onChange={(event) => setAlbumDescription(event.target.value)} rows={4} maxLength={512} />
+            </label>
+            <DialogFooter className="archive-actions">
+              <Button type="button" variant="ghost" disabled={isCreatingAlbum} onClick={() => setIsCreateAlbumOpen(false)}>
+                Отмена
+              </Button>
+              <Button type="submit" disabled={isCreatingAlbum}>
+                {isCreatingAlbum ? "Создаю альбом..." : "Создать альбом"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {isUploadReviewOpen ? (
-        <div
-          className="media-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Подготовка загрузки"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              closeUploadReview();
-            }
-          }}
-        >
-          <div className="media-lightbox-dialog archive-dialog">
-            <div className="media-lightbox-header">
-              <div className="media-lightbox-copy">
-                <h3>Подготовка загрузки</h3>
-                <p>
-                  {reviewTargetAlbum
-                    ? `Новые материалы попадут в альбом «${reviewTargetAlbum.title}».`
-                    : "Выберите, что именно сохранить в семейный архив."}
-                </p>
-              </div>
-            </div>
-            {selectedAlbum?.albumKind !== "manual" && manualAlbums.length ? (
-              <label className="archive-field">
-                Куда сохранить
-                <select value={reviewAlbumId} onChange={(event) => setReviewAlbumId(event.target.value)}>
+      <Dialog open={isUploadReviewOpen} onOpenChange={(open) => (!open ? closeUploadReview() : null)}>
+        <DialogContent className="archive-dialog" aria-label="Подготовка загрузки" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Подготовка загрузки</DialogTitle>
+            <DialogDescription>
+              {reviewTargetAlbum
+                ? `Новые материалы попадут в альбом «${reviewTargetAlbum.title}».`
+                : "Выберите, что именно сохранить в семейный архив."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="archive-review-layout">
+            {selectedAlbum?.albumKind !== "manual" ? (
+              <label className="form-field archive-field archive-review-field-span">
+                Куда сохранить (можно выбрать альбом)
+                <SelectField value={reviewAlbumId} onChange={(event) => handleReviewAlbumChange(event.target.value)}>
                   <option value="">Только в общий архив</option>
                   {manualAlbums.map((album) => (
                     <option key={album.id} value={album.id}>
                       {album.title}
                     </option>
                   ))}
-                </select>
+                  <option value={CREATE_ALBUM_OPTION_VALUE}>+ Создать альбом</option>
+                </SelectField>
               </label>
             ) : null}
-            <div className="builder-review-controls">
-              <label className="archive-field">
+            <div className="archive-review-metadata">
+              <label className="form-field archive-field">
                 Видимость
-                <select value={reviewVisibility} onChange={(event) => setReviewVisibility(event.target.value as "public" | "members")}>
-                  <option value="members">Только участникам</option>
+                <SelectField value={reviewVisibility} onChange={(event) => setReviewVisibility(event.target.value as "public" | "members")}>
+                  <option value="members">Только членам семьи</option>
                   <option value="public">Всем по ссылке</option>
-                </select>
+                </SelectField>
               </label>
-              <label className="archive-field">
+              <label className="form-field archive-field">
                 Подпись
-                <textarea
-                  rows={3}
+                <Textarea
+                  rows={1}
+                  className="min-h-11"
                   value={reviewCaption}
                   onChange={(event) => setReviewCaption(event.target.value)}
                   placeholder="Общая подпись для выбранных файлов, если она нужна"
@@ -1218,7 +1248,7 @@ export function TreeMediaArchiveClient({
               </label>
             </div>
             <div className="archive-review-body">
-              <div className={`archive-grid archive-review-grid${pendingUploads.length > 8 ? " archive-review-grid-dense" : ""}`}>
+              <div className={`archive-grid archive-review-grid${pendingUploads.length > 12 ? " archive-review-grid-dense" : ""}`}>
                 {pendingUploads.map((item) => (
                   <article key={item.id} className="archive-review-tile">
                     <button
@@ -1242,63 +1272,51 @@ export function TreeMediaArchiveClient({
                 ))}
               </div>
             </div>
-            <div className="archive-action-bar archive-review-footer">
-              <input
-                ref={reviewFileInputRef}
-                className="builder-native-file-input"
-                type="file"
-                multiple
-                accept={mode === "photo" ? "image/*" : mode === "video" ? "video/*" : "image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx"}
-                onChange={handleArchiveFileSelection}
-              />
-              <button type="button" className="ghost-button" onClick={() => reviewFileInputRef.current?.click()}>
-                Добавить еще
-              </button>
-              <button type="button" className="ghost-button" onClick={closeUploadReview}>
-                Отмена
-              </button>
-              <button type="button" className="primary-button" disabled={isSavingUploads} onClick={() => void savePendingUploads()}>
-                {isSavingUploads ? "Сохраняем..." : `Сохранить ${pendingUploads.length}`}
-              </button>
-            </div>
           </div>
-        </div>
-      ) : null}
+          <DialogFooter className="archive-review-footer archive-actions">
+            <input
+              ref={reviewFileInputRef}
+              className="builder-native-file-input"
+              type="file"
+              multiple
+              accept={mode === "photo" ? "image/*" : mode === "video" ? "video/*" : "image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx"}
+              onChange={handleArchiveFileSelection}
+            />
+            <Button type="button" variant="secondary" onClick={() => reviewFileInputRef.current?.click()}>
+              Добавить еще
+            </Button>
+            <Button type="button" variant="outline" onClick={closeUploadReview}>
+              Отмена
+            </Button>
+            <Button type="button" disabled={isSavingUploads} onClick={() => void savePendingUploads()}>
+              {isSavingUploads ? "Сохраняем..." : `Сохранить ${pendingUploads.length}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {isDiscardConfirmOpen ? (
-        <div
-          className="media-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Закрыть окно загрузки"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setIsDiscardConfirmOpen(false);
-            }
-          }}
-        >
-          <div className="media-lightbox-dialog archive-confirm-dialog">
-            <div className="media-lightbox-copy">
-              <h3>Закрыть окно загрузки?</h3>
-              <p>Некоторые выбранные файлы еще не сохранены. Если закрыть окно сейчас, этот набор пропадет.</p>
-            </div>
-            <div className="card-actions archive-actions">
-              <button type="button" className="ghost-button" onClick={() => setIsDiscardConfirmOpen(false)}>
-                Отмена
-              </button>
-              <button type="button" className="primary-button" onClick={discardPendingUploads}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <Dialog open={isDiscardConfirmOpen} onOpenChange={setIsDiscardConfirmOpen}>
+        <DialogContent className="archive-confirm-dialog" aria-label="Закрыть окно загрузки" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Закрыть окно загрузки?</DialogTitle>
+            <DialogDescription>Некоторые выбранные файлы еще не сохранены. Если закрыть окно сейчас, этот набор пропадет.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="archive-actions">
+            <Button type="button" variant="ghost" onClick={() => setIsDiscardConfirmOpen(false)}>
+              Отмена
+            </Button>
+            <Button type="button" onClick={discardPendingUploads}>
+              Закрыть
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {status ? (
         <div className="builder-status-toast" role="status" aria-live="polite">
           {status}
         </div>
       ) : null}
-    </section>
+    </Card>
   );
 }

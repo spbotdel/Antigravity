@@ -3,6 +3,9 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+
 export function InviteAcceptanceCard() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -11,12 +14,13 @@ export function InviteAcceptanceCard() {
   const [loading, setLoading] = useState(false);
 
   return (
-    <div className="auth-card">
-      <p className="eyebrow">Приглашение</p>
-      <h1>Принять приглашение в семейное дерево</h1>
-      <p className="muted-copy">Чтобы активировать приглашение, нужно войти в аккаунт.</p>
-      <button
-        className="primary-button"
+    <Card className="auth-card">
+      <div className="auth-card-copy">
+        <p className="eyebrow">Приглашение</p>
+        <h1>Принять приглашение в семейное дерево</h1>
+        <p className="muted-copy">Чтобы активировать приглашение, нужно войти в аккаунт.</p>
+      </div>
+      <Button
         disabled={loading || !token}
         onClick={async () => {
           setLoading(true);
@@ -42,8 +46,8 @@ export function InviteAcceptanceCard() {
         }}
       >
         {loading ? "Подтверждаю..." : "Принять приглашение"}
-      </button>
+      </Button>
       {error ? <p className="form-error">{error}</p> : null}
-    </div>
+    </Card>
   );
 }

@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
+import { CopyIcon } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/select-field";
+import { Textarea } from "@/components/ui/textarea";
 import type { PersonRecord, TreeRecord } from "@/lib/types";
 import { formatTreeVisibility } from "@/lib/ui-text";
 import { cn } from "@/lib/utils";
@@ -97,129 +104,145 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
 
   return (
     <div className="settings-grid">
-      <section className="surface-card settings-card settings-card-wide">
-        <div className="settings-card-header">
+      <Card className="settings-card settings-card-wide p-0">
+        <CardHeader className="settings-card-header px-6 pt-6 pb-0">
           <div className="settings-card-header-copy">
             <p className="eyebrow">Данные дерева</p>
             <h2 className="settings-title">Название, адрес и структура</h2>
             <p className="muted-copy settings-lead">Задайте название, короткий адрес и человека, от которого начинается основная ветка схемы.</p>
           </div>
-        </div>
+        </CardHeader>
 
-        <div className="settings-meta-grid">
-          <div className="settings-meta-card">
-            <span>Ссылка на дерево</span>
-            <strong>{treeUrl}</strong>
-            <div className="card-actions settings-meta-actions">
-              <button type="button" className="ghost-button ghost-button-compact" onClick={() => void copyTreeUrl()}>
-                Скопировать ссылку
-              </button>
+        <CardContent className="px-6 pt-0 pb-6">
+          <div className="settings-meta-grid">
+            <div className="settings-meta-card">
+              <span>Ссылка на дерево</span>
+              <strong>{treeUrl}</strong>
+              <div className="action-row settings-meta-actions">
+                <Button type="button" variant="secondary" size="sm" onClick={() => void copyTreeUrl()}>
+                  <CopyIcon />
+                  Скопировать ссылку
+                </Button>
+              </div>
+              <p>Этот адрес можно отправлять родственникам и участникам.</p>
             </div>
-            <p>Этот адрес можно отправлять родственникам и участникам.</p>
-          </div>
-          <div className="settings-meta-card">
-            <span>Корень дерева</span>
-            <strong>{currentRootPerson?.full_name || "Пока не выбран"}</strong>
-            <p>Если корень не выбран, схема собирается от первого доступного человека.</p>
-          </div>
-          <div className="settings-meta-card">
-            <span>Людей в дереве</span>
-            <strong>{people.length}</strong>
-            <p>Количество карточек, доступных для выбора корня и дальнейшей сборки структуры.</p>
-          </div>
-        </div>
-
-        <form className="stack-form settings-form" onSubmit={updateIdentity}>
-          <div className="field-grid field-grid-2">
-            <label>
-              Название дерева
-              <input name="title" defaultValue={tree.title} required />
-              <small className="settings-field-note">Так дерево увидят участники и гости по ссылке.</small>
-            </label>
-
-            <label>
-              Адрес страницы
-              <input name="slug" defaultValue={tree.slug} required onChange={(event) => setDraftSlug(event.target.value)} />
-              <small className="settings-field-note">Лучше оставить короткий и читаемый адрес, например `/tree/ivanovy`.</small>
-            </label>
-          </div>
-
-          <label>
-            Описание
-            <textarea name="description" rows={4} defaultValue={tree.description || ""} />
-            <small className="settings-field-note">Несколько строк о том, что это за дерево и кому оно посвящено.</small>
-          </label>
-
-          <div className="field-grid field-grid-2">
-            <label>
-              Корневой человек
-              <select name="rootPersonId" defaultValue={tree.root_person_id || ""}>
-                <option value="">Выбрать позже</option>
-                {people.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.full_name}
-                  </option>
-                ))}
-              </select>
-              <small className="settings-field-note">От него начинается основная ветка дерева в viewer и builder.</small>
-            </label>
-            <div className="settings-inline-note">
-              <span className="settings-inline-note-label">Подсказка</span>
-              <strong>Если структура семьи еще не готова, корень можно выбрать позже.</strong>
-              <p>Сначала добавьте людей и связи, а потом закрепите того, с кого удобнее начинать просмотр дерева.</p>
+            <div className="settings-meta-card">
+              <span>Корень дерева</span>
+              <strong>{currentRootPerson?.full_name || "Пока не выбран"}</strong>
+              <p>Если корень не выбран, схема собирается от первого доступного человека.</p>
+            </div>
+            <div className="settings-meta-card">
+              <span>Людей в дереве</span>
+              <strong>{people.length}</strong>
+              <p>Количество карточек, доступных для выбора корня и дальнейшей сборки структуры.</p>
             </div>
           </div>
 
-          <div className="settings-actions-row">
-            <button className="primary-button settings-save-button" type="submit" disabled={pendingAction === "identity"}>
-              {pendingAction === "identity" ? "Сохраняю..." : "Сохранить данные"}
-            </button>
-          </div>
-        </form>
-      </section>
+          <form className="stack-form settings-form" onSubmit={updateIdentity}>
+            <div className="form-grid form-grid-2">
+              <label className="form-field">
+                Название дерева
+                <Input name="title" defaultValue={tree.title} required />
+                <small className="settings-field-note">Так дерево увидят участники и гости по ссылке.</small>
+              </label>
 
-      <section className="surface-card settings-card settings-card-accent">
-        <div className="settings-card-header settings-card-header-stack">
+              <label className="form-field">
+                Адрес страницы
+                <Input name="slug" defaultValue={tree.slug} required onChange={(event) => setDraftSlug(event.target.value)} />
+                <small className="settings-field-note">Лучше оставить короткий и читаемый адрес, например `/tree/ivanovy`.</small>
+              </label>
+            </div>
+
+            <label className="form-field">
+              Описание
+              <Textarea name="description" rows={4} defaultValue={tree.description || ""} />
+              <small className="settings-field-note">Несколько строк о том, что это за дерево и кому оно посвящено.</small>
+            </label>
+
+            <div className="form-grid form-grid-2">
+              <label className="form-field">
+                Корневой человек
+                <SelectField name="rootPersonId" defaultValue={tree.root_person_id || ""}>
+                  <option value="">Выбрать позже</option>
+                  {people.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.full_name}
+                    </option>
+                  ))}
+                </SelectField>
+                <small className="settings-field-note">От него начинается основная ветка дерева в viewer и builder.</small>
+              </label>
+              <div className="settings-inline-note">
+                <span className="settings-inline-note-label">Подсказка</span>
+                <strong>Если структура семьи еще не готова, корень можно выбрать позже.</strong>
+                <p>Сначала добавьте людей и связи, а потом закрепите того, с кого удобнее начинать просмотр дерева.</p>
+              </div>
+            </div>
+
+            <div className="settings-actions-row">
+              <Button className="settings-save-button" type="submit" disabled={pendingAction === "identity"}>
+                {pendingAction === "identity" ? "Сохраняю..." : "Сохранить данные"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="settings-card settings-card-accent p-0">
+        <CardHeader className="settings-card-header settings-card-header-stack px-6 pt-6 pb-0">
           <div className="settings-card-header-copy">
             <p className="eyebrow">Приватность</p>
             <h2 className="settings-title">Кто может открыть дерево</h2>
             <p className="muted-copy settings-lead">Изменение применяется сразу. Даже в открытом дереве медиа «только участникам» останутся скрытыми для гостей.</p>
           </div>
 
-          <div className={cn("settings-visibility-badge", currentVisibility === "public" ? "settings-visibility-badge-public" : "settings-visibility-badge-private")}>
+          <Badge
+            className={cn("settings-visibility-badge", currentVisibility === "public" ? "settings-visibility-badge-public" : "settings-visibility-badge-private")}
+            variant="secondary"
+          >
             Сейчас: {formatTreeVisibility(currentVisibility)}
+          </Badge>
+        </CardHeader>
+
+        <CardContent className="px-6 pt-0 pb-6">
+          <div className="privacy-toggle">
+            <Button
+              className={cn(
+                "privacy-option h-auto w-full justify-start whitespace-normal text-left",
+                currentVisibility === "private" && "privacy-option-active"
+              )}
+              type="button"
+              variant="outline"
+              disabled={pendingAction === "private"}
+              onClick={() => updateVisibility("private")}
+            >
+              <span className="privacy-option-label">Закрытое дерево</span>
+              <strong className="privacy-option-title">Сделать закрытым</strong>
+              <span className="privacy-option-copy">Доступ останется только у приглашенных и авторизованных участников.</span>
+            </Button>
+
+            <Button
+              className={cn(
+                "privacy-option h-auto w-full justify-start whitespace-normal text-left",
+                currentVisibility === "public" && "privacy-option-active"
+              )}
+              type="button"
+              variant="outline"
+              disabled={pendingAction === "public"}
+              onClick={() => updateVisibility("public")}
+            >
+              <span className="privacy-option-label">Открытое дерево</span>
+              <strong className="privacy-option-title">Сделать открытым</strong>
+              <span className="privacy-option-copy">Любой человек со ссылкой сможет открыть дерево без приглашения.</span>
+            </Button>
           </div>
-        </div>
 
-        <div className="privacy-toggle">
-          <button
-            className={cn("privacy-option", currentVisibility === "private" && "privacy-option-active")}
-            type="button"
-            disabled={pendingAction === "private"}
-            onClick={() => updateVisibility("private")}
-          >
-            <span className="privacy-option-label">Закрытое дерево</span>
-            <strong className="privacy-option-title">Сделать закрытым</strong>
-            <span className="privacy-option-copy">Доступ останется только у приглашенных и авторизованных участников.</span>
-          </button>
-
-          <button
-            className={cn("privacy-option", currentVisibility === "public" && "privacy-option-active")}
-            type="button"
-            disabled={pendingAction === "public"}
-            onClick={() => updateVisibility("public")}
-          >
-            <span className="privacy-option-label">Открытое дерево</span>
-            <strong className="privacy-option-title">Сделать открытым</strong>
-            <span className="privacy-option-copy">Любой человек со ссылкой сможет открыть дерево без приглашения.</span>
-          </button>
-        </div>
-
-        <div className="settings-note-panel settings-note-panel-compact">
-          <strong>Что важно</strong>
-          <p>Фото, видео и документы теперь загружаются как файлы. Доступ к ним управляется общей настройкой видимости и ролями участников.</p>
-        </div>
-      </section>
+          <div className="settings-note-panel settings-note-panel-compact">
+            <strong>Что важно</strong>
+            <p>Фото, видео и документы теперь загружаются как файлы. Доступ к ним управляется общей настройкой видимости и ролями участников.</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {(error || success) && (
         <div className="settings-feedback-strip">

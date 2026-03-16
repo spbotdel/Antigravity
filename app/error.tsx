@@ -1,16 +1,21 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+
 export default function GlobalError({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <main className="page-shell narrow-shell">
-      <section className="auth-card">
-        <p className="eyebrow">Неожиданная ошибка</p>
-        <h1>Что-то пошло не так</h1>
+      <Card className="auth-card">
+        <div className="auth-card-copy">
+          <p className="eyebrow">Неожиданная ошибка</p>
+          <h1>Что-то пошло не так</h1>
+        </div>
         <p className="form-error">{error.message}</p>
-        <button className="primary-button" onClick={() => reset()}>
+        <Button onClick={() => reset()}>
           Повторить
-        </button>
-      </section>
+        </Button>
+      </Card>
     </main>
   );
 }

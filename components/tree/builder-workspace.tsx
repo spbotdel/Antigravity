@@ -2,6 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
 
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/select-field";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   FamilyTreeCanvas,
   type FamilyTreeCanvasAction
@@ -502,6 +516,16 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         )?.media_id || null
       : null;
   const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
+  const selectedPersonEditFormKey = selectedPerson
+    ? [
+        selectedPerson.id,
+        selectedPerson.full_name,
+        selectedPerson.gender || "",
+        selectedPerson.birth_date || "",
+        selectedPerson.death_date || "",
+        selectedPerson.bio || "",
+      ].join("::")
+    : "edit-none";
   const anchorPerson = createContext.type === "standalone" ? null : peopleById.get(createContext.anchorPersonId) || null;
   const createHeading = getCreateContextHeading(createContext, anchorPerson);
   const createModeActive = activePanel === "person" && personMode === "create";
@@ -1700,12 +1724,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           <span>{mediaCount} {mediaCount === 1 ? "материал" : mediaCount < 5 ? "материала" : "материалов"} на основной сцене</span>
         </div>
         <div className="archive-action-bar">
-          <button type="button" className="ghost-button" onClick={closeExpandedGallery}>
+          <Button type="button" variant="ghost" onClick={closeExpandedGallery}>
             Вернуться к дереву
-          </button>
-          <button type="button" className="secondary-button" onClick={openMediaPickerOrReview}>
+          </Button>
+          <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
             {mode === "photo" ? "Загрузить фото" : "Загрузить видео"}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -1736,14 +1760,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               onChange={handleMediaFileSelection}
             />
             <div className="builder-file-picker-shell">
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={isUploadingMedia}
-                onClick={openMediaPickerOrReview}
-              >
+              <Button type="button" variant="secondary" disabled={isUploadingMedia} onClick={openMediaPickerOrReview}>
                 {config.chooseButtonLabel}
-              </button>
+              </Button>
             </div>
           </div>
           <div className="builder-upload-feedback builder-field-span">
@@ -1785,121 +1804,116 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
   if (!isClientReady) {
     return (
-      <section className="surface-card builder-loading-state" data-testid="builder-workspace-loading">
+      <Card className="builder-loading-state p-6" data-testid="builder-workspace-loading">
         <p className="eyebrow">Конструктор</p>
-        <h2>Подготавливаю рабочее пространство</h2>
+        <h2 className="card-heading">Подготавливаю рабочее пространство</h2>
         <p className="muted-copy">Схема, связи и карточки загрузятся сразу после инициализации клиента.</p>
-      </section>
+      </Card>
     );
   }
 
   return (
     <>
       <div className="builder-layout builder-layout-reworked builder-layout-canvas">
-      <main className="builder-main">
-        <div className="surface-card viewer-stage builder-stage builder-stage-canvas">
-          <div className="stage-header builder-stage-header builder-stage-header-overlay">
-            <div className="stage-header-copy">
-              <p className="stage-kicker">{expandedGalleryMode ? "Галерея" : "Схема дерева"}</p>
-              <h2>{stageTitle}</h2>
-              <p className="builder-stage-note">{stageNote}</p>
+        <main className="builder-main">
+          <Card className="viewer-stage builder-stage builder-stage-canvas">
+            <div className="stage-header builder-stage-header builder-stage-header-overlay">
+              <div className="stage-header-copy">
+                <p className="stage-kicker">{expandedGalleryMode ? "Галерея" : "Схема дерева"}</p>
+                <h2 className="card-heading">{stageTitle}</h2>
+                <p className="builder-stage-note">{stageNote}</p>
+              </div>
+              {expandedGalleryMode ? (
+                <div className="builder-stage-meta">
+                  <Button type="button" variant="ghost" size="sm" onClick={closeExpandedGallery}>
+                    Вернуться к дереву
+                  </Button>
+                </div>
+              ) : null}
             </div>
             {expandedGalleryMode ? (
-              <div className="builder-stage-meta">
-                <button type="button" className="ghost-button ghost-button-compact" onClick={closeExpandedGallery}>
-                  Вернуться к дереву
-                </button>
-              </div>
-            ) : null}
-          </div>
-          {expandedGalleryMode ? (
-            <div className="builder-stage-gallery-shell">
-              <PersonMediaGallery
-                media={expandedGalleryMode === "photo" ? selectedPhotoMedia : selectedVideoMedia}
-                emptyTitle={expandedGalleryMode === "photo" ? "Фотографий пока нет" : "Видео пока нет"}
-                emptyMessage={expandedGalleryMode === "photo" ? "Для этого человека пока нет фотографий." : "Для этого человека пока нет видео."}
-                avatarMediaId={expandedGalleryMode === "photo" ? selectedPrimaryPhotoMediaId : null}
-                showStickyFooter={false}
-                onSetAvatar={
-                  expandedGalleryMode === "photo" && selectedPerson
-                    ? (mediaId) =>
-                        submitJson(`/api/media/${mediaId}`, "PATCH", {
-                          personId: selectedPerson.id,
-                          setPrimary: true
-                        }).then(() => undefined)
-                    : undefined
-                }
-              />
-              {renderExpandedGalleryFooter(expandedGalleryMode)}
-            </div>
-          ) : (
-            <>
-              <div className="builder-canvas-shell" style={{ height: `${canvasHeight}px` }}>
-                <FamilyTreeCanvas
-                  tree={displayTree}
-                  selectedPersonId={selectedPersonId}
-                  onSelectPerson={focusPerson}
-                  interactive
-                  displayMode="builder"
-                  people={currentSnapshot.people}
-                  parentLinks={currentSnapshot.parentLinks}
-                  partnerships={currentSnapshot.partnerships}
-                  personPhotoUrls={personPhotoPreviewUrls}
-                  viewportHeightHint={canvasHeight}
-                  onPartnershipDateChange={savePartnershipDate}
-                  onNodeAction={handleCanvasAction}
-                  onEmptyAction={startStandaloneCreate}
+              <div className="builder-stage-gallery-shell">
+                <PersonMediaGallery
+                  media={expandedGalleryMode === "photo" ? selectedPhotoMedia : selectedVideoMedia}
+                  emptyTitle={expandedGalleryMode === "photo" ? "Фотографий пока нет" : "Видео пока нет"}
+                  emptyMessage={expandedGalleryMode === "photo" ? "Для этого человека пока нет фотографий." : "Для этого человека пока нет видео."}
+                  avatarMediaId={expandedGalleryMode === "photo" ? selectedPrimaryPhotoMediaId : null}
+                  showStickyFooter={false}
+                  onSetAvatar={
+                    expandedGalleryMode === "photo" && selectedPerson
+                      ? (mediaId) =>
+                          submitJson(`/api/media/${mediaId}`, "PATCH", {
+                            personId: selectedPerson.id,
+                            setPrimary: true
+                          }).then(() => undefined)
+                      : undefined
+                  }
                 />
+                {renderExpandedGalleryFooter(expandedGalleryMode)}
               </div>
-              <button
-                type="button"
-                className="builder-canvas-resize-handle"
-                aria-label="Изменить высоту схемы"
-                onPointerDown={startCanvasResize}
-              >
-                <span className="builder-canvas-resize-grip" />
-              </button>
-            </>
-          )}
-        </div>
-      </main>
+            ) : (
+              <>
+                <div className="builder-canvas-shell" style={{ height: `${canvasHeight}px` }}>
+                  <FamilyTreeCanvas
+                    tree={displayTree}
+                    selectedPersonId={selectedPersonId}
+                    onSelectPerson={focusPerson}
+                    interactive
+                    displayMode="builder"
+                    people={currentSnapshot.people}
+                    parentLinks={currentSnapshot.parentLinks}
+                    partnerships={currentSnapshot.partnerships}
+                    personPhotoUrls={personPhotoPreviewUrls}
+                    viewportHeightHint={canvasHeight}
+                    onPartnershipDateChange={savePartnershipDate}
+                    onNodeAction={handleCanvasAction}
+                    onEmptyAction={startStandaloneCreate}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="builder-canvas-resize-handle"
+                  aria-label="Изменить высоту схемы"
+                  onPointerDown={startCanvasResize}
+                >
+                  <span className="builder-canvas-resize-grip" />
+                </button>
+              </>
+            )}
+          </Card>
+        </main>
 
-      <aside className="surface-card builder-inspector builder-inspector-overlay">
+        <Card className="builder-inspector builder-inspector-overlay p-6">
         <div className="builder-inspector-header">
           <div className="builder-inspector-copy">
             <p className="eyebrow">{createModeActive ? "Новый блок" : "Карточка человека"}</p>
-            <h2>{inspectorTitle}</h2>
+            <h2 className="card-heading">{inspectorTitle}</h2>
             {inspectorDescription ? <p className="muted-copy">{inspectorDescription}</p> : null}
           </div>
-          <div className="builder-panel-tabs" role="tablist" aria-label="Панели конструктора">
-            <button
-              type="button"
-              className={currentBuilderTab === "info" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"}
-              onClick={() => setActivePanel("person")}
-            >
-              Инфо
-            </button>
-            <button
-              type="button"
-              className={currentBuilderTab === "photo" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"}
-              onClick={() => {
-                setMediaMode("photo");
-                setActivePanel("media");
-              }}
-            >
-              Фото
-            </button>
-            <button
-              type="button"
-              className={currentBuilderTab === "video" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"}
-              onClick={() => {
-                setMediaMode("video");
-                setActivePanel("media");
-              }}
-            >
-              Видео
-            </button>
-          </div>
+          <Tabs
+            value={currentBuilderTab}
+            onValueChange={(value) => {
+              if (value === "info") {
+                setActivePanel("person");
+                return;
+              }
+
+              setMediaMode(value === "video" ? "video" : "photo");
+              setActivePanel("media");
+            }}
+          >
+            <TabsList className="builder-panel-tabs" aria-label="Панели конструктора">
+              <TabsTrigger className={currentBuilderTab === "info" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"} value="info">
+                Инфо
+              </TabsTrigger>
+              <TabsTrigger className={currentBuilderTab === "photo" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"} value="photo">
+                Фото
+              </TabsTrigger>
+              <TabsTrigger className={currentBuilderTab === "video" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"} value="video">
+                Видео
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
         {createModeActive ? (
@@ -1921,7 +1935,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             {personMode === "create" ? (
               <div className="builder-section-block">
                 <div className="builder-section-heading">
-                  <h3>{createHeading.title}</h3>
+                  <h3 className="card-heading">{createHeading.title}</h3>
                   <p className="muted-copy">Заполните данные человека. После сохранения новый блок появится на схеме.</p>
                 </div>
                 {createContext.type !== "standalone" && anchorPerson ? (
@@ -1930,9 +1944,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       <strong>{anchorPerson.full_name}</strong>
                       <span>Отдельный блок создается без связи. Для мгновенного добавления родственника используйте + на карточке дерева.</span>
                     </div>
-                    <button type="button" className="ghost-button ghost-button-compact" onClick={startStandaloneCreate}>
+                    <Button type="button" variant="ghost" size="sm" onClick={startStandaloneCreate}>
                       Без связи
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
                 <form
@@ -1940,41 +1954,41 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                   className="stack-form builder-form-grid"
                   onSubmit={submitCreatePerson}
                 >
-                  <label className="builder-field-span">
+                  <label className="form-field builder-field-span">
                     Полное имя
-                    <input name="fullName" required placeholder="Мария Иванова" onKeyDown={handleSubmitOnEnter} />
+                    <Input name="fullName" required placeholder="Мария Иванова" onKeyDown={handleSubmitOnEnter} />
                   </label>
-                  <label>
+                  <label className="form-field">
                     Пол
-                    <select name="gender" defaultValue="">
+                    <SelectField name="gender" defaultValue="">
                       {PERSON_GENDER_OPTIONS.map((option) => (
                         <option key={option.value || "none"} value={option.value}>
                           {option.label}
                         </option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
-                  <label>
+                  <label className="form-field">
                     Дата рождения
-                    <input name="birthDate" type="date" />
+                    <Input name="birthDate" type="date" />
                   </label>
-                  <label>
+                  <label className="form-field">
                     Дата смерти
-                    <input name="deathDate" type="date" />
+                    <Input name="deathDate" type="date" />
                   </label>
-                  <label className="builder-field-span">
+                  <label className="form-field builder-field-span">
                     Био
-                    <textarea name="bio" rows={3} placeholder="Короткая биография, заметки или семейные воспоминания..." />
+                    <Textarea name="bio" rows={3} placeholder="Короткая биография, заметки или семейные воспоминания..." />
                   </label>
-                  <button className="primary-button builder-field-span" type="submit">
+                  <Button className="builder-field-span" type="submit">
                     {createHeading.submitLabel}
-                  </button>
+                  </Button>
                 </form>
               </div>
             ) : selectedPersonPending ? (
               <div className="builder-section-block">
                 <div className="builder-section-heading">
-                  <h3>Блок создается</h3>
+                  <h3 className="card-heading">Блок создается</h3>
                   <p className="muted-copy">Новый человек уже стоит на схеме. Дождитесь подтверждения сервера, и поля станут редактируемыми.</p>
                 </div>
                 <div className="builder-relation-empty">Сейчас запись создается в базе. Обычно это занимает несколько секунд.</div>
@@ -1982,7 +1996,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             ) : selectedPerson ? (
               <div className="builder-section-block">
                 <form
-                  key={`edit-${selectedPerson.id}`}
+                  key={`edit-${selectedPersonEditFormKey}`}
                   className="stack-form builder-form-grid"
                   onSubmit={async (event) => {
                     event.preventDefault();
@@ -1999,56 +2013,44 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     });
                   }}
                 >
-                  <label className="builder-field-span">
+                  <label className="form-field builder-field-span">
                     Полное имя
-                    <input name="fullName" defaultValue={selectedPerson.full_name} required suppressHydrationWarning onKeyDown={handleSubmitOnEnter} />
+                    <Input name="fullName" defaultValue={selectedPerson.full_name} required suppressHydrationWarning onKeyDown={handleSubmitOnEnter} />
                   </label>
-                  <label>
+                  <label className="form-field">
                     Пол
-                    <select name="gender" defaultValue={selectedPerson.gender || ""} suppressHydrationWarning>
+                    <SelectField name="gender" defaultValue={selectedPerson.gender || ""} suppressHydrationWarning>
                       {PERSON_GENDER_OPTIONS.map((option) => (
                         <option key={option.value || "none"} value={option.value}>
                           {option.label}
                         </option>
                       ))}
-                    </select>
+                    </SelectField>
                   </label>
-                  <label>
+                  <label className="form-field">
                     Дата рождения
-                    <input name="birthDate" type="date" defaultValue={selectedPerson.birth_date || ""} suppressHydrationWarning />
+                    <Input name="birthDate" type="date" defaultValue={selectedPerson.birth_date || ""} suppressHydrationWarning />
                   </label>
-                  <label>
+                  <label className="form-field">
                     Дата смерти
-                    <input name="deathDate" type="date" defaultValue={selectedPerson.death_date || ""} suppressHydrationWarning />
+                    <Input name="deathDate" type="date" defaultValue={selectedPerson.death_date || ""} suppressHydrationWarning />
                   </label>
-                  <label className="builder-field-span">
+                  <label className="form-field builder-field-span">
                     Био
-                    <textarea name="bio" rows={3} defaultValue={selectedPerson.bio || ""} suppressHydrationWarning />
+                    <Textarea name="bio" rows={3} defaultValue={selectedPerson.bio || ""} suppressHydrationWarning />
                   </label>
-                  <div className="card-actions builder-field-span builder-form-actions">
-                    <button className="primary-button" type="submit">
+                  <div className="action-row builder-field-span builder-form-actions">
+                    <Button type="submit">
                       Сохранить
-                    </button>
+                    </Button>
                     {!isSelectedRoot ? (
-                      <button
-                        className="ghost-button"
-                        type="button"
-                        onClick={() => {
-                          void setRootPerson(selectedPerson.id);
-                        }}
-                      >
+                      <Button type="button" variant="ghost" onClick={() => void setRootPerson(selectedPerson.id)}>
                         Сделать корнем
-                      </button>
+                      </Button>
                     ) : null}
-                    <button
-                      className="danger-button"
-                      type="button"
-                      onClick={() => {
-                        void handleDeletePerson(selectedPerson);
-                      }}
-                    >
+                    <Button type="button" variant="destructive" onClick={() => void handleDeletePerson(selectedPerson)}>
                       Удалить человека
-                    </button>
+                    </Button>
                   </div>
                 </form>
               </div>
@@ -2064,7 +2066,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               <>
                 <div className="builder-section-block">
                   <div className="builder-section-heading">
-                    <h3>Текущие связи</h3>
+                    <h3 className="card-heading">Текущие связи</h3>
                     <p className="muted-copy">Нужного родственника можно открыть отсюда. Новые связи добавляются через + на карточке дерева.</p>
                   </div>
                   <div className="builder-relation-board">
@@ -2081,19 +2083,13 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                               </div>
                               <div className="builder-relation-card-actions">
                                 {parent ? (
-                                  <button type="button" className="ghost-button ghost-button-compact" onClick={() => focusPerson(parent.id)}>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => focusPerson(parent.id)}>
                                     Открыть
-                                  </button>
+                                  </Button>
                                 ) : null}
-                                <button
-                                  type="button"
-                                  className="danger-button danger-button-compact"
-                                  onClick={async () => {
-                                    await removeParentLink(link.id);
-                                  }}
-                                >
+                                <Button type="button" variant="destructive" size="sm" onClick={async () => await removeParentLink(link.id)}>
                                   Удалить
-                                </button>
+                                </Button>
                               </div>
                             </article>
                           );
@@ -2116,19 +2112,13 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                               </div>
                               <div className="builder-relation-card-actions">
                                 {child ? (
-                                  <button type="button" className="ghost-button ghost-button-compact" onClick={() => focusPerson(child.id)}>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => focusPerson(child.id)}>
                                     Открыть
-                                  </button>
+                                  </Button>
                                 ) : null}
-                                <button
-                                  type="button"
-                                  className="danger-button danger-button-compact"
-                                  onClick={async () => {
-                                    await removeParentLink(link.id);
-                                  }}
-                                >
+                                <Button type="button" variant="destructive" size="sm" onClick={async () => await removeParentLink(link.id)}>
                                   Удалить
-                                </button>
+                                </Button>
                               </div>
                             </article>
                           );
@@ -2153,19 +2143,13 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                               </div>
                               <div className="builder-relation-card-actions">
                                 {partner ? (
-                                  <button type="button" className="ghost-button ghost-button-compact" onClick={() => focusPerson(partner.id)}>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => focusPerson(partner.id)}>
                                     Открыть
-                                  </button>
+                                  </Button>
                                 ) : null}
-                                <button
-                                  type="button"
-                                  className="danger-button danger-button-compact"
-                                  onClick={async () => {
-                                    await removePartnership(partnership.id);
-                                  }}
-                                >
+                                <Button type="button" variant="destructive" size="sm" onClick={async () => await removePartnership(partnership.id)}>
                                   Удалить
-                                </button>
+                                </Button>
                               </div>
                             </article>
                           );
@@ -2203,18 +2187,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       </div>
                       <h4>{asset.title}</h4>
                       {asset.caption ? <p>{asset.caption}</p> : null}
-                      <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className="ghost-button">
+                      <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>
                         Открыть документ
                       </a>
-                      <button
-                        className="danger-button"
-                        type="button"
-                        onClick={async () => {
-                          await submitJson(`/api/media/${asset.id}`, "DELETE", {});
-                        }}
-                      >
+                      <Button type="button" variant="destructive" onClick={async () => await submitJson(`/api/media/${asset.id}`, "DELETE", {})}>
                         Удалить документ
-                      </button>
+                      </Button>
                     </article>
                   ))
                 ) : (
@@ -2241,9 +2219,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         emptyTitle="Фотографий пока нет"
                         emptyMessage="Для этого человека пока нет фотографий."
                         emptyActions={
-                          <button type="button" className="secondary-button" onClick={openMediaPickerOrReview}>
+                          <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
                             Загрузить фото
-                          </button>
+                          </Button>
                         }
                         avatarMediaId={selectedPrimaryPhotoMediaId}
                         showStickyFooter={false}
@@ -2263,10 +2241,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         <strong>{formatPhotoUploadCountLabel(selectedPhotoMedia.length)}</strong>
                       </div>
                       <div className="archive-action-bar">
-                        <button type="button" className="secondary-button" onClick={openMediaPickerOrReview}>
+                        <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
                           Загрузить фото
-                        </button>
-                        <a href={buildSelectedPhotoArchiveHref()} className="ghost-button">
+                        </Button>
+                        <a href={buildSelectedPhotoArchiveHref()} className={buttonVariants({ variant: "ghost" })}>
                           Перейти в альбом
                         </a>
                       </div>
@@ -2284,9 +2262,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         emptyTitle="Видео пока нет"
                         emptyMessage="Для этого человека пока нет видео."
                         emptyActions={
-                          <button type="button" className="secondary-button" onClick={openMediaPickerOrReview}>
+                          <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
                             Загрузить видео
-                          </button>
+                          </Button>
                         }
                         showStickyFooter={false}
                       />
@@ -2318,28 +2296,28 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                           event.currentTarget.reset();
                         }}
                       >
-                        <label className="builder-field-span">
+                        <label className="form-field builder-field-span">
                           Ссылка на видео
-                          <input name="externalUrl" type="url" required placeholder="https://disk.yandex.ru/..." />
+                          <Input name="externalUrl" type="url" required placeholder="https://disk.yandex.ru/..." />
                         </label>
-                        <label>
+                        <label className="form-field">
                           Название
-                          <input name="title" required placeholder="Семейная хроника" />
+                          <Input name="title" required placeholder="Семейная хроника" />
                         </label>
-                        <label>
+                        <label className="form-field">
                           Видимость
-                          <select name="visibility" defaultValue="public">
+                          <SelectField name="visibility" defaultValue="public">
                             <option value="public">Всем по ссылке</option>
                             <option value="members">Только участникам</option>
-                          </select>
+                          </SelectField>
                         </label>
-                        <label className="builder-field-span">
+                        <label className="form-field builder-field-span">
                           Подпись
-                          <textarea name="caption" rows={3} placeholder="Например: оцифрованная запись, семейный архив или внешний видеоплеер" />
+                          <Textarea name="caption" rows={3} placeholder="Например: оцифрованная запись, семейный архив или внешний видеоплеер" />
                         </label>
-                        <button className="primary-button builder-field-span" type="submit">
+                        <Button className="builder-field-span" type="submit">
                           Добавить видео по ссылке
-                        </button>
+                        </Button>
                       </form>
                     </div>
 
@@ -2360,18 +2338,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                                 </div>
                                 <h4>{asset.title}</h4>
                                 {asset.caption ? <p>{asset.caption}</p> : null}
-                                <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className="ghost-button">
+                                <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>
                                   Открыть видео
                                 </a>
-                                <button
-                                  className="danger-button"
-                                  type="button"
-                                  onClick={async () => {
-                                    await submitJson(`/api/media/${asset.id}`, "DELETE", {});
-                                  }}
-                                >
+                                <Button type="button" variant="destructive" onClick={async () => await submitJson(`/api/media/${asset.id}`, "DELETE", {})}>
                                   Удалить видео
-                                </button>
+                                </Button>
                               </article>
                             ))
                           ) : (
@@ -2396,18 +2368,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                                 </div>
                                 <h4>{asset.title}</h4>
                                 {asset.caption ? <p>{asset.caption}</p> : null}
-                                <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className="ghost-button">
+                                <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>
                                   Открыть видео
                                 </a>
-                                <button
-                                  className="danger-button"
-                                  type="button"
-                                  onClick={async () => {
-                                    await submitJson(`/api/media/${asset.id}`, "DELETE", {});
-                                  }}
-                                >
+                                <Button type="button" variant="destructive" onClick={async () => await submitJson(`/api/media/${asset.id}`, "DELETE", {})}>
                                   Удалить ссылку
-                                </button>
+                                </Button>
                               </article>
                             ))
                           ) : (
@@ -2424,18 +2390,18 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       </div>
                       <div className="archive-action-bar">
                         {selectedVideoMedia.length ? (
-                          <button type="button" className="ghost-button" onClick={() => openExpandedGallery("video")}>
+                          <Button type="button" variant="ghost" onClick={() => openExpandedGallery("video")}>
                             Показать все
-                          </button>
+                          </Button>
                         ) : null}
                         {pendingMediaUploads.length ? (
-                          <button type="button" className="ghost-button" onClick={() => setIsMediaUploadReviewOpen(true)}>
+                          <Button type="button" variant="ghost" onClick={() => setIsMediaUploadReviewOpen(true)}>
                             Проверить набор
-                          </button>
+                          </Button>
                         ) : null}
-                        <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
+                        <Button type="button" variant="secondary" onClick={() => mediaFileInputRef.current?.click()}>
                           Выбрать видео
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </>
@@ -2446,34 +2412,42 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             )}
           </section>
         ) : null}
-      </aside>
+        </Card>
       </div>
 
-      {isMediaUploadReviewOpen ? (
-        <div
-          className="media-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Проверка файлов перед загрузкой"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              requestCloseMediaUploadReview();
-            }
-          }}
-        >
-          <div className="media-lightbox-dialog archive-dialog">
-            <div className="media-lightbox-header">
-              <div className="media-lightbox-copy">
-                <h3>Проверка перед загрузкой</h3>
-                <p>
-                  {selectedPerson
-                    ? `Файлы будут привязаны к карточке «${selectedPerson.full_name}».`
-                    : "Файлы будут привязаны к выбранной карточке."}
-                </p>
-              </div>
+      <Dialog open={isMediaUploadReviewOpen} onOpenChange={(open) => (!open ? requestCloseMediaUploadReview() : null)}>
+        <DialogContent className="archive-dialog" aria-label="Проверка файлов перед загрузкой" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Проверка файлов перед загрузкой</DialogTitle>
+            <DialogDescription>
+              {selectedPerson
+                ? `Файлы будут привязаны к карточке «${selectedPerson.full_name}».`
+                : "Файлы будут привязаны к выбранной карточке."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="archive-review-layout">
+            <div className="archive-review-metadata">
+              <label className="form-field">
+                Видимость
+                <SelectField value={reviewMediaVisibility} onChange={(event) => setReviewMediaVisibility(event.target.value as "public" | "members")} disabled={isUploadingMedia}>
+                  <option value="public">Всем по ссылке</option>
+                  <option value="members">Только членам семьи</option>
+                </SelectField>
+              </label>
+              <label className="form-field">
+                Подпись
+                <Textarea
+                  rows={1}
+                  className="min-h-11"
+                  value={reviewMediaCaption}
+                  onChange={(event) => setReviewMediaCaption(event.target.value)}
+                  placeholder="Общая подпись для выбранных файлов, если она нужна"
+                  disabled={isUploadingMedia}
+                />
+              </label>
             </div>
             <div className="archive-review-body">
-              <div className={`archive-grid archive-review-grid${pendingMediaUploads.length > 8 ? " archive-review-grid-dense" : ""}`}>
+              <div className={`archive-grid archive-review-grid${pendingMediaUploads.length > 12 ? " archive-review-grid-dense" : ""}`}>
                 {pendingMediaUploads.map((item) => (
                   <article key={item.id} className="archive-review-tile">
                     <button
@@ -2497,80 +2471,49 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                 ))}
               </div>
             </div>
-            <div className="builder-review-controls">
-              <label>
-                Видимость
-                <select value={reviewMediaVisibility} onChange={(event) => setReviewMediaVisibility(event.target.value as "public" | "members")} disabled={isUploadingMedia}>
-                  <option value="public">Всем по ссылке</option>
-                  <option value="members">Только участникам</option>
-                </select>
-              </label>
-              <label>
-                Подпись
-                <textarea
-                  rows={3}
-                  value={reviewMediaCaption}
-                  onChange={(event) => setReviewMediaCaption(event.target.value)}
-                  placeholder="Общая подпись для выбранных файлов, если она нужна"
-                  disabled={isUploadingMedia}
-                />
-              </label>
-            </div>
-            <div className="archive-action-bar archive-review-footer">
-              <input
-                ref={reviewMediaFileInputRef}
-                className="builder-native-file-input"
-                type="file"
-                multiple
-                accept={activeUploadConfig.accept}
-                disabled={isUploadingMedia}
-                onChange={handleReviewMediaFileSelection}
-              />
-              <button type="button" className="ghost-button" disabled={isUploadingMedia} onClick={() => reviewMediaFileInputRef.current?.click()}>
-                Добавить еще
-              </button>
-              <button type="button" className="ghost-button" disabled={isUploadingMedia} onClick={hideMediaUploadReview}>
-                Обратно
-              </button>
-              <button type="button" className="ghost-button" disabled={isUploadingMedia} onClick={requestCloseMediaUploadReview}>
-                Отмена
-              </button>
-              <button type="button" className="primary-button" disabled={isUploadingMedia} onClick={() => void savePendingMediaUploads()}>
-                Сохранить {pendingMediaUploads.length}
-              </button>
-            </div>
           </div>
-        </div>
-      ) : null}
+          <DialogFooter className="archive-review-footer archive-actions">
+            <input
+              ref={reviewMediaFileInputRef}
+              className="builder-native-file-input"
+              type="file"
+              multiple
+              accept={activeUploadConfig.accept}
+              disabled={isUploadingMedia}
+              onChange={handleReviewMediaFileSelection}
+            />
+            <Button type="button" variant="secondary" disabled={isUploadingMedia} onClick={() => reviewMediaFileInputRef.current?.click()}>
+              Добавить еще
+            </Button>
+            <Button type="button" variant="outline" disabled={isUploadingMedia} onClick={hideMediaUploadReview}>
+              Обратно
+            </Button>
+            <Button type="button" variant="outline" disabled={isUploadingMedia} onClick={requestCloseMediaUploadReview}>
+              Отмена
+            </Button>
+            <Button type="button" disabled={isUploadingMedia} onClick={() => void savePendingMediaUploads()}>
+              Сохранить {pendingMediaUploads.length}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {isMediaUploadDiscardConfirmOpen ? (
-        <div
-          className="media-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Сбросить выбранные файлы"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setIsMediaUploadDiscardConfirmOpen(false);
-            }
-          }}
-        >
-          <div className="media-lightbox-dialog archive-confirm-dialog">
-            <div className="media-lightbox-copy">
-              <h3>Сбросить выбранный набор?</h3>
-              <p>Файлы уже выбраны, но еще не сохранены. Если закрыть окно сейчас, набор придется собирать заново.</p>
-            </div>
-            <div className="card-actions archive-actions">
-              <button type="button" className="ghost-button" onClick={() => setIsMediaUploadDiscardConfirmOpen(false)}>
-                Вернуться
-              </button>
-              <button type="button" className="primary-button" onClick={discardPendingMediaUploads}>
-                Сбросить набор
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <Dialog open={isMediaUploadDiscardConfirmOpen} onOpenChange={setIsMediaUploadDiscardConfirmOpen}>
+        <DialogContent className="archive-confirm-dialog" aria-label="Сбросить выбранные файлы" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Сбросить выбранные файлы</DialogTitle>
+            <DialogDescription>Файлы уже выбраны, но еще не сохранены. Если закрыть окно сейчас, набор придется собирать заново.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="archive-actions">
+            <Button type="button" variant="ghost" onClick={() => setIsMediaUploadDiscardConfirmOpen(false)}>
+              Вернуться
+            </Button>
+            <Button type="button" onClick={discardPendingMediaUploads}>
+              Сбросить набор
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {status ? (
         <div className="builder-status-toast" role="status" aria-live="polite">

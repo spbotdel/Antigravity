@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface TreeNavProps {
@@ -36,11 +37,24 @@ export function TreeNav({ slug, shareToken, canEdit, canManageMembers, canReadAu
   ];
 
   return (
-    <nav className="pill-nav">
+    <nav className="tree-nav-tabs">
       {items
         .filter((item) => item.visible)
         .map((item) => (
-          <Link key={item.href} href={item.href} prefetch={false} className={cn("pill-link", pathname === item.pathname && "pill-link-active")}>
+          <Link
+            key={item.href}
+            href={item.href}
+            prefetch={false}
+            className={cn(
+              buttonVariants({
+                variant: pathname === item.pathname ? "secondary" : "ghost",
+                size: "sm",
+                className: "rounded-full px-4"
+              }),
+              "pill-link",
+              pathname === item.pathname && "pill-link-active"
+            )}
+          >
             {item.label}
           </Link>
         ))}

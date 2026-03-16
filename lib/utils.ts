@@ -1,4 +1,11 @@
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
 import type { MediaStorageBackend, MediaUploadRolloutState, UploadMode, VariantUploadMode } from "@/lib/types";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 export function formatDate(date: string | null) {
   if (!date) return "";
@@ -7,10 +14,6 @@ export function formatDate(date: string | null) {
     month: "short",
     year: "numeric"
   }).format(new Date(date));
-}
-
-export function cn(...parts: Array<string | false | null | undefined>) {
-  return parts.filter(Boolean).join(" ");
 }
 
 export interface BrowserMediaVariantTarget {

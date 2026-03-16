@@ -3,6 +3,8 @@
 import { startTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardFooter, CardHeader } from "@/components/ui/card";
 import { buildDashboardModel } from "@/components/dashboard/dashboard-model";
 import { DashboardOverview } from "@/components/dashboard/dashboard-overview";
 import type { MembershipRecord, TreeRecord } from "@/lib/types";
@@ -143,23 +145,25 @@ export function DashboardPageClient() {
       </section>
 
       {state.status === "error" ? (
-        <section className="surface-card">
-          <p className="card-kicker">Supabase</p>
-          <h2>Панель пока недоступна</h2>
-          <p className="muted-copy">{getDashboardErrorMessage(state.error)}</p>
-          <div className="card-actions dashboard-card-actions">
-            <button
+        <Card className="p-0">
+          <CardHeader className="px-6 pt-6 pb-0">
+            <p className="card-kicker">Supabase</p>
+            <h2 className="card-heading">Панель пока недоступна</h2>
+            <p className="muted-copy">{getDashboardErrorMessage(state.error)}</p>
+          </CardHeader>
+          <CardFooter className="action-row dashboard-card-actions border-0 bg-transparent px-6 pt-0 pb-6">
+            <Button
               type="button"
-              className="secondary-button"
+              variant="secondary"
               onClick={() => {
                 setState(initialState);
                 setRetryKey((value) => value + 1);
               }}
             >
               Повторить
-            </button>
-          </div>
-        </section>
+            </Button>
+          </CardFooter>
+        </Card>
       ) : null}
 
       {state.status === "ready" ? <DashboardOverview dashboard={dashboard} /> : null}

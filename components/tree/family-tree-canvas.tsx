@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 
@@ -2031,9 +2032,9 @@ export function FamilyTreeCanvas({
       <div className="empty-state tree-canvas-empty">
         <p>Добавьте первого человека. Он станет корнем автоматически, а потом корень можно сменить прямо в конструкторе.</p>
         {interactive && onEmptyAction ? (
-          <button type="button" className="primary-button tree-canvas-empty-action" onClick={onEmptyAction}>
+          <Button type="button" className="tree-canvas-empty-action" onClick={onEmptyAction}>
             Добавить первый блок
-          </button>
+          </Button>
         ) : null}
       </div>
     );

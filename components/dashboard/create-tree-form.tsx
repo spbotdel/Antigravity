@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
 interface CreateTreeFormProps {
   submitLabel?: string;
 }
@@ -48,24 +52,24 @@ export function CreateTreeForm({ submitLabel = "Создать первое де
         router.refresh();
       }}
     >
-      <div className="field-grid field-grid-2">
-        <label>
+      <div className="form-grid form-grid-2">
+        <label className="form-field">
           Название дерева
-          <input name="title" required placeholder="Семейное дерево Петровых" />
+          <Input name="title" required placeholder="Семейное дерево Петровых" />
         </label>
-        <label>
+        <label className="form-field">
           Адрес ссылки
-          <input name="slug" required placeholder="ivanov-family" />
+          <Input name="slug" required placeholder="ivanov-family" />
         </label>
       </div>
-      <label>
+      <label className="form-field">
         Описание
-        <textarea name="description" rows={4} placeholder="Короткое описание веток и периода семьи." />
+        <Textarea name="description" rows={4} placeholder="Короткое описание веток и периода семьи." />
       </label>
       {error ? <p className="form-error">{error}</p> : null}
-      <button className="primary-button" type="submit" disabled={loading}>
+      <Button type="submit" disabled={loading}>
         {loading ? "Создаю..." : submitLabel}
-      </button>
+      </Button>
     </form>
   );
 }

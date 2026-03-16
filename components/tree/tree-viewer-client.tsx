@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+import { Card } from "@/components/ui/card";
 import { FamilyTreeCanvas } from "@/components/tree/family-tree-canvas";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
 import { buildBuilderDisplayTree, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
@@ -48,11 +49,11 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
 
   return (
     <div className="viewer-layout">
-      <div className="surface-card viewer-stage viewer-stage-canvas">
+      <Card className="viewer-stage viewer-stage-canvas">
         <div className="stage-header viewer-stage-header-overlay">
           <div className="stage-header-copy">
             <p className="stage-kicker">Схема семьи</p>
-            <h2>Главная структура дерева</h2>
+            <h2 className="card-heading">Главная структура дерева</h2>
           </div>
           <p className="stage-hint">Перетаскивайте схему мышью и масштабируйте колесиком, чтобы спокойно просматривать ветви.</p>
         </div>
@@ -66,9 +67,9 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
           partnerships={snapshot.partnerships}
           personPhotoUrls={personPhotoPreviewUrls}
         />
-      </div>
+      </Card>
 
-      <aside className="surface-card info-rail">
+      <Card className="info-rail p-6">
         {selectedPerson ? (
           <>
             {selectedAvatarUrl ? (
@@ -77,7 +78,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
               </div>
             ) : null}
             <p className="eyebrow">Выбранный человек</p>
-            <h2>{selectedPerson.full_name}</h2>
+            <h2 className="card-heading">{selectedPerson.full_name}</h2>
             <div className="detail-list">
               <div>
                 <strong>Пол</strong>
@@ -110,7 +111,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
         ) : (
           <div className="empty-state">Выберите человека, чтобы посмотреть его данные.</div>
         )}
-      </aside>
+      </Card>
     </div>
   );
 }

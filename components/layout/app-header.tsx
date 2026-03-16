@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
+import { buttonVariants } from "@/components/ui/button";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
@@ -87,11 +88,11 @@ export function AppHeader({ initialUser }: AppHeaderProps) {
           <>
             <span className="header-user">{user.email}</span>
             {pathname === "/dashboard" ? (
-              <span className="ghost-button ghost-button-current" aria-current="page">
+              <span className={buttonVariants({ variant: "secondary", size: "sm" })} aria-current="page">
                 Панель
               </span>
             ) : (
-              <Link href="/dashboard" className="ghost-button">
+              <Link href="/dashboard" className={buttonVariants({ variant: "ghost", size: "sm" })}>
                 Панель
               </Link>
             )}
@@ -99,10 +100,10 @@ export function AppHeader({ initialUser }: AppHeaderProps) {
           </>
         ) : (
           <>
-            <Link href="/auth/login" className="ghost-button">
+            <Link href="/auth/login" className={buttonVariants({ variant: "ghost", size: "sm" })}>
               Войти
             </Link>
-            <Link href="/auth/register" className="primary-button">
+            <Link href="/auth/register" className={buttonVariants({ size: "sm" })}>
               Создать дерево
             </Link>
           </>

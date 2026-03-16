@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, buttonVariants } from "@/components/ui/button";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl } from "@/lib/tree/display";
@@ -146,7 +147,7 @@ function MediaPreview({
     <div className="person-media-placeholder">
       <strong>{getMediaPlaceholderTitle(asset)}</strong>
       <p>{asset.caption || "Этот материал открывается по отдельной ссылке."}</p>
-      <a href={mediaUrl} target="_blank" rel="noreferrer" className="ghost-button">
+      <a href={mediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
         {getMediaOpenLabel(asset)}
       </a>
     </div>
@@ -250,7 +251,7 @@ export function PersonMediaGallery({
           {emptyTitle ? <strong>{emptyTitle}</strong> : null}
           {emptyMessage ? <p>{emptyMessage}</p> : null}
         </div>
-        {emptyActions ? <div className="card-actions empty-state-actions">{emptyActions}</div> : null}
+        {emptyActions ? <div className="action-row empty-state-actions">{emptyActions}</div> : null}
       </div>
     );
   }
@@ -280,17 +281,17 @@ export function PersonMediaGallery({
 
           <div className="person-media-stage-actions">
             {canNavigate ? (
-              <button type="button" className="ghost-button ghost-button-compact" aria-label="Предыдущее медиа" onClick={() => moveSelection(-1)}>
+              <Button type="button" variant="ghost" size="sm" aria-label="Предыдущее медиа" onClick={() => moveSelection(-1)}>
                 ‹
-              </button>
+              </Button>
             ) : null}
             {canNavigate ? (
-              <button type="button" className="ghost-button ghost-button-compact" aria-label="Следующее медиа" onClick={() => moveSelection(1)}>
+              <Button type="button" variant="ghost" size="sm" aria-label="Следующее медиа" onClick={() => moveSelection(1)}>
                 ›
-              </button>
+              </Button>
             ) : null}
             {!isInlineRenderableAsset(activeAsset) ? (
-              <a href={activeMediaUrl} target="_blank" rel="noreferrer" className="ghost-button">
+              <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
                 {getMediaOpenLabel(activeAsset)}
               </a>
             ) : null}
@@ -298,16 +299,16 @@ export function PersonMediaGallery({
               activeAsset.id === avatarMediaId ? (
                 <span className="members-static-note">Текущее фото профиля</span>
               ) : (
-                <button
+                <Button
                   type="button"
-                  className="ghost-button"
+                  variant="ghost"
                   disabled={isAvatarUpdating}
                   onClick={() => {
                     void handleSetAvatar(activeAsset.id);
                   }}
                 >
                   {isAvatarUpdating ? "Сохраняю аватар..." : "Сделать фото профиля"}
-                </button>
+                </Button>
               )
             ) : null}
           </div>
@@ -336,11 +337,11 @@ export function PersonMediaGallery({
               <span>{media.length} {media.length === 1 ? "материал" : media.length < 5 ? "материала" : "материалов"} в галерее</span>
             </div>
             <div className="archive-action-bar">
-              <button type="button" className="ghost-button" onClick={() => setIsLightboxOpen(true)}>
+              <Button type="button" variant="ghost" onClick={() => setIsLightboxOpen(true)}>
                 Показать все
-              </button>
+              </Button>
               {!isInlineRenderableAsset(activeAsset) ? (
-                <a href={activeMediaUrl} target="_blank" rel="noreferrer" className="ghost-button">
+                <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
                   {getMediaOpenLabel(activeAsset)}
                 </a>
               ) : null}
@@ -376,28 +377,28 @@ export function PersonMediaGallery({
               ) : <div />}
 
               <div className="media-lightbox-actions">
-                <a href={activeMediaUrl} target="_blank" rel="noreferrer" className="ghost-button">
+                <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
                   {getMediaOpenLabel(activeAsset)}
                 </a>
                 {canSetAvatar ? (
                   activeAsset.id === avatarMediaId ? (
                     <span className="members-static-note">Текущее фото профиля</span>
                   ) : (
-                    <button
+                    <Button
                       type="button"
-                      className="ghost-button"
+                      variant="ghost"
                       disabled={isAvatarUpdating}
                       onClick={() => {
                         void handleSetAvatar(activeAsset.id);
                       }}
                     >
                       {isAvatarUpdating ? "Сохраняю аватар..." : "Сделать фото профиля"}
-                    </button>
+                    </Button>
                   )
                 ) : null}
-                <button type="button" className="ghost-button" aria-label="Закрыть просмотр" onClick={() => setIsLightboxOpen(false)}>
+                <Button type="button" variant="ghost" aria-label="Закрыть просмотр" onClick={() => setIsLightboxOpen(false)}>
                   Закрыть
-                </button>
+                </Button>
               </div>
             </div>
 
