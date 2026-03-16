@@ -99,7 +99,7 @@ async function selectPerson(page, name) {
   const item = sidebarItem(page, name);
   await item.waitFor({ timeout: 60000 });
   await item.click();
-  await page.locator("aside.builder-inspector h2", { hasText: name }).waitFor({ timeout: 60000 });
+  await page.locator(".builder-inspector h2", { hasText: name }).waitFor({ timeout: 60000 });
 }
 
 async function getSnapshot(baseUrl, slug) {
@@ -320,7 +320,7 @@ async function main() {
     }
 
     await selectPerson(qaPage, `${prefix} Parent`);
-    await qaPage.locator("aside.builder-inspector").getByRole("button", { name: "Связи", exact: true }).click();
+    await qaPage.locator(".builder-inspector").getByRole("button", { name: "Связи", exact: true }).click();
 
     const childCard = qaPage.locator(".builder-relation-card").filter({
       has: qaPage.locator("strong", { hasText: `${prefix} Child` })
@@ -346,10 +346,10 @@ async function main() {
     });
     report.deletions.partnership = { ok: true, id: created.partnership.id };
 
-    await qaPage.locator("aside.builder-inspector").getByRole("button", { name: "Человек", exact: true }).click();
+    await qaPage.locator(".builder-inspector").getByRole("button", { name: "Человек", exact: true }).click();
     await selectPerson(qaPage, `${prefix} Partner`);
     qaPage.once("dialog", (dialog) => dialog.accept());
-    await qaPage.locator("aside.builder-inspector").getByRole("button", { name: "Удалить человека", exact: true }).click();
+    await qaPage.locator(".builder-inspector").getByRole("button", { name: "Удалить человека", exact: true }).click();
 
     await waitForCondition("person deleted", async () => {
       const snapshot = await getSnapshot(baseUrl, slug);

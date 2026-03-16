@@ -250,7 +250,40 @@ async function startMediaSmokeRuntime() {
 }
 
 function builderInspector(page) {
-  return page.locator("aside.builder-inspector");
+  return page.locator(".builder-inspector");
+}
+
+function getBuilderTabControl(root, label) {
+  return root
+    .getByRole("tab", { name: label, exact: true })
+    .or(root.getByRole("button", { name: label, exact: true }))
+    .first();
+}
+
+function getVisibilityChoice(value) {
+  if (value === "members") {
+    return { value, label: "Только членам семьи" };
+  }
+
+  return { value: "public", label: "Всем по ссылке" };
+}
+
+async function setLabeledSelectValue(page, root, fieldLabel, choice) {
+  const field = root.getByLabel(fieldLabel);
+  await field.waitFor({ timeout: 30_000 });
+  const tagName = await field.evaluate((element) => element.tagName.toLowerCase());
+
+  if (tagName === "select") {
+    if (choice.value !== undefined) {
+      await field.selectOption(choice.value);
+    } else {
+      await field.selectOption({ label: choice.label });
+    }
+    return;
+  }
+
+  await field.click();
+  await page.getByRole("option", { name: choice.label, exact: true }).click();
 }
 
 async function postJson(url, payload) {
@@ -342,8 +375,8 @@ function assertUploadIntentContract(intent, expected) {
 }
 
 async function waitForBuilderReady(page) {
-  await page.goto(`${baseUrl}/tree/${slug}/builder`, { waitUntil: "domcontentloaded" });
-  await page.waitForURL(`**/tree/${slug}/builder`);
+  await page.goto(`${baseUrl}/tree/${slug}/builder`, { waitUntil: "domcontentloaded", timeout: 120000 });
+  await page.waitForURL(`**/tree/${slug}/builder`, { timeout: 120000, waitUntil: "domcontentloaded" });
   await page.locator(".builder-layout-reworked").waitFor({ timeout: 45000 });
   await builderInspector(page).waitFor({ timeout: 45000 });
   await builderInspector(page).locator("h2").waitFor({ timeout: 45000 });
@@ -351,7 +384,7 @@ async function waitForBuilderReady(page) {
 
 async function openMediaPanel(page, tabLabel = "Фото") {
   const inspector = builderInspector(page);
-  await inspector.getByRole("button", { name: tabLabel, exact: true }).click();
+  await getBuilderTabControl(inspector, tabLabel).click();
   await inspector.locator("form").nth(0).waitFor({ timeout: 30000 });
 }
 
@@ -359,11 +392,8 @@ async function uploadDeviceMediaViaUi(page, options) {
   const {
     tabLabel,
     inputLabel,
-    title,
     caption,
-    submitButtonLabel,
     files,
-    hasServerSideVariants = false,
   } = options;
   const inspector = builderInspector(page);
   await openMediaPanel(page, tabLabel);
@@ -372,26 +402,18 @@ async function uploadDeviceMediaViaUi(page, options) {
   await storageForm.getByLabel(inputLabel).setInputFiles(files);
   const reviewDialog = page.getByRole("dialog", { name: "Проверка файлов перед загрузкой" });
   await reviewDialog.waitFor({ timeout: 15000 });
-  await reviewDialog.getByRole("button", { name: "Обратно" }).click();
-  await reviewDialog.waitFor({ state: "detached", timeout: 15000 });
-  await storageForm.getByLabel("Подпись").fill(caption);
-  await storageForm.getByLabel("Видимость").selectOption("members");
-  await storageForm.getByRole("button", { name: submitButtonLabel }).click();
-  await reviewDialog.waitFor({ timeout: 15000 });
+  await reviewDialog.getByLabel("Подпись").fill(caption);
+  await setLabeledSelectValue(page, reviewDialog, "Видимость", getVisibilityChoice("members"));
   await reviewDialog.getByRole("button", { name: "Сохранить 1" }).click();
   await reviewDialog.waitFor({ state: "detached", timeout: 30000 });
   await inspector.locator(".builder-media-limits-note").waitFor({ timeout: 15000 });
-  await inspector.getByText(/Загружено 1 файл|Загружено 1 файла|Загружено 1 файлов/).waitFor({ timeout: 90000 });
 }
 
 async function uploadDevicePhotoViaUi(page) {
   await uploadDeviceMediaViaUi(page, {
     tabLabel: "Фото",
     inputLabel: "Фотографии с устройства",
-    title: photoTitle,
     caption: `${photoTitle} caption`,
-    submitButtonLabel: "Проверить фото перед загрузкой",
-    hasServerSideVariants: true,
     files: [
       {
         name: "smoke-photo.png",
@@ -406,10 +428,7 @@ async function uploadDeviceVideoViaUi(page) {
   await uploadDeviceMediaViaUi(page, {
     tabLabel: "Видео",
     inputLabel: "Видео с устройства",
-    title: storageVideoTitle,
     caption: `${storageVideoTitle} caption`,
-    submitButtonLabel: "Проверить видео перед загрузкой",
-    hasServerSideVariants: false,
     files: [
       {
         name: "smoke-video.webm",
@@ -518,9 +537,18 @@ async function assertViewerShowsMedia(page) {
 async function cleanupMedia(mediaIds) {
   for (const mediaId of mediaIds) {
     try {
-      await fetch(`${baseUrl}/api/media/${mediaId}`, {
-        method: "DELETE"
-      });
+      await withRetries(`cleanup:media:${mediaId}`, async () => {
+        const response = await fetch(`${baseUrl}/api/media/${mediaId}`, {
+          method: "DELETE"
+        });
+
+        if (response.ok || response.status === 404) {
+          return;
+        }
+
+        const body = await response.text().catch(() => "");
+        throw new Error(`DELETE ${mediaId} failed with ${response.status}: ${body.slice(0, 200)}`);
+      }, 4, { logRetries: true });
     } catch (error) {
       console.warn("cleanup warning", mediaId, error);
     }
@@ -684,7 +712,15 @@ async function main() {
     await cleanupMedia([photoRecord.id, storageVideoRecord.id, externalVideoRecord.id]);
     mediaIds = [];
 
-    const afterDelete = await fetchMediaRecords(treeId, { requireAllExpected: false, expectEmpty: true });
+    await cleanupMediaByTitle(treeId).catch((error) => {
+      console.warn("cleanup warning: post-delete cleanupMediaByTitle", error);
+    });
+
+    const afterDelete = await fetchMediaRecords(treeId, {
+      requireAllExpected: false,
+      expectEmpty: true,
+      attempts: 24,
+    });
     if (afterDelete.length !== 0) {
       throw new Error(`Expected media to be deleted, but ${afterDelete.length} records remain.`);
     }

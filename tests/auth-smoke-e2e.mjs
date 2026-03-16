@@ -343,7 +343,7 @@ const slug = `smoke-register-${timestamp}`;
 const registrationConfirmationMessage = "Аккаунт создан. Подтвердите почту, затем войдите и создайте свое дерево из панели управления.";
 
 function builderInspector(page) {
-  return page.locator("aside.builder-inspector");
+  return page.locator(".builder-inspector");
 }
 
 async function waitForBuilderNavigation(page, timeout = 90000) {

@@ -91,17 +91,17 @@ async function waitForBuilderReady(page, expectedSelectedName) {
   await page.waitForURL(`**/tree/${slug}/builder`);
   await page.locator(".builder-layout-reworked").waitFor({ timeout: 30000 });
   await page.locator(".tree-canvas").waitFor({ timeout: 30000 });
-  await page.locator("aside.builder-inspector").waitFor({ timeout: 30000 });
+  await page.locator(".builder-inspector").waitFor({ timeout: 30000 });
   if (expectedSelectedName) {
-    await page.locator("aside.builder-inspector h2", { hasText: expectedSelectedName }).waitFor({ timeout: 30000 });
+    await page.locator(".builder-inspector h2", { hasText: expectedSelectedName }).waitFor({ timeout: 30000 });
   }
 }
 
 async function waitForSelectedEditable(page) {
-  const inspector = page.locator("aside.builder-inspector");
+  const inspector = page.locator(".builder-inspector");
   await inspector.getByRole("button", { name: "Человек", exact: true }).click();
   await page.waitForFunction(() => {
-    const inspectorRoot = document.querySelector("aside.builder-inspector");
+    const inspectorRoot = document.querySelector(".builder-inspector");
     if (!inspectorRoot) {
       return false;
     }
@@ -131,20 +131,20 @@ async function addRelatedAndRenameFromCurrent(page, actionLabel, newName, expect
   await waitForSnapshotCount(expectedCount);
   await waitForSelectedEditable(page);
 
-  const inspector = page.locator("aside.builder-inspector");
+  const inspector = page.locator(".builder-inspector");
   await inspector.locator('input[name="fullName"]').fill(newName);
   await inspector.getByRole("button", { name: "Сохранить", exact: true }).click();
   await page.getByText("Данные человека обновлены.").waitFor({ timeout: 45000 });
-  await page.locator("aside.builder-inspector h2", { hasText: newName }).waitFor({ timeout: 45000 });
+  await page.locator(".builder-inspector h2", { hasText: newName }).waitFor({ timeout: 45000 });
 }
 
 async function openRelationPerson(page, groupTitle, personName) {
-  const inspector = page.locator("aside.builder-inspector");
+  const inspector = page.locator(".builder-inspector");
   await inspector.getByRole("button", { name: "Связи", exact: true }).click();
   const card = inspector.locator(".builder-relation-card").filter({ hasText: personName }).first();
   await card.waitFor({ timeout: 30000 });
   await card.getByRole("button", { name: "Открыть", exact: true }).click();
-  await page.locator("aside.builder-inspector h2", { hasText: personName }).waitFor({ timeout: 30000 });
+  await page.locator(".builder-inspector h2", { hasText: personName }).waitFor({ timeout: 30000 });
 }
 
 async function navigatePathFromRoot(page, rootName, pathSteps) {
@@ -156,7 +156,7 @@ async function navigatePathFromRoot(page, rootName, pathSteps) {
 
 async function deleteCurrentPerson(page, expectedCount) {
   page.once("dialog", (dialog) => dialog.accept());
-  await page.locator("aside.builder-inspector").getByRole("button", { name: "Удалить человека", exact: true }).click();
+  await page.locator(".builder-inspector").getByRole("button", { name: "Удалить человека", exact: true }).click();
   await waitForSnapshotCount(expectedCount);
 }
 

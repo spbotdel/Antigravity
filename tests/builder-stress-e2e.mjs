@@ -81,21 +81,21 @@ async function waitForBuilderReady(page) {
   await page.goto(`${baseUrl}/tree/${slug}/builder`);
   await page.waitForURL(`**/tree/${slug}/builder`);
   await page.locator(".builder-layout-reworked").waitFor({ timeout: 30000 });
-  await page.locator("aside.builder-inspector").waitFor({ timeout: 30000 });
+  await page.locator(".builder-inspector").waitFor({ timeout: 30000 });
 }
 
 async function selectPerson(page, name) {
   const item = sidebarItem(page, name);
   await item.waitFor({ timeout: 45000 });
   await item.click();
-  await page.locator("aside.builder-inspector h2", { hasText: name }).waitFor({ timeout: 45000 });
+  await page.locator(".builder-inspector h2", { hasText: name }).waitFor({ timeout: 45000 });
 }
 
 async function waitForSelectedEditable(page) {
-  const inspector = page.locator("aside.builder-inspector");
+  const inspector = page.locator(".builder-inspector");
   await inspector.getByRole("button", { name: "Человек", exact: true }).click();
   await page.waitForFunction(() => {
-    const inspectorRoot = document.querySelector("aside.builder-inspector");
+    const inspectorRoot = document.querySelector(".builder-inspector");
     if (!inspectorRoot) {
       return false;
     }
@@ -134,7 +134,7 @@ async function addRelatedAndRename(page, anchorName, actionLabel, newName) {
   await waitForPersonCount(page, beforeCount + 1);
   await waitForSelectedEditable(page);
 
-  const inspector = page.locator("aside.builder-inspector");
+  const inspector = page.locator(".builder-inspector");
   await inspector.locator('input[name="fullName"]').fill(newName);
   await inspector.getByRole("button", { name: "Сохранить", exact: true }).click();
   await page.getByText("Данные человека обновлены.").waitFor({ timeout: 45000 });
@@ -154,7 +154,7 @@ async function deleteSelectedViaInspector(page, name) {
   await selectPerson(page, name);
   const beforeCount = await page.locator(".person-list-item").count();
   page.once("dialog", (dialog) => dialog.accept());
-  await page.locator("aside.builder-inspector").getByRole("button", { name: "Удалить человека", exact: true }).click();
+  await page.locator(".builder-inspector").getByRole("button", { name: "Удалить человека", exact: true }).click();
   await waitForPersonCount(page, beforeCount - 1);
 }
 

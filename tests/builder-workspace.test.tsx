@@ -154,7 +154,7 @@ describe("builder workspace", () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Фото" })).toHaveClass("builder-panel-tab-active");
+      expect(screen.getByRole("tab", { name: "Фото" })).toHaveAttribute("aria-selected", "true");
     });
 
     expect(screen.getByText("Галерея фото")).toBeInTheDocument();
@@ -164,13 +164,13 @@ describe("builder workspace", () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Инфо" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Инфо" })).toBeInTheDocument();
     });
 
     expect(screen.getByRole("button", { name: "Загрузить документы" })).toBeInTheDocument();
     expect(screen.getByText("Demo Document")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Видео" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
     expect(screen.getByText("Галерея видео")).toBeInTheDocument();
     expect(screen.getByText("Локально загруженных видео пока нет.")).toBeInTheDocument();
@@ -228,6 +228,7 @@ describe("builder workspace", () => {
 
   it("shows a transient toast after saving a person instead of an inline success block", async () => {
     const snapshot = createSnapshot();
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
       const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
@@ -262,6 +263,15 @@ describe("builder workspace", () => {
       expect(screen.getByRole("status")).toHaveTextContent("Данные человека обновлены.");
     });
     expect(screen.queryByText("Данные человека обновлены.", { selector: ".form-success" })).not.toBeInTheDocument();
+    expect(
+      consoleErrorSpy.mock.calls.some((call) =>
+        call.some(
+          (arg) =>
+            typeof arg === "string" &&
+            arg.includes("changing the default value state of an uncontrolled FieldControl")
+        )
+      )
+    ).toBe(false);
   });
 
   it("shows an explicit proxy-override hint for Cloudflare uploads", async () => {
@@ -314,10 +324,10 @@ describe("builder workspace", () => {
     render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Фото" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
 
     const input = screen.getByLabelText("Фотографии с устройства") as HTMLInputElement;
     const file = new File([new Uint8Array([1, 2, 3])], "family-photo.png", { type: "image/png" });
@@ -344,10 +354,10 @@ describe("builder workspace", () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Фото" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
 
     const input = screen.getByLabelText("Фотографии с устройства") as HTMLInputElement;
     const file = new File([new Uint8Array([1, 2, 3])], "family-photo.png", { type: "image/png" });
@@ -374,10 +384,10 @@ describe("builder workspace", () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Видео" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Видео" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Видео" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
     const input = screen.getByLabelText("Видео с устройства") as HTMLInputElement;
     const file = new File([new Uint8Array([1, 2, 3])], "family-video.mp4", { type: "video/mp4" });
@@ -395,10 +405,10 @@ describe("builder workspace", () => {
     render(<BuilderWorkspace snapshot={createSnapshotWithPhoto()} mediaLoaded />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Фото" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
     const footer = screen.getByText("1 фото загружено").closest(".builder-photo-footer");
     expect(footer).not.toBeNull();
     expect(within(footer as HTMLElement).getByRole("button", { name: "Загрузить фото" })).toBeInTheDocument();
@@ -409,10 +419,10 @@ describe("builder workspace", () => {
     render(<BuilderWorkspace snapshot={createSnapshotWithPhoto()} mediaLoaded />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Фото" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
 
     expect(screen.getByTestId("person-media-gallery")).toBeInTheDocument();
   });

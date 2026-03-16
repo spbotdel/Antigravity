@@ -170,7 +170,7 @@ describe("tree media archive client", () => {
     expect(tileImage).not.toBeNull();
     expect(tileImage).toHaveAttribute("src", "/api/media/media-photo?variant=thumb");
 
-    fireEvent.click(screen.getByRole("button", { name: "Альбомы" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
     const albumImage = document.querySelector(".archive-album-image");
     expect(albumImage).not.toBeNull();
     expect(albumImage).toHaveAttribute("src", "/api/media/media-photo?variant=thumb");
@@ -231,7 +231,7 @@ describe("tree media archive client", () => {
       allMedia: [photo, video],
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Альбомы" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
     fireEvent.click(screen.getByRole("button", { name: /Свадьба.*Пользовательский альбом/ }));
 
     expect(screen.getAllByRole("button", { name: "Назад к альбомам" }).length).toBeGreaterThan(0);
@@ -301,18 +301,18 @@ describe("tree media archive client", () => {
       allMedia: [photo, video],
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Альбомы" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
     fireEvent.click(screen.getByRole("button", { name: /Свадьба.*Пользовательский альбом/ }));
 
     expect(screen.getAllByText("Свадьба").length).toBeGreaterThan(0);
     expect(screen.getByText("2 материалов в альбоме")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Видео" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
     expect(screen.getAllByText("Свадьба").length).toBeGreaterThan(0);
     expect(screen.getByText("1 видео в альбоме")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Открыть видео: Видео из альбома" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
     expect(screen.getAllByText("Свадьба").length).toBeGreaterThan(0);
     expect(screen.getByText("1 фото в альбоме")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Открыть фото: Фото из альбома" })).toBeInTheDocument();
@@ -343,10 +343,10 @@ describe("tree media archive client", () => {
       allMedia: [photo],
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Альбомы" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
     fireEvent.click(screen.getByRole("button", { name: /Семейный альбом.*Пользовательский альбом/ }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Видео" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
     expect(screen.getAllByText("Семейный альбом").length).toBeGreaterThan(0);
     expect(screen.getByText("0 видео в альбоме")).toBeInTheDocument();
@@ -420,7 +420,7 @@ describe("tree media archive client", () => {
     fireEvent.change(input);
 
     await screen.findByRole("dialog", { name: "Подготовка загрузки" });
-    expect(screen.getByLabelText("Видимость")).toHaveValue("members");
+    expect(screen.getByLabelText("Видимость")).toHaveTextContent("Только членам семьи");
     expect(screen.getByLabelText("Подпись")).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: "Сохранить 1" }));
 
