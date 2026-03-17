@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-03-12 18:00:28Z`
+- Generated at (UTC): `2026-03-16 20:24:41Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -135,10 +135,10 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-03-12 18:00:28Z`
-- Active branch: `main`
-- Git status: `STATUS:99 files`
-- Git diff: `DIFF:13444 lines`
+- Updated at (UTC): `2026-03-16 20:24:41Z`
+- Active branch: `fix/builder-inspector-desktop-align-final`
+- Git status: `STATUS:0 files`
+- Git diff: `DIFF:0 lines`
 
 ### Detected Stack
 
@@ -155,46 +155,32 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `.next-auth-smoke/`
 - `.next-dev.err.log`
 - `.next-dev.log`
-- `.next-invite-debug/`
 - `.next-media-smoke/`
 - `.next-smoke-e2e/`
-- `.next-smoke-e2e-1773097073046-4wl4k8/`
 - `.next-start.err.log`
 - `.next-start.log`
 - `.pytest_cache/`
 - `.tmp/`
-- `.vscode/`
 - `3.ged`
 - `AGENTS.md`
+- `app/`
+- `ARCHITECTURE_RULES.md`
+- `CHANGELOG.md`
 
 ### Recently Changed Paths
 
-- `.claude/ARCHITECTURE.md`
-- `.claude/BACKLOG.md`
-- `.claude/SNAPSHOT.md`
-- `.codex/config/framework-adapter.json`
-- `.env.example`
-- `.gitignore`
-- `COMMON_BUGS.md`
-- `DECISIONS.md`
-- `README.md`
-- `REPO_MAP.md`
-- `app/api/dashboard/route.ts`
-- `app/api/media/[mediaId]/route.ts`
-- `app/api/media/upload-file/route.ts`
-- `app/globals.css`
-- `app/tree/[slug]/audit/page.tsx`
+- `<none>`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-03-12 18:00:28Z`
-- Branch: `main`
-- Git status summary: `STATUS:99 files`
-- Git diff summary: `DIFF:13444 lines`
+- Completed at (UTC): `2026-03-16 20:24:41Z`
+- Branch: `fix/builder-inspector-desktop-align-final`
+- Git status summary: `STATUS:0 files`
+- Git diff summary: `DIFF:0 lines`
 
-- Session summary: `99` changed files, `13444` diff lines, `15` tracked changed paths.
+- Session summary: `0` changed files, `0` diff lines, `0` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -202,8 +188,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:99 files`)
-- `git_diff`: `success` (`DIFF:13444 lines`)
+- `git_status`: `success` (`STATUS:0 files`)
+- `git_diff`: `success` (`DIFF:0 lines`)
 <!-- FRAMEWORK:SESSION:END -->
 
 ## Current Media Architecture
@@ -215,18 +201,25 @@ The display tree is derived and must not be treated as the canonical domain mode
 - The binary plane is in transitional mode: current file-backed reads still preserve object-storage compatibility, while Cloudflare R2 foundation is already present in env/runtime config for the next migration stage.
 - Architectural boundary remains unchanged: `app/api/media*` stays thin, repository owns media/archive mutations, and rendering consumes repository snapshots rather than issuing direct DB traversal.
 - Active architecture-driving task: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
-- Current regression signal: latest `smoke:media` artifact `media-storage-report-1773322585848.json` is green.
-- Share-link architecture is moving from `hash-only + reveal-once` to `token_hash for validation + encrypted revealable token for owner/admin UX`; legacy links remain readable but may require reissue if they predate encrypted storage.
-- Invite delivery remains an application-level concern: the system keeps `tree_invites` as the source of truth, and planned email delivery should send the existing app-generated invite URL rather than redesigning around Supabase Auth invite emails.
-- Hosted staging is the intended validation surface after Wave 1: real auth, invite/share-link behavior, and perceived speed should be judged there rather than from local `next dev` with `DEV_IMPERSONATE_*`.
-- A full `shadcn` / design-system migration is intentionally deferred until after launch-critical fixes and hosted validation.
+- Current regression signal: latest `smoke:media` artifact `media-storage-report-1773671336869.json` is green.
+- Server-side Supabase transport is now a first-class runtime rule: native Node fetch is preferred, while the PowerShell bridge remains fallback/debug transport only.
+- Tree runtime now distinguishes between full snapshot consumers and narrow page-data consumers; `audit`, `members`, `media`, and `settings` should stay on specialized loaders instead of drifting back to full snapshots.
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
+- "
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
+- Custom marker-driven runtime rule should surface in startup memory.\n")
 
 ## Current Runtime Rules
 
 - Server-side Supabase transport is `native-first`: `lib/supabase/admin-rest.ts` and `lib/supabase/server-fetch.ts` should prefer native Node fetch and use the PowerShell bridge only as fallback or explicit override.
 - Tree pages should not default to `getTreeSnapshot(...)`: `audit`, `members`, `media`, and `settings` now rely on specialized repository page-data loaders, while full snapshots remain for real snapshot consumers such as viewer and snapshot APIs.
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
-- Local `next dev` with `DEV_IMPERSONATE_*` is not a valid surface for final invite-role validation or route-speed conclusions.
-- After Wave 1, hosted staging without impersonation becomes the truth surface for real user-path checks.
-- Planned email invite delivery should keep a manual-copy fallback even when mail transport succeeds.
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
+- "
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
+- Custom marker-driven runtime rule should surface in startup memory.\n")
 

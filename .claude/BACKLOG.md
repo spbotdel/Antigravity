@@ -2,7 +2,7 @@
 
 *Operational task backlog only.*
 
-*Updated: 2026-03-13*
+*Updated: 2026-03-16*
 
 ## Wave 1 — Current Execution
 
@@ -52,3 +52,31 @@ Operational note:
 - [ ] Add `Tailwind + shadcn/ui` foundation
 - [ ] Migrate shared primitives: buttons, inputs, selects, textareas, dialogs, tabs, cards
 - [ ] Bring the remaining custom builder/media/member surfaces to the same visual language without forcing the canvas onto stock components
+
+## Active Sprint
+
+### High Priority
+
+- [ ] Подтвердить, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий.
+- [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
+- [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
+- [ ] Довести variant architecture до green regression: `thumb/small/medium` должны стабильно использоваться в archive/viewer/builder, а оригинал открываться только явно.
+- [ ] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
+- [ ] Завершить текущий pass по `family-tree-canvas`: age-aware avatars, fallback badge states, читаемость карточек и стабильное выделение выбранного узла в viewer и builder.
+- [ ] Стабилизировать layout конструктора: resizable canvas shell, overlay inspector на desktop и предсказуемое поведение на tablet/mobile без потери приоритета дерева.
+- [ ] Довести экран `Участники`: приглашения по аккаунту и read-only share links должны быть самодостаточными, с понятными подсказками, копированием ссылок и безопасным отзывом доступа.
+- [ ] Провести целевой QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.
+- [ ] Держать startup context, task capsules и memory-файлы актуальными: `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.
+
+### Medium Priority
+
+- [ ] Вернуться к calm pass для landing и dashboard после стабилизации builder/members: сократить лишний copy, выровнять ритм заголовков и CTA.
+- [ ] Добить единый light visual system для `Настройки`, `Журнал`, `Участники`, builder и viewer.
+- [ ] Проверить аватары и карточки дерева на кейсах без фото, с кириллицей в gender, с детьми и пожилыми, чтобы визуальные fallback-и были предсказуемыми.
+- [ ] Уточнить, какие из новых проектных документов должны оставаться обязательным startup context, а какие достаточно держать как справочные.
+- [ ] Подготовить следующий smoke cycle после текущих UI правок и обновления memory-файлов.
+
+### Low Priority
+
+- [ ] Добавлять motion-акценты только после стабилизации canvas/layout/access flows.
+- [ ] Возвращаться к бренд-деталям landing только если это не конфликтует с коротким utilitarian тоном продукта.

@@ -3,28 +3,21 @@
 <!-- FRAMEWORK:LAUNCH:START -->
 ## Current Launch Sync
 
-- Updated at (UTC): `2026-03-13 13:55:00Z`
-- Launch is currently blocked by post-UAT hardening, hosted validation, and recovery checks.
+- Updated at (UTC): `2026-03-16 20:24:41Z`
+- Launch is currently blocked until `Cloudflare R2` rollout is activated and confirmed as the steady-state upload path.
 - Current execution order:
-1. Keep the local Wave 1 baseline green while switching validation to the hosted `Vercel` environment.
-2. Update hosted `NEXT_PUBLIC_SITE_URL` to the stable `Vercel` UAT URL and keep `DEV_IMPERSONATE_*` disabled there.
-3. Apply the new share-link reveal migration remotely so hosted reveal works without fallback.
-4. Finish `Resend` sender/domain verification and add final hosted sender vars.
-5. Run staged UAT for owner `EU`, helper `RF`, and read-only relative `RF`, including perceived speed observations from staging.
-6. Complete backup/restore rehearsal and the final launch checklist before release decision.
+1. Verify gated `Cloudflare R2` readiness: `CF_R2_*`, bucket CORS, upload-intent metadata, `smoke:media`, and `smoke:media:direct`.
+2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
+3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
+4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
+5. Complete backup/restore rehearsal and the final launch checklist before release decision.
 
 ### Current Validation Signal
 
 - `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
 - `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
-- Local validation is green on:
-  - `npm test`
-  - `npm run build`
-  - `npm run smoke:media`
-  - `npm run smoke:auth`
-  - `npm run smoke:e2e`
-- Hosted `Vercel` deployment for the latest `main` commit is live:
-  - `https://antigravity-git-main-spbotdel-4945s-projects.vercel.app`
+- Latest `smoke:media` artifact `media-storage-report-1773671336869.json` is green.
+- Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
 <!-- FRAMEWORK:LAUNCH:END -->
 
 ## 1. Цель

@@ -3,43 +3,32 @@
 <!-- FRAMEWORK:ENGINEERING:START -->
 ## Current Engineering Sync
 
-- Updated at (UTC): `2026-03-13 13:55:00Z`
-- Treat the historical phases below as reference coverage. The execution order in this sync block is the current engineering queue.
-- Active engineering stream: `Post-UAT launch hardening` inside `Media Upload Flow V2` (`in_progress`).
+- Updated at (UTC): `2026-03-16 20:24:41Z`
+- Treat the historical phases below as reference coverage. The launch order in this sync block is the current engineering queue.
+- Active engineering stream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 
-### Current Wave Order
+### Current P0 Launch Order
 
-1. `Wave 1` - access correctness, share-link reveal, and the builder/media/archive cleanup from the live pass.
-2. `Wave 2` - hosted validation on `Vercel`, real staged UAT, and finalizing live invite email delivery through `Resend`.
-3. `Wave 3` - `shadcn` / unified visual-system migration after launch-critical fixes and hosted validation.
-
-### Current Immediate Order
-
-1. Keep the local Wave 1 baseline green while switching validation to hosted `Vercel`.
-2. Fix hosted env details:
-- stable `NEXT_PUBLIC_SITE_URL`
-- `DEV_IMPERSONATE_*` absent
-- final `Resend` sender vars
-3. Apply the new share-link reveal migration remotely.
-4. Run staged `Owner EU / Helper RF / Relative RF` validation and record perceived speed from the hosted URL.
+1. Verify gated `Cloudflare R2` readiness: `CF_R2_*`, bucket CORS, upload-intent metadata, `smoke:media`, and `smoke:media:direct`.
+2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
+3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
+4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
 5. Complete backup/restore rehearsal and the final launch checklist before release decision.
 
 ### Current P0 Gaps
 
-- Local `next dev` with `DEV_IMPERSONATE_*` is not a trustworthy surface for real invite-role or performance conclusions.
-- Hosted `Vercel` is live, but generated hosted links still need the final stable `NEXT_PUBLIC_SITE_URL`.
-- Remote Supabase still needs the reveal migration if hosted share-link reveal should work without fallback.
-- `Resend` domain verification is still pending, so live email delivery is not fully closed.
-- Hosted `EU + RF` UAT is still a launch gate.
+- Mandatory `Cloudflare R2` rollout still needs gated verification, activation, and post-activation close-out.
+- Live `EU + RF` UAT is still a launch gate.
 - Backup/restore rehearsal and final launch checklist remain part of release readiness.
+- Archive/viewer/builder/members regression after rollout activation still needs explicit close-out.
+- Preview-variant rollout still needs regression confirmation across archive/viewer/builder.
 
 ### Current Validation Baseline
 
 - `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
 - `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
-- Local validation is green on `npm test`, `npm run build`, `npm run smoke:media`, `npm run smoke:auth`, and `npm run smoke:e2e`.
-- Hosted `Vercel` deployment for the latest `main` commit is live at the branch alias:
-  `https://antigravity-git-main-spbotdel-4945s-projects.vercel.app`
+- Latest `smoke:media` artifact `media-storage-report-1773671336869.json` is green.
+- Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
 <!-- FRAMEWORK:ENGINEERING:END -->
 
 ## 1. Цель
