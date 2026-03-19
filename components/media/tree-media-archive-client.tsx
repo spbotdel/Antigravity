@@ -229,6 +229,18 @@ function getArchiveOpenLabel(asset: MediaAssetRecord) {
   return "Открыть оригинал";
 }
 
+function getArchiveKindLabel(asset: MediaAssetRecord) {
+  if (asset.kind === "video") {
+    return "Видео";
+  }
+
+  if (asset.kind === "document") {
+    return "Документ";
+  }
+
+  return "Фото";
+}
+
 function getArchiveMediaSourceLabel(asset: MediaAssetRecord) {
   return asset.provider === "yandex_disk" ? "По ссылке" : "Файл";
 }
@@ -572,6 +584,7 @@ export function TreeMediaArchiveClient({
 
   function renderArchiveTile(asset: MediaAssetRecord, items: MediaAssetRecord[]) {
     const imageUrl = asset.kind === "photo" && isHydrated ? buildPhotoUrl(asset, shareToken) : null;
+    const secondaryLabel = asset.caption?.trim() || `${getArchiveKindLabel(asset)} • ${getArchiveMediaSourceLabel(asset)}`;
 
     return (
       <button
@@ -589,6 +602,10 @@ export function TreeMediaArchiveClient({
           </div>
         )}
         {asset.kind !== "photo" ? <span className="archive-tile-badge">{asset.kind === "video" ? "Видео" : "Файл"}</span> : null}
+        <div className="archive-tile-copy">
+          <strong title={asset.title}>{asset.title}</strong>
+          <span title={secondaryLabel}>{secondaryLabel}</span>
+        </div>
       </button>
     );
   }
@@ -1090,7 +1107,7 @@ export function TreeMediaArchiveClient({
                 <div className="archive-album-copy">
                   <strong>{album.title}</strong>
                   <span>{album.count} {mode === "all" ? "материалов" : itemLabel}</span>
-                  <small>{album.albumKind === "uploader" ? "Автоальбом загрузившего" : "Пользовательский альбом"}</small>
+                  <small>{album.description?.trim() || (album.albumKind === "uploader" ? "Автоальбом загрузившего" : "Пользовательский альбом")}</small>
                 </div>
               </button>
             );

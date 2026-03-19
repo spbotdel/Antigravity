@@ -190,6 +190,39 @@ describe("tree media archive client", () => {
     expect(screen.getByText("3 материалов в текущем режиме")).toBeInTheDocument();
   });
 
+  it("shows visible tile copy and album descriptions in the archive grid", () => {
+    const photo = createMediaAsset({
+      id: "media-photo",
+      title: "Семейный портрет",
+      caption: "Главная фотография архива",
+      storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+    });
+
+    renderArchiveClient({
+      allMedia: [photo],
+      allAlbums: [
+        {
+          id: "album-1",
+          title: "Свадьба",
+          description: "Большая семейная подборка со свадьбы",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-photo",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-1": [photo],
+      },
+    });
+
+    expect(screen.getByText("Семейный портрет")).toBeInTheDocument();
+    expect(screen.getByText("Главная фотография архива")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    expect(screen.getByText("Большая семейная подборка со свадьбы")).toBeInTheDocument();
+  });
+
   it("shows contextual empty-state actions when the current archive mode is empty", () => {
     renderArchiveClient({ allMedia: [] });
 

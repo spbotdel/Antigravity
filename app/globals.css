@@ -2233,6 +2233,31 @@ textarea {
   cursor: pointer;
 }
 
+.archive-tile-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.archive-tile-copy strong,
+.archive-tile-copy span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-tile-copy strong {
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.archive-tile-copy span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .archive-tile-image,
 .archive-album-image,
 .archive-tile-video {
@@ -2357,6 +2382,13 @@ textarea {
 .archive-album-copy small {
   color: var(--muted);
   line-height: 1.45;
+}
+
+.archive-album-copy small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .archive-review-tile {
