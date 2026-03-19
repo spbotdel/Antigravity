@@ -1008,8 +1008,30 @@ textarea {
   gap: 4px;
 }
 
+.tree-nav-shell {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.tree-nav-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .tree-nav-tabs a {
   min-height: 38px;
+}
+
+.tree-nav-link {
+  min-width: 0;
+}
+
+.tree-nav-link-active {
+  box-shadow: var(--surface-shadow-soft);
 }
 
 .viewer-layout {
@@ -1184,6 +1206,10 @@ textarea {
 .tree-canvas-empty p {
   margin: 0;
   max-width: 38ch;
+}
+
+.tree-canvas-empty .empty-state-copy {
+  justify-items: center;
 }
 
 .tree-canvas-empty-action {
@@ -4552,6 +4578,11 @@ textarea {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+  }
+
+  .tree-nav-shell {
+    width: 100%;
+    justify-items: stretch;
   }
 
   .archive-review-layout {

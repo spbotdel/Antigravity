@@ -2030,7 +2030,10 @@ export function FamilyTreeCanvas({
   if (!tree) {
     return (
       <div className="empty-state tree-canvas-empty">
-        <p>Добавьте первого человека. Он станет корнем автоматически, а потом корень можно сменить прямо в конструкторе.</p>
+        <div className="empty-state-copy">
+          <strong>Дерево пока пусто</strong>
+          <p>Добавьте первого человека. Он станет корнем автоматически, а потом корень можно сменить прямо в конструкторе.</p>
+        </div>
         {interactive && onEmptyAction ? (
           <Button type="button" className="tree-canvas-empty-action" onClick={onEmptyAction}>
             Добавить первый блок

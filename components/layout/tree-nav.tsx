@@ -37,27 +37,30 @@ export function TreeNav({ slug, shareToken, canEdit, canManageMembers, canReadAu
   ];
 
   return (
-    <nav className="tree-nav-tabs">
-      {items
-        .filter((item) => item.visible)
-        .map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            prefetch={false}
-            className={cn(
-              buttonVariants({
-                variant: pathname === item.pathname ? "secondary" : "ghost",
-                size: "sm",
-                className: "rounded-full px-4"
-              }),
-              "pill-link",
-              pathname === item.pathname && "pill-link-active"
-            )}
-          >
-            {item.label}
-          </Link>
-        ))}
-    </nav>
+    <div className="tree-nav-shell">
+      <span className="tree-nav-label">Разделы дерева</span>
+      <nav className="tree-nav-tabs" aria-label="Разделы дерева">
+        {items
+          .filter((item) => item.visible)
+          .map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              prefetch={false}
+              className={cn(
+                buttonVariants({
+                  variant: pathname === item.pathname ? "secondary" : "ghost",
+                  size: "sm",
+                  className: "rounded-full px-4"
+                }),
+                "pill-link tree-nav-link",
+                pathname === item.pathname && "pill-link-active tree-nav-link-active"
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+      </nav>
+    </div>
   );
 }
