@@ -19,14 +19,14 @@ function getCreatePanelCopy(dashboardState: DashboardModel["dashboardState"]) {
   if (dashboardState === "invited_only") {
     return {
       title: "Создайте свое дерево",
-      description: "Приглашенные деревья останутся в списке, а собственное дерево появится как основное рабочее пространство.",
+      description: "Приглашенные деревья останутся в списке, а собственное дерево появится как основной рабочий контур.",
       submitLabel: "Создать дерево"
     };
   }
 
   return {
     title: "Создайте первое дерево",
-    description: "После создания вы сразу перейдете в конструктор и продолжите работу из этого dashboard.",
+    description: "После создания вы сразу перейдете в конструктор и сможете продолжить работу уже из этого dashboard.",
     submitLabel: "Создать дерево"
   };
 }
@@ -62,7 +62,7 @@ export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
                 <strong>{formatTreeVisibility(dashboard.primaryOwnedItem.tree.visibility)}</strong>
               </div>
               <div className="dashboard-fact-card">
-                <span>Ссылка</span>
+                <span>Адрес</span>
                 <strong>/tree/{dashboard.primaryOwnedItem.tree.slug}</strong>
               </div>
             </div>
@@ -76,7 +76,7 @@ export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
                 Открыть просмотр
               </Link>
             </div>
-            <p className="dashboard-action-note">Конструктор для изменений, просмотр для проверки структуры и доступа.</p>
+            <p className="dashboard-action-note">Конструктор нужен для изменений, просмотр для спокойной проверки структуры и доступа.</p>
           </CardFooter>
         </Card>
       ) : null}
@@ -86,6 +86,7 @@ export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
           <div className="dashboard-section-heading">
             <p className="eyebrow">Дополнительно</p>
             <h2 className="card-heading">{secondarySectionTitle}</h2>
+            <p className="muted-copy">Здесь остаются приглашенные деревья и дополнительные рабочие контуры, чтобы основной экран не перегружался.</p>
           </div>
           <div className="dashboard-secondary-grid">
             {dashboard.secondaryItems.map(({ membership, tree }) => {

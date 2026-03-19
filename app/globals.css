@@ -470,7 +470,7 @@ textarea {
 
 .landing-page {
   display: grid;
-  gap: 20px;
+  gap: 24px;
 }
 
 .landing-hero,
@@ -485,7 +485,7 @@ textarea {
   grid-template-columns: minmax(0, 0.92fr) minmax(320px, 0.88fr);
   align-items: start;
   gap: 22px;
-  padding-top: 8px;
+  padding-top: 10px;
 }
 
 .landing-hero-copy,
@@ -493,12 +493,12 @@ textarea {
 .landing-workspace-copy,
 .landing-summary-copy {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .landing-title {
   margin: 0;
-  max-width: 12ch;
+  max-width: 13ch;
   font-size: clamp(1.95rem, 3.4vw, 3.05rem);
   line-height: 0.98;
   letter-spacing: -0.045em;
@@ -507,9 +507,9 @@ textarea {
 .landing-lead {
   margin: 0;
   color: var(--muted);
-  max-width: 56ch;
-  font-size: 0.98rem;
-  line-height: 1.6;
+  max-width: 58ch;
+  font-size: 0.96rem;
+  line-height: 1.58;
 }
 
 .landing-actions {
@@ -521,8 +521,8 @@ textarea {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 8px;
-  max-width: 54ch;
+  gap: 10px;
+  max-width: 56ch;
 }
 
 .landing-hero-list-item {
@@ -555,8 +555,8 @@ textarea {
 }
 
 .landing-workspace-card {
-  padding: 20px;
-  gap: 14px;
+  padding: 22px;
+  gap: 16px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 247, 242, 0.92));
 }
 
@@ -574,7 +574,7 @@ textarea {
   font-size: clamp(1.28rem, 1.9vw, 1.72rem);
   line-height: 1.12;
   letter-spacing: -0.03em;
-  max-width: 24ch;
+  max-width: 28ch;
 }
 
 .landing-workspace-copy p {
@@ -628,12 +628,13 @@ textarea {
 }
 
 .landing-detail-grid p {
+  margin: 0;
   line-height: 1.58;
 }
 
 .landing-summary-card {
   display: grid;
-  gap: 18px;
+  gap: 16px;
   padding: 22px;
 }
 
@@ -793,8 +794,8 @@ textarea {
 }
 
 .dashboard-header {
-  max-width: 760px;
-  margin-bottom: 14px;
+  max-width: 780px;
+  margin-bottom: 16px;
 }
 
 .dashboard-title {
@@ -806,7 +807,7 @@ textarea {
 
 .dashboard-workspace {
   display: grid;
-  gap: 18px;
+  gap: 20px;
 }
 
 .dashboard-primary-card,
@@ -817,7 +818,7 @@ textarea {
 }
 
 .dashboard-primary-card {
-  padding: 22px;
+  padding: 24px;
 }
 
 .dashboard-primary-topline,
@@ -831,7 +832,7 @@ textarea {
 
 .dashboard-primary-copy {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .dashboard-primary-copy h2 {
@@ -843,7 +844,8 @@ textarea {
 
 .dashboard-primary-copy p {
   max-width: 58ch;
-  line-height: 1.6;
+  margin: 0;
+  line-height: 1.58;
 }
 
 .dashboard-primary-slug {
@@ -865,6 +867,7 @@ textarea {
 }
 
 .dashboard-card-copy p {
+  margin: 0;
   line-height: 1.55;
 }
 
@@ -938,6 +941,13 @@ textarea {
   display: grid;
   gap: 12px;
   padding: 18px;
+}
+
+.dashboard-form-note {
+  margin: -2px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .dashboard-card-actions {

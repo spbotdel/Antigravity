@@ -2,7 +2,7 @@
 
 *Operational task backlog only.*
 
-*Updated: 2026-03-19*
+*Updated: 2026-03-20*
 
 ## Wave 1 — Current Execution
 
@@ -49,31 +49,32 @@ Operational note:
 
 ## Wave 3 — Visual System
 
-- [ ] Add `Tailwind + shadcn/ui` foundation
-- [ ] Migrate shared primitives: buttons, inputs, selects, textareas, dialogs, tabs, cards
-- [ ] Bring the remaining custom builder/media/member surfaces to the same visual language without forcing the canvas onto stock components
+- [x] Add `Tailwind + shadcn/ui` foundation
+- [x] Migrate shared primitives: buttons, inputs, selects, textareas, dialogs, tabs, cards
+- [x] Bring the main tree-scoped builder/media/member/settings/audit surfaces to one visual language without forcing the canvas onto stock components
+- [ ] Run a calm post-migration pass on landing/dashboard and close any remaining low-risk visual drift
 
 ## Active Sprint
 
 ### High Priority
 
 - [x] Закрыть `docs/FIX_PLAN_PR1.md`: direct upload fallback сузить до network/timeout-only, закрепить signed-URL fallback contract тестами и локализовать shared dialog `Close`.
-- [ ] Подтвердить, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий.
+- [x] Подтвердить автоматизированно, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий на hosted preview.
 - [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
 - [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
 - [ ] Довести variant architecture до green regression: `thumb/small/medium` должны стабильно использоваться в archive/viewer/builder, а оригинал открываться только явно.
-- [ ] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
-- [ ] Завершить текущий pass по `family-tree-canvas`: age-aware avatars, fallback badge states, читаемость карточек и стабильное выделение выбранного узла в viewer и builder.
+- [x] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
+- [x] Завершить текущий visual pass по `family-tree-canvas`, tree nav и связанным viewer/builder surfaces на уровне migration checkpoint.
 - [ ] Стабилизировать layout конструктора: resizable canvas shell, overlay inspector на desktop и предсказуемое поведение на tablet/mobile без потери приоритета дерева.
-- [ ] Довести экран `Участники`: приглашения по аккаунту и read-only share links должны быть самодостаточными, с понятными подсказками, копированием ссылок и безопасным отзывом доступа.
-- [ ] Провести целевой QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.
+- [x] Довести экран `Участники` до единого visual-system checkpoint: приглашения по аккаунту и read-only share links теперь проходят через общий utility-surface язык.
+- [ ] Провести целевой human QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.
 - [ ] Держать startup context, task capsules и memory-файлы актуальными: `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.
 
 ### Medium Priority
 
 - [ ] После закрытия `FIX_PLAN_PR1` не расширять scope review-правок: следующий шаг только QA/archive/member flows, а не новый transport refactor.
-- [ ] Вернуться к calm pass для landing и dashboard после стабилизации builder/members: сократить лишний copy, выровнять ритм заголовков и CTA.
-- [ ] Добить единый light visual system для `Настройки`, `Журнал`, `Участники`, builder и viewer.
+- [ ] Вернуться к calm pass для landing и dashboard: сократить лишний copy, выровнять ритм заголовков и CTA после завершения основного tree-scoped migration checkpoint.
+- [x] Добить единый light visual system для `Настройки`, `Журнал`, `Участники`, builder и viewer.
 - [ ] Проверить аватары и карточки дерева на кейсах без фото, с кириллицей в gender, с детьми и пожилыми, чтобы визуальные fallback-и были предсказуемыми.
 - [ ] Уточнить, какие из новых проектных документов должны оставаться обязательным startup context, а какие достаточно держать как справочные.
 - [ ] Подготовить следующий smoke cycle после текущих UI правок и обновления memory-файлов.

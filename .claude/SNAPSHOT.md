@@ -2,7 +2,7 @@
 
 *Operational memory only. Not the canonical architecture document.*
 
-*Last updated: 2026-03-19*
+*Last updated: 2026-03-20*
 
 ## Current State
 
@@ -12,7 +12,7 @@
 - Backend/data layer: `Supabase` auth, database, RLS + S3-compatible object storage
 - Dev environment: linked to Supabase project `untwxmiqqwepopeepzqe`
 - Legacy static viewer: preserved in `legacy/` and old `index.html`, but no longer the main runtime
-- Current workstream: family archive foundation, uploader/manual albums, variant-aware media delivery, and Cloudflare R2 groundwork are already in the worktree; current effort should now shift to archive/viewer polishing, broader QA, and migration sequencing
+- Current workstream: the main tree-scoped visual-system migration has now passed through archive, utility surfaces, builder/viewer media, and tree nav/canvas framing; current effort should shift from broad migration to consolidated QA, access/UAT validation, and calm follow-up polish
 - Target media platform: `Cloudflare` for the next binary/media delivery stage, while the current Yandex path remains transitional compatibility.
 
 ## Current Active Task
@@ -41,6 +41,8 @@
 
 - [x] Unified local-file upload now covers photos and videos from device in one flow.
 - [x] Multi-file batches, visible limits copy, and human-readable progress feedback are in place in the builder.
+- [x] Tree-scoped visual-system migration is now materially in place across `Медиа`, `Участники`, `Настройки`, `Журнал`, builder/viewer media surfaces, and tree nav/canvas framing.
+- [x] Hosted preview regression is green after the migration passes on `smoke:auth`, `smoke:e2e`, `smoke:media`, and a logged-in route sweep.
 - [x] PR1 browser upload transport fix is in place: direct upload now falls back to server proxy only on network/timeout-style failures, not on abort or 4xx signed-URL errors.
 - [x] PR1 signed-URL fallback regression coverage is in place for `win32`, non-`win32`, and repository-level `503` degradation scenarios.
 - [x] Shared dialog close labels are localized to Russian in the shared primitive.
@@ -52,35 +54,42 @@
 - [x] Archive surface now includes a large in-app viewer/lightbox and sticky bottom actions for the current context.
 - [x] Variant-aware media delivery foundation exists for `thumb/small/medium` photo previews.
 - [x] Cloudflare R2 runtime/config foundation is present for the next media storage stage.
-- [ ] Finish the current `family-tree-canvas` interaction and visual pass.
-- [ ] Validate `Участники`, invites and share links as one coherent access-management flow.
+- [ ] Finish the remaining calm pass after migration: landing/dashboard rhythm, any last low-risk copy cleanup, and residual layout polish.
+- [ ] Validate `Участники`, invites and share links as one coherent access-management flow in final hosted UAT, not only smoke.
 - [ ] QA the reworked builder layout so the tree keeps visual priority on desktop and mobile.
 - [ ] Keep startup context, task capsules and memory files aligned with the current sprint.
 
 ## Active Blockers
 
-- [ ] Current media upload UX is still not archive-ready: single flow, multi-file batches, device video, limits and progress need to be confirmed end-to-end.
+- [ ] Current media upload UX is smoke-green and hosted regression-green, but still needs explicit human QA close-out for archive album/mobile/end-to-end confidence.
 - [ ] Cloudflare target foundations exist in code/env, but the actual migration away from the transitional Yandex path is still incomplete.
-- [ ] Preview variant foundations exist, but rollout and QA are still incomplete; originals should not leak back into archive/viewer/builder previews.
-- [ ] The tree-level family archive now has sticky actions and a large viewer/lightbox, but broader album/mobile/end-to-end QA is still unfinished.
-- [ ] Builder canvas resize and overlay inspector still need practical QA on desktop, tablet and mobile widths.
-- [ ] Members/invite/share-link flows need end-to-end validation against live API responses and clipboard behavior.
+- [ ] Preview variant foundations exist and the main surfaces now use them, but final rollout QA is still incomplete; originals should not leak back into archive/viewer/builder previews.
+- [ ] The tree-level family archive now has sticky actions, large viewer/lightbox, calmer review flow, and visible tile copy, but broader album/mobile/end-to-end QA is still unfinished.
+- [ ] Builder canvas resize and overlay inspector now pass the current smoke checkpoint, but still need practical QA on desktop, tablet and mobile widths.
+- [ ] Members/invite/share-link flows are smoke-green and hosted route-green, but still need explicit live UAT against clipboard and perceived-speed behavior.
 - [ ] Manual memory notes must stay aligned with the actual workstream after each `/fi`.
-- [ ] Landing/dashboard cleanup is no longer the primary blocker, but still needs a secondary calm pass after tree/member flows stabilize.
+- [ ] Landing/dashboard cleanup is now the next visual follow-up, but it remains secondary to final access/UAT close-out.
 
 ## Next Steps
 
 - [ ] Convert the Cloudflare target into an explicit migration sequence: rollout gating, direct upload, Stream, and Queues.
 - [ ] Finish archive album/mobile QA now that sticky actions and the large viewer/lightbox are in place.
 - [ ] Switch tree cards, side rails, archive tiles, and media galleries to preview variants by default and confirm legacy fallbacks.
-- [ ] Run targeted QA for viewer, builder and members after the current media UI pass.
+- [ ] Run targeted QA for viewer, builder and members after the completed migration checkpoint.
 - [ ] Review `Участники` end-to-end with invite, copy and revoke flows.
-- [ ] Revisit landing and dashboard only after tree/member workflows are stable.
+- [ ] Revisit landing and dashboard now as the next calm visual pass, but keep it below final access/UAT close-out if the two conflict.
 - [ ] Close each concrete work cycle with `/fi`; completion now needs to keep manual memory sections current as well.
 
 ## Completion Capture
 
 - Primary captured workstream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
+- Main tree-scoped visual-system migration checkpoint is now materially complete:
+  archive, utility surfaces, builder/viewer media surfaces, and tree nav/canvas framing have all passed through the current visual pass.
+- Hosted preview checkpoint is green on:
+  `smoke:auth`,
+  `smoke:e2e`,
+  `smoke:media`,
+  plus a logged-in route sweep across `viewer`, `builder`, `media`, `members`, `settings`, and `audit`.
 - PR1 high-confidence review fixes are closed:
   direct browser upload no longer retries through proxy on user abort or 4xx signed-URL responses.
 - PR1 signed HTTP transport coverage now fixes the regression contract around `win32` PowerShell fallback and repository-level `503` degradation.

@@ -9,23 +9,23 @@ export default function HomePage() {
     <main className="page-shell landing-page">
       <section className="landing-hero">
         <div className="landing-hero-copy">
-          <p className="eyebrow">Семейное дерево</p>
-          <h1 className="landing-title">Соберите семейную историю в одном рабочем дереве.</h1>
+          <p className="eyebrow">Частный семейный архив</p>
+          <h1 className="landing-title">Одно дерево для семьи, связей и общего архива.</h1>
           <p className="landing-lead">
-            Родственники, связи и материалы остаются рядом со схемой. Владелец управляет доступом, участники открывают только нужный уровень данных.
+            Дерево остается центром экрана. Владелец управляет доступом, помощники редактируют только нужное, а родственники открывают спокойный read-only просмотр по ссылке.
           </p>
           <div className="hero-actions landing-actions">
             <Link href="/auth/register" className={buttonVariants({ size: "lg" })}>
-              Начать с дерева
+              Создать дерево
             </Link>
             <Link href="/auth/login" className={buttonVariants({ variant: "ghost", size: "lg" })}>
               Войти
             </Link>
           </div>
           <ul className="landing-hero-list">
-            <li className="landing-hero-list-item">Схема семьи остается главным объектом экрана.</li>
-            <li className="landing-hero-list-item">Права доступа не мешают работе с деревом.</li>
-            <li className="landing-hero-list-item">Фото и истории привязаны к людям и веткам.</li>
+            <li className="landing-hero-list-item">Дерево, просмотр и редактирование собраны в одном рабочем контуре.</li>
+            <li className="landing-hero-list-item">Приглашения и семейные ссылки не смешиваются между собой.</li>
+            <li className="landing-hero-list-item">Фото и видео остаются рядом с людьми и ветками, а не в отдельной админке.</li>
           </ul>
         </div>
 
@@ -35,31 +35,31 @@ export default function HomePage() {
             <div className="landing-workspace-pills">
               <Badge className="meta-pill">Viewer + Builder</Badge>
               <Badge className="meta-pill meta-pill-muted" variant="secondary">
-                Роли и доступ
+                Архив и доступ
               </Badge>
             </div>
           </div>
           <div className="landing-workspace-copy">
-            <h2 className="card-heading">Короткий контур: открыть дерево, перейти в конструктор, проверить доступ.</h2>
-            <p className="card-copy">Интерфейс собран вокруг семьи и веток, а не вокруг длинных маркетинговых блоков.</p>
+            <h2 className="card-heading">Открыть дерево, перейти в конструктор, проверить доступ и вернуться к архиву без лишних переходов.</h2>
+            <p className="card-copy">Вся навигация держится вокруг одной семейной структуры, а не вокруг отдельных разрозненных инструментов.</p>
           </div>
           <div className="landing-workspace-list">
             <article className="landing-workspace-row">
               <span>Просмотр</span>
-              <strong>Сразу видно структуру семьи и базовые материалы.</strong>
+              <strong>Сразу видно структуру семьи, выбранного человека и связанные материалы.</strong>
             </article>
             <article className="landing-workspace-row">
               <span>Редактирование</span>
-              <strong>Конструктор ведет к действиям без лишних переходов.</strong>
+              <strong>Конструктор ведет к действиям рядом со схемой, а не уводит в отдельные формы.</strong>
             </article>
             <article className="landing-workspace-row">
               <span>Контроль</span>
-              <strong>Роли и видимость включаются только в нужных местах.</strong>
+              <strong>Роли, ссылки и видимость включаются только там, где это действительно нужно.</strong>
             </article>
           </div>
           <div className="landing-workspace-footer">
             <span>Один адрес для семьи</span>
-            <strong>Открываете дерево и продолжаете работу с того же экрана.</strong>
+            <strong>Открываете дерево по ссылке и остаетесь в одном понятном рабочем ритме.</strong>
           </div>
         </Card>
       </section>
@@ -67,33 +67,33 @@ export default function HomePage() {
       <section className="landing-detail-grid">
         <Card className="p-6">
           <p className="card-kicker">Права и роли</p>
-          <h3 className="card-heading">Владелец, администратор и участник работают в одном дереве с разными правами.</h3>
-          <p className="card-copy">Доступы разделены по реальным сценариям и не требуют отдельной настройки на каждом шаге.</p>
+          <h3 className="card-heading">Владелец, помощник и участник работают в одном дереве без тяжелой админки.</h3>
+          <p className="card-copy">Приглашения нужны для постоянного доступа по аккаунту, а семейные ссылки остаются отдельным read-only каналом.</p>
         </Card>
         <Card className="p-6">
           <p className="card-kicker">Материалы</p>
-          <h3 className="card-heading">Фотографии и заметки остаются рядом с людьми, а не в отдельной админке.</h3>
-          <p className="card-copy">Публичные материалы видны по ссылке, приватные остаются только для участников дерева.</p>
+          <h3 className="card-heading">Фотографии, видео и документы собираются рядом с людьми и в общем семейном архиве.</h3>
+          <p className="card-copy">Публичный просмотр по ссылке и приватные материалы для участников не конфликтуют между собой.</p>
         </Card>
       </section>
 
       <Card className="landing-summary-card">
         <div className="landing-summary-copy">
           <p className="card-kicker">Кому подходит</p>
-          <h2 className="card-heading">Когда нужно вести живое семейное дерево и давать доступ близким без перегруженного интерфейса.</h2>
+          <h2 className="card-heading">Когда семье нужен один спокойный инструмент для дерева, доступа и общего архива.</h2>
         </div>
         <div className="landing-summary-grid">
           <div>
             <span>Для семьи</span>
-            <p className="card-copy">Один адрес дерева и понятный просмотр для родственников.</p>
+            <p className="card-copy">Один адрес дерева и понятный просмотр для родственников без лишней регистрации.</p>
           </div>
           <div>
             <span>Для владельца</span>
-            <p className="card-copy">Конструктор, настройки и журнал доступны из одного рабочего контура.</p>
+            <p className="card-copy">Конструктор, доступы, настройки и журнал собираются в один рабочий контур.</p>
           </div>
           <div>
             <span>Для участников</span>
-            <p className="card-copy">Открывается только тот объем информации, который разрешен владельцем.</p>
+            <p className="card-copy">Открывается только тот объем информации и действий, который разрешен владельцем.</p>
           </div>
         </div>
       </Card>
