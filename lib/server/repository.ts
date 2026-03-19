@@ -113,8 +113,13 @@ function toPublicShareLinkRecord(shareLink: ShareLinkRecord | ShareLinkRevealRec
   return publicShareLink;
 }
 
-function buildShareLinkUrl(treeSlug: string, token: string) {
-  return `${getBaseUrl()}/tree/${treeSlug}?share=${encodeURIComponent(token)}`;
+function resolveRuntimeBaseUrl(baseUrl?: string | null) {
+  const trimmed = baseUrl?.trim();
+  if (trimmed) {
+    return trimmed.replace(/\/+$/, "");
+  }
+
+  return getBaseUrl();
 }
 
 async function sendInviteEmailIfConfigured(input: {
@@ -1121,7 +1126,7 @@ export async function getTreeSettingsPageData(slug: string, options?: { shareTok
   };
 }
 
-export async function createShareLink(input: { treeId: string; treeSlug?: string | null; label?: string | null; expiresInDays: number }) {
+export async function createShareLink(input: { treeId: string; treeSlug?: string | null; label?: string | null; expiresInDays: number; baseUrl?: string | null }) {
   const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
   const token = createOpaqueToken();
   const tokenHash = hashOpaqueToken(token);
@@ -1184,11 +1189,11 @@ export async function createShareLink(input: { treeId: string; treeSlug?: string
   return {
     shareLink: data,
     token,
-    url: buildShareLinkUrl(treeSlug, token)
+    url: `${resolveRuntimeBaseUrl(input.baseUrl)}/tree/${treeSlug}?share=${encodeURIComponent(token)}`
   };
 }
 
-export async function revealShareLink(shareLinkId: string) {
+export async function revealShareLink(shareLinkId: string, baseUrl?: string | null) {
   const [shareLink, user] = await Promise.all([
     (async () => {
       try {
@@ -1247,7 +1252,7 @@ export async function revealShareLink(shareLinkId: string) {
     return {
       shareLink: publicShareLink,
       canReveal: true,
-      url: buildShareLinkUrl(treeSlug, token),
+      url: `${resolveRuntimeBaseUrl(baseUrl)}/tree/${treeSlug}?share=${encodeURIComponent(token)}`,
       message: "Семейная ссылка загружена."
     };
   } catch {
@@ -1947,7 +1952,7 @@ export async function deletePartnership(partnershipId: string) {
   });
 }
 
-export async function createInvite(input: { treeId: string; role: UserRole; inviteMethod: "link" | "email"; email?: string | null; expiresInDays: number }) {
+export async function createInvite(input: { treeId: string; role: UserRole; inviteMethod: "link" | "email"; email?: string | null; expiresInDays: number; baseUrl?: string | null }) {
   const { userId, membership } = await requireTreeRole(input.treeId, ["owner", "admin"]);
 
   if (membership.role === "admin" && input.role === "owner") {
@@ -1986,7 +1991,7 @@ export async function createInvite(input: { treeId: string; role: UserRole; invi
   });
 
   const treeTitle = (await getTreeById(input.treeId)).title;
-  const inviteUrl = `${getBaseUrl()}/auth/accept-invite?token=${token}`;
+  const inviteUrl = `${resolveRuntimeBaseUrl(input.baseUrl)}/auth/accept-invite?token=${token}`;
   const delivery = await sendInviteEmailIfConfigured({
     inviteMethod: input.inviteMethod,
     email: input.email || null,

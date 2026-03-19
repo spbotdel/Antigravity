@@ -18,7 +18,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const payload = createShareLinkSchema.parse(await request.json());
-    const result = await createShareLink(payload);
+    const result = await createShareLink({
+      ...payload,
+      baseUrl: new URL(request.url).origin
+    });
     return Response.json({ ...result, message: "Семейная ссылка создана." }, { status: 201 });
   } catch (error) {
     return toErrorResponse(error);

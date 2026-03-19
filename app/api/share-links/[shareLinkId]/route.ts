@@ -5,10 +5,10 @@ interface Params {
   params: Promise<{ shareLinkId: string }>;
 }
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   try {
     const { shareLinkId } = await params;
-    const result = await revealShareLink(shareLinkId);
+    const result = await revealShareLink(shareLinkId, new URL(request.url).origin);
     return Response.json(result);
   } catch (error) {
     return toErrorResponse(error);
