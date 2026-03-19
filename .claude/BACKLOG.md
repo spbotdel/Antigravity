@@ -61,6 +61,7 @@ Operational note:
 - [x] Закрыть `docs/FIX_PLAN_PR1.md`: direct upload fallback сузить до network/timeout-only, закрепить signed-URL fallback contract тестами и локализовать shared dialog `Close`.
 - [x] Подтвердить автоматизированно, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий на hosted preview.
 - [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
+  Текущее состояние: hosted `smoke:media:direct` уже green, а новые file-backed media теперь сохраняются как `provider: cloudflare_r2` после remote migrations `20260320093000` и `20260320093100`.
 - [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
 - [ ] Довести variant architecture до green regression: `thumb/small/medium` должны стабильно использоваться в archive/viewer/builder, а оригинал открываться только явно.
 - [x] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
@@ -68,6 +69,7 @@ Operational note:
 - [ ] Стабилизировать layout конструктора: resizable canvas shell, overlay inspector на desktop и предсказуемое поведение на tablet/mobile без потери приоритета дерева.
 - [x] Довести экран `Участники` до единого visual-system checkpoint: приглашения по аккаунту и read-only share links теперь проходят через общий utility-surface язык.
 - [ ] Провести целевой human QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.
+- [ ] Проверить hosted invite-email readiness и точно зафиксировать, что ещё блокирует `Resend` sender/domain close-out.
 - [ ] Держать startup context, task capsules и memory-файлы актуальными: `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.
 
 ### Medium Priority

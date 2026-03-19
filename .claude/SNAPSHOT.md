@@ -18,7 +18,7 @@
 ## Current Active Task
 
 - `tasks/active/media-upload-flow-v2` — `Media Upload Flow V2` (`in_progress`, priority `high`)
-- Latest `smoke:media`: `media-storage-report-1773671336869.json` (`green`)
+- Latest `smoke:media`: `media-storage-report-1773924934314.json` (`green`)
 
 ## Working Assumptions
 
@@ -43,6 +43,7 @@
 - [x] Multi-file batches, visible limits copy, and human-readable progress feedback are in place in the builder.
 - [x] Tree-scoped visual-system migration is now materially in place across `Медиа`, `Участники`, `Настройки`, `Журнал`, builder/viewer media surfaces, and tree nav/canvas framing.
 - [x] Hosted preview regression is green after the migration passes on `smoke:auth`, `smoke:e2e`, `smoke:media`, and a logged-in route sweep.
+- [x] Cloudflare rollout metadata now persists explicitly as `provider: cloudflare_r2` after remote schema update, not only in upload-intent transport fields.
 - [x] PR1 browser upload transport fix is in place: direct upload now falls back to server proxy only on network/timeout-style failures, not on abort or 4xx signed-URL errors.
 - [x] PR1 signed-URL fallback regression coverage is in place for `win32`, non-`win32`, and repository-level `503` degradation scenarios.
 - [x] Shared dialog close labels are localized to Russian in the shared primitive.
@@ -62,7 +63,7 @@
 ## Active Blockers
 
 - [ ] Current media upload UX is smoke-green and hosted regression-green, but still needs explicit human QA close-out for archive album/mobile/end-to-end confidence.
-- [ ] Cloudflare target foundations exist in code/env, but the actual migration away from the transitional Yandex path is still incomplete.
+- [ ] Cloudflare target foundations and explicit provider metadata are now green on hosted smoke, but the broader migration close-out is still incomplete while legacy reads and release/UAT hardening remain open.
 - [ ] Preview variant foundations exist and the main surfaces now use them, but final rollout QA is still incomplete; originals should not leak back into archive/viewer/builder previews.
 - [ ] The tree-level family archive now has sticky actions, large viewer/lightbox, calmer review flow, and visible tile copy, but broader album/mobile/end-to-end QA is still unfinished.
 - [ ] Builder canvas resize and overlay inspector now pass the current smoke checkpoint, but still need practical QA on desktop, tablet and mobile widths.
@@ -73,6 +74,7 @@
 ## Next Steps
 
 - [ ] Convert the Cloudflare target into an explicit migration sequence: rollout gating, direct upload, Stream, and Queues.
+- [ ] Probe hosted invite-email readiness and pin down whether `Resend` sender/domain remains the next external blocker.
 - [ ] Finish archive album/mobile QA now that sticky actions and the large viewer/lightbox are in place.
 - [ ] Switch tree cards, side rails, archive tiles, and media galleries to preview variants by default and confirm legacy fallbacks.
 - [ ] Run targeted QA for viewer, builder and members after the completed migration checkpoint.
@@ -90,6 +92,8 @@
   `smoke:e2e`,
   `smoke:media`,
   plus a logged-in route sweep across `viewer`, `builder`, `media`, `members`, `settings`, and `audit`.
+- Cloudflare rollout checkpoint is stronger now:
+  after remote migrations `20260320093000` and `20260320093100`, hosted `smoke:media:direct` confirms new file-backed media persist as `provider: cloudflare_r2`.
 - PR1 high-confidence review fixes are closed:
   direct browser upload no longer retries through proxy on user abort or 4xx signed-URL responses.
 - PR1 signed HTTP transport coverage now fixes the regression contract around `win32` PowerShell fallback and repository-level `503` degradation.
@@ -98,7 +102,7 @@
 - Detected archive upload review flow with pending batch state and discard confirmation.
 - Detected variant-aware media delivery foundation for photo previews (`thumb/small/medium`).
 - Detected Cloudflare R2 foundation in env/runtime config and supporting project files.
-- Latest `smoke:media` artifact `media-storage-report-1773671336869.json` is green.
+- Latest `smoke:media` artifact `media-storage-report-1773924934314.json` is green.
 - Targeted regression signal is green on:
   `tests/upload-transport-contract.test.ts`,
   `tests/repository-signed-http.test.ts`,
