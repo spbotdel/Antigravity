@@ -191,6 +191,8 @@ For the current media/object-storage path this includes at least:
 - [`supabase/migrations/20260306173100_unified_media_constraints_v1.sql`](./supabase/migrations/20260306173100_unified_media_constraints_v1.sql)
 - [`supabase/migrations/20260307111500_object_storage_provider_v1.sql`](./supabase/migrations/20260307111500_object_storage_provider_v1.sql)
 - [`supabase/migrations/20260307111600_object_storage_provider_constraints_v1.sql`](./supabase/migrations/20260307111600_object_storage_provider_constraints_v1.sql)
+- [`supabase/migrations/20260320093000_cloudflare_r2_provider_v1.sql`](./supabase/migrations/20260320093000_cloudflare_r2_provider_v1.sql)
+- [`supabase/migrations/20260320093100_cloudflare_r2_provider_constraints_v1.sql`](./supabase/migrations/20260320093100_cloudflare_r2_provider_constraints_v1.sql)
 
 4. Optionally run [`supabase/seed.sql`](./supabase/seed.sql) after at least one auth user exists.
 

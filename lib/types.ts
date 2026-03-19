@@ -2,7 +2,7 @@ export type UserRole = "owner" | "admin" | "viewer";
 export type TreeVisibility = "public" | "private";
 export type MediaVisibility = "public" | "members";
 export type MediaKind = "photo" | "video" | "document";
-export type MediaProvider = "supabase_storage" | "object_storage" | "yandex_disk";
+export type MediaProvider = "supabase_storage" | "object_storage" | "cloudflare_r2" | "yandex_disk";
 export type MediaStorageBackend = "supabase" | "object_storage" | "cloudflare_r2";
 export type MediaUploadRolloutState = "steady_state" | "cloudflare_rollout_gated" | "cloudflare_rollout_active";
 export type MediaVariantName = "thumb" | "small" | "medium";
@@ -113,7 +113,7 @@ export interface MediaUploadVariantTarget {
   path: string;
   signedUrl: string;
   token: string | null;
-  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage">;
+  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage" | "cloudflare_r2">;
 }
 
 export interface MediaUploadTargetResponse {
@@ -123,7 +123,7 @@ export interface MediaUploadTargetResponse {
   bucket: string;
   signedUrl: string;
   token: string | null;
-  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage">;
+  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage" | "cloudflare_r2">;
   configuredBackend: MediaStorageBackend;
   resolvedUploadBackend: MediaStorageBackend;
   rolloutState: MediaUploadRolloutState;

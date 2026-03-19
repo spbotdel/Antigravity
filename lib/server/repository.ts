@@ -32,7 +32,7 @@ import type {
 } from "@/lib/types";
 import { buildAuditEntryViews } from "@/lib/audit-presenter";
 import { buildViewerActor, canSeeMedia, hasRequiredRole, normalizeMembershipRole, resolveTreeRole } from "@/lib/permissions";
-import { getBaseUrl, getFileBackedMediaProvider, getObjectStorageEnv, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, getResendEmailEnv, getShareLinkTokenEncryptionSecret, getStorageBucket, isObjectStorageLikeBackend, resolveMediaUploadPlan, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
+import { getBaseUrl, getFileBackedMediaProvider, getObjectStorageEnv, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, getResendEmailEnv, getShareLinkTokenEncryptionSecret, getStorageBucket, isObjectStorageLikeBackend, isObjectStorageMediaProvider, resolveMediaUploadPlan, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson, fetchSupabaseAdminRestJsonWithHeaders, parsePowerShellJsonStdout } from "@/lib/supabase/admin-rest";
 import { getCurrentUser, requireAuthenticatedUserId } from "@/lib/server/auth";
@@ -492,7 +492,7 @@ async function createObjectStorageSignedUploadUrl(storagePath: string, mimeType:
     bucket: config.bucket,
     signedUrl,
     token: null,
-    uploadProvider: "object_storage" as const
+    uploadProvider: getFileBackedMediaProvider()
   };
 }
 
@@ -2301,7 +2301,7 @@ type CompletedStoredMediaInput = {
   visibility: "public" | "members";
   mimeType: string;
   sizeBytes?: number | null;
-  provider?: "supabase_storage" | "object_storage";
+  provider?: "supabase_storage" | "object_storage" | "cloudflare_r2";
 };
 
 type CompletedExternalVideoInput = {
@@ -2335,7 +2335,7 @@ type CompletedStoredArchiveMediaInput = {
   visibility: "public" | "members";
   mimeType: string;
   sizeBytes?: number | null;
-  provider?: "supabase_storage" | "object_storage";
+  provider?: "supabase_storage" | "object_storage" | "cloudflare_r2";
 };
 
 type CompletedExternalArchiveVideoInput = {
@@ -2369,7 +2369,7 @@ export async function completeMediaUpload(input: {
   visibility: "public" | "members";
   mimeType: string;
   sizeBytes?: number | null;
-  provider?: "supabase_storage" | "object_storage";
+  provider?: "supabase_storage" | "object_storage" | "cloudflare_r2";
 } | {
   treeId: string;
   personId: string;
@@ -2668,7 +2668,7 @@ export async function resolveMediaAccess(mediaId: string, shareToken?: string | 
     }
   }
 
-  if (media.provider === "object_storage") {
+  if (isObjectStorageMediaProvider(media.provider)) {
     const storageEnv = getObjectStorageEnvForMedia(media.created_at);
     const resolvedStoragePath = resolvedVariantPath || media.storage_path;
     const signedUrl = await createObjectStorageSignedReadUrl(resolvedStoragePath, storageEnv);
@@ -2714,7 +2714,7 @@ export async function deleteMedia(mediaId: string) {
       : [];
 
   if (before.storage_path) {
-    if (before.provider === "object_storage") {
+    if (isObjectStorageMediaProvider(before.provider)) {
       const storageEnv = getObjectStorageEnvForMedia(before.created_at);
       try {
         await deleteObjectStorageObject(before.storage_path, storageEnv);

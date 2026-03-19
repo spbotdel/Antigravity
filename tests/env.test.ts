@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, resolveMediaUploadPlan, resolveMediaUploadTransport, shouldForceProxyMediaUpload, shouldUseCloudflareR2ForMedia, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
+import { getFileBackedMediaProvider, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, resolveMediaUploadPlan, resolveMediaUploadTransport, shouldForceProxyMediaUpload, shouldUseCloudflareR2ForMedia, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
 import { formatMediaUploadTransportHint } from "@/lib/utils";
 
 const ENV_KEYS = [
@@ -77,6 +77,7 @@ describe("media env rollout gating", () => {
     process.env.CF_R2_ROLLOUT_AT = "2026-03-01T00:00:00Z";
 
     expect(shouldUseCloudflareR2ForNewMedia(Date.parse("2026-03-09T00:00:00Z"))).toBe(true);
+    expect(getFileBackedMediaProvider(Date.parse("2026-03-09T00:00:00Z"))).toBe("cloudflare_r2");
     expect(getObjectStorageEnvForNewMedia(Date.parse("2026-03-09T00:00:00Z")).bucket).toBe("r2-bucket");
     expect(shouldUseCloudflareR2ForMedia("2026-03-09T00:00:00Z")).toBe(true);
     expect(getObjectStorageEnvForMedia("2026-03-09T00:00:00Z").bucket).toBe("r2-bucket");
@@ -102,6 +103,7 @@ describe("media env rollout gating", () => {
     process.env.CF_R2_ROLLOUT_AT = "not-a-date";
 
     expect(shouldUseCloudflareR2ForNewMedia(Date.parse("2026-03-09T00:00:00Z"))).toBe(false);
+    expect(getFileBackedMediaProvider(Date.parse("2026-03-09T00:00:00Z"))).toBe("object_storage");
     expect(shouldUseCloudflareR2ForMedia("2026-03-09T00:00:00Z")).toBe(false);
     expect(getObjectStorageEnvForNewMedia(Date.parse("2026-03-09T00:00:00Z")).bucket).toBe("legacy-bucket");
   });

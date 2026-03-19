@@ -281,7 +281,15 @@ export function getObjectStorageEnv() {
   return getLegacyObjectStorageEnv();
 }
 
-export function getFileBackedMediaProvider(): Extract<MediaProvider, "supabase_storage" | "object_storage"> {
+export function isObjectStorageMediaProvider(provider: MediaProvider | null | undefined) {
+  return provider === "object_storage" || provider === "cloudflare_r2";
+}
+
+export function getFileBackedMediaProvider(nowMs = Date.now()): Extract<MediaProvider, "supabase_storage" | "object_storage" | "cloudflare_r2"> {
+  if (getMediaStorageBackend() === "cloudflare_r2") {
+    return shouldUseCloudflareR2ForNewMedia(nowMs) ? "cloudflare_r2" : "object_storage";
+  }
+
   return isObjectStorageLikeBackend() ? "object_storage" : "supabase_storage";
 }
 

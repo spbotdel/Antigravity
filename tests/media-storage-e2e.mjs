@@ -87,6 +87,10 @@ const expectedUploadMode =
   expectedResolvedUploadBackend === "cloudflare_r2" && !expectedForceProxyUpload
     ? "direct"
     : "proxy";
+const expectedFileBackedProvider =
+  expectedResolvedUploadBackend === "cloudflare_r2"
+    ? "cloudflare_r2"
+    : "object_storage";
 
 function shouldUseHostedAuthenticatedSession() {
   return Boolean(baseUrlOverride && hostedLoginEmail && hostedLoginPassword);
@@ -842,11 +846,11 @@ async function main() {
 
     mediaIds = mediaRecords.map((item) => item.id);
 
-    if (photoRecord.provider !== "object_storage" || photoRecord.kind !== "photo" || !photoRecord.storage_path) {
+    if (photoRecord.provider !== expectedFileBackedProvider || photoRecord.kind !== "photo" || !photoRecord.storage_path) {
       throw new Error(`Unexpected photo record: ${JSON.stringify(photoRecord)}`);
     }
 
-    if (storageVideoRecord.provider !== "object_storage" || storageVideoRecord.kind !== "video" || !storageVideoRecord.storage_path) {
+    if (storageVideoRecord.provider !== expectedFileBackedProvider || storageVideoRecord.kind !== "video" || !storageVideoRecord.storage_path) {
       throw new Error(`Unexpected storage video record: ${JSON.stringify(storageVideoRecord)}`);
     }
 
@@ -881,7 +885,7 @@ async function main() {
     }
 
     report.ok = true;
-    report.verifiedProviders = ["object_storage", "yandex_disk"];
+    report.verifiedProviders = [expectedFileBackedProvider, "yandex_disk"];
     report.mediaRecords = mediaRecords.map((item) => ({
       id: item.id,
       title: item.title,
