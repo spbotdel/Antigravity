@@ -25,12 +25,16 @@ vi.mock("@/lib/server/auth", () => ({
   requireAuthenticatedUserId: mocks.requireAuthenticatedUserId,
 }));
 
-vi.mock("@/lib/permissions", () => ({
-  buildViewerActor: mocks.buildViewerActor,
-  canViewTree: mocks.canViewTree,
-  hasRequiredRole: mocks.hasRequiredRole,
-  canSeeMedia: mocks.canSeeMedia,
-}));
+vi.mock("@/lib/permissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/permissions")>();
+  return {
+    ...actual,
+    buildViewerActor: mocks.buildViewerActor,
+    canViewTree: mocks.canViewTree,
+    hasRequiredRole: mocks.hasRequiredRole,
+    canSeeMedia: mocks.canSeeMedia,
+  };
+});
 
 import { getTreeMembersPageData } from "@/lib/server/repository";
 

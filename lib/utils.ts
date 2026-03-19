@@ -67,6 +67,23 @@ export interface BasicUploadProgressSnapshot {
   percent: number;
 }
 
+class BrowserUploadTransportError extends Error {
+  kind: "network" | "timeout" | "abort" | "response";
+
+  constructor(kind: "network" | "timeout" | "abort" | "response", message: string) {
+    super(message);
+    this.name = "BrowserUploadTransportError";
+    this.kind = kind;
+  }
+}
+
+function shouldFallbackToProxyUpload(error: unknown) {
+  return (
+    error instanceof BrowserUploadTransportError &&
+    (error.kind === "network" || error.kind === "timeout")
+  );
+}
+
 async function uploadFileWithXhr(input: {
   url: string;
   method: "PUT" | "POST";
@@ -89,7 +106,9 @@ async function uploadFileWithXhr(input: {
       const percent = totalBytes > 0 ? Math.min(100, Math.round((uploadedBytes / totalBytes) * 100)) : 0;
       input.onProgress?.({ uploadedBytes, totalBytes, percent });
     };
-    xhr.onerror = () => reject(new Error(input.errorMessage));
+    xhr.onerror = () => reject(new BrowserUploadTransportError("network", input.errorMessage));
+    xhr.onabort = () => reject(new BrowserUploadTransportError("abort", "Загрузка файла была отменена."));
+    xhr.ontimeout = () => reject(new BrowserUploadTransportError("timeout", input.errorMessage));
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve();
@@ -98,7 +117,8 @@ async function uploadFileWithXhr(input: {
 
       const payload = xhr.response && typeof xhr.response === "object" ? xhr.response : null;
       reject(
-        new Error(
+        new BrowserUploadTransportError(
+          "response",
           (payload && "error" in payload && typeof payload.error === "string" && payload.error) ||
             xhr.responseText ||
             input.responseErrorMessage
@@ -167,7 +187,11 @@ export async function uploadFileWithTransportContract(input: {
         errorMessage: directErrorMessage,
         responseErrorMessage: directErrorMessage,
       });
-    } catch {
+    } catch (error) {
+      if (!shouldFallbackToProxyUpload(error)) {
+        throw error;
+      }
+
       await proxyMediaUpload({
         file: input.file,
         signedUrl: input.target.signedUrl,

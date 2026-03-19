@@ -2,7 +2,7 @@
 
 *Operational task backlog only.*
 
-*Updated: 2026-03-16*
+*Updated: 2026-03-19*
 
 ## Wave 1 — Current Execution
 
@@ -57,6 +57,7 @@ Operational note:
 
 ### High Priority
 
+- [x] Закрыть `docs/FIX_PLAN_PR1.md`: direct upload fallback сузить до network/timeout-only, закрепить signed-URL fallback contract тестами и локализовать shared dialog `Close`.
 - [ ] Подтвердить, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий.
 - [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
 - [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
@@ -70,6 +71,7 @@ Operational note:
 
 ### Medium Priority
 
+- [ ] После закрытия `FIX_PLAN_PR1` не расширять scope review-правок: следующий шаг только QA/archive/member flows, а не новый transport refactor.
 - [ ] Вернуться к calm pass для landing и dashboard после стабилизации builder/members: сократить лишний copy, выровнять ритм заголовков и CTA.
 - [ ] Добить единый light visual system для `Настройки`, `Журнал`, `Участники`, builder и viewer.
 - [ ] Проверить аватары и карточки дерева на кейсах без фото, с кириллицей в gender, с детьми и пожилыми, чтобы визуальные fallback-и были предсказуемыми.
@@ -80,3 +82,4 @@ Operational note:
 
 - [ ] Добавлять motion-акценты только после стабилизации canvas/layout/access flows.
 - [ ] Возвращаться к бренд-деталям landing только если это не конфликтует с коротким utilitarian тоном продукта.
+

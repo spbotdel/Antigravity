@@ -2,7 +2,7 @@
 
 *Operational memory only. Not the canonical architecture document.*
 
-*Last updated: 2026-03-16*
+*Last updated: 2026-03-19*
 
 ## Current State
 
@@ -41,6 +41,9 @@
 
 - [x] Unified local-file upload now covers photos and videos from device in one flow.
 - [x] Multi-file batches, visible limits copy, and human-readable progress feedback are in place in the builder.
+- [x] PR1 browser upload transport fix is in place: direct upload now falls back to server proxy only on network/timeout-style failures, not on abort or 4xx signed-URL errors.
+- [x] PR1 signed-URL fallback regression coverage is in place for `win32`, non-`win32`, and repository-level `503` degradation scenarios.
+- [x] Shared dialog close labels are localized to Russian in the shared primitive.
 - [x] Viewer and builder now expose an in-app media gallery with inline playback for file-backed video.
 - [x] `smoke:media` now persists a JSON report artifact in `tests/artifacts/`.
 - [x] Tree-level `/tree/[slug]/media` archive foundation is in place with navigation, page shell, and archive client.
@@ -78,11 +81,21 @@
 ## Completion Capture
 
 - Primary captured workstream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
+- PR1 high-confidence review fixes are closed:
+  direct browser upload no longer retries through proxy on user abort or 4xx signed-URL responses.
+- PR1 signed HTTP transport coverage now fixes the regression contract around `win32` PowerShell fallback and repository-level `503` degradation.
+- Shared dialog primitive no longer leaks English `Close` labels into Russian dialogs.
 - Detected foundation: tree-level `Медиа` route, archive client, archive upload endpoints, and persisted album model are present in the worktree.
 - Detected archive upload review flow with pending batch state and discard confirmation.
 - Detected variant-aware media delivery foundation for photo previews (`thumb/small/medium`).
 - Detected Cloudflare R2 foundation in env/runtime config and supporting project files.
 - Latest `smoke:media` artifact `media-storage-report-1773671336869.json` is green.
+- Targeted regression signal is green on:
+  `tests/upload-transport-contract.test.ts`,
+  `tests/repository-signed-http.test.ts`,
+  `tests/tree-media-archive-client.test.tsx`,
+  `tests/builder-workspace.test.tsx`,
+  `tests/person-media-gallery.test.tsx`.
 
 ## Runtime Rules
 
@@ -91,7 +104,4 @@
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
-- "
-- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
-- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
-- Custom marker-driven runtime rule should surface in startup memory.\n")
+

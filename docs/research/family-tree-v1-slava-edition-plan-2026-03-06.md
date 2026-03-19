@@ -3,7 +3,7 @@
 <!-- FRAMEWORK:PLAN:START -->
 ## Current Plan Sync
 
-- Updated at (UTC): `2026-03-16 20:24:41Z`
+- Updated at (UTC): `2026-03-18 10:37:09Z`
 - This document remains the long-lived product frame; the current execution order below is the active launch path.
 - Current launch rule: `Cloudflare R2` rollout is mandatory for `Slava edition` release readiness.
 - Current primary workstream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).

@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-03-16 20:24:41Z`
+- Generated at (UTC): `2026-03-18 10:37:09Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -135,9 +135,9 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-03-16 20:24:41Z`
+- Updated at (UTC): `2026-03-18 10:37:09Z`
 - Active branch: `fix/builder-inspector-desktop-align-final`
-- Git status: `STATUS:0 files`
+- Git status: `STATUS:1 files`
 - Git diff: `DIFF:0 lines`
 
 ### Detected Stack
@@ -169,18 +169,18 @@ The display tree is derived and must not be treated as the canonical domain mode
 
 ### Recently Changed Paths
 
-- `<none>`
+- `docs/FIX_PLAN_PR1.md`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-03-16 20:24:41Z`
+- Completed at (UTC): `2026-03-18 10:37:09Z`
 - Branch: `fix/builder-inspector-desktop-align-final`
-- Git status summary: `STATUS:0 files`
+- Git status summary: `STATUS:1 files`
 - Git diff summary: `DIFF:0 lines`
 
-- Session summary: `0` changed files, `0` diff lines, `0` tracked changed paths.
+- Session summary: `1` changed files, `0` diff lines, `1` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -188,7 +188,7 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:0 files`)
+- `git_status`: `success` (`STATUS:1 files`)
 - `git_diff`: `success` (`DIFF:0 lines`)
 <!-- FRAMEWORK:SESSION:END -->
 
@@ -206,10 +206,6 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Tree runtime now distinguishes between full snapshot consumers and narrow page-data consumers; `audit`, `members`, `media`, and `settings` should stay on specialized loaders instead of drifting back to full snapshots.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
-- "
-- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
-- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
-- Custom marker-driven runtime rule should surface in startup memory.\n")
 
 ## Current Runtime Rules
 
@@ -218,8 +214,4 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
-- "
-- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
-- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
-- Custom marker-driven runtime rule should surface in startup memory.\n")
 

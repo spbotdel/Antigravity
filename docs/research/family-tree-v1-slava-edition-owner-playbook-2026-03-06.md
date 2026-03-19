@@ -3,7 +3,7 @@
 <!-- FRAMEWORK:PLAYBOOK:START -->
 ## Current Operational Sync
 
-- Updated at (UTC): `2026-03-16 20:24:41Z`
+- Updated at (UTC): `2026-03-18 10:37:09Z`
 - Current launch rule: `Cloudflare R2` rollout is mandatory for `Slava edition`; legacy Yandex-backed media remains compatibility/read path only until migration is closed.
 - Current person-media UI:
   - `Инфо` for person data and documents
