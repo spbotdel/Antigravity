@@ -69,16 +69,24 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
         />
       </Card>
 
-      <Card className="info-rail p-6">
+      <Card className="info-rail utility-section-card p-6">
         {selectedPerson ? (
           <>
-            {selectedAvatarUrl ? (
-              <div className="person-summary-avatar info-rail-avatar">
-                <img src={selectedAvatarUrl} alt={`Портрет: ${selectedPerson.full_name}`} />
+            <div className="viewer-person-summary utility-note-card">
+              {selectedAvatarUrl ? (
+                <div className="person-summary-avatar info-rail-avatar">
+                  <img src={selectedAvatarUrl} alt={`Портрет: ${selectedPerson.full_name}`} />
+                </div>
+              ) : null}
+              <div className="viewer-person-summary-copy">
+                <p className="eyebrow">Выбранный человек</p>
+                <h2 className="card-heading">{selectedPerson.full_name}</h2>
+                <div className="builder-inspector-badges">
+                  <span className="members-static-note">{formatGender(selectedPerson.gender)}</span>
+                  <span className="members-static-note">{formatDate(selectedPerson.birth_date) || "Дата рождения не указана"}</span>
+                </div>
               </div>
-            ) : null}
-            <p className="eyebrow">Выбранный человек</p>
-            <h2 className="card-heading">{selectedPerson.full_name}</h2>
+            </div>
             <div className="detail-list">
               <div>
                 <strong>Пол</strong>

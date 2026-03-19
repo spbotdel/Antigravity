@@ -64,6 +64,10 @@ function getMediaOpenLabel(asset: MediaAsset) {
   return "Открыть файл";
 }
 
+function getMediaStageSecondaryLabel(asset: MediaAsset) {
+  return [formatMediaKind(asset.kind), formatMediaVisibility(asset.visibility), getMediaSourceLabel(asset)].join(" • ");
+}
+
 function MediaThumb({
   asset,
   active,
@@ -100,6 +104,10 @@ function MediaThumb({
           </span>
         )}
         {isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
+      </span>
+      <span className="person-media-thumb-copy">
+        <strong title={asset.title}>{asset.title}</strong>
+        <span title={getMediaStageSecondaryLabel(asset)}>{getMediaStageSecondaryLabel(asset)}</span>
       </span>
     </button>
   );
@@ -261,23 +269,21 @@ export function PersonMediaGallery({
   return (
     <>
       <section className="person-media-gallery">
-        <article className="person-media-stage">
+        <article className="person-media-stage utility-section-card">
           <div className="person-media-stage-shell">
             <MediaPreview asset={activeAsset} shareToken={shareToken} />
           </div>
 
-          {!isPhotoAsset(activeAsset) ? (
-            <div className="person-media-stage-copy">
-              <div className="media-meta">
-                <span>{formatMediaKind(activeAsset.kind)}</span>
-                <span>{formatMediaVisibility(activeAsset.visibility)}</span>
-                <span>{getMediaSourceLabel(activeAsset)}</span>
-                {activeAsset.id === avatarMediaId && isPhotoAsset(activeAsset) ? <span>Аватар</span> : null}
-              </div>
-              <h3>{activeAsset.title}</h3>
-              {activeAsset.caption ? <p>{activeAsset.caption}</p> : null}
+          <div className="person-media-stage-copy">
+            <div className="media-meta">
+              <span>{formatMediaKind(activeAsset.kind)}</span>
+              <span>{formatMediaVisibility(activeAsset.visibility)}</span>
+              <span>{getMediaSourceLabel(activeAsset)}</span>
+              {activeAsset.id === avatarMediaId && isPhotoAsset(activeAsset) ? <span>Аватар</span> : null}
             </div>
-          ) : null}
+            <h3>{activeAsset.title}</h3>
+            {activeAsset.caption ? <p>{activeAsset.caption}</p> : <p>{isPhotoAsset(activeAsset) ? "Фотография открыта в текущей галерее и доступна для просмотра без отдельного окна." : "Материал открыт в текущей галерее и готов к просмотру или переходу по ссылке."}</p>}
+          </div>
 
           <div className="person-media-stage-actions">
             {canNavigate ? (
@@ -364,17 +370,16 @@ export function PersonMediaGallery({
         >
           <div className="media-lightbox-dialog">
             <div className="media-lightbox-header">
-              {!isPhotoAsset(activeAsset) ? (
-                <div className="media-lightbox-copy">
-                  <div className="media-meta">
-                    <span>{formatMediaKind(activeAsset.kind)}</span>
-                    <span>{formatMediaVisibility(activeAsset.visibility)}</span>
-                    <span>{getMediaSourceLabel(activeAsset)}</span>
-                  </div>
-                  <h3>{activeAsset.title}</h3>
-                  {activeAsset.caption ? <p>{activeAsset.caption}</p> : null}
+              <div className="media-lightbox-copy">
+                <div className="media-meta">
+                  <span>{formatMediaKind(activeAsset.kind)}</span>
+                  <span>{formatMediaVisibility(activeAsset.visibility)}</span>
+                  <span>{getMediaSourceLabel(activeAsset)}</span>
+                  {activeAsset.id === avatarMediaId && isPhotoAsset(activeAsset) ? <span>Аватар</span> : null}
                 </div>
-              ) : <div />}
+                <h3>{activeAsset.title}</h3>
+                {activeAsset.caption ? <p>{activeAsset.caption}</p> : null}
+              </div>
 
               <div className="media-lightbox-actions">
                 <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>

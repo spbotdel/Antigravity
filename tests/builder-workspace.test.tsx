@@ -338,6 +338,10 @@ describe("builder workspace", () => {
     fireEvent.change(input);
 
     expect(screen.getByRole("dialog", { name: "Проверка файлов перед загрузкой" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 файл");
+    expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 фото");
+    expect(screen.getByText("family-photo.png")).toBeInTheDocument();
+    expect(screen.getByText("Фото • 3 Б")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Проверить фото перед загрузкой" })).not.toBeInTheDocument();
     expect(uploadFileWithTransportContract).not.toHaveBeenCalled();
 
@@ -399,6 +403,8 @@ describe("builder workspace", () => {
 
     expect(screen.getByRole("dialog", { name: "Проверка файлов перед загрузкой" })).toBeInTheDocument();
     expect(document.querySelector("video.archive-tile-video")).not.toBeNull();
+    expect(screen.getByText("family-video.mp4")).toBeInTheDocument();
+    expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 видео");
   });
 
   it("links photo footer to the archive album view", async () => {

@@ -75,6 +75,9 @@ describe("person media gallery", () => {
     );
 
     expect(document.querySelector("img.person-media-stage-photo-inline")).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Семейное фото" })).toBeInTheDocument();
+    expect(screen.getByText("Фото")).toBeInTheDocument();
+    expect(screen.getByText("Семейное видео")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" }));
 
@@ -245,7 +248,7 @@ describe("person media gallery", () => {
       />
     );
 
-    expect(screen.getByText("Аватар")).toBeInTheDocument();
+    expect(screen.getAllByText("Аватар").length).toBeGreaterThan(0);
   });
 
   it("renders the empty state safely when avatar selection is available but the gallery is empty", () => {

@@ -269,6 +269,78 @@ function buildPendingMediaUploadItem(file: File): PendingMediaUploadItem {
   };
 }
 
+function formatBuilderReviewFileSize(sizeBytes: number) {
+  if (sizeBytes >= 1024 * 1024) {
+    return `${(sizeBytes / (1024 * 1024)).toFixed(sizeBytes >= 10 * 1024 * 1024 ? 0 : 1)} МБ`;
+  }
+
+  if (sizeBytes >= 1024) {
+    return `${Math.round(sizeBytes / 1024)} КБ`;
+  }
+
+  return `${sizeBytes} Б`;
+}
+
+function getBuilderPendingUploadKindLabel(file: File) {
+  const kind = detectMediaUploadKind(file);
+
+  if (kind === "photo") {
+    return "Фото";
+  }
+
+  if (kind === "video") {
+    return "Видео";
+  }
+
+  if (kind === "document") {
+    return "Документ";
+  }
+
+  return "Файл";
+}
+
+function buildBuilderPendingUploadsSummary(items: PendingMediaUploadItem[]) {
+  const stats = items.reduce(
+    (accumulator, item) => {
+      accumulator.totalBytes += item.file.size;
+
+      const kind = detectMediaUploadKind(item.file);
+      if (kind === "photo") {
+        accumulator.photoCount += 1;
+      } else if (kind === "video") {
+        accumulator.videoCount += 1;
+      } else {
+        accumulator.otherCount += 1;
+      }
+
+      return accumulator;
+    },
+    {
+      totalBytes: 0,
+      photoCount: 0,
+      videoCount: 0,
+      otherCount: 0,
+    }
+  );
+  const parts = [`${items.length} ${items.length === 1 ? "файл" : items.length < 5 ? "файла" : "файлов"}`];
+
+  if (stats.photoCount) {
+    parts.push(`${stats.photoCount} фото`);
+  }
+
+  if (stats.videoCount) {
+    parts.push(`${stats.videoCount} видео`);
+  }
+
+  if (stats.otherCount) {
+    parts.push(`${stats.otherCount} ${stats.otherCount === 1 ? "документ" : stats.otherCount < 5 ? "документа" : "документов"}`);
+  }
+
+  parts.push(formatBuilderReviewFileSize(stats.totalBytes));
+
+  return parts.join(" • ");
+}
+
 function revokePendingMediaUploadPreview(item: PendingMediaUploadItem) {
   if (item.previewUrl) {
     URL.revokeObjectURL(item.previewUrl);
@@ -546,6 +618,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       : selectedPerson
       ? null
       : "Сначала выберите человека на схеме или в списке слева.";
+  const pendingMediaUploadsSummary = useMemo(
+    () => buildBuilderPendingUploadsSummary(pendingMediaUploads),
+    [pendingMediaUploads]
+  );
   const stageTitle = expandedGalleryMode
     ? selectedPerson
       ? expandedGalleryMode === "photo"
@@ -1883,9 +1959,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           </Card>
         </main>
 
-        <Card className="builder-inspector builder-inspector-overlay p-6">
-        <div className="builder-inspector-header">
-          <div className="builder-inspector-copy">
+        <Card className="builder-inspector builder-inspector-overlay utility-section-card p-6">
+        <div className="builder-inspector-header utility-section-heading">
+          <div className="builder-inspector-copy utility-section-heading-copy">
             <p className="eyebrow">{createModeActive ? "Новый блок" : "Карточка человека"}</p>
             <h2 className="card-heading">{inspectorTitle}</h2>
             {inspectorDescription ? <p className="muted-copy">{inspectorDescription}</p> : null}
@@ -1917,12 +1993,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         </div>
 
         {createModeActive ? (
-          <div className="builder-person-summary builder-person-summary-empty">
+          <div className="builder-person-summary builder-person-summary-empty utility-note-card">
             <strong>{createHeading.title}</strong>
             <span>{createContext.type === "standalone" ? "Новый блок появится отдельно, а связи можно добавить позже." : "Новый блок сразу встанет в выбранную связь."}</span>
           </div>
         ) : activePanel === "media" || selectedPerson ? null : (
-          <div className="builder-person-summary builder-person-summary-empty">
+          <div className="builder-person-summary builder-person-summary-empty utility-note-card">
             <strong>Выберите человека</strong>
             <span>После выбора справа откроются его данные, связи и медиа.</span>
           </div>
@@ -1933,13 +2009,13 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         {activePanel === "person" ? (
           <section className="builder-panel-stack">
             {personMode === "create" ? (
-              <div className="builder-section-block">
-                <div className="builder-section-heading">
+              <div className="builder-section-block utility-section-card">
+                <div className="builder-section-heading utility-section-heading">
                   <h3 className="card-heading">{createHeading.title}</h3>
                   <p className="muted-copy">Заполните данные человека. После сохранения новый блок появится на схеме.</p>
                 </div>
                 {createContext.type !== "standalone" && anchorPerson ? (
-                  <div className="builder-create-context-card">
+                  <div className="builder-create-context-card utility-note-card">
                     <div className="builder-create-context-copy">
                       <strong>{anchorPerson.full_name}</strong>
                       <span>Отдельный блок создается без связи. Для мгновенного добавления родственника используйте + на карточке дерева.</span>
@@ -1986,15 +2062,15 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                 </form>
               </div>
             ) : selectedPersonPending ? (
-              <div className="builder-section-block">
-                <div className="builder-section-heading">
+              <div className="builder-section-block utility-section-card">
+                <div className="builder-section-heading utility-section-heading">
                   <h3 className="card-heading">Блок создается</h3>
                   <p className="muted-copy">Новый человек уже стоит на схеме. Дождитесь подтверждения сервера, и поля станут редактируемыми.</p>
                 </div>
                 <div className="builder-relation-empty">Сейчас запись создается в базе. Обычно это занимает несколько секунд.</div>
               </div>
             ) : selectedPerson ? (
-              <div className="builder-section-block">
+              <div className="builder-section-block utility-section-card">
                 <form
                   key={`edit-${selectedPersonEditFormKey}`}
                   className="stack-form builder-form-grid"
@@ -2426,6 +2502,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             </DialogDescription>
           </DialogHeader>
           <div className="archive-review-layout">
+            <div className="archive-review-summary" aria-label="Сводка выбранных файлов">
+              {pendingMediaUploadsSummary}
+            </div>
             <div className="archive-review-metadata">
               <label className="form-field">
                 Видимость
@@ -2467,6 +2546,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         <span>{item.file.type.startsWith("video/") ? "▶" : "DOC"}</span>
                       </div>
                     )}
+                    <div className="archive-review-tile-copy">
+                      <strong title={item.file.name}>{item.file.name}</strong>
+                      <span>{getBuilderPendingUploadKindLabel(item.file)} • {formatBuilderReviewFileSize(item.file.size)}</span>
+                    </div>
                   </article>
                 ))}
               </div>
