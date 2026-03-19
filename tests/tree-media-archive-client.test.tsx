@@ -420,6 +420,10 @@ describe("tree media archive client", () => {
     fireEvent.change(input);
 
     await screen.findByRole("dialog", { name: "Подготовка загрузки" });
+    expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 файл");
+    expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 фото");
+    expect(screen.getByText("archive-photo.jpg")).toBeInTheDocument();
+    expect(screen.getByText("Фото • 3 Б")).toBeInTheDocument();
     expect(screen.getByLabelText("Видимость")).toHaveTextContent("Только членам семьи");
     expect(screen.getByLabelText("Подпись")).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: "Сохранить 1" }));
@@ -444,6 +448,8 @@ describe("tree media archive client", () => {
 
     await screen.findByRole("dialog", { name: "Подготовка загрузки" });
     expect(document.querySelector("video.archive-tile-video")).not.toBeNull();
+    expect(screen.getByText("archive-video.mp4")).toBeInTheDocument();
+    expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 видео");
   });
 
   it("shows a pending state while creating an album", async () => {

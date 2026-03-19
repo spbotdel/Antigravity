@@ -79,6 +79,71 @@ function getArchiveMaxMediaFileSizeBytes(file: File) {
   return MAX_DEFAULT_FILE_SIZE_BYTES;
 }
 
+function formatArchiveFileSize(sizeBytes: number) {
+  if (sizeBytes >= 1024 * 1024) {
+    return `${(sizeBytes / (1024 * 1024)).toFixed(sizeBytes >= 10 * 1024 * 1024 ? 0 : 1)} МБ`;
+  }
+
+  if (sizeBytes >= 1024) {
+    return `${Math.round(sizeBytes / 1024)} КБ`;
+  }
+
+  return `${sizeBytes} Б`;
+}
+
+function getArchiveUploadItemKindLabel(file: File) {
+  if (file.type.startsWith("image/")) {
+    return "Фото";
+  }
+
+  if (file.type.startsWith("video/")) {
+    return "Видео";
+  }
+
+  return "Файл";
+}
+
+function buildPendingUploadSummary(items: PendingArchiveUploadItem[]) {
+  const stats = items.reduce(
+    (accumulator, item) => {
+      accumulator.totalBytes += item.file.size;
+
+      if (item.file.type.startsWith("image/")) {
+        accumulator.photoCount += 1;
+      } else if (item.file.type.startsWith("video/")) {
+        accumulator.videoCount += 1;
+      } else {
+        accumulator.otherCount += 1;
+      }
+
+      return accumulator;
+    },
+    {
+      totalBytes: 0,
+      photoCount: 0,
+      videoCount: 0,
+      otherCount: 0,
+    }
+  );
+  const parts = [`${items.length} ${items.length === 1 ? "файл" : items.length < 5 ? "файла" : "файлов"}`];
+
+  if (stats.photoCount) {
+    parts.push(`${stats.photoCount} фото`);
+  }
+
+  if (stats.videoCount) {
+    parts.push(`${stats.videoCount} видео`);
+  }
+
+  if (stats.otherCount) {
+    parts.push(`${stats.otherCount} ${stats.otherCount === 1 ? "документ" : stats.otherCount < 5 ? "документа" : "документов"}`);
+  }
+
+  parts.push(formatArchiveFileSize(stats.totalBytes));
+
+  return parts.join(" • ");
+}
+
 interface ActiveArchiveUploadItem {
   id: string;
   name: string;
@@ -435,6 +500,17 @@ export function TreeMediaArchiveClient({
   const resolvedViewerIndex = viewerIndex >= 0 ? viewerIndex : 0;
   const activeViewerAsset = viewerMedia[resolvedViewerIndex] || null;
   const canNavigateViewer = viewerMedia.length > 1;
+  const pendingUploadsSummary = useMemo(() => buildPendingUploadSummary(pendingUploads), [pendingUploads]);
+  const activeUploadCompletedCount = activeUploads.filter((item) => item.status === "done").length;
+  const activeUploadPosition = activeUpload ? activeUploads.findIndex((item) => item.id === activeUpload.id) + 1 : 0;
+  const activeUploadSummary =
+    activeUploads.length > 1 && activeUpload
+      ? `Файл ${activeUploadPosition} из ${activeUploads.length}. Готово ${activeUploadCompletedCount} из ${activeUploads.length}.`
+      : activeUpload
+        ? activeUpload.name
+        : activeUploads.length
+          ? `Готово ${activeUploadCompletedCount} из ${activeUploads.length}.`
+          : null;
 
   useEffect(() => {
     if (!viewerMedia.length) {
@@ -882,7 +958,11 @@ export function TreeMediaArchiveClient({
       {error ? <p className="form-error">{error}</p> : null}
       {activeUploads.length ? (
         <div className="archive-upload-panel">
-          <strong>{activeUpload ? `Загрузка ${activeUpload.progressPercent}%` : "Загрузка завершена"}</strong>
+          <div className="archive-upload-panel-copy">
+            <strong>{activeUpload ? `Загрузка ${activeUpload.progressPercent}%` : "Загрузка завершена"}</strong>
+            {activeUploadSummary ? <span>{activeUploadSummary}</span> : null}
+            {activeUpload?.message ? <small>{activeUpload.message}</small> : null}
+          </div>
           <div className="builder-upload-progress-bar">
             <span
               style={{
@@ -1214,6 +1294,9 @@ export function TreeMediaArchiveClient({
             </DialogDescription>
           </DialogHeader>
           <div className="archive-review-layout">
+            <div className="archive-review-summary" aria-label="Сводка выбранных файлов">
+              {pendingUploadsSummary}
+            </div>
             {selectedAlbum?.albumKind !== "manual" ? (
               <label className="form-field archive-field archive-review-field-span">
                 Куда сохранить (можно выбрать альбом)
@@ -1268,6 +1351,10 @@ export function TreeMediaArchiveClient({
                         <span>{item.file.type.startsWith("video/") ? "▶" : "DOC"}</span>
                       </div>
                     )}
+                    <div className="archive-review-tile-copy">
+                      <strong title={item.file.name}>{item.file.name}</strong>
+                      <span>{getArchiveUploadItemKindLabel(item.file)} • {formatArchiveFileSize(item.file.size)}</span>
+                    </div>
                   </article>
                 ))}
               </div>

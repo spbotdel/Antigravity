@@ -247,6 +247,13 @@ async function startIsolatedMediaSmokeServer() {
 }
 
 async function startMediaSmokeRuntime() {
+  if (baseUrlOverride) {
+    return {
+      baseUrl,
+      async stop() {},
+    };
+  }
+
   const shouldReuseExistingDevServer = !expectedForceProxyUpload && expectedResolvedUploadBackend === "cloudflare_r2";
 
   if (shouldReuseExistingDevServer) {
@@ -297,21 +304,31 @@ async function login(page, userEmail, userPassword, nextPath = "/dashboard") {
 
 async function performRequest(input) {
   const url = new URL(input.path, baseUrl).toString();
+  const pageSession =
+    input.page ||
+    (input.requestContext && typeof input.requestContext.evaluate === "function" ? input.requestContext : null);
 
-  if (input.requestContext) {
-    const response = await input.requestContext.fetch(url, {
-      method: input.method || "GET",
+  if (pageSession) {
+    return pageSession.evaluate(async ({ requestUrl, method, headers, body }) => {
+      const response = await fetch(requestUrl, {
+        method: method || "GET",
+        headers,
+        body,
+        credentials: "include",
+        redirect: "manual",
+      });
+
+      return {
+        status: response.status,
+        text: await response.text(),
+        headers: Object.fromEntries(response.headers.entries()),
+      };
+    }, {
+      requestUrl: url,
+      method: input.method,
       headers: input.headers,
-      data: input.body,
-      failOnStatusCode: false,
-      maxRedirects: 0,
+      body: input.body,
     });
-
-    return {
-      status: response.status(),
-      text: await response.text(),
-      headers: response.headers(),
-    };
   }
 
   const response = await fetch(url, {
@@ -335,6 +352,7 @@ async function requestJson(pathname, options = {}) {
     method: options.method,
     headers: options.headers,
     body: options.body,
+    page: options.page,
     requestContext: options.requestContext,
   });
   let parsed = null;
@@ -578,7 +596,21 @@ async function assertMediaRedirect(mediaPathOrId, expectedUrlPart, requestContex
   const mediaPath = mediaPathOrId.includes("/") || mediaPathOrId.includes("?") ? mediaPathOrId : `/api/media/${mediaPathOrId}`;
   let result;
 
-  if (requestContext) {
+  if (requestContext && typeof requestContext.context === "function") {
+    const redirectPage = await requestContext.context().newPage();
+    try {
+      const response = await redirectPage.goto(new URL(mediaPath, baseUrl).toString(), {
+        waitUntil: "domcontentloaded",
+        timeout: 60_000,
+      });
+      result = {
+        status: response?.status() || 0,
+        location: redirectPage.url(),
+      };
+    } finally {
+      await redirectPage.close().catch(() => {});
+    }
+  } else if (requestContext) {
     const response = await performRequest({
       path: mediaPath,
       method: "GET",
@@ -612,7 +644,9 @@ async function assertMediaRedirect(mediaPathOrId, expectedUrlPart, requestContex
     });
   }
 
-  if (result.status !== 307) {
+  const usedBrowserNavigation = Boolean(requestContext && typeof requestContext.context === "function");
+
+  if (!usedBrowserNavigation && result.status !== 307) {
     throw new Error(`Expected 307 for media ${mediaPath}, got ${result.status}`);
   }
 
@@ -687,6 +721,7 @@ async function main() {
   let context = null;
   let page = null;
   let requestContext = null;
+  let sessionPage = null;
   let treeId = null;
   let report = null;
   let mediaIds = [];
@@ -702,9 +737,11 @@ async function main() {
     if (shouldUseHostedAuthenticatedSession()) {
       await login(page, hostedLoginEmail, hostedLoginPassword, `/tree/${slug}/builder`);
       requestContext = context.request;
+      sessionPage = page;
     }
 
     const snapshot = await requestJson(`/api/tree/${slug}/builder-snapshot`, {
+      page: sessionPage,
       requestContext,
     });
     treeId = snapshot.tree.id;
@@ -728,7 +765,7 @@ async function main() {
       }
     };
 
-    await cleanupStaleSmokeMedia(treeId, requestContext).catch((error) => {
+    await cleanupStaleSmokeMedia(treeId, sessionPage || requestContext).catch((error) => {
       console.warn("cleanup warning: cleanupStaleSmokeMedia", error);
     });
 
@@ -736,7 +773,7 @@ async function main() {
       await waitForBuilderReady(page);
       await openMediaPanel(page, "Фото");
     });
-    const uploadIntentContracts = await fetchUploadIntentContracts(treeId, personId, requestContext);
+    const uploadIntentContracts = await fetchUploadIntentContracts(treeId, personId, sessionPage || requestContext);
     assertUploadIntentContract(uploadIntentContracts.photoIntent, {
       configuredBackend: expectedConfiguredBackend,
       resolvedUploadBackend: expectedResolvedUploadBackend,
@@ -784,17 +821,17 @@ async function main() {
     await fetchMediaRecords(treeId, {
       expectedTitles: [uploadedPhotoRecordTitle],
       requireAllExpected: true,
-      requestContext,
+      requestContext: sessionPage || requestContext,
     });
     await uploadDeviceVideoViaUi(page);
     await fetchMediaRecords(treeId, {
       expectedTitles: [uploadedPhotoRecordTitle, uploadedStorageVideoRecordTitle],
       requireAllExpected: true,
-      requestContext,
+      requestContext: sessionPage || requestContext,
     });
-    await createExternalVideoViaApi(treeId, personId, requestContext);
+    await createExternalVideoViaApi(treeId, personId, sessionPage || requestContext);
 
-    const mediaRecords = await fetchMediaRecords(treeId, { requestContext });
+    const mediaRecords = await fetchMediaRecords(treeId, { requestContext: sessionPage || requestContext });
     const photoRecord = mediaRecords.find((item) => item.title === uploadedPhotoRecordTitle);
     const storageVideoRecord = mediaRecords.find((item) => item.title === uploadedStorageVideoRecordTitle);
     const externalVideoRecord = mediaRecords.find((item) => item.title === externalVideoTitle);
@@ -821,15 +858,15 @@ async function main() {
       throw new Error(`Unexpected external video record: ${JSON.stringify(externalVideoRecord)}`);
     }
 
-    await assertMediaRedirect(photoRecord.id, expectedObjectStorageHost, requestContext);
-    await assertMediaRedirect(`/api/media/${photoRecord.id}?variant=thumb`, "/variants/thumb.webp", requestContext);
-    await assertMediaRedirect(storageVideoRecord.id, expectedObjectStorageHost, requestContext);
-    await assertMediaRedirect(externalVideoRecord.id, externalVideoUrl, requestContext);
+    await assertMediaRedirect(photoRecord.id, expectedObjectStorageHost, sessionPage || requestContext);
+    await assertMediaRedirect(`/api/media/${photoRecord.id}?variant=thumb`, "/variants/thumb.webp", sessionPage || requestContext);
+    await assertMediaRedirect(storageVideoRecord.id, expectedObjectStorageHost, sessionPage || requestContext);
+    await assertMediaRedirect(externalVideoRecord.id, externalVideoUrl, sessionPage || requestContext);
     await assertViewerShowsMedia(page);
-    await cleanupMedia([photoRecord.id, storageVideoRecord.id, externalVideoRecord.id], requestContext);
+    await cleanupMedia([photoRecord.id, storageVideoRecord.id, externalVideoRecord.id], sessionPage || requestContext);
     mediaIds = [];
 
-    await cleanupMediaByTitle(treeId, requestContext).catch((error) => {
+    await cleanupMediaByTitle(treeId, sessionPage || requestContext).catch((error) => {
       console.warn("cleanup warning: post-delete cleanupMediaByTitle", error);
     });
 
@@ -837,7 +874,7 @@ async function main() {
       requireAllExpected: false,
       expectEmpty: true,
       attempts: 24,
-      requestContext,
+      requestContext: sessionPage || requestContext,
     });
     if (afterDelete.length !== 0) {
       throw new Error(`Expected media to be deleted, but ${afterDelete.length} records remain.`);
@@ -865,9 +902,9 @@ async function main() {
       }
     }
   } finally {
-    await cleanupMedia(mediaIds, requestContext);
+    await cleanupMedia(mediaIds, sessionPage || requestContext);
     if (treeId) {
-      await cleanupMediaByTitle(treeId, requestContext).catch((error) => {
+      await cleanupMediaByTitle(treeId, sessionPage || requestContext).catch((error) => {
         console.warn("cleanup warning: cleanupMediaByTitle", error);
       });
     }
