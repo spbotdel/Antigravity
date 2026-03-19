@@ -103,10 +103,10 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
   }
 
   return (
-    <div className="settings-grid">
-      <Card className="settings-card settings-card-wide p-0">
-        <CardHeader className="settings-card-header px-6 pt-6 pb-0">
-          <div className="settings-card-header-copy">
+    <div className="settings-grid utility-surface-layout">
+      <Card className="settings-card settings-card-wide utility-section-card p-0">
+        <CardHeader className="settings-card-header utility-section-heading px-6 pt-6 pb-0">
+          <div className="settings-card-header-copy utility-section-heading-copy">
             <p className="eyebrow">Данные дерева</p>
             <h2 className="settings-title">Название, адрес и структура</h2>
             <p className="muted-copy settings-lead">Задайте название, короткий адрес и человека, от которого начинается основная ветка схемы.</p>
@@ -114,8 +114,8 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
         </CardHeader>
 
         <CardContent className="px-6 pt-0 pb-6">
-          <div className="settings-meta-grid">
-            <div className="settings-meta-card">
+          <div className="settings-meta-grid utility-summary-grid">
+            <div className="settings-meta-card utility-summary-card">
               <span>Ссылка на дерево</span>
               <strong>{treeUrl}</strong>
               <div className="action-row settings-meta-actions">
@@ -126,12 +126,12 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
               </div>
               <p>Этот адрес можно отправлять родственникам и участникам.</p>
             </div>
-            <div className="settings-meta-card">
+            <div className="settings-meta-card utility-summary-card">
               <span>Корень дерева</span>
               <strong>{currentRootPerson?.full_name || "Пока не выбран"}</strong>
               <p>Если корень не выбран, схема собирается от первого доступного человека.</p>
             </div>
-            <div className="settings-meta-card">
+            <div className="settings-meta-card utility-summary-card">
               <span>Людей в дереве</span>
               <strong>{people.length}</strong>
               <p>Количество карточек, доступных для выбора корня и дальнейшей сборки структуры.</p>
@@ -172,7 +172,7 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
                 </SelectField>
                 <small className="settings-field-note">От него начинается основная ветка дерева в viewer и builder.</small>
               </label>
-              <div className="settings-inline-note">
+              <div className="settings-inline-note utility-note-card">
                 <span className="settings-inline-note-label">Подсказка</span>
                 <strong>Если структура семьи еще не готова, корень можно выбрать позже.</strong>
                 <p>Сначала добавьте людей и связи, а потом закрепите того, с кого удобнее начинать просмотр дерева.</p>
@@ -188,9 +188,9 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
         </CardContent>
       </Card>
 
-      <Card className="settings-card settings-card-accent p-0">
-        <CardHeader className="settings-card-header settings-card-header-stack px-6 pt-6 pb-0">
-          <div className="settings-card-header-copy">
+      <Card className="settings-card settings-card-accent utility-section-card p-0">
+        <CardHeader className="settings-card-header settings-card-header-stack utility-section-heading px-6 pt-6 pb-0">
+          <div className="settings-card-header-copy utility-section-heading-copy">
             <p className="eyebrow">Приватность</p>
             <h2 className="settings-title">Кто может открыть дерево</h2>
             <p className="muted-copy settings-lead">Изменение применяется сразу. Даже в открытом дереве медиа «только участникам» останутся скрытыми для гостей.</p>
@@ -237,7 +237,7 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
             </Button>
           </div>
 
-          <div className="settings-note-panel settings-note-panel-compact">
+          <div className="settings-note-panel settings-note-panel-compact utility-note-card">
             <strong>Что важно</strong>
             <p>Фото, видео и документы теперь загружаются как файлы. Доступ к ним управляется общей настройкой видимости и ролями участников.</p>
           </div>
@@ -245,7 +245,7 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
       </Card>
 
       {(error || success) && (
-        <div className="settings-feedback-strip">
+        <div className="settings-feedback-strip utility-feedback-strip">
           {error ? <p className="form-error">{error}</p> : null}
           {success ? <p className="form-success">{success}</p> : null}
         </div>

@@ -287,29 +287,29 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
   }
 
   return (
-    <div className="members-layout">
-      <section className="members-summary-grid">
-        <Card className="members-summary-card">
+    <div className="members-layout utility-surface-layout">
+      <section className="members-summary-grid utility-summary-grid">
+        <Card className="members-summary-card utility-summary-card">
           <span>Активные</span>
           <strong>{activeMemberships.length}</strong>
           <p>Уже имеют доступ к дереву.</p>
         </Card>
-        <Card className="members-summary-card">
+        <Card className="members-summary-card utility-summary-card">
           <span>Ожидают</span>
           <strong>{pendingInvites.length}</strong>
           <p>Еще не приняли приглашение.</p>
         </Card>
-        <Card className="members-summary-card">
+        <Card className="members-summary-card utility-summary-card">
           <span>Управляют</span>
           <strong>{managers.length}</strong>
           <p>Владелец и администраторы.</p>
         </Card>
-        <Card className="members-summary-card">
+        <Card className="members-summary-card utility-summary-card">
           <span>Доступ</span>
           <strong>{formatTreeVisibility(tree.visibility)}</strong>
           <p>Текущий режим открытия дерева.</p>
         </Card>
-        <Card className="members-summary-card">
+        <Card className="members-summary-card utility-summary-card">
           <span>Ссылки</span>
           <strong>{activeShareLinks.length}</strong>
           <p>Активные семейные ссылки для просмотра.</p>
@@ -317,12 +317,12 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
       </section>
 
       <section className="members-guidance-grid">
-        <Card className="members-guidance-card">
+        <Card className="members-guidance-card utility-note-card">
           <p className="eyebrow">По аккаунту</p>
           <strong>Приглашение участника</strong>
           <p>Используйте, если человеку нужен постоянный доступ под своей ролью, а не просто просмотр по ссылке.</p>
         </Card>
-        <Card className="members-guidance-card">
+        <Card className="members-guidance-card utility-note-card">
           <p className="eyebrow">Без аккаунта</p>
           <strong>Семейная ссылка</strong>
           <p>Подходит для родственников, которым нужен только просмотр дерева и файлов без отдельной регистрации.</p>
@@ -331,13 +331,13 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
 
       {copiedMessage ? <p className="form-success">{copiedMessage}</p> : null}
 
-      <Card className="members-invite-card p-6">
-        <div className="members-section-heading">
+      <Card className="members-invite-card utility-section-card p-6">
+        <div className="members-section-heading utility-section-heading">
           <p className="eyebrow">Приглашение</p>
           <h2 className="card-heading">Пригласите нового участника</h2>
           <p className="muted-copy">Выберите роль, способ приглашения и срок действия. Готовую ссылку можно отправить сразу.</p>
         </div>
-        <div className="members-context-row">
+        <div className="members-context-row utility-context-row">
           <Badge className="meta-pill meta-pill-muted" variant="secondary">
             {formatTreeVisibility(tree.visibility)} дерево
           </Badge>
@@ -442,13 +442,13 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
         {error ? <p className="form-error">{error}</p> : null}
       </Card>
 
-      <Card className="members-invite-card p-6">
-        <div className="members-section-heading">
+      <Card className="members-invite-card utility-section-card p-6">
+        <div className="members-section-heading utility-section-heading">
           <p className="eyebrow">Семейные ссылки</p>
           <h2 className="card-heading">Ссылка для просмотра без аккаунта</h2>
           <p className="muted-copy">Эта ссылка открывает дерево в режиме чтения. Подходит для родственников, которым нужен только просмотр.</p>
         </div>
-        <div className="members-context-row">
+        <div className="members-context-row utility-context-row">
           <Badge className="meta-pill meta-pill-muted" variant="secondary">
             Активны: {activeShareLinks.length}
           </Badge>
@@ -534,15 +534,15 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
         {error ? <p className="form-error">{error}</p> : null}
       </Card>
 
-      <Card className="members-list-card p-6">
-        <div className="members-section-heading">
+      <Card className="members-list-card utility-section-card p-6">
+        <div className="members-section-heading utility-section-heading">
           <p className="eyebrow">Участники дерева</p>
           <h2 className="card-heading">Кто уже имеет доступ</h2>
           <p className="muted-copy">Каждая роль показана отдельно, а быстрые действия остаются прямо в карточке участника.</p>
         </div>
-        <div className="members-card-list">
+        <div className="members-card-list utility-entry-list">
           {membershipState.map((membership) => (
-            <article key={membership.id} className="members-entry-card">
+            <article key={membership.id} className="members-entry-card utility-entry-card">
               <div className="members-entry-topline">
                 <div className="meta-row meta-row-tight">
                   <Badge className="meta-pill">{formatRole(membership.role)}</Badge>
@@ -602,13 +602,13 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
         </div>
       </Card>
 
-      <Card className="members-list-card p-6">
-        <div className="members-section-heading">
+      <Card className="members-list-card utility-section-card p-6">
+        <div className="members-section-heading utility-section-heading">
           <p className="eyebrow">Приглашения</p>
           <h2 className="card-heading">Что уже отправлено</h2>
           <p className="muted-copy">Здесь видны роль, способ отправки и текущее состояние каждого приглашения.</p>
         </div>
-        <div className="members-context-row">
+        <div className="members-context-row utility-context-row">
           <Badge className="meta-pill meta-pill-muted" variant="secondary">
             Всего: {invites.length}
           </Badge>
@@ -619,10 +619,10 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
             Приняты: {acceptedInvites.length}
           </Badge>
         </div>
-        <div className="members-card-list">
+        <div className="members-card-list utility-entry-list">
           {inviteState.length ? (
             inviteState.map((invite) => (
-              <article key={invite.id} className="members-entry-card">
+              <article key={invite.id} className="members-entry-card utility-entry-card">
                 <div className="members-entry-topline">
                   <div className="meta-row meta-row-tight">
                     <Badge className="meta-pill">{formatRole(invite.role)}</Badge>
@@ -674,17 +674,17 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
           )}
         </div>
         {acceptedInvites.length ? (
-          <p className="members-footnote">Принятых приглашений: {acceptedInvites.length}. Активный доступ после принятия уже отражается в списке участников.</p>
+          <p className="members-footnote utility-footnote">Принятых приглашений: {acceptedInvites.length}. Активный доступ после принятия уже отражается в списке участников.</p>
         ) : null}
       </Card>
 
-      <Card className="members-list-card p-6">
-        <div className="members-section-heading">
+      <Card className="members-list-card utility-section-card p-6">
+        <div className="members-section-heading utility-section-heading">
           <p className="eyebrow">Семейные ссылки</p>
           <h2 className="card-heading">Ссылки для семейного просмотра</h2>
           <p className="muted-copy">Эти ссылки не выдают роль в дереве и подходят только для просмотра. При необходимости их можно в любой момент отозвать.</p>
         </div>
-        <div className="members-context-row">
+        <div className="members-context-row utility-context-row">
           <Badge className="meta-pill meta-pill-muted" variant="secondary">
             Активны: {activeShareLinks.length}
           </Badge>
@@ -692,10 +692,10 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
             Всего: {shareLinks.length}
           </Badge>
         </div>
-        <div className="members-card-list">
+        <div className="members-card-list utility-entry-list">
           {shareLinkState.length ? (
             shareLinkState.map((shareLink) => (
-              <article key={shareLink.id} className="members-entry-card">
+              <article key={shareLink.id} className="members-entry-card utility-entry-card">
                 {(() => {
                   const revealedUrl = revealedShareLinkUrls[shareLink.id] || null;
                   const revealMessage = shareLinkRevealMessages[shareLink.id] || null;
@@ -813,7 +813,7 @@ export function MemberManagementPanel({ tree, memberships, invites, shareLinks }
             <div className="empty-state">Ссылки для семейного просмотра еще не создавались.</div>
           )}
         </div>
-        <p className="members-footnote">Для новых ссылок адрес можно показать повторно. Для старых ссылок без защищенного хранения адреса может понадобиться перевыпуск.</p>
+        <p className="members-footnote utility-footnote">Для новых ссылок адрес можно показать повторно. Для старых ссылок без защищенного хранения адреса может понадобиться перевыпуск.</p>
       </Card>
     </div>
   );

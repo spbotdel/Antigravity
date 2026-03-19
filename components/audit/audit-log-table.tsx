@@ -44,8 +44,8 @@ export function AuditLogTable({ entries, total, page, pageSize, slug }: AuditLog
 
   if (!entries.length) {
     return (
-      <Card className="audit-card">
-        <CardHeader className="audit-section-heading">
+      <Card className="audit-card utility-section-card">
+        <CardHeader className="audit-section-heading utility-section-heading">
           <p className="eyebrow">Журнал изменений</p>
           <h2 className="card-heading">Событий пока нет</h2>
           <p className="muted-copy">Когда в дереве появятся действия, здесь будет видна понятная история изменений по МСК.</p>
@@ -58,30 +58,30 @@ export function AuditLogTable({ entries, total, page, pageSize, slug }: AuditLog
   }
 
   return (
-    <div className="audit-layout">
-      <section className="audit-summary-grid">
-        <Card className="audit-summary-card" size="sm">
+    <div className="audit-layout utility-surface-layout">
+      <section className="audit-summary-grid utility-summary-grid">
+        <Card className="audit-summary-card utility-summary-card" size="sm">
           <CardContent className="flex flex-col gap-2">
             <span>Всего событий</span>
             <strong>{total}</strong>
             <p className="card-copy">Полный объем истории, а не только текущая страница.</p>
           </CardContent>
         </Card>
-        <Card className="audit-summary-card" size="sm">
+        <Card className="audit-summary-card utility-summary-card" size="sm">
           <CardContent className="flex flex-col gap-2">
             <span>Кто менял</span>
             <strong>{actors.size}</strong>
             <p className="card-copy">Уникальных участников или системных действий на текущей странице.</p>
           </CardContent>
         </Card>
-        <Card className="audit-summary-card" size="sm">
+        <Card className="audit-summary-card utility-summary-card" size="sm">
           <CardContent className="flex flex-col gap-2">
             <span>Последнее событие</span>
             <strong>{latestEntry ? formatter.format(new Date(latestEntry.created_at)) : "Нет данных"}</strong>
             <p className="card-copy">Время показано по МСК, UTC+3.</p>
           </CardContent>
         </Card>
-        <Card className="audit-summary-card" size="sm">
+        <Card className="audit-summary-card utility-summary-card" size="sm">
           <CardContent className="flex flex-col gap-2">
             <span>Последний автор</span>
             <strong>{latestActor}</strong>
@@ -90,8 +90,8 @@ export function AuditLogTable({ entries, total, page, pageSize, slug }: AuditLog
         </Card>
       </section>
 
-      <Card className="audit-card">
-        <CardHeader className="audit-section-heading">
+      <Card className="audit-card utility-section-card">
+        <CardHeader className="audit-section-heading utility-section-heading">
           <p className="eyebrow">Журнал изменений</p>
           <h2 className="card-heading">Лента действий</h2>
           <p className="muted-copy">Создания, изменения, удаления и доступ собраны по времени без технических полей.</p>
@@ -115,9 +115,9 @@ export function AuditLogTable({ entries, total, page, pageSize, slug }: AuditLog
             </span>
           </div>
 
-          <div className="audit-feed-list">
+          <div className="audit-feed-list utility-entry-list">
             {entries.map((entry) => (
-              <article key={entry.id} className="audit-entry-card">
+              <article key={entry.id} className="audit-entry-card utility-entry-card">
                 <div className="audit-entry-topline">
                   <div className="meta-row meta-row-tight">
                     <span className={`audit-event-pill audit-event-pill-${entry.event_tone}`}>{entry.event_label}</span>
