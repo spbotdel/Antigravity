@@ -27,6 +27,7 @@ Status note:
 - [ ] Run hosted UAT for `Owner EU`, `Helper RF`, and `Relative RF`
 - [x] Add invite email delivery via `Resend` with manual-copy fallback
 - [ ] Finish `Resend` sender/domain setup and add `RESEND_FROM_EMAIL` plus optional `INVITE_EMAIL_REPLY_TO` to hosted env
+  Проверено на preview: email-invite path не падает, но сейчас возвращает `deliveryStatus=skipped` и manual-copy fallback, потому что `Resend` не настроен.
 - [ ] Review staged UAT findings and fix any release-blocking defects
 
 Operational note:
@@ -70,6 +71,7 @@ Operational note:
 - [x] Довести экран `Участники` до единого visual-system checkpoint: приглашения по аккаунту и read-only share links теперь проходят через общий utility-surface язык.
 - [ ] Провести целевой human QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.
 - [ ] Проверить hosted invite-email readiness и точно зафиксировать, что ещё блокирует `Resend` sender/domain close-out.
+- [ ] Зафиксировать, нужен ли для branch-UAT отдельный base URL в invite links, или текущий main alias остаётся целевым truth surface даже во время preview-проверок.
 - [ ] Держать startup context, task capsules и memory-файлы актуальными: `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.
 
 ### Medium Priority

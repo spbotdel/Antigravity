@@ -44,6 +44,7 @@
 - [x] Tree-scoped visual-system migration is now materially in place across `Медиа`, `Участники`, `Настройки`, `Журнал`, builder/viewer media surfaces, and tree nav/canvas framing.
 - [x] Hosted preview regression is green after the migration passes on `smoke:auth`, `smoke:e2e`, `smoke:media`, and a logged-in route sweep.
 - [x] Cloudflare rollout metadata now persists explicitly as `provider: cloudflare_r2` after remote schema update, not only in upload-intent transport fields.
+- [x] Hosted invite-email readiness is now verified: the flow succeeds with graceful manual-link fallback when `Resend` is not configured.
 - [x] PR1 browser upload transport fix is in place: direct upload now falls back to server proxy only on network/timeout-style failures, not on abort or 4xx signed-URL errors.
 - [x] PR1 signed-URL fallback regression coverage is in place for `win32`, non-`win32`, and repository-level `503` degradation scenarios.
 - [x] Shared dialog close labels are localized to Russian in the shared primitive.
@@ -68,6 +69,7 @@
 - [ ] The tree-level family archive now has sticky actions, large viewer/lightbox, calmer review flow, and visible tile copy, but broader album/mobile/end-to-end QA is still unfinished.
 - [ ] Builder canvas resize and overlay inspector now pass the current smoke checkpoint, but still need practical QA on desktop, tablet and mobile widths.
 - [ ] Members/invite/share-link flows are smoke-green and hosted route-green, but still need explicit live UAT against clipboard and perceived-speed behavior.
+- [ ] Hosted invite-email path itself is healthy, but `Resend` sender/domain is still not configured; delivery currently degrades to manual-copy fallback by design.
 - [ ] Manual memory notes must stay aligned with the actual workstream after each `/fi`.
 - [ ] Landing/dashboard cleanup is now the next visual follow-up, but it remains secondary to final access/UAT close-out.
 
@@ -75,6 +77,7 @@
 
 - [ ] Convert the Cloudflare target into an explicit migration sequence: rollout gating, direct upload, Stream, and Queues.
 - [ ] Probe hosted invite-email readiness and pin down whether `Resend` sender/domain remains the next external blocker.
+- [ ] Decide whether branch-specific UAT should keep using the current stable main alias in invite URLs or whether a preview-specific base URL is needed for branch testing.
 - [ ] Finish archive album/mobile QA now that sticky actions and the large viewer/lightbox are in place.
 - [ ] Switch tree cards, side rails, archive tiles, and media galleries to preview variants by default and confirm legacy fallbacks.
 - [ ] Run targeted QA for viewer, builder and members after the completed migration checkpoint.
@@ -94,6 +97,9 @@
   plus a logged-in route sweep across `viewer`, `builder`, `media`, `members`, `settings`, and `audit`.
 - Cloudflare rollout checkpoint is stronger now:
   after remote migrations `20260320093000` and `20260320093100`, hosted `smoke:media:direct` confirms new file-backed media persist as `provider: cloudflare_r2`.
+- Hosted invite-email checkpoint is now explicit:
+  preview UI returns `deliveryStatus=skipped` with `Resend пока не настроен...` while still creating a valid invite URL and surfacing it for manual copy.
+- Current hosted invite URLs still point at the configured main alias rather than the branch preview URL, so branch-UAT should treat that as current env behavior, not as a runtime mystery.
 - PR1 high-confidence review fixes are closed:
   direct browser upload no longer retries through proxy on user abort or 4xx signed-URL responses.
 - PR1 signed HTTP transport coverage now fixes the regression contract around `win32` PowerShell fallback and repository-level `503` degradation.
