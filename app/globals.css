@@ -4276,13 +4276,13 @@ textarea {
   .builder-canvas-shell,
   .builder-canvas-shell .tree-canvas,
   .viewer-stage-canvas .tree-canvas {
-    min-height: 70vh;
+    min-height: 74vh;
     border: 1px solid rgba(86, 115, 168, 0.18);
     border-radius: 14px;
   }
 
   .builder-canvas-shell {
-    height: 70vh !important;
+    height: 74vh !important;
   }
 
   .builder-canvas-resize-handle {
@@ -4370,6 +4370,16 @@ textarea {
 
   .builder-field-span {
     grid-column: auto;
+  }
+
+  .builder-canvas-shell,
+  .builder-canvas-shell .tree-canvas,
+  .viewer-stage-canvas .tree-canvas {
+    min-height: 78vh;
+  }
+
+  .builder-canvas-shell {
+    height: 78vh !important;
   }
 
   .hero-copy h1,
