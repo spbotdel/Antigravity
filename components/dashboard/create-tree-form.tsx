@@ -66,7 +66,7 @@ export function CreateTreeForm({ submitLabel = "Создать первое де
         Описание
         <Textarea name="description" rows={4} placeholder="Короткое описание веток и периода семьи." />
       </label>
-      <p className="dashboard-form-note">После создания вы сразу перейдете в конструктор. Адрес дерева можно будет поменять позже в настройках.</p>
+      <p className="dashboard-form-note">После создания вы сразу перейдете в конструктор. Адрес можно поменять позже в настройках.</p>
       {error ? <p className="form-error">{error}</p> : null}
       <Button type="submit" disabled={loading}>
         {loading ? "Создаю..." : submitLabel}

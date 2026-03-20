@@ -13,13 +13,13 @@
 2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
 3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
 4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
-5. Complete backup/restore rehearsal and the final launch checklist before release decision.
+5. Capture a fresh manual database export and complete the final launch checklist before release decision.
 
 ### Current P0 Gaps
 
 - Mandatory `Cloudflare R2` rollout still needs gated verification, activation, and post-activation close-out.
 - Live `EU + RF` UAT is still a launch gate.
-- Backup/restore rehearsal and final launch checklist remain part of release readiness.
+- Manual database export discipline and final launch checklist remain part of release readiness for the current milestone.
 - Archive/viewer/builder/members regression after rollout activation still needs explicit close-out.
 - Preview-variant rollout still needs regression confirmation across archive/viewer/builder.
 
@@ -67,7 +67,7 @@
 1. Обязательный `Cloudflare R2` rollout еще не активирован и не закрыт как steady-state upload path.
 2. Post-activation regression для archive/viewer/builder/members и preview variants еще не закрыт.
 3. Live UAT `EU + RF` еще не зафиксирован как complete.
-4. Backup/restore rehearsal и launch checklist execution еще не закрыты.
+4. Manual database export discipline и launch checklist execution еще не закрыты.
 5. Startup memory и operational docs должны оставаться синхронизированными с текущим launch path.
 
 ## 3. Ключевые инженерные решения V1
@@ -115,7 +115,7 @@
 - `Resend`
 - текущие app-level invite URLs остаются source of truth
 - manual-copy fallback остается обязательным
-5. После staged validation выполнить backup/restore rehearsal и final launch checklist.
+5. После staged validation снять manual database export и пройти final launch checklist.
 
 ## 4. Бэклог по этапам
 
@@ -396,7 +396,7 @@ Phases `A-D` below are now largely implemented in the current repository. For th
 ### E3. Backup и launch checklist
 
 **Что сделать**
-1. Зафиксировать backup/restore процедуру.
+1. Зафиксировать manual database export процедуру.
 2. Зафиксировать env checklist для production.
 3. Зафиксировать owner playbook:
 - как пригласить помощника,
@@ -450,7 +450,7 @@ Phases `A-D` below are now largely implemented in the current repository. For th
 2. provider-aware legacy Yandex reads после activation
 3. post-activation regression для archive/viewer/builder/members
 4. live UAT `EU + RF`
-5. backup/restore rehearsal и launch checklist
+5. manual database export discipline и launch checklist
 
 ### P1 - желательно в том же цикле
 

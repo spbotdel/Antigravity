@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { TreeViewerClient } from "@/components/tree/tree-viewer-client";
 import { AppError } from "@/lib/server/errors";
 import { getTreeSnapshot } from "@/lib/server/repository";
-import { formatTreeVisibility } from "@/lib/ui-text";
 
 export const dynamic = "force-dynamic";
 
@@ -30,15 +29,7 @@ export default async function TreePage({ params, searchParams }: TreePageProps) 
 
     return (
       <main className="page-shell workspace-page workspace-page-canvas">
-        <section className="section-header workspace-header workspace-header-canvas">
-          <div className="workspace-header-main">
-            <div className="workspace-meta-row">
-              <p className="eyebrow">{formatTreeVisibility(snapshot.tree.visibility)} дерево</p>
-              <span className="workspace-meta-chip">{snapshot.people.length} чел.</span>
-            </div>
-            <h1>{snapshot.tree.title}</h1>
-            <p className="muted-copy">{snapshot.tree.description || "Описание пока не добавлено."}</p>
-          </div>
+        <section className="tree-page-nav-row">
           <TreeNav
             slug={slug}
             shareToken={shareToken}

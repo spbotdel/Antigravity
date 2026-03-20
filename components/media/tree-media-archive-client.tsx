@@ -1039,8 +1039,8 @@ export function TreeMediaArchiveClient({
           renderArchiveEmptyState({
             title: mode === "photo" ? "В этом разделе пока нет фотографий" : mode === "video" ? "В этом разделе пока нет видео" : "Семейный архив пока пуст",
             description: canEdit
-              ? "Начните с первого набора материалов: загрузите файлы или сразу подготовьте альбом под семейную подборку."
-              : "Когда в архиве появятся материалы, они будут собраны здесь в спокойной галерее.",
+              ? "Добавьте первые файлы или сразу создайте альбом под семейную подборку."
+              : "Когда материалы появятся, они соберутся здесь в спокойной галерее.",
             actions: canEdit ? (
               <>
                 <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
@@ -1073,7 +1073,7 @@ export function TreeMediaArchiveClient({
             renderArchiveEmptyState({
               title: mode === "all" ? `В альбоме «${selectedAlbum.title}» пока пусто` : `В альбоме «${selectedAlbum.title}» пока нет материалов этого типа`,
               description: canEdit
-                ? "Можно добавить сюда новый набор файлов или вернуться к альбомам и выбрать другую подборку."
+                ? "Добавьте сюда файлы или вернитесь к альбомам и выберите другую подборку."
                 : "Когда в выбранном альбоме появятся материалы этого типа, они откроются здесь.",
               actions: canEdit ? (
                 <>
@@ -1117,7 +1117,7 @@ export function TreeMediaArchiveClient({
         renderArchiveEmptyState({
           title: "Альбомов для этого раздела пока нет",
           description: canEdit
-            ? "Создайте первый альбом для семейной подборки, чтобы складывать туда поездки, праздники и другие общие серии."
+            ? "Создайте первый альбом для поездки, праздника или другой общей серии."
             : "Когда владелец или редактор соберет альбомы, они появятся здесь.",
           actions: canEdit ? (
             <Button type="button" variant="secondary" onClick={() => setIsCreateAlbumOpen(true)}>

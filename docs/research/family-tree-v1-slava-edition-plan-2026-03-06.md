@@ -12,7 +12,7 @@
 2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
 3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
 4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
-5. Complete backup/restore rehearsal and the final launch checklist before release decision.
+5. Capture a fresh manual database export and complete the final launch checklist before release decision.
 
 ### Validation Baseline
 
@@ -283,7 +283,7 @@
 5. Медиа приватны и не опираются на публичные consumer-links.
 6. Новые upload проходят через `Cloudflare R2`, а legacy Yandex-backed медиа остаются читаемыми в transition.
 7. Приложение открывается и работает для владельца в Европе и для родственников в РФ.
-8. Есть backup/restore дисциплина.
+8. Есть manual export дисциплина для базы и понятный media recovery path.
 9. Продукт решает задачу одной семьи без явных "заглушек для будущего SaaS".
 
 ## 10. Что переносится в V2 mass-market

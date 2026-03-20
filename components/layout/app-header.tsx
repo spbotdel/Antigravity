@@ -78,7 +78,7 @@ export function AppHeader({ initialUser }: AppHeaderProps) {
       <Link href="/" className="brandmark">
         <span className="brandmark-seal">AG</span>
         <span>
-          <strong>Antigravity Family Atlas</strong>
+          <strong>Семейное дерево</strong>
           <small>Система семейной памяти</small>
         </span>
       </Link>

@@ -18,7 +18,7 @@
 2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
 3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
 4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
-5. Complete backup/restore rehearsal and the final launch checklist before release decision.
+5. Capture a fresh manual database export and complete the final launch checklist before release decision.
 
 ### Validation Baseline
 

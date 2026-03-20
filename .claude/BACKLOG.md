@@ -2,7 +2,7 @@
 
 *Operational task backlog only.*
 
-*Updated: 2026-03-20*
+*Updated: 2026-03-19*
 
 ## Wave 1 — Current Execution
 
@@ -27,7 +27,7 @@ Status note:
 - [ ] Run hosted UAT for `Owner EU`, `Helper RF`, and `Relative RF`
 - [x] Add invite email delivery via `Resend` with manual-copy fallback
 - [ ] Finish `Resend` sender/domain setup and add `RESEND_FROM_EMAIL` plus optional `INVITE_EMAIL_REPLY_TO` to hosted env
-  Проверено на preview: email-invite path не падает, но сейчас возвращает `deliveryStatus=skipped` и manual-copy fallback, потому что `Resend` не настроен.
+  Проверено на production alias: email-invite path не падает, но сейчас возвращает `deliveryStatus=skipped` и manual-copy fallback, потому что `Resend` не настроен.
 - [ ] Review staged UAT findings and fix any release-blocking defects
 
 Operational note:
@@ -44,7 +44,8 @@ Operational note:
 
 ## Launch-Critical
 
-- [ ] Complete a full database backup/restore rehearsal on a machine or environment with `pg_dump` / `psql` or a safe staging target
+- [x] For the current milestone, remove `backup/restore rehearsal` from launch blockers and use manual database export discipline instead
+  Принятое решение: это продукт для одной семьи, медиа уже лежат в `Cloudflare`, а для текущего риска достаточно ручного экспорта данных/схемы из `Supabase` dashboard или SQL editor с сохранением файла вне платформы.
 - [ ] Update the final launch decision notes after staged UAT and recovery checks are complete
 - [ ] Keep startup memory and launch docs aligned with the actual execution order
 
@@ -53,7 +54,7 @@ Operational note:
 - [x] Add `Tailwind + shadcn/ui` foundation
 - [x] Migrate shared primitives: buttons, inputs, selects, textareas, dialogs, tabs, cards
 - [x] Bring the main tree-scoped builder/media/member/settings/audit surfaces to one visual language without forcing the canvas onto stock components
-- [ ] Run a calm post-migration pass on landing/dashboard and close any remaining low-risk visual drift
+- [x] Run a calm post-migration pass on landing/dashboard and close the remaining low-risk visual drift there
 
 ## Active Sprint
 
@@ -62,15 +63,19 @@ Operational note:
 - [x] Закрыть `docs/FIX_PLAN_PR1.md`: direct upload fallback сузить до network/timeout-only, закрепить signed-URL fallback contract тестами и локализовать shared dialog `Close`.
 - [x] Подтвердить автоматизированно, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий на hosted preview.
 - [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
-  Текущее состояние: hosted `smoke:media:direct` уже green, а новые file-backed media теперь сохраняются как `provider: cloudflare_r2` после remote migrations `20260320093000` и `20260320093100`.
-- [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
-- [ ] Довести variant architecture до green regression: `thumb/small/medium` должны стабильно использоваться в archive/viewer/builder, а оригинал открываться только явно.
+  Текущее состояние: local и hosted `smoke:media:direct` green, а новые file-backed media теперь сохраняются как `provider: cloudflare_r2` после remote migrations `20260320093000` и `20260320093100`. `Stream` и `Queues` пока остаются deferred follow-up, не текущим шагом.
+- [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и финальный human end-to-end close-out.
+- [x] Довести variant architecture до green regression: `thumb/small/medium` теперь покрыты focused regression в archive/viewer/builder, а оригинал открывается только явно.
 - [x] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
 - [x] Завершить текущий visual pass по `family-tree-canvas`, tree nav и связанным viewer/builder surfaces на уровне migration checkpoint.
 - [ ] Стабилизировать layout конструктора: resizable canvas shell, overlay inspector на desktop и предсказуемое поведение на tablet/mobile без потери приоритета дерева.
+- [x] Подтвердить automated baseline для builder/layout: `builder-qa-large-tree-e2e.mjs` снова green на текущем canvas-first UI.
 - [x] Довести экран `Участники` до единого visual-system checkpoint: приглашения по аккаунту и read-only share links теперь проходят через общий utility-surface язык.
 - [ ] Провести целевой human QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.
-- [ ] Проверить hosted invite-email readiness и точно зафиксировать, что ещё блокирует `Resend` sender/domain close-out.
+- [x] Подтвердить hosted browser-emulation pass для `members` flows: invite create/copy, share-link create/reveal/revoke, и invite acceptance на production alias.
+- [x] Подтвердить browser-emulation UAT для `builder/media/members/viewer-share` на hosted production alias в desktop/tablet/mobile со снапшотами и без route-level ошибок.
+- [x] Подтвердить hosted mobile album-view pass для `Медиа` через query-state `view=albums&album=...` без route-level ошибок.
+- [x] Проверить hosted invite-email readiness и точно зафиксировать, что email-path healthy, а единственный оставшийся blocker — ненастроенный `Resend` sender/domain.
 - [ ] Зафиксировать, нужен ли для branch-UAT отдельный base URL в invite links, или текущий main alias остаётся целевым truth surface даже во время preview-проверок.
 - [ ] Держать startup context, task capsules и memory-файлы актуальными: `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.
 

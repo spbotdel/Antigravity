@@ -852,6 +852,9 @@ textarea {
   display: grid;
   color: var(--muted);
   font-size: 0.88rem;
+  max-width: min(100%, 52ch);
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-card-copy {
@@ -901,6 +904,7 @@ textarea {
 .dashboard-fact-card strong {
   font-size: 0.98rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-create-card {
@@ -1045,8 +1049,8 @@ textarea {
 }
 
 .viewer-layout {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.7fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 12px minmax(320px, var(--viewer-rail-width, 420px));
+  gap: 0;
   align-items: stretch;
 }
 
@@ -1124,6 +1128,43 @@ textarea {
   padding: 10px;
 }
 
+.tree-page-nav-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.viewer-layout-resizable {
+  --viewer-rail-width: 420px;
+}
+
+.viewer-layout-resizing {
+  cursor: col-resize;
+}
+
+.viewer-rail-resize-handle {
+  width: 12px;
+  cursor: col-resize;
+  position: relative;
+}
+
+.viewer-rail-resize-handle::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(24, 33, 48, 0.08);
+}
+
+.viewer-rail-resize-handle:hover::before,
+.viewer-layout-resizing .viewer-rail-resize-handle::before {
+  background: rgba(208, 106, 66, 0.35);
+}
+
 .person-summary-avatar {
   width: 76px;
   height: 76px;
@@ -1143,7 +1184,8 @@ textarea {
 
 .viewer-person-summary {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
   gap: 14px;
 }
 
@@ -1151,10 +1193,23 @@ textarea {
   min-width: 0;
   display: grid;
   gap: 6px;
+  flex: 1 1 auto;
 }
 
 .viewer-person-summary-copy .card-heading {
   margin: 0;
+}
+
+.detail-list-row-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.detail-date-item {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
 }
 
 .viewer-stage-canvas {
@@ -2648,21 +2703,21 @@ textarea {
 .media-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 120;
-  padding: 20px;
+  z-index: 2000;
+  padding: 12px;
   display: grid;
   place-items: center;
-  background: rgba(8, 12, 20, 0.84);
+  background: rgba(8, 12, 20, 0.94);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
 .media-lightbox-dialog {
   width: min(1180px, 100%);
-  max-height: calc(100vh - 40px);
-  padding: 18px;
+  max-height: calc(100vh - 24px);
+  padding: 14px;
   display: grid;
-  gap: 16px;
+  gap: 12px;
   border-radius: 14px;
   background: rgba(10, 14, 22, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2705,7 +2760,7 @@ textarea {
 
 .media-lightbox-stage .person-media-stage-photo,
 .media-lightbox-stage .person-media-stage-video {
-  max-height: calc(100vh - 240px);
+  max-height: calc(100vh - 190px);
 }
 
 .media-lightbox-nav {
@@ -4252,6 +4307,15 @@ textarea {
     max-height: none;
   }
 
+  .tree-page-nav-row {
+    justify-content: stretch;
+    margin-bottom: 10px;
+  }
+
+  .tree-page-nav-row > * {
+    width: 100%;
+  }
+
   .builder-inspector-overlay {
     position: static;
     width: auto;
@@ -4286,6 +4350,10 @@ textarea {
   }
 
   .builder-canvas-resize-handle {
+    display: none;
+  }
+
+  .viewer-rail-resize-handle {
     display: none;
   }
 
@@ -4733,6 +4801,10 @@ textarea {
     max-height: 100vh;
     border-radius: 0;
     padding: 16px;
+  }
+
+  .viewer-person-summary {
+    align-items: flex-start;
   }
 
   .person-media-stage,

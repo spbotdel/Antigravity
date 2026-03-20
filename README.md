@@ -131,7 +131,7 @@ Mandatory rollout sequence for `Slava edition`:
 8. Treat release readiness as blocked until:
    - targeted archive/viewer/builder/members QA is green
    - live `EU + RF` UAT is complete
-   - backup/restore rehearsal is complete
+   - a fresh manual database export is captured and stored outside the platform
 
 Controlled rollout checklist:
 
@@ -154,7 +154,7 @@ Controlled rollout checklist:
 - Phase 5. Launch hardening
   - targeted archive/viewer/builder/members QA is green
   - live `EU + RF` UAT is complete
-  - backup/restore rehearsal and launch checklist are complete
+  - a fresh manual database export is captured and launch checklist is complete
 
 Current transition detail:
 

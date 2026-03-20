@@ -18,6 +18,7 @@ interface PersonMediaGalleryProps {
   avatarMediaId?: string | null;
   onSetAvatar?: (mediaId: string) => Promise<void> | void;
   showStickyFooter?: boolean;
+  showStage?: boolean;
 }
 
 function isPhotoAsset(asset: MediaAsset) {
@@ -171,6 +172,7 @@ export function PersonMediaGallery({
   avatarMediaId = null,
   onSetAvatar,
   showStickyFooter = true,
+  showStage = true,
 }: PersonMediaGalleryProps) {
   const [activeMediaId, setActiveMediaId] = useState<string | null>(media[0]?.id ?? null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -269,58 +271,60 @@ export function PersonMediaGallery({
   return (
     <>
       <section className="person-media-gallery">
-        <article className="person-media-stage utility-section-card">
-          <div className="person-media-stage-shell">
-            <MediaPreview asset={activeAsset} shareToken={shareToken} />
-          </div>
-
-          <div className="person-media-stage-copy">
-            <div className="media-meta">
-              <span>{formatMediaKind(activeAsset.kind)}</span>
-              <span>{formatMediaVisibility(activeAsset.visibility)}</span>
-              <span>{getMediaSourceLabel(activeAsset)}</span>
-              {activeAsset.id === avatarMediaId && isPhotoAsset(activeAsset) ? <span>Аватар</span> : null}
+        {showStage ? (
+          <article className="person-media-stage utility-section-card">
+            <div className="person-media-stage-shell">
+              <MediaPreview asset={activeAsset} shareToken={shareToken} />
             </div>
-            <h3>{activeAsset.title}</h3>
-            {activeAsset.caption ? <p>{activeAsset.caption}</p> : <p>{isPhotoAsset(activeAsset) ? "Фотография открыта в текущей галерее и доступна для просмотра без отдельного окна." : "Материал открыт в текущей галерее и готов к просмотру или переходу по ссылке."}</p>}
-          </div>
 
-          <div className="person-media-stage-actions">
-            {canNavigate ? (
-              <Button type="button" variant="ghost" size="sm" aria-label="Предыдущее медиа" onClick={() => moveSelection(-1)}>
-                ‹
-              </Button>
-            ) : null}
-            {canNavigate ? (
-              <Button type="button" variant="ghost" size="sm" aria-label="Следующее медиа" onClick={() => moveSelection(1)}>
-                ›
-              </Button>
-            ) : null}
-            {!isInlineRenderableAsset(activeAsset) ? (
-              <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
-                {getMediaOpenLabel(activeAsset)}
-              </a>
-            ) : null}
-            {canSetAvatar ? (
-              activeAsset.id === avatarMediaId ? (
-                <span className="members-static-note">Текущее фото профиля</span>
-              ) : (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={isAvatarUpdating}
-                  onClick={() => {
-                    void handleSetAvatar(activeAsset.id);
-                  }}
-                >
-                  {isAvatarUpdating ? "Сохраняю аватар..." : "Сделать фото профиля"}
+            <div className="person-media-stage-copy">
+              <div className="media-meta">
+                <span>{formatMediaKind(activeAsset.kind)}</span>
+                <span>{formatMediaVisibility(activeAsset.visibility)}</span>
+                <span>{getMediaSourceLabel(activeAsset)}</span>
+                {activeAsset.id === avatarMediaId && isPhotoAsset(activeAsset) ? <span>Аватар</span> : null}
+              </div>
+              <h3>{activeAsset.title}</h3>
+              {activeAsset.caption ? <p>{activeAsset.caption}</p> : <p>{isPhotoAsset(activeAsset) ? "Фотография открыта в текущей галерее и доступна для просмотра без отдельного окна." : "Материал открыт в текущей галерее и готов к просмотру или переходу по ссылке."}</p>}
+            </div>
+
+            <div className="person-media-stage-actions">
+              {canNavigate ? (
+                <Button type="button" variant="ghost" size="sm" aria-label="Предыдущее медиа" onClick={() => moveSelection(-1)}>
+                  ‹
                 </Button>
-              )
-            ) : null}
-          </div>
-        </article>
+              ) : null}
+              {canNavigate ? (
+                <Button type="button" variant="ghost" size="sm" aria-label="Следующее медиа" onClick={() => moveSelection(1)}>
+                  ›
+                </Button>
+              ) : null}
+              {!isInlineRenderableAsset(activeAsset) ? (
+                <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
+                  {getMediaOpenLabel(activeAsset)}
+                </a>
+              ) : null}
+              {canSetAvatar ? (
+                activeAsset.id === avatarMediaId ? (
+                  <span className="members-static-note">Текущее фото профиля</span>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={isAvatarUpdating}
+                    onClick={() => {
+                      void handleSetAvatar(activeAsset.id);
+                    }}
+                  >
+                    {isAvatarUpdating ? "Сохраняю аватар..." : "Сделать фото профиля"}
+                  </Button>
+                )
+              ) : null}
+            </div>
+          </article>
+        ) : null}
 
-        {media.length > 1 ? (
+        {!showStage || media.length > 1 ? (
           <div className="person-media-thumb-strip">
             {media.map((asset, index) => (
               <MediaThumb
@@ -328,7 +332,12 @@ export function PersonMediaGallery({
                 asset={asset}
                 active={asset.id === activeAsset.id}
                 shareToken={shareToken}
-                onSelect={() => setActiveMediaId(asset.id)}
+                onSelect={() => {
+                  setActiveMediaId(asset.id);
+                  if (!showStage) {
+                    setIsLightboxOpen(true);
+                  }
+                }}
                 index={index}
                 isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
               />

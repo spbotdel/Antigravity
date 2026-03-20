@@ -4,7 +4,7 @@
 ## Current Implementation Sync
 
 - Updated at (UTC): `2026-03-18 10:37:09Z`
-- Workstreams `A-D` are largely materialized in the repo; the active launch-critical sequence is now rollout + regression + UAT + recovery rehearsal.
+- Workstreams `A-D` are largely materialized in the repo; the active launch-critical sequence is now rollout + regression + UAT + manual export discipline.
 - Active implementation stream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 - Tree-level archive foundation is present in the repo.
 - Preview-variant delivery foundation is present in the repo.
@@ -14,7 +14,7 @@
 
 - Mandatory `Cloudflare R2` rollout still needs gated verification, activation, and post-activation close-out.
 - Live `EU + RF` UAT is still a launch gate.
-- Backup/restore rehearsal and final launch checklist remain part of release readiness.
+- Manual database export discipline and the final launch checklist remain part of release readiness for the current milestone.
 - Archive/viewer/builder/members regression after rollout activation still needs explicit close-out.
 - Preview-variant rollout still needs regression confirmation across archive/viewer/builder.
 
@@ -24,7 +24,7 @@
 2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
 3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
 4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
-5. Complete backup/restore rehearsal and the final launch checklist before release decision.
+5. Capture a fresh manual database export and complete the final launch checklist before release decision.
 <!-- FRAMEWORK:IMPLEMENTATION:END -->
 
 ## 1. Цель документа
@@ -69,7 +69,7 @@
 1. Обязательный `Cloudflare R2` rollout для новых upload еще не активирован и не закрыт как steady-state production path.
 2. Post-activation regression для archive/viewer/builder/members и preview variants еще не закрыт.
 3. Live UAT между Европой и РФ еще не зафиксирован как complete.
-4. Backup/restore rehearsal и финальный launch checklist еще не закрыты.
+4. Manual database export discipline и финальный launch checklist еще не закрыты.
 
 ## 4. Архитектурные решения для исполнения
 
@@ -224,7 +224,7 @@
 ### Что нужно сделать
 
 1. Подготовить production env.
-2. Проверить backup/restore процедуры.
+2. Проверить и задокументировать ручной export данных базы.
 3. Настроить минимум operational visibility:
 - error logging,
 - health visibility,
@@ -258,7 +258,7 @@
 3. Активировать rollout и подтвердить `resolvedUploadBackend=cloudflare_r2`.
 4. Пройти post-activation regression для archive/viewer/builder/members, variant delivery и legacy reads.
 5. Пройти live UAT `EU + RF`.
-6. Выполнить backup/restore rehearsal и финальный launch checklist.
+6. Снять свежий manual export и выполнить финальный launch checklist.
 
 Примечание:
 1. Workstreams `A-D` уже в основном материализованы в текущем репозитории.
@@ -273,7 +273,7 @@
 2. Legacy Yandex-backed reads продолжают работать в transition.
 3. Owner/admin/viewer и invite/share-link flows стабилизированы на live API.
 4. Archive/viewer/builder/members regression закрыт после activation.
-5. Backup/restore rehearsal и UAT `EU + RF` завершены.
+5. Manual export discipline и UAT `EU + RF` завершены.
 
 ### P1 - желательно до запуска, но можно добивать в конце цикла
 
@@ -319,4 +319,4 @@ Mitigation: проводить реальную проверку EU/RF до фи
 - закрыть gated verification для `Cloudflare R2`
 - активировать rollout
 - пройти post-activation QA
-- затем закрыть `EU + RF` UAT и backup/restore rehearsal
+- затем закрыть `EU + RF` UAT и manual export discipline

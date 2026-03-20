@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { getBaseUrl } from "@/lib/env";
 import { formatRole, formatTreeVisibility } from "@/lib/ui-text";
 import { CreateTreeForm } from "@/components/dashboard/create-tree-form";
 import type { DashboardModel, DashboardTreeItem } from "@/components/dashboard/dashboard-model";
@@ -19,16 +20,24 @@ function getCreatePanelCopy(dashboardState: DashboardModel["dashboardState"]) {
   if (dashboardState === "invited_only") {
     return {
       title: "Создайте свое дерево",
-      description: "Приглашенные деревья останутся в списке, а собственное дерево появится как основной рабочий контур.",
+      description: "Приглашенные деревья останутся в списке, а собственное станет основным рабочим контуром.",
       submitLabel: "Создать дерево"
     };
   }
 
   return {
     title: "Создайте первое дерево",
-    description: "После создания вы сразу перейдете в конструктор и сможете продолжить работу уже из этого dashboard.",
+    description: "После создания вы сразу перейдете в конструктор.",
     submitLabel: "Создать дерево"
   };
+}
+
+function normalizeBaseUrl(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function buildTreeUrl(slug: string) {
+  return `${normalizeBaseUrl(getBaseUrl())}/tree/${slug}`;
 }
 
 export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
@@ -37,56 +46,62 @@ export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
 
   return (
     <div className="dashboard-workspace">
-      {dashboard.primaryOwnedItem ? (
-        <Card className="dashboard-primary-card p-0">
-          <CardHeader className="px-6 pt-6 pb-0">
-            <div className="dashboard-primary-topline">
-              <div className="meta-row meta-row-tight">
-                <Badge className="meta-pill">{formatRole(dashboard.primaryOwnedItem.membership.role)}</Badge>
-                <Badge className="meta-pill meta-pill-muted" variant="secondary">
-                  {formatTreeVisibility(dashboard.primaryOwnedItem.tree.visibility)}
-                </Badge>
-              </div>
-              <span className="dashboard-primary-slug">/tree/{dashboard.primaryOwnedItem.tree.slug}</span>
-            </div>
-            <div className="dashboard-primary-copy">
-              <p className="card-kicker">Ваше дерево</p>
-              <h2 className="card-heading">{dashboard.primaryOwnedItem.tree.title}</h2>
-              <p className="card-copy">{dashboard.primaryOwnedItem.tree.description || "Описание пока не заполнено."}</p>
-            </div>
-          </CardHeader>
-          <CardContent className="px-6 pt-0 pb-0">
-            <div className="dashboard-fact-grid">
-              <div className="dashboard-fact-card">
-                <span>Доступ</span>
-                <strong>{formatTreeVisibility(dashboard.primaryOwnedItem.tree.visibility)}</strong>
-              </div>
-              <div className="dashboard-fact-card">
-                <span>Адрес</span>
-                <strong>/tree/{dashboard.primaryOwnedItem.tree.slug}</strong>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="dashboard-primary-actions border-0 bg-transparent px-6 pt-0 pb-6">
-            <div className="action-row dashboard-card-actions">
-              <Link href={`/tree/${dashboard.primaryOwnedItem.tree.slug}/builder`} className={buttonVariants()}>
-                Открыть конструктор
-              </Link>
-              <Link href={`/tree/${dashboard.primaryOwnedItem.tree.slug}`} className={buttonVariants({ variant: "secondary" })}>
-                Открыть просмотр
-              </Link>
-            </div>
-            <p className="dashboard-action-note">Конструктор нужен для изменений, просмотр для спокойной проверки структуры и доступа.</p>
-          </CardFooter>
-        </Card>
-      ) : null}
+      {dashboard.primaryOwnedItem
+        ? (() => {
+            const treeUrl = buildTreeUrl(dashboard.primaryOwnedItem.tree.slug);
+
+            return (
+              <Card className="dashboard-primary-card p-0">
+                <CardHeader className="px-6 pt-6 pb-0">
+                  <div className="dashboard-primary-topline">
+                    <div className="meta-row meta-row-tight">
+                      <Badge className="meta-pill">{formatRole(dashboard.primaryOwnedItem.membership.role)}</Badge>
+                      <Badge className="meta-pill meta-pill-muted" variant="secondary">
+                        {formatTreeVisibility(dashboard.primaryOwnedItem.tree.visibility)}
+                      </Badge>
+                    </div>
+                    <span className="dashboard-primary-slug" title={treeUrl}>{treeUrl}</span>
+                  </div>
+                  <div className="dashboard-primary-copy">
+                    <p className="card-kicker">Ваше дерево</p>
+                    <h2 className="card-heading">{dashboard.primaryOwnedItem.tree.title}</h2>
+                    <p className="card-copy">{dashboard.primaryOwnedItem.tree.description || "Описание пока не добавлено."}</p>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-6 pt-0 pb-0">
+                  <div className="dashboard-fact-grid">
+                    <div className="dashboard-fact-card">
+                      <span>Доступ</span>
+                      <strong>{formatTreeVisibility(dashboard.primaryOwnedItem.tree.visibility)}</strong>
+                    </div>
+                    <div className="dashboard-fact-card">
+                      <span>Ссылка</span>
+                      <strong title={treeUrl}>{treeUrl}</strong>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="dashboard-primary-actions border-0 bg-transparent px-6 pt-0 pb-6">
+                  <div className="action-row dashboard-card-actions">
+                    <Link href={`/tree/${dashboard.primaryOwnedItem.tree.slug}/builder`} className={buttonVariants()}>
+                      Открыть конструктор
+                    </Link>
+                    <Link href={`/tree/${dashboard.primaryOwnedItem.tree.slug}`} className={buttonVariants({ variant: "secondary" })}>
+                      Открыть просмотр
+                    </Link>
+                  </div>
+                  <p className="dashboard-action-note">Конструктор для изменений, просмотр для спокойной проверки.</p>
+                </CardFooter>
+              </Card>
+            );
+          })()
+        : null}
 
       {dashboard.secondaryItems.length ? (
         <section className="dashboard-secondary-section">
           <div className="dashboard-section-heading">
             <p className="eyebrow">Дополнительно</p>
             <h2 className="card-heading">{secondarySectionTitle}</h2>
-            <p className="muted-copy">Здесь остаются приглашенные деревья и дополнительные рабочие контуры, чтобы основной экран не перегружался.</p>
+            <p className="muted-copy">Здесь остаются приглашенные деревья и дополнительные контуры, чтобы основной экран не перегружался.</p>
           </div>
           <div className="dashboard-secondary-grid">
             {dashboard.secondaryItems.map(({ membership, tree }) => {
@@ -106,7 +121,7 @@ export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
                     </div>
                     <div className="dashboard-card-copy">
                       <h3 className="card-heading">{tree.title}</h3>
-                      <p className="card-copy">{tree.description || "Описание пока не заполнено."}</p>
+                      <p className="card-copy">{tree.description || "Описание пока не добавлено."}</p>
                     </div>
                   </CardHeader>
                   <CardFooter className="action-row dashboard-card-actions border-0 bg-transparent px-[18px] pt-0 pb-[18px]">

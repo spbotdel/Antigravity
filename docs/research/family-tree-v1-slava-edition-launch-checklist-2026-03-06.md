@@ -10,7 +10,7 @@
 2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
 3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
 4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
-5. Complete backup/restore rehearsal and the final launch checklist before release decision.
+5. Capture a fresh manual database export and complete the final launch checklist before release decision.
 
 ### Current Validation Signal
 
@@ -24,7 +24,7 @@
 
 1. Этот документ нужен перед private production launch.
 2. Его задача - собрать минимальный checklist запуска без лишнего process overhead.
-3. Для текущего состояния проекта launch считается заблокированным, пока не закрыты post-UAT hardening, hosted validation и recovery checks.
+3. Для текущего состояния проекта launch считается заблокированным, пока не закрыты post-UAT hardening, hosted validation и текущая минимальная recovery discipline.
 
 ## 2. Технический pre-launch
 
@@ -311,7 +311,7 @@
 2. `last_accessed_at` по семейным ссылкам обновляется.
 3. Ошибки на ключевых действиях отображаются пользователю.
 4. При email-invite ошибке UI явно показывает fallback через ручное копирование ссылки.
-5. Backup/restore rehearsal выполнен и задокументирован.
+5. Свежий manual database export сохранен и задокументирован.
 
 ## 7. Network and geography check
 
@@ -330,7 +330,7 @@
 4. Родственник может читать дерево по ссылке.
 5. Файлы работают по private delivery.
 6. Email invite delivery либо работает через `Resend`, либо честно отрабатывает через ручной fallback без потери invite URL.
-7. Есть backup/restore дисциплина.
+7. Есть понятная manual export дисциплина для базы и понятный media recovery path.
 
 Запуск откладывается, если:
 1. `Cloudflare R2` rollout не активирован или не подтвержден.
@@ -338,4 +338,4 @@
 3. Семейные ссылки ведут себя нестабильно.
 4. Upload/read media ломается в реальном сценарии.
 5. Hosted staging не подтверждает реальные auth/speed user paths.
-6. Нет понятного recovery path.
+6. Нет понятного manual export / recovery path.

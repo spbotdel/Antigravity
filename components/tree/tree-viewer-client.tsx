@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 
 import { Card } from "@/components/ui/card";
 import { FamilyTreeCanvas } from "@/components/tree/family-tree-canvas";
@@ -29,7 +29,10 @@ function withShareToken(url: string, shareToken?: string | null) {
 
 export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps) {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(snapshot.tree.root_person_id || snapshot.people[0]?.id || null);
+  const [infoRailWidth, setInfoRailWidth] = useState(420);
+  const [isResizing, setIsResizing] = useState(false);
   const displayTree = useMemo(() => buildBuilderDisplayTree(snapshot), [snapshot]);
+  const layoutRef = useRef<HTMLDivElement | null>(null);
   const personPhotoPreviewUrls = useMemo(() => {
     const rawUrls = buildPersonPhotoPreviewUrls(snapshot);
     return Object.fromEntries(Object.entries(rawUrls).map(([personId, url]) => [personId, withShareToken(url, shareToken)]));
@@ -47,16 +50,42 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
         )?.media_id || null
       : null;
 
+  useEffect(() => {
+    if (!isResizing) {
+      return undefined;
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      if (!layoutRef.current) {
+        return;
+      }
+
+      const rect = layoutRef.current.getBoundingClientRect();
+      const nextWidth = rect.right - event.clientX;
+      const maxWidth = Math.min(720, Math.max(360, rect.width - 320));
+      setInfoRailWidth(Math.max(320, Math.min(maxWidth, nextWidth)));
+    }
+
+    function handlePointerUp() {
+      setIsResizing(false);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isResizing]);
+
   return (
-    <div className="viewer-layout">
+    <div
+      ref={layoutRef}
+      className={`viewer-layout viewer-layout-resizable${isResizing ? " viewer-layout-resizing" : ""}`}
+      style={{ "--viewer-rail-width": `${infoRailWidth}px` } as CSSProperties}
+    >
       <Card className="viewer-stage viewer-stage-canvas">
-        <div className="stage-header viewer-stage-header-overlay">
-          <div className="stage-header-copy">
-            <p className="stage-kicker">Схема семьи</p>
-            <h2 className="card-heading">Главная структура дерева</h2>
-          </div>
-          <p className="stage-hint">Перетаскивайте схему мышью и масштабируйте колесиком, чтобы спокойно просматривать ветви.</p>
-        </div>
         <FamilyTreeCanvas
           tree={displayTree}
           selectedPersonId={selectedPersonId}
@@ -69,36 +98,46 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
         />
       </Card>
 
-      <Card className="info-rail utility-section-card p-6">
+      <div
+        className="viewer-rail-resize-handle"
+        aria-label="Изменить ширину карточки человека"
+        role="separator"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          setIsResizing(true);
+        }}
+      />
+
+      <Card className="info-rail viewer-info-rail utility-section-card p-6">
         {selectedPerson ? (
           <>
             <div className="viewer-person-summary utility-note-card">
+              <div className="viewer-person-summary-copy">
+                <h2 className="card-heading">{selectedPerson.full_name}</h2>
+                <div className="builder-inspector-badges">
+                  <span className="members-static-note">{formatGender(selectedPerson.gender)}</span>
+                </div>
+              </div>
               {selectedAvatarUrl ? (
                 <div className="person-summary-avatar info-rail-avatar">
                   <img src={selectedAvatarUrl} alt={`Портрет: ${selectedPerson.full_name}`} />
                 </div>
               ) : null}
-              <div className="viewer-person-summary-copy">
-                <p className="eyebrow">Выбранный человек</p>
-                <h2 className="card-heading">{selectedPerson.full_name}</h2>
-                <div className="builder-inspector-badges">
-                  <span className="members-static-note">{formatGender(selectedPerson.gender)}</span>
-                  <span className="members-static-note">{formatDate(selectedPerson.birth_date) || "Дата рождения не указана"}</span>
-                </div>
-              </div>
             </div>
             <div className="detail-list">
               <div>
                 <strong>Пол</strong>
                 <span>{formatGender(selectedPerson.gender)}</span>
               </div>
-              <div>
-                <strong>Дата рождения</strong>
-                <span>{formatDate(selectedPerson.birth_date) || "Не указана"}</span>
-              </div>
-              <div>
-                <strong>Дата смерти</strong>
-                <span>{formatDate(selectedPerson.death_date) || "Не указана"}</span>
+              <div className="detail-list-row detail-list-row-dates">
+                <div className="detail-date-item">
+                  <strong>Дата рождения</strong>
+                  <span>{formatDate(selectedPerson.birth_date) || "Не указана"}</span>
+                </div>
+                <div className="detail-date-item">
+                  <strong>Дата смерти</strong>
+                  <span>{formatDate(selectedPerson.death_date) || "Не указана"}</span>
+                </div>
               </div>
               <div>
                 <strong>Био</strong>
@@ -111,6 +150,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
                 media={selectedMedia}
                 shareToken={shareToken}
                 avatarMediaId={selectedAvatarMediaId}
+                showStage={false}
                 emptyTitle="Материалы еще не добавлены"
                 emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
               />
