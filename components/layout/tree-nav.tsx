@@ -38,7 +38,6 @@ export function TreeNav({ slug, shareToken, canEdit, canManageMembers, canReadAu
 
   return (
     <div className="tree-nav-shell">
-      <span className="tree-nav-label">Разделы дерева</span>
       <nav className="tree-nav-tabs" aria-label="Разделы дерева">
         {items
           .filter((item) => item.visible)

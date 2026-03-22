@@ -115,6 +115,32 @@ function mockScrollableThumb(
   });
 }
 
+function createTouchPoint(clientX: number, clientY: number) {
+  return {
+    clientX,
+    clientY,
+    identifier: 1,
+  };
+}
+
+function swipeElement(element: Element, points: { startX: number; startY: number; endX: number; endY: number }) {
+  const startTouch = createTouchPoint(points.startX, points.startY);
+  const endTouch = createTouchPoint(points.endX, points.endY);
+
+  fireEvent.touchStart(element, {
+    touches: [startTouch],
+    changedTouches: [startTouch],
+  });
+  fireEvent.touchMove(element, {
+    touches: [endTouch],
+    changedTouches: [endTouch],
+  });
+  fireEvent.touchEnd(element, {
+    touches: [],
+    changedTouches: [endTouch],
+  });
+}
+
 describe("person media gallery", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -307,6 +333,156 @@ describe("person media gallery", () => {
       vi.advanceTimersByTime(1);
     });
     expect(screen.queryByRole("dialog", { name: "Просмотр медиа: Семейное фото" })).not.toBeInTheDocument();
+  });
+
+  it("switches to the next media on fullscreen swipe left", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать все" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" });
+    swipeElement(dialog, { startX: 240, startY: 180, endX: 120, endY: 190 });
+
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 2" })).toBeInTheDocument();
+  });
+
+  it("switches to the previous media on fullscreen swipe right", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Фото 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Показать все" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 2" });
+    swipeElement(dialog, { startX: 120, startY: 180, endX: 240, endY: 188 });
+
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" })).toBeInTheDocument();
+  });
+
+  it("starts closing transition on fullscreen swipe down", () => {
+    vi.useFakeTimers();
+
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo",
+            title: "Семейное фото",
+            storage_path: "trees/tree-1/media/photo/media-photo/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Второе фото",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать все" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр медиа: Семейное фото" });
+    swipeElement(dialog, { startX: 180, startY: 120, endX: 188, endY: 244 });
+
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Семейное фото" })).toHaveClass("media-lightbox-closing");
+
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+    expect(screen.queryByRole("dialog", { name: "Просмотр медиа: Семейное фото" })).not.toBeInTheDocument();
+  });
+
+  it("does not trigger swipe actions on small touch movement", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать все" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" });
+    swipeElement(dialog, { startX: 180, startY: 160, endX: 202, endY: 172 });
+
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" })).toBeInTheDocument();
+  });
+
+  it("ignores swipe navigation when touch starts on the strip or controls", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-3",
+            title: "Фото 3",
+            storage_path: "trees/tree-1/media/photo/media-photo-3/photo.jpg"
+          })
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Фото 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Показать все" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 2" });
+    const strip = dialog.querySelector(".media-lightbox-strip-fixed");
+    expect(strip).not.toBeNull();
+
+    swipeElement(strip as Element, { startX: 240, startY: 180, endX: 120, endY: 188 });
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 2" })).toBeInTheDocument();
+
+    const nextButton = within(dialog).getByRole("button", { name: "Следующее медиа" });
+    swipeElement(nextButton, { startX: 240, startY: 180, endX: 120, endY: 188 });
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 2" })).toBeInTheDocument();
   });
 
   it("smoothly scrolls the fullscreen strip to center a right-edge thumbnail on click", () => {

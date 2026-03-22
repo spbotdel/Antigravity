@@ -2,7 +2,7 @@
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl } from "@/lib/tree/display";
@@ -11,6 +11,7 @@ import type { TreeSnapshot } from "@/lib/types";
 
 type MediaAsset = TreeSnapshot["media"][number];
 type LightboxState = "closed" | "open" | "closing";
+type LightboxGestureAxis = "undetermined" | "horizontal" | "vertical";
 
 interface PersonMediaGalleryProps {
   media: MediaAsset[];
@@ -74,6 +75,30 @@ function getMediaStageSecondaryLabel(asset: MediaAsset) {
 
 const LIGHTBOX_STRIP_CENTER_THRESHOLD_PX = 16;
 const LIGHTBOX_TRANSITION_MS = 180;
+const LIGHTBOX_SWIPE_INTENT_THRESHOLD_PX = 18;
+const LIGHTBOX_SWIPE_HORIZONTAL_THRESHOLD_PX = 72;
+const LIGHTBOX_SWIPE_CLOSE_THRESHOLD_PX = 96;
+const LIGHTBOX_SWIPE_AXIS_DOMINANCE_RATIO = 1.2;
+
+function createIdleLightboxGestureState() {
+  return {
+    tracking: false,
+    ignore: false,
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    axis: "undetermined" as LightboxGestureAxis,
+  };
+}
+
+function shouldIgnoreLightboxGestureStart(target: EventTarget | null) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(target.closest(".media-lightbox-strip-fixed, .media-lightbox-nav, .media-lightbox-close, button, a, input, textarea, select"));
+}
 
 function getLightboxStripScrollTarget(container: HTMLElement, activeThumb: HTMLElement) {
   const containerRect = container.getBoundingClientRect();
@@ -232,6 +257,7 @@ export function PersonMediaGallery({
   const [isAvatarUpdating, setIsAvatarUpdating] = useState(false);
   const lightboxStripRef = useRef<HTMLDivElement | null>(null);
   const lightboxThumbRefs = useRef(new Map<string, HTMLButtonElement>());
+  const lightboxGestureRef = useRef(createIdleLightboxGestureState());
   const isLightboxOpen = lightboxState === "open";
   const isLightboxClosing = lightboxState === "closing";
   const isLightboxRendered = lightboxState !== "closed";
@@ -242,6 +268,10 @@ export function PersonMediaGallery({
 
   function closeLightbox() {
     setLightboxState((currentState) => (currentState === "closed" ? currentState : "closing"));
+  }
+
+  function resetLightboxGesture() {
+    lightboxGestureRef.current = createIdleLightboxGestureState();
   }
 
   useEffect(() => {
@@ -309,6 +339,108 @@ export function PersonMediaGallery({
     }
   }
 
+  function handleLightboxTouchStart(event: ReactTouchEvent<HTMLDivElement>) {
+    if (!isLightboxOpen) {
+      return;
+    }
+
+    const gesture = lightboxGestureRef.current;
+    Object.assign(gesture, createIdleLightboxGestureState());
+
+    if (event.touches.length !== 1 || shouldIgnoreLightboxGestureStart(event.target)) {
+      gesture.ignore = true;
+      return;
+    }
+
+    const touch = event.touches[0];
+    gesture.tracking = true;
+    gesture.startX = touch.clientX;
+    gesture.startY = touch.clientY;
+    gesture.lastX = touch.clientX;
+    gesture.lastY = touch.clientY;
+  }
+
+  function handleLightboxTouchMove(event: ReactTouchEvent<HTMLDivElement>) {
+    const gesture = lightboxGestureRef.current;
+    if (!gesture.tracking || gesture.ignore) {
+      return;
+    }
+
+    if (event.touches.length !== 1) {
+      resetLightboxGesture();
+      return;
+    }
+
+    const touch = event.touches[0];
+    gesture.lastX = touch.clientX;
+    gesture.lastY = touch.clientY;
+
+    if (gesture.axis !== "undetermined") {
+      return;
+    }
+
+    const deltaX = touch.clientX - gesture.startX;
+    const deltaY = touch.clientY - gesture.startY;
+    const absoluteDeltaX = Math.abs(deltaX);
+    const absoluteDeltaY = Math.abs(deltaY);
+
+    if (Math.max(absoluteDeltaX, absoluteDeltaY) < LIGHTBOX_SWIPE_INTENT_THRESHOLD_PX) {
+      return;
+    }
+
+    if (absoluteDeltaX > absoluteDeltaY * LIGHTBOX_SWIPE_AXIS_DOMINANCE_RATIO) {
+      gesture.axis = "horizontal";
+      return;
+    }
+
+    if (deltaY > 0 && absoluteDeltaY > absoluteDeltaX * LIGHTBOX_SWIPE_AXIS_DOMINANCE_RATIO) {
+      gesture.axis = "vertical";
+    }
+  }
+
+  function handleLightboxTouchEnd(event: ReactTouchEvent<HTMLDivElement>) {
+    const gesture = lightboxGestureRef.current;
+    if (!gesture.tracking || gesture.ignore) {
+      resetLightboxGesture();
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const endX = touch?.clientX ?? gesture.lastX;
+    const endY = touch?.clientY ?? gesture.lastY;
+    const deltaX = endX - gesture.startX;
+    const deltaY = endY - gesture.startY;
+    const absoluteDeltaX = Math.abs(deltaX);
+    const absoluteDeltaY = Math.abs(deltaY);
+
+    if (
+      deltaX <= -LIGHTBOX_SWIPE_HORIZONTAL_THRESHOLD_PX &&
+      absoluteDeltaX > absoluteDeltaY * LIGHTBOX_SWIPE_AXIS_DOMINANCE_RATIO
+    ) {
+      moveSelection(1);
+      resetLightboxGesture();
+      return;
+    }
+
+    if (
+      deltaX >= LIGHTBOX_SWIPE_HORIZONTAL_THRESHOLD_PX &&
+      absoluteDeltaX > absoluteDeltaY * LIGHTBOX_SWIPE_AXIS_DOMINANCE_RATIO
+    ) {
+      moveSelection(-1);
+      resetLightboxGesture();
+      return;
+    }
+
+    if (
+      deltaY >= LIGHTBOX_SWIPE_CLOSE_THRESHOLD_PX &&
+      absoluteDeltaY > absoluteDeltaX * LIGHTBOX_SWIPE_AXIS_DOMINANCE_RATIO
+    ) {
+      closeLightbox();
+    }
+
+    resetLightboxGesture();
+  }
+
   useEffect(() => {
     if (!isLightboxOpen || !activeAsset) {
       return undefined;
@@ -361,6 +493,10 @@ export function PersonMediaGallery({
       role="dialog"
       aria-modal="true"
       aria-label={`Просмотр медиа: ${activeAsset.title}`}
+      onTouchStart={handleLightboxTouchStart}
+      onTouchMove={handleLightboxTouchMove}
+      onTouchEnd={handleLightboxTouchEnd}
+      onTouchCancel={resetLightboxGesture}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           closeLightbox();

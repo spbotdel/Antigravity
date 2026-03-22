@@ -29,17 +29,20 @@ export default async function TreePage({ params, searchParams }: TreePageProps) 
 
     return (
       <main className="page-shell workspace-page workspace-page-canvas">
-        <section className="tree-page-nav-row">
-          <TreeNav
-            slug={slug}
-            shareToken={shareToken}
-            canEdit={snapshot.actor.canEdit}
-            canManageMembers={snapshot.actor.canManageMembers}
-            canReadAudit={snapshot.actor.canReadAudit}
-            canManageSettings={snapshot.actor.canManageSettings}
-          />
-        </section>
-        <TreeViewerClient snapshot={snapshot} shareToken={shareToken} />
+        <TreeViewerClient
+          snapshot={snapshot}
+          shareToken={shareToken}
+          nav={
+            <TreeNav
+              slug={slug}
+              shareToken={shareToken}
+              canEdit={snapshot.actor.canEdit}
+              canManageMembers={snapshot.actor.canManageMembers}
+              canReadAudit={snapshot.actor.canReadAudit}
+              canManageSettings={snapshot.actor.canManageSettings}
+            />
+          }
+        />
       </main>
     );
   } catch (error) {
