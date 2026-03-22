@@ -591,6 +591,49 @@ Prefer page-specific repository loaders over full snapshot loading when the page
 
 ---
 
+# 17. Fullscreen Media Viewer Shows A Wide Horizontal Bar On Narrow Screens
+
+### Symptom
+
+On a narrow-width fullscreen media viewer:
+
+- a wide horizontal bar appears across the media stage
+- left and right arrows look merged into one oversized overlay
+- fullscreen composition breaks even though the inline gallery still looks acceptable
+
+### Likely Cause
+
+The fullscreen viewer and inline gallery share navigation classes such as `.media-lightbox-nav`.
+
+A generic mobile rule for `.media-lightbox-nav` can unintentionally stretch the fullscreen nav controls to full width.
+
+In the fullscreen path those controls are absolutely positioned side controls, so `width: 100%` makes the left and right buttons overlap across the stage.
+
+### First Checks
+
+1. Inspect the responsive rules for `.media-lightbox-nav` in `app/globals.css`.
+2. Confirm whether the fullscreen path uses `.media-lightbox-minimal`.
+3. Check whether fullscreen nav has an explicit scoped override such as `.media-lightbox-minimal .media-lightbox-nav`.
+4. Verify which element is drawing the bar before blaming filmstrip or browser video controls.
+
+### Typical Fix
+
+Keep inline/mobile responsive behavior separate from fullscreen responsive behavior.
+
+Use:
+
+- generic mobile rules for inline/shared baseline only
+- explicit fullscreen overrides through `.media-lightbox-minimal .media-lightbox-nav`
+
+Do not treat this as a `video-only` problem or a `filmstrip-only` problem unless inspection proves otherwise.
+
+### Relevant Files
+
+- `app/globals.css`
+- `components/tree/person-media-gallery.tsx`
+
+---
+
 # Practical Rule
 
 Before modifying production code, always determine which category the issue belongs to:

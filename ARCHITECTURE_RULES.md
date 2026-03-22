@@ -299,6 +299,27 @@ page / route
 
 If a change makes this flow harder to see, it is probably the wrong shape.
 
+## Rule 18: Shared Responsive UI Classes Must Be Scoped By Context
+
+Some UI elements intentionally reuse classes across different surfaces.
+
+Examples:
+
+- inline gallery
+- fullscreen media viewer
+
+Do not assume that a responsive rule which is safe for one surface is safe for the other just because they share a class name.
+
+If inline and fullscreen paths share classes such as `.media-lightbox-nav`:
+
+- generic mobile rules should be treated as the shared baseline only
+- fullscreen-specific behavior must be scoped explicitly through a higher-context selector such as `.media-lightbox-minimal .media-lightbox-nav`
+- responsive changes must be checked in both inline and fullscreen contexts before they are accepted
+
+This prevents cascade collisions where a mobile inline rule accidentally breaks fullscreen positioning or composition.
+
+Do not apply global responsive rules (e.g. width: 100%) to shared classes without verifying all rendering contexts.
+
 ## Practical Reading Order
 
 For most feature work:

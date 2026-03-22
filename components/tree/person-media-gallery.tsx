@@ -1,13 +1,16 @@
 "use client";
 
 import { Button, buttonVariants } from "@/components/ui/button";
-import { type ReactNode, useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import type { TreeSnapshot } from "@/lib/types";
 
 type MediaAsset = TreeSnapshot["media"][number];
+type LightboxState = "closed" | "open" | "closing";
 
 interface PersonMediaGalleryProps {
   media: MediaAsset[];
@@ -69,13 +72,48 @@ function getMediaStageSecondaryLabel(asset: MediaAsset) {
   return [formatMediaKind(asset.kind), formatMediaVisibility(asset.visibility), getMediaSourceLabel(asset)].join(" • ");
 }
 
+const LIGHTBOX_STRIP_CENTER_THRESHOLD_PX = 16;
+const LIGHTBOX_TRANSITION_MS = 180;
+
+function getLightboxStripScrollTarget(container: HTMLElement, activeThumb: HTMLElement) {
+  const containerRect = container.getBoundingClientRect();
+  const thumbRect = activeThumb.getBoundingClientRect();
+
+  if (containerRect.width <= 0 || thumbRect.width <= 0 || container.clientWidth <= 0) {
+    return null;
+  }
+
+  const thumbLeft = container.scrollLeft + (thumbRect.left - containerRect.left);
+  const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth);
+  const activeThumbCenter = thumbLeft + thumbRect.width / 2;
+  const nextScrollLeft = activeThumbCenter - container.clientWidth / 2;
+  const clampedScrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft));
+
+  return Math.abs(clampedScrollLeft - container.scrollLeft) > LIGHTBOX_STRIP_CENTER_THRESHOLD_PX ? clampedScrollLeft : null;
+}
+
+function syncLightboxStrip(container: HTMLElement | null, activeThumb: HTMLElement | null) {
+  if (!container || !activeThumb) {
+    return;
+  }
+
+  const nextScrollLeft = getLightboxStripScrollTarget(container, activeThumb);
+  if (nextScrollLeft === null) {
+    return;
+  }
+
+  container.scrollTo({ left: nextScrollLeft, behavior: "smooth" });
+}
+
 function MediaThumb({
   asset,
   active,
   shareToken,
   onSelect,
   index,
-  isAvatar
+  isAvatar,
+  compact = false,
+  thumbRef,
 }: {
   asset: MediaAsset;
   active: boolean;
@@ -83,6 +121,8 @@ function MediaThumb({
   onSelect: () => void;
   index: number;
   isAvatar: boolean;
+  compact?: boolean;
+  thumbRef?: (node: HTMLButtonElement | null) => void;
 }) {
   const mediaUrl = isPhotoAsset(asset)
     ? buildPhotoPreviewRouteUrl(asset, "thumb", shareToken)
@@ -91,7 +131,8 @@ function MediaThumb({
   return (
     <button
       type="button"
-      className={`person-media-thumb${active ? " person-media-thumb-active" : ""}`}
+      ref={thumbRef}
+      className={`person-media-thumb${active ? " person-media-thumb-active" : ""}${compact ? " person-media-thumb-compact" : ""}`}
       aria-pressed={active}
       aria-label={`Показать медиа ${index + 1}: ${asset.title}`}
       onClick={onSelect}
@@ -99,17 +140,29 @@ function MediaThumb({
       <span className="person-media-thumb-visual">
         {isPhotoAsset(asset) ? (
           <img src={mediaUrl} alt="" loading="lazy" />
+        ) : asset.kind === "video" ? (
+          <span
+            className={`person-media-thumb-video-placeholder${compact ? " person-media-thumb-video-placeholder-compact" : ""}`}
+            aria-hidden="true"
+          >
+            <span className="person-media-thumb-video-badge">
+              <span className="person-media-thumb-video-play">▶</span>
+            </span>
+            <span className="person-media-thumb-video-label">Видео</span>
+          </span>
         ) : (
           <span className="person-media-thumb-icon" aria-hidden="true">
-            {asset.kind === "video" ? "▶" : "DOC"}
+            DOC
           </span>
         )}
         {isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
       </span>
-      <span className="person-media-thumb-copy">
-        <strong title={asset.title}>{asset.title}</strong>
-        <span title={getMediaStageSecondaryLabel(asset)}>{getMediaStageSecondaryLabel(asset)}</span>
-      </span>
+      {!compact ? (
+        <span className="person-media-thumb-copy">
+          <strong title={asset.title}>{asset.title}</strong>
+          <span title={getMediaStageSecondaryLabel(asset)}>{getMediaStageSecondaryLabel(asset)}</span>
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -175,8 +228,21 @@ export function PersonMediaGallery({
   showStage = true,
 }: PersonMediaGalleryProps) {
   const [activeMediaId, setActiveMediaId] = useState<string | null>(media[0]?.id ?? null);
-  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [lightboxState, setLightboxState] = useState<LightboxState>("closed");
   const [isAvatarUpdating, setIsAvatarUpdating] = useState(false);
+  const lightboxStripRef = useRef<HTMLDivElement | null>(null);
+  const lightboxThumbRefs = useRef(new Map<string, HTMLButtonElement>());
+  const isLightboxOpen = lightboxState === "open";
+  const isLightboxClosing = lightboxState === "closing";
+  const isLightboxRendered = lightboxState !== "closed";
+
+  function openLightbox() {
+    setLightboxState("open");
+  }
+
+  function closeLightbox() {
+    setLightboxState((currentState) => (currentState === "closed" ? currentState : "closing"));
+  }
 
   useEffect(() => {
     setActiveMediaId((currentMediaId) => {
@@ -189,17 +255,31 @@ export function PersonMediaGallery({
   }, [media]);
 
   useEffect(() => {
-    if (!isLightboxOpen) {
+    if (!isLightboxRendered) {
       return undefined;
     }
 
     const previousOverflow = document.body.style.overflow;
+    document.body.classList.add("media-lightbox-open");
     document.body.style.overflow = "hidden";
 
     return () => {
+      document.body.classList.remove("media-lightbox-open");
       document.body.style.overflow = previousOverflow;
     };
-  }, [isLightboxOpen]);
+  }, [isLightboxRendered]);
+
+  useEffect(() => {
+    if (!isLightboxClosing) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setLightboxState("closed");
+    }, LIGHTBOX_TRANSITION_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isLightboxClosing]);
 
   const activeIndex = activeMediaId ? media.findIndex((asset) => asset.id === activeMediaId) : -1;
   const resolvedActiveIndex = activeIndex >= 0 ? activeIndex : 0;
@@ -236,7 +316,7 @@ export function PersonMediaGallery({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setIsLightboxOpen(false);
+        closeLightbox();
       }
 
       if (event.key === "ArrowLeft" && canNavigate) {
@@ -254,6 +334,14 @@ export function PersonMediaGallery({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeAsset, canNavigate, isLightboxOpen, resolvedActiveIndex, media]);
 
+  useEffect(() => {
+    if (!isLightboxOpen || media.length <= 1 || !activeAsset) {
+      return;
+    }
+
+    syncLightboxStrip(lightboxStripRef.current, lightboxThumbRefs.current.get(activeAsset.id) ?? null);
+  }, [activeAsset, isLightboxOpen, media.length]);
+
   if (!media.length || !activeAsset) {
     return (
       <div className="empty-state person-media-empty-state">
@@ -267,6 +355,70 @@ export function PersonMediaGallery({
   }
 
   const activeMediaUrl = buildMediaOpenRouteUrl(activeAsset, shareToken);
+  const lightboxContent = isLightboxRendered ? (
+    <div
+      className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Просмотр медиа: ${activeAsset.title}`}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          closeLightbox();
+        }
+      }}
+    >
+      <div className="media-lightbox-shell">
+        <button
+          type="button"
+          className="media-lightbox-close"
+          aria-label="Закрыть просмотр"
+          onClick={closeLightbox}
+        >
+          <X className="media-lightbox-control-icon" aria-hidden="true" />
+        </button>
+
+        {canNavigate ? (
+          <button type="button" className="media-lightbox-nav media-lightbox-nav-left" aria-label="Предыдущее медиа" onClick={() => moveSelection(-1)}>
+            <ChevronLeft className="media-lightbox-control-icon" aria-hidden="true" />
+          </button>
+        ) : null}
+
+        <div className="media-lightbox-stage media-lightbox-stage-minimal">
+          <MediaPreview asset={activeAsset} shareToken={shareToken} expanded />
+        </div>
+
+        {canNavigate ? (
+          <button type="button" className="media-lightbox-nav media-lightbox-nav-right" aria-label="Следующее медиа" onClick={() => moveSelection(1)}>
+            <ChevronRight className="media-lightbox-control-icon" aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+
+      {media.length > 1 ? (
+        <div ref={lightboxStripRef} className="media-lightbox-strip media-lightbox-strip-fixed">
+          {media.map((asset, index) => (
+            <MediaThumb
+              key={asset.id}
+              asset={asset}
+              active={asset.id === activeAsset.id}
+              shareToken={shareToken}
+              onSelect={() => setActiveMediaId(asset.id)}
+              index={index}
+              isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
+              compact
+              thumbRef={(node) => {
+                if (node) {
+                  lightboxThumbRefs.current.set(asset.id, node);
+                } else {
+                  lightboxThumbRefs.current.delete(asset.id);
+                }
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  ) : null;
 
   return (
     <>
@@ -335,11 +487,12 @@ export function PersonMediaGallery({
                 onSelect={() => {
                   setActiveMediaId(asset.id);
                   if (!showStage) {
-                    setIsLightboxOpen(true);
+                    openLightbox();
                   }
                 }}
                 index={index}
                 isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
+                compact={!showStage}
               />
             ))}
           </div>
@@ -352,7 +505,7 @@ export function PersonMediaGallery({
               <span>{media.length} {media.length === 1 ? "материал" : media.length < 5 ? "материала" : "материалов"} в галерее</span>
             </div>
             <div className="archive-action-bar">
-              <Button type="button" variant="ghost" onClick={() => setIsLightboxOpen(true)}>
+              <Button type="button" variant="ghost" onClick={openLightbox}>
                 Показать все
               </Button>
               {!isInlineRenderableAsset(activeAsset) ? (
@@ -365,93 +518,7 @@ export function PersonMediaGallery({
         ) : null}
       </section>
 
-      {isLightboxOpen ? (
-        <div
-          className="media-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Просмотр медиа: ${activeAsset.title}`}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setIsLightboxOpen(false);
-            }
-          }}
-        >
-          <div className="media-lightbox-dialog">
-            <div className="media-lightbox-header">
-              <div className="media-lightbox-copy">
-                <div className="media-meta">
-                  <span>{formatMediaKind(activeAsset.kind)}</span>
-                  <span>{formatMediaVisibility(activeAsset.visibility)}</span>
-                  <span>{getMediaSourceLabel(activeAsset)}</span>
-                  {activeAsset.id === avatarMediaId && isPhotoAsset(activeAsset) ? <span>Аватар</span> : null}
-                </div>
-                <h3>{activeAsset.title}</h3>
-                {activeAsset.caption ? <p>{activeAsset.caption}</p> : null}
-              </div>
-
-              <div className="media-lightbox-actions">
-                <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
-                  {getMediaOpenLabel(activeAsset)}
-                </a>
-                {canSetAvatar ? (
-                  activeAsset.id === avatarMediaId ? (
-                    <span className="members-static-note">Текущее фото профиля</span>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={isAvatarUpdating}
-                      onClick={() => {
-                        void handleSetAvatar(activeAsset.id);
-                      }}
-                    >
-                      {isAvatarUpdating ? "Сохраняю аватар..." : "Сделать фото профиля"}
-                    </Button>
-                  )
-                ) : null}
-                <Button type="button" variant="ghost" aria-label="Закрыть просмотр" onClick={() => setIsLightboxOpen(false)}>
-                  Закрыть
-                </Button>
-              </div>
-            </div>
-
-            <div className="media-lightbox-body">
-              {canNavigate ? (
-                <button type="button" className="media-lightbox-nav" aria-label="Предыдущее медиа" onClick={() => moveSelection(-1)}>
-                  ‹
-                </button>
-              ) : null}
-
-              <div className="media-lightbox-stage">
-                <MediaPreview asset={activeAsset} shareToken={shareToken} expanded />
-              </div>
-
-              {canNavigate ? (
-                <button type="button" className="media-lightbox-nav" aria-label="Следующее медиа" onClick={() => moveSelection(1)}>
-                  ›
-                </button>
-              ) : null}
-            </div>
-
-            {media.length > 1 ? (
-              <div className="media-lightbox-strip">
-                {media.map((asset, index) => (
-                  <MediaThumb
-                    key={asset.id}
-                    asset={asset}
-                    active={asset.id === activeAsset.id}
-                    shareToken={shareToken}
-                    onSelect={() => setActiveMediaId(asset.id)}
-                    index={index}
-                    isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {lightboxContent && typeof document !== "undefined" ? createPortal(lightboxContent, document.body) : null}
     </>
   );
 }

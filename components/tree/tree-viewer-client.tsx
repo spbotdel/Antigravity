@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { Card } from "@/components/ui/card";
 import { FamilyTreeCanvas } from "@/components/tree/family-tree-canvas";
@@ -13,6 +13,7 @@ import type { TreeSnapshot } from "@/lib/types";
 interface TreeViewerClientProps {
   snapshot: TreeSnapshot;
   shareToken?: string | null;
+  nav?: ReactNode;
 }
 
 function withShareToken(url: string, shareToken?: string | null) {
@@ -27,7 +28,7 @@ function withShareToken(url: string, shareToken?: string | null) {
   return nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
 }
 
-export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps) {
+export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewerClientProps) {
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(snapshot.tree.root_person_id || snapshot.people[0]?.id || null);
   const [infoRailWidth, setInfoRailWidth] = useState(420);
   const [isResizing, setIsResizing] = useState(false);
@@ -82,7 +83,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   return (
     <div
       ref={layoutRef}
-      className={`viewer-layout viewer-layout-resizable${isResizing ? " viewer-layout-resizing" : ""}`}
+      className={`viewer-layout viewer-layout-overlay viewer-layout-resizable${isResizing ? " viewer-layout-resizing" : ""}`}
       style={{ "--viewer-rail-width": `${infoRailWidth}px` } as CSSProperties}
     >
       <Card className="viewer-stage viewer-stage-canvas">
@@ -97,6 +98,8 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
           personPhotoUrls={personPhotoPreviewUrls}
         />
       </Card>
+
+      {nav ? <div className="viewer-nav-overlay">{nav}</div> : null}
 
       <div
         className="viewer-rail-resize-handle"
@@ -151,6 +154,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
                 shareToken={shareToken}
                 avatarMediaId={selectedAvatarMediaId}
                 showStage={false}
+                showStickyFooter={false}
                 emptyTitle="Материалы еще не добавлены"
                 emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
               />

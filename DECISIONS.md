@@ -573,6 +573,46 @@ The main viewer page and snapshot APIs remain valid consumers of the full snapsh
 
 ---
 
+# 2026-03-22 — Fullscreen media viewer and inline gallery must use separate responsive nav behavior
+
+### Decision
+
+Responsive behavior for shared media navigation classes must be scoped by UI context.
+
+For `inline gallery` usage, mobile layouts may use wider navigation controls when that helps the inline composition.
+
+For `fullscreen media viewer` usage under `.media-lightbox-minimal`:
+
+- navigation must remain compact side controls
+- fullscreen path must not inherit `width: 100%` mobile nav behavior from shared classes
+- fullscreen-specific overrides must be applied explicitly through a context selector such as `.media-lightbox-minimal .media-lightbox-nav`
+
+### Why
+
+The media lightbox and inline gallery currently reuse classes such as `.media-lightbox-nav`.
+
+A generic mobile rule for `.media-lightbox-nav` was acceptable for inline/mobile gallery, but it also affected the fullscreen lightbox path.
+
+In fullscreen mode the nav controls are absolutely positioned at the left and right sides of the stage. When the shared mobile rule stretched them to full width:
+
+- left and right controls overlapped
+- the viewer showed a wide horizontal bar across the media stage
+- fullscreen composition broke even though the inline/mobile gallery behavior itself was still reasonable
+
+This is a class-sharing and cascade-scoping problem, not a media-type-specific layout problem.
+
+### Consequence
+
+Future responsive work on shared media components must preserve this rule:
+
+- shared responsive rules should be treated as inline-safe defaults, not automatically fullscreen-safe behavior
+- fullscreen viewer must explicitly override conflicting mobile rules through scoped selectors
+- when inline and fullscreen surfaces share classes, responsive changes must be reviewed in both contexts before they are treated as safe
+
+This reduces the chance that a mobile polish change for inline gallery quietly breaks fullscreen viewer composition.
+
+---
+
 # How to update this file
 
 Add a new entry when:
