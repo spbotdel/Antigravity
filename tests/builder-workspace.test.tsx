@@ -198,29 +198,60 @@ describe("builder workspace", () => {
     });
   });
 
-  it("submits the person form when Enter is pressed in the full-name field", async () => {
-    render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
+  it("saves the header name inline when Enter is pressed", async () => {
+    const snapshot = createSnapshot();
 
-    const nameInput = (await screen.findByDisplayValue("Demo Person")) as HTMLInputElement;
-    const form = nameInput.closest("form") as HTMLFormElement;
-    const requestSubmitSpy = vi.fn();
-    Object.defineProperty(form, "requestSubmit", {
-      configurable: true,
-      value: requestSubmitSpy,
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+      if (url.endsWith("/api/persons/person-1") && init?.method === "PATCH") {
+        return Response.json(
+          {
+            person: {
+              ...snapshot.people[0],
+              full_name: "Новое имя",
+            },
+            message: "Данные человека обновлены."
+          },
+          { status: 200 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
     });
 
+    render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
+
+    await waitFor(() => {
+      const inspector = document.querySelector(".builder-inspector");
+      expect(inspector).not.toBeNull();
+      expect(within(inspector as HTMLElement).getByRole("button", { name: "Редактировать имя человека" })).toBeInTheDocument();
+    });
+
+    const inspector = document.querySelector(".builder-inspector") as HTMLElement;
+    fireEvent.click(within(inspector).getByRole("button", { name: "Редактировать имя человека" }));
+
+    const nameInput = within(inspector).getByLabelText("Имя человека");
+    fireEvent.change(nameInput, { target: { value: "Новое имя" } });
     fireEvent.keyDown(nameInput, { key: "Enter", code: "Enter" });
 
-    expect(requestSubmitSpy).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(within(inspector).getByText("Новое имя")).toBeInTheDocument();
+    });
+    expect(within(inspector).queryByText("Полное имя")).not.toBeInTheDocument();
   });
 
   it("keeps the inspector compact for an already selected person", async () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Demo Person")).toBeInTheDocument();
+      const inspector = document.querySelector(".builder-inspector");
+      expect(inspector).not.toBeNull();
+      expect(within(inspector as HTMLElement).getByText("Demo Person")).toBeInTheDocument();
     });
 
+    const inspector = document.querySelector(".builder-inspector") as HTMLElement;
+    expect(within(inspector).queryByText("Полное имя")).not.toBeInTheDocument();
     expect(screen.queryByText("Данные человека")).not.toBeInTheDocument();
     expect(screen.queryByText("Изменения сохраняются по кнопке ниже.")).not.toBeInTheDocument();
     expect(screen.queryByText("Здесь редактируются данные, связи и документы выбранного человека.")).not.toBeInTheDocument();
@@ -252,16 +283,23 @@ describe("builder workspace", () => {
     render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Demo Person")).toBeInTheDocument();
+      const inspector = document.querySelector(".builder-inspector");
+      expect(inspector).not.toBeNull();
+      expect(within(inspector as HTMLElement).getByRole("button", { name: "Редактировать имя человека" })).toBeInTheDocument();
     });
 
-    const nameInput = screen.getByDisplayValue("Demo Person");
+    const inspector = document.querySelector(".builder-inspector") as HTMLElement;
+    fireEvent.click(within(inspector).getByRole("button", { name: "Редактировать имя человека" }));
+
+    const nameInput = within(inspector).getByLabelText("Имя человека");
     fireEvent.change(nameInput, { target: { value: "Обновленное имя" } });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    fireEvent.blur(nameInput);
 
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent("Данные человека обновлены.");
     });
+    expect(within(inspector).getByText("Обновленное имя")).toBeInTheDocument();
+    expect(within(inspector).queryByText("Полное имя")).not.toBeInTheDocument();
     expect(screen.queryByText("Данные человека обновлены.", { selector: ".form-success" })).not.toBeInTheDocument();
     expect(
       consoleErrorSpy.mock.calls.some((call) =>

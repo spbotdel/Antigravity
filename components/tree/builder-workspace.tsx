@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
+import { Pencil } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -519,6 +520,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [isMediaUploadDiscardConfirmOpen, setIsMediaUploadDiscardConfirmOpen] = useState(false);
   const [reviewMediaVisibility, setReviewMediaVisibility] = useState<"public" | "members">("public");
   const [reviewMediaCaption, setReviewMediaCaption] = useState("");
+  const [isEditingPersonName, setIsEditingPersonName] = useState(false);
+  const [isSavingPersonName, setIsSavingPersonName] = useState(false);
+  const [personNameDraft, setPersonNameDraft] = useState("");
   const [expandedGalleryMode, setExpandedGalleryMode] = useState<"photo" | "video" | null>(null);
   const [canvasHeight, setCanvasHeight] = useState(980);
   const storageKeys = useMemo(
@@ -618,6 +622,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       : selectedPerson
       ? null
       : "Сначала выберите человека на схеме или в списке слева.";
+  const canInlineEditInspectorName = activePanel === "person" && !createModeActive && !selectedPersonPending && Boolean(selectedPerson);
   const pendingMediaUploadsSummary = useMemo(
     () => buildBuilderPendingUploadsSummary(pendingMediaUploads),
     [pendingMediaUploads]
@@ -662,6 +667,19 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   useEffect(() => {
     setIsClientReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!selectedPerson) {
+      setIsEditingPersonName(false);
+      setIsSavingPersonName(false);
+      setPersonNameDraft("");
+      return;
+    }
+
+    setPersonNameDraft(selectedPerson.full_name);
+    setIsEditingPersonName(false);
+    setIsSavingPersonName(false);
+  }, [selectedPerson?.id, selectedPerson?.full_name]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1473,6 +1491,60 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setStatus(payload.message || "Данные человека обновлены.");
   }
 
+  async function savePersonName(personId: string, fullName: string) {
+    setStatus(null);
+    setError(null);
+    setIsSavingPersonName(true);
+    const payload = await requestJson(`/api/persons/${personId}`, "PATCH", { fullName });
+    setIsSavingPersonName(false);
+    if (!payload?.person) {
+      return null;
+    }
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      people: sortPeopleRecords(prev.people.map((person) => (person.id === personId ? payload.person : person)))
+    }));
+    setStatus(payload.message || "Данные человека обновлены.");
+    return payload.person as PersonRecord;
+  }
+
+  function startPersonNameEdit() {
+    if (!selectedPerson || !canInlineEditInspectorName) {
+      return;
+    }
+
+    setError(null);
+    setPersonNameDraft(selectedPerson.full_name);
+    setIsEditingPersonName(true);
+  }
+
+  async function commitPersonNameEdit() {
+    if (!selectedPerson || isSavingPersonName) {
+      return;
+    }
+
+    const nextName = personNameDraft.trim();
+    if (nextName === selectedPerson.full_name) {
+      setPersonNameDraft(selectedPerson.full_name);
+      setIsEditingPersonName(false);
+      return;
+    }
+
+    if (nextName.length < 2) {
+      setError("Полное имя должно быть не короче 2 символов.");
+      return;
+    }
+
+    const updatedPerson = await savePersonName(selectedPerson.id, nextName);
+    if (!updatedPerson) {
+      return;
+    }
+
+    setPersonNameDraft(updatedPerson.full_name);
+    setIsEditingPersonName(false);
+  }
+
   function updateMediaUploadItem(itemId: string, updates: Partial<MediaUploadQueueItem>) {
     setMediaUploadItems((items) => items.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
   }
@@ -1963,7 +2035,43 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         <div className="builder-inspector-header utility-section-heading">
           <div className="builder-inspector-copy utility-section-heading-copy">
             <p className="eyebrow">{createModeActive ? "Новый блок" : "Карточка человека"}</p>
-            <h2 className="card-heading">{inspectorTitle}</h2>
+            {canInlineEditInspectorName ? (
+              <div className="builder-inspector-name-row">
+                {isEditingPersonName ? (
+                  <Input
+                    aria-label="Имя человека"
+                    className="builder-inspector-name-input"
+                    value={personNameDraft}
+                    onChange={(event) => setPersonNameDraft(event.target.value)}
+                    onBlur={() => void commitPersonNameEdit()}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                        return;
+                      }
+
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setPersonNameDraft(selectedPerson?.full_name || "");
+                        event.currentTarget.blur();
+                      }
+                    }}
+                    autoFocus
+                    required
+                    suppressHydrationWarning
+                  />
+                ) : (
+                  <button type="button" className="builder-inspector-name-button" aria-label="Редактировать имя человека" onClick={startPersonNameEdit}>
+                    <span className="card-heading builder-inspector-name-text">{inspectorTitle}</span>
+                    <Pencil className="builder-inspector-name-edit-icon" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <h2 className="card-heading">{inspectorTitle}</h2>
+            )}
             {inspectorDescription ? <p className="muted-copy">{inspectorDescription}</p> : null}
           </div>
           <Tabs
@@ -2078,7 +2186,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     event.preventDefault();
                     const form = new FormData(event.currentTarget);
                     await savePerson(selectedPerson.id, {
-                      fullName: String(form.get("fullName") || "").trim(),
+                      fullName: selectedPerson.full_name,
                       gender: String(form.get("gender") || "") || null,
                       birthDate: String(form.get("birthDate") || "") || null,
                       deathDate: String(form.get("deathDate") || "") || null,
@@ -2089,10 +2197,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     });
                   }}
                 >
-                  <label className="form-field builder-field-span">
-                    Полное имя
-                    <Input name="fullName" defaultValue={selectedPerson.full_name} required suppressHydrationWarning onKeyDown={handleSubmitOnEnter} />
-                  </label>
                   <label className="form-field">
                     Пол
                     <SelectField name="gender" defaultValue={selectedPerson.gender || ""} suppressHydrationWarning>
