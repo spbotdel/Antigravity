@@ -300,6 +300,19 @@ function getBuilderPendingUploadKindLabel(file: File) {
   return "Файл";
 }
 
+function getInspectorAvatarFallback(name?: string | null) {
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) {
+    return "АГ";
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0] || "")
+    .join("")
+    .toUpperCase();
+}
+
 function buildBuilderPendingUploadsSummary(items: PendingMediaUploadItem[]) {
   const stats = items.reduce(
     (accumulator, item) => {
@@ -2034,44 +2047,59 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         <Card className="builder-inspector builder-inspector-overlay utility-section-card p-6">
         <div className="builder-inspector-header utility-section-heading">
           <div className="builder-inspector-copy utility-section-heading-copy">
-            <p className="eyebrow">{createModeActive ? "Новый блок" : "Карточка человека"}</p>
-            {canInlineEditInspectorName ? (
-              <div className="builder-inspector-name-row">
-                {isEditingPersonName ? (
-                  <Input
-                    aria-label="Имя человека"
-                    className="builder-inspector-name-input"
-                    value={personNameDraft}
-                    onChange={(event) => setPersonNameDraft(event.target.value)}
-                    onBlur={() => void commitPersonNameEdit()}
-                    onFocus={(event) => event.currentTarget.select()}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        event.currentTarget.blur();
-                        return;
-                      }
+            <div className="builder-inspector-copy-topline">
+              <div className="builder-inspector-copy-main">
+                <p className="eyebrow">{createModeActive ? "Новый блок" : "Карточка человека"}</p>
+                {canInlineEditInspectorName ? (
+                  <div className="builder-inspector-name-row">
+                    {isEditingPersonName ? (
+                      <Input
+                        aria-label="Имя человека"
+                        className="builder-inspector-name-input"
+                        value={personNameDraft}
+                        onChange={(event) => setPersonNameDraft(event.target.value)}
+                        onBlur={() => void commitPersonNameEdit()}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                            return;
+                          }
 
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        setPersonNameDraft(selectedPerson?.full_name || "");
-                        event.currentTarget.blur();
-                      }
-                    }}
-                    autoFocus
-                    required
-                    suppressHydrationWarning
-                  />
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            setPersonNameDraft(selectedPerson?.full_name || "");
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        autoFocus
+                        required
+                        suppressHydrationWarning
+                      />
+                    ) : (
+                      <button type="button" className="builder-inspector-name-button" aria-label="Редактировать имя человека" onClick={startPersonNameEdit}>
+                        <span className="card-heading builder-inspector-name-text">{inspectorTitle}</span>
+                        <Pencil className="builder-inspector-name-edit-icon" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 ) : (
-                  <button type="button" className="builder-inspector-name-button" aria-label="Редактировать имя человека" onClick={startPersonNameEdit}>
-                    <span className="card-heading builder-inspector-name-text">{inspectorTitle}</span>
-                    <Pencil className="builder-inspector-name-edit-icon" aria-hidden="true" />
-                  </button>
+                  <h2 className="card-heading">{inspectorTitle}</h2>
                 )}
               </div>
-            ) : (
-              <h2 className="card-heading">{inspectorTitle}</h2>
-            )}
+              {selectedPerson && !createModeActive ? (
+                <div className="person-summary-avatar builder-person-summary-avatar builder-inspector-avatar">
+                  {selectedAvatarUrl ? (
+                    <img src={selectedAvatarUrl} alt={`Аватар: ${selectedPerson.full_name}`} />
+                  ) : (
+                    <span className="builder-inspector-avatar-fallback" aria-hidden="true">
+                      {getInspectorAvatarFallback(selectedPerson.full_name)}
+                    </span>
+                  )}
+                </div>
+              ) : null}
+            </div>
             {inspectorDescription ? <p className="muted-copy">{inspectorDescription}</p> : null}
           </div>
           <Tabs

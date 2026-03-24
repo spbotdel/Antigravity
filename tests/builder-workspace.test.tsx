@@ -242,6 +242,23 @@ describe("builder workspace", () => {
   });
 
   it("keeps the inspector compact for an already selected person", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshotWithPhoto()} mediaLoaded />);
+
+    await waitFor(() => {
+      const inspector = document.querySelector(".builder-inspector");
+      expect(inspector).not.toBeNull();
+      expect(within(inspector as HTMLElement).getByText("Demo Person")).toBeInTheDocument();
+    });
+
+    const inspector = document.querySelector(".builder-inspector") as HTMLElement;
+    expect(within(inspector).getByAltText("Аватар: Demo Person")).toBeInTheDocument();
+    expect(within(inspector).queryByText("Полное имя")).not.toBeInTheDocument();
+    expect(screen.queryByText("Данные человека")).not.toBeInTheDocument();
+    expect(screen.queryByText("Изменения сохраняются по кнопке ниже.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Здесь редактируются данные, связи и документы выбранного человека.")).not.toBeInTheDocument();
+  });
+
+  it("keeps an avatar block in the header even when the selected person has no photo", async () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
 
     await waitFor(() => {
@@ -251,10 +268,8 @@ describe("builder workspace", () => {
     });
 
     const inspector = document.querySelector(".builder-inspector") as HTMLElement;
-    expect(within(inspector).queryByText("Полное имя")).not.toBeInTheDocument();
-    expect(screen.queryByText("Данные человека")).not.toBeInTheDocument();
-    expect(screen.queryByText("Изменения сохраняются по кнопке ниже.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Здесь редактируются данные, связи и документы выбранного человека.")).not.toBeInTheDocument();
+    expect(inspector.querySelector(".builder-inspector-avatar")).not.toBeNull();
+    expect(inspector.querySelector(".builder-inspector-avatar-fallback")).not.toBeNull();
   });
 
   it("shows a transient toast after saving a person instead of an inline success block", async () => {

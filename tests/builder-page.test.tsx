@@ -82,10 +82,10 @@ describe("builder page", () => {
       })
     );
 
-    expect(mocks.getBuilderSnapshot).toHaveBeenCalledWith("demo-family", { shareToken: null });
+    expect(mocks.getBuilderSnapshot).toHaveBeenCalledWith("demo-family", { includeMedia: true, shareToken: null });
     expect(screen.getByRole("heading", { name: "Demo Family" })).toBeInTheDocument();
     expect(screen.getByTestId("tree-nav")).toHaveTextContent("share:none;edit:true");
-    expect(screen.getByTestId("builder-workspace")).toHaveTextContent("title:Demo Family;mediaLoaded:false");
+    expect(screen.getByTestId("builder-workspace")).toHaveTextContent("title:Demo Family;mediaLoaded:true");
   });
 
   it("redirects share-link viewers back to the tree viewer", async () => {
