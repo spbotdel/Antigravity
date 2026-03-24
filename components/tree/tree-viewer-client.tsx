@@ -369,22 +369,6 @@ export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewe
           aria-expanded={effectivePanelState === "open"}
           aria-label={toggleLabel}
           onClick={handleTogglePanel}
-          onWheel={(event) => {
-            const infoRailElement = infoRailRef.current;
-            if (!infoRailElement || effectivePanelState !== "open") {
-              return;
-            }
-
-            if (event.deltaX === 0 && event.deltaY === 0) {
-              return;
-            }
-
-            event.preventDefault();
-            infoRailElement.scrollBy({
-              left: event.deltaX,
-              top: event.deltaY,
-            });
-          }}
         >
           <span className="viewer-info-rail-tab-icon" aria-hidden="true">
             <ArrowLeft className="viewer-info-rail-tab-icon-svg" />

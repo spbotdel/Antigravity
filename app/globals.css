@@ -1437,7 +1437,17 @@ textarea {
   }
 
   .viewer-layout-overlay.viewer-panel-open .viewer-info-rail-tab {
+    pointer-events: none;
     transform: translateX(0);
+  }
+
+  .viewer-layout-overlay.viewer-panel-open .viewer-info-rail-tab-icon {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  .viewer-layout-overlay.viewer-panel-open .viewer-info-rail-tab-name {
+    pointer-events: none;
   }
 
   .viewer-layout-overlay.viewer-panel-open .viewer-info-rail {
