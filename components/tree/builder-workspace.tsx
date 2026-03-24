@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
-import { Pencil } from "lucide-react";
+import { CalendarDays, Pencil } from "lucide-react";
+import { format as formatDateFn, parseISO } from "date-fns";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -14,9 +16,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SelectField } from "@/components/ui/select-field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   FamilyTreeCanvas,
   type FamilyTreeCanvasAction
@@ -42,19 +46,13 @@ type CreateContext =
   | { type: "child"; anchorPersonId: string }
   | { type: "partner"; anchorPersonId: string };
 
-const PERSON_GENDER_OPTIONS = [
-  { value: "", label: "Не указывать" },
-  { value: "female", label: "Женщина" },
-  { value: "male", label: "Мужчина" },
-  { value: "other", label: "Другое" }
-] as const;
-
 const BUILDER_CANVAS_MIN_HEIGHT = 700;
 const BUILDER_CANVAS_MAX_HEIGHT = 1600;
 const MAX_MEDIA_FILES_PER_BATCH = 36;
 const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
 const MAX_DOCUMENT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const BIO_AUTOSAVE_DEBOUNCE_MS = 800;
 
 type MediaUploadKind = "photo" | "video" | "document" | "unknown";
 type MediaUploadStatus = "queued" | "uploading" | "finalizing" | "done" | "error";
@@ -313,6 +311,214 @@ function getInspectorAvatarFallback(name?: string | null) {
     .toUpperCase();
 }
 
+function getDisplayedBuilderGenderValue(value?: string | null) {
+  return value === "male" || value === "female" ? value : "";
+}
+
+function formatBuilderMetaDateValue(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return formatDateFn(parseISO(value), "dd.MM.yyyy");
+  } catch {
+    return "";
+  }
+}
+
+function buildPersonInfoDraftValue(values: {
+  gender?: string | null;
+  birthDate?: string | null;
+  deathDate?: string | null;
+  bio?: string | null;
+}) {
+  return {
+    gender: values.gender || "",
+    birthDate: values.birthDate || "",
+    deathDate: values.deathDate || "",
+    bio: values.bio || "",
+  };
+}
+
+function arePersonInfoDraftValuesEqual(
+  left: { gender: string; birthDate: string; deathDate: string; bio: string },
+  right: { gender: string; birthDate: string; deathDate: string; bio: string }
+) {
+  return (
+    left.gender === right.gender &&
+    left.birthDate === right.birthDate &&
+    left.deathDate === right.deathDate &&
+    left.bio === right.bio
+  );
+}
+
+function BuilderGenderToggleField({
+  name,
+  value,
+  onValueChange,
+  defaultValue = "",
+  suppressHydrationWarning = false,
+  className,
+  itemClassName,
+  ariaLabel = "Пол",
+  iconOnly = false,
+  spacing = 0,
+}: {
+  name?: string;
+  value?: string;
+  onValueChange?: (value: string) => void;
+  defaultValue?: string | null;
+  suppressHydrationWarning?: boolean;
+  className?: string;
+  itemClassName?: string;
+  ariaLabel?: string;
+  iconOnly?: boolean;
+  spacing?: number;
+}) {
+  const isControlled = value !== undefined;
+  const [internalValue, setInternalValue] = useState(defaultValue || "");
+
+  useEffect(() => {
+    if (!isControlled) {
+      setInternalValue(defaultValue || "");
+    }
+  }, [defaultValue, isControlled]);
+
+  const currentValue = isControlled ? value || "" : internalValue;
+  const displayedValue = getDisplayedBuilderGenderValue(currentValue);
+
+  return (
+    <>
+      {name ? <input type="hidden" name={name} value={currentValue} readOnly suppressHydrationWarning={suppressHydrationWarning} /> : null}
+      <ToggleGroup
+        aria-label={ariaLabel}
+        className={className || "grid w-full grid-cols-2 gap-2"}
+        value={displayedValue ? [displayedValue] : []}
+        onValueChange={(groupValue) => {
+          const nextValue = groupValue[0];
+          if (!nextValue) {
+            return;
+          }
+          if (isControlled) {
+            onValueChange?.(nextValue);
+            return;
+          }
+          setInternalValue(nextValue);
+        }}
+        variant="outline"
+        size="lg"
+        multiple={false}
+        spacing={spacing}
+      >
+        <ToggleGroupItem
+          aria-label="Мужчина"
+          className={itemClassName || "h-11 w-full justify-center rounded-md font-semibold"}
+          value="male"
+        >
+          {iconOnly ? "♂" : "Мужчина"}
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          aria-label="Женщина"
+          className={itemClassName || "h-11 w-full justify-center rounded-md font-semibold"}
+          value="female"
+        >
+          {iconOnly ? "♀" : "Женщина"}
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </>
+  );
+}
+
+function BuilderMetaDateField({
+  name,
+  defaultValue = "",
+  value,
+  onValueChange,
+  ariaLabel,
+}: {
+  name: string;
+  defaultValue?: string | null;
+  value?: string;
+  onValueChange?: (value: string) => void;
+  ariaLabel: string;
+}) {
+  const isControlled = value !== undefined;
+  const [internalValue, setInternalValue] = useState(defaultValue || "");
+
+  useEffect(() => {
+    if (!isControlled) {
+      setInternalValue(defaultValue || "");
+    }
+  }, [defaultValue, isControlled]);
+
+  const currentValue = isControlled ? value || "" : internalValue;
+  const selectedDate = currentValue ? parseISO(currentValue) : undefined;
+
+  return (
+    <>
+      <input
+        type="text"
+        className="sr-only"
+        aria-hidden="true"
+        tabIndex={-1}
+        name={name}
+        value={currentValue}
+        onChange={(event) => {
+          if (isControlled) {
+            onValueChange?.(event.currentTarget.value);
+            return;
+          }
+          setInternalValue(event.currentTarget.value);
+        }}
+      />
+      <Popover>
+        <PopoverTrigger
+          className="builder-inspector-meta-date-trigger"
+          aria-label={ariaLabel}
+          data-empty={currentValue ? "false" : "true"}
+          data-field={name === "deathDate" ? "death" : "birth"}
+        >
+          <span className="builder-inspector-meta-date-trigger-text">{formatBuilderMetaDateValue(currentValue) || "дд.мм.гггг"}</span>
+          <CalendarDays className="builder-inspector-meta-date-trigger-icon" aria-hidden="true" />
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            defaultMonth={selectedDate}
+            onSelect={(nextDate) => {
+              const nextValue = nextDate ? formatDateFn(nextDate, "yyyy-MM-dd") : "";
+              if (isControlled) {
+                onValueChange?.(nextValue);
+                return;
+              }
+              setInternalValue(nextValue);
+            }}
+            initialFocus
+          />
+          <div className="builder-inspector-meta-date-popover-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (isControlled) {
+                  onValueChange?.("");
+                  return;
+                }
+                setInternalValue("");
+              }}
+            >
+              Очистить
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </>
+  );
+}
+
 function buildBuilderPendingUploadsSummary(items: PendingMediaUploadItem[]) {
   const stats = items.reduce(
     (accumulator, item) => {
@@ -536,6 +742,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [isEditingPersonName, setIsEditingPersonName] = useState(false);
   const [isSavingPersonName, setIsSavingPersonName] = useState(false);
   const [personNameDraft, setPersonNameDraft] = useState("");
+  const [selectedPersonGenderDraft, setSelectedPersonGenderDraft] = useState("");
+  const [selectedPersonBirthDateDraft, setSelectedPersonBirthDateDraft] = useState("");
+  const [selectedPersonDeathDateDraft, setSelectedPersonDeathDateDraft] = useState("");
+  const [bioDraft, setBioDraft] = useState("");
+  const [personInfoAutosaveState, setPersonInfoAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [expandedGalleryMode, setExpandedGalleryMode] = useState<"photo" | "video" | null>(null);
   const [canvasHeight, setCanvasHeight] = useState(980);
   const storageKeys = useMemo(
@@ -556,6 +767,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const reviewMediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingMediaUploadsRef = useRef<PendingMediaUploadItem[]>([]);
+  const selectedPersonIdRef = useRef<string | null>(selectedPersonId);
+  const personInfoDraftRef = useRef({ gender: "", birthDate: "", deathDate: "", bio: "" });
+  const lastSavedPersonInfoRef = useRef({ gender: "", birthDate: "", deathDate: "", bio: "" });
+  const personInfoSaveInFlightRef = useRef<{ personId: string; value: { gender: string; birthDate: string; deathDate: string; bio: string } } | null>(null);
+  const personInfoSaveRequestIdRef = useRef(0);
   const renderSnapshot = useMemo<TreeSnapshot>(
     () =>
       isClientReady
@@ -605,16 +821,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         )?.media_id || null
       : null;
   const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
-  const selectedPersonEditFormKey = selectedPerson
-    ? [
-        selectedPerson.id,
-        selectedPerson.full_name,
-        selectedPerson.gender || "",
-        selectedPerson.birth_date || "",
-        selectedPerson.death_date || "",
-        selectedPerson.bio || "",
-      ].join("::")
-    : "edit-none";
+  const selectedPersonEditFormKey = selectedPerson ? selectedPerson.id : "edit-none";
   const anchorPerson = createContext.type === "standalone" ? null : peopleById.get(createContext.anchorPersonId) || null;
   const createHeading = getCreateContextHeading(createContext, anchorPerson);
   const createModeActive = activePanel === "person" && personMode === "create";
@@ -678,6 +885,33 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   }, [status]);
 
   useEffect(() => {
+    if (personInfoAutosaveState !== "saved") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setPersonInfoAutosaveState((currentState) => (currentState === "saved" ? "idle" : currentState));
+    }, 1600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [personInfoAutosaveState]);
+
+  useEffect(() => {
+    selectedPersonIdRef.current = selectedPersonId;
+  }, [selectedPersonId]);
+
+  useEffect(() => {
+    personInfoDraftRef.current = buildPersonInfoDraftValue({
+      gender: selectedPersonGenderDraft,
+      birthDate: selectedPersonBirthDateDraft,
+      deathDate: selectedPersonDeathDateDraft,
+      bio: bioDraft,
+    });
+  }, [selectedPersonGenderDraft, selectedPersonBirthDateDraft, selectedPersonDeathDateDraft, bioDraft]);
+
+  useEffect(() => {
     setIsClientReady(true);
   }, []);
 
@@ -686,13 +920,72 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       setIsEditingPersonName(false);
       setIsSavingPersonName(false);
       setPersonNameDraft("");
+      setSelectedPersonGenderDraft("");
+      setSelectedPersonBirthDateDraft("");
+      setSelectedPersonDeathDateDraft("");
+      setBioDraft("");
+      lastSavedPersonInfoRef.current = buildPersonInfoDraftValue({});
+      personInfoSaveInFlightRef.current = null;
+      setPersonInfoAutosaveState("idle");
       return;
     }
 
     setPersonNameDraft(selectedPerson.full_name);
+    setSelectedPersonGenderDraft(selectedPerson.gender || "");
+    setSelectedPersonBirthDateDraft(selectedPerson.birth_date || "");
+    setSelectedPersonDeathDateDraft(selectedPerson.death_date || "");
+    setBioDraft(selectedPerson.bio || "");
     setIsEditingPersonName(false);
     setIsSavingPersonName(false);
-  }, [selectedPerson?.id, selectedPerson?.full_name]);
+  }, [selectedPerson?.id, selectedPerson?.full_name, selectedPerson?.gender, selectedPerson?.birth_date, selectedPerson?.death_date, selectedPerson?.bio]);
+
+  useEffect(() => {
+    lastSavedPersonInfoRef.current = buildPersonInfoDraftValue({
+      gender: selectedPerson?.gender,
+      birthDate: selectedPerson?.birth_date,
+      deathDate: selectedPerson?.death_date,
+      bio: selectedPerson?.bio,
+    });
+    personInfoSaveInFlightRef.current = null;
+    setPersonInfoAutosaveState("idle");
+  }, [selectedPerson?.id]);
+
+  useEffect(() => {
+    if (!selectedPerson || selectedPersonPending) {
+      return;
+    }
+
+    const currentDraft = buildPersonInfoDraftValue({
+      gender: selectedPersonGenderDraft,
+      birthDate: selectedPersonBirthDateDraft,
+      deathDate: selectedPersonDeathDateDraft,
+      bio: bioDraft,
+    });
+
+    if (arePersonInfoDraftValuesEqual(currentDraft, lastSavedPersonInfoRef.current)) {
+      return;
+    }
+
+    const inFlight = personInfoSaveInFlightRef.current;
+    if (inFlight && inFlight.personId === selectedPerson.id && arePersonInfoDraftValuesEqual(inFlight.value, currentDraft)) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void savePersonInfo(selectedPerson.id, personInfoDraftRef.current);
+    }, BIO_AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    bioDraft,
+    selectedPerson?.id,
+    selectedPersonGenderDraft,
+    selectedPersonBirthDateDraft,
+    selectedPersonDeathDateDraft,
+    selectedPersonPending,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1481,27 +1774,76 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setStatus(payload.message || "Дата пары обновлена.");
   }
 
-  async function savePerson(personId: string, values: {
-    fullName: string;
-    gender: string | null;
-    birthDate: string | null;
-    deathDate: string | null;
-    birthPlace?: string | null;
-    deathPlace?: string | null;
-    bio: string | null;
-    isLiving: boolean;
-  }) {
-    setStatus(null);
-    const payload = await requestJson(`/api/persons/${personId}`, "PATCH", values);
-    if (!payload?.person) {
-      return;
+  async function savePersonInfo(
+    personId: string,
+    nextValues: { gender: string; birthDate: string; deathDate: string; bio: string }
+  ) {
+    if (arePersonInfoDraftValuesEqual(nextValues, lastSavedPersonInfoRef.current)) {
+      return null;
     }
+
+    const inFlight = personInfoSaveInFlightRef.current;
+    if (inFlight && inFlight.personId === personId && arePersonInfoDraftValuesEqual(inFlight.value, nextValues)) {
+      return null;
+    }
+
+    const requestId = ++personInfoSaveRequestIdRef.current;
+    personInfoSaveInFlightRef.current = { personId, value: nextValues };
+    setPersonInfoAutosaveState("saving");
+
+    const payload = await requestJson(`/api/persons/${personId}`, "PATCH", {
+      gender: nextValues.gender || null,
+      birthDate: nextValues.birthDate || null,
+      deathDate: nextValues.deathDate || null,
+      bio: nextValues.bio || null,
+      isLiving: !nextValues.deathDate,
+    });
+
+    if (
+      personInfoSaveInFlightRef.current &&
+      personInfoSaveInFlightRef.current.personId === personId &&
+      arePersonInfoDraftValuesEqual(personInfoSaveInFlightRef.current.value, nextValues)
+    ) {
+      personInfoSaveInFlightRef.current = null;
+    }
+
+    if (!payload?.person) {
+      if (personInfoSaveRequestIdRef.current === requestId) {
+        setPersonInfoAutosaveState("idle");
+      }
+      return null;
+    }
+
+    const updatedPerson = {
+      ...payload.person,
+      gender: nextValues.gender || null,
+      birth_date: nextValues.birthDate || null,
+      death_date: nextValues.deathDate || null,
+      bio: nextValues.bio || null,
+    } as PersonRecord;
 
     updateSnapshot((prev) => ({
       ...prev,
-      people: sortPeopleRecords(prev.people.map((person) => (person.id === personId ? payload.person : person)))
+      people: sortPeopleRecords(prev.people.map((person) => (person.id === personId ? updatedPerson : person)))
     }));
-    setStatus(payload.message || "Данные человека обновлены.");
+    if (selectedPersonIdRef.current === personId) {
+      lastSavedPersonInfoRef.current = buildPersonInfoDraftValue({
+        gender: updatedPerson.gender,
+        birthDate: updatedPerson.birth_date,
+        deathDate: updatedPerson.death_date,
+        bio: updatedPerson.bio,
+      });
+    }
+
+    if (
+      selectedPersonIdRef.current === personId &&
+      personInfoSaveRequestIdRef.current === requestId &&
+      arePersonInfoDraftValuesEqual(personInfoDraftRef.current, lastSavedPersonInfoRef.current)
+    ) {
+      setPersonInfoAutosaveState("saved");
+    }
+
+    return updatedPerson;
   }
 
   async function savePersonName(personId: string, fullName: string) {
@@ -2172,13 +2514,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                   </label>
                   <label className="form-field">
                     Пол
-                    <SelectField name="gender" defaultValue="">
-                      {PERSON_GENDER_OPTIONS.map((option) => (
-                        <option key={option.value || "none"} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </SelectField>
+                    <BuilderGenderToggleField name="gender" />
                   </label>
                   <label className="form-field">
                     Дата рождения
@@ -2206,62 +2542,78 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                 <div className="builder-relation-empty">Сейчас запись создается в базе. Обычно это занимает несколько секунд.</div>
               </div>
             ) : selectedPerson ? (
-              <div className="builder-section-block utility-section-card">
-                <form
-                  key={`edit-${selectedPersonEditFormKey}`}
-                  className="stack-form builder-form-grid"
-                  onSubmit={async (event) => {
-                    event.preventDefault();
-                    const form = new FormData(event.currentTarget);
-                    await savePerson(selectedPerson.id, {
-                      fullName: selectedPerson.full_name,
-                      gender: String(form.get("gender") || "") || null,
-                      birthDate: String(form.get("birthDate") || "") || null,
-                      deathDate: String(form.get("deathDate") || "") || null,
-                      birthPlace: form.has("birthPlace") ? String(form.get("birthPlace") || "") || null : undefined,
-                      deathPlace: form.has("deathPlace") ? String(form.get("deathPlace") || "") || null : undefined,
-                      bio: String(form.get("bio") || "") || null,
-                      isLiving: !String(form.get("deathDate") || "")
-                    });
-                  }}
-                >
-                  <label className="form-field">
-                    Пол
-                    <SelectField name="gender" defaultValue={selectedPerson.gender || ""} suppressHydrationWarning>
-                      {PERSON_GENDER_OPTIONS.map((option) => (
-                        <option key={option.value || "none"} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </SelectField>
-                  </label>
-                  <label className="form-field">
-                    Дата рождения
-                    <Input name="birthDate" type="date" defaultValue={selectedPerson.birth_date || ""} suppressHydrationWarning />
-                  </label>
-                  <label className="form-field">
-                    Дата смерти
-                    <Input name="deathDate" type="date" defaultValue={selectedPerson.death_date || ""} suppressHydrationWarning />
-                  </label>
-                  <label className="form-field builder-field-span">
-                    Био
-                    <Textarea name="bio" rows={3} defaultValue={selectedPerson.bio || ""} suppressHydrationWarning />
-                  </label>
-                  <div className="action-row builder-field-span builder-form-actions">
-                    <Button type="submit">
-                      Сохранить
-                    </Button>
-                    {!isSelectedRoot ? (
-                      <Button type="button" variant="ghost" onClick={() => void setRootPerson(selectedPerson.id)}>
-                        Сделать корнем
-                      </Button>
-                    ) : null}
-                    <Button type="button" variant="destructive" onClick={() => void handleDeletePerson(selectedPerson)}>
-                      Удалить человека
+              <>
+                {!isSelectedRoot ? (
+                  <div className="action-row builder-form-actions builder-inspector-card-actions">
+                    <Button
+                      className="builder-inspector-secondary-action"
+                      type="button"
+                      variant="ghost"
+                      onClick={() => void setRootPerson(selectedPerson.id)}
+                    >
+                      Сделать корнем
                     </Button>
                   </div>
+                ) : null}
+                <form
+                  key={`edit-${selectedPersonEditFormKey}`}
+                  className="builder-panel-stack"
+                >
+                <div className="builder-inspector-meta-row" aria-label="Краткая информация о человеке">
+                  <BuilderGenderToggleField
+                    name="gender"
+                    value={selectedPersonGenderDraft}
+                    onValueChange={setSelectedPersonGenderDraft}
+                    className="builder-inspector-meta-gender-group"
+                    itemClassName="builder-inspector-meta-gender-item"
+                    ariaLabel="Пол человека"
+                    iconOnly
+                    spacing={0}
+                  />
+                  <div className="builder-inspector-meta-dates">
+                    <BuilderMetaDateField
+                      name="birthDate"
+                      value={selectedPersonBirthDateDraft}
+                      onValueChange={setSelectedPersonBirthDateDraft}
+                      ariaLabel="Дата рождения"
+                    />
+                    <span className="builder-inspector-meta-date-separator" aria-hidden="true">—</span>
+                    <BuilderMetaDateField
+                      name="deathDate"
+                      value={selectedPersonDeathDateDraft}
+                      onValueChange={setSelectedPersonDeathDateDraft}
+                      ariaLabel="Дата смерти"
+                    />
+                  </div>
+                </div>
+                <Textarea
+                  aria-label="Био"
+                  className="builder-inspector-bio-textarea"
+                  name="bio"
+                  rows={3}
+                  value={bioDraft}
+                  onChange={(event) => {
+                    setBioDraft(event.target.value);
+                    setPersonInfoAutosaveState((currentState) => (currentState === "saved" ? "idle" : currentState));
+                  }}
+                  onBlur={() => {
+                    void savePersonInfo(selectedPerson.id, personInfoDraftRef.current);
+                  }}
+                  placeholder="Краткая информация о человеке…"
+                  suppressHydrationWarning
+                />
+                <div className="builder-inspector-bio-status-row">
+                  <span
+                    className="builder-inspector-bio-status"
+                    role="status"
+                    aria-live="polite"
+                    data-state={personInfoAutosaveState}
+                  >
+                    {personInfoAutosaveState === "saving" ? "Сохраняется…" : personInfoAutosaveState === "saved" ? "Сохранено ✓" : ""}
+                  </span>
+                </div>
                 </form>
-              </div>
+              </>
             ) : (
               <div className="empty-state">Выберите человека в списке или на схеме, чтобы отредактировать его данные.</div>
             )}

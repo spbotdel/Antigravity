@@ -252,10 +252,20 @@ describe("builder workspace", () => {
 
     const inspector = document.querySelector(".builder-inspector") as HTMLElement;
     expect(within(inspector).getByAltText("Аватар: Demo Person")).toBeInTheDocument();
+    expect((inspector.querySelector('input[name="birthDate"]') as HTMLInputElement | null)?.value).toBe("1990-01-01");
+    expect((inspector.querySelectorAll('input[name="birthDate"]') || []).length).toBe(1);
+    expect((inspector.querySelectorAll('input[name="deathDate"]') || []).length).toBe(1);
+    const bioTextarea = within(inspector).getByPlaceholderText("Краткая информация о человеке…") as HTMLTextAreaElement;
+    expect(within(inspector).queryByRole("button", { name: "Сохранить" })).not.toBeInTheDocument();
+    expect(within(inspector).queryByRole("button", { name: "Удалить" })).not.toBeInTheDocument();
     expect(within(inspector).queryByText("Полное имя")).not.toBeInTheDocument();
+    expect(within(inspector).queryByText("Пол")).not.toBeInTheDocument();
+    expect(within(inspector).queryByText("Дата рождения")).not.toBeInTheDocument();
+    expect(within(inspector).queryByText("Дата смерти")).not.toBeInTheDocument();
     expect(screen.queryByText("Данные человека")).not.toBeInTheDocument();
     expect(screen.queryByText("Изменения сохраняются по кнопке ниже.")).not.toBeInTheDocument();
     expect(screen.queryByText("Здесь редактируются данные, связи и документы выбранного человека.")).not.toBeInTheDocument();
+    expect(bioTextarea.closest(".builder-section-block")).toBeNull();
   });
 
   it("keeps an avatar block in the header even when the selected person has no photo", async () => {
@@ -270,6 +280,152 @@ describe("builder workspace", () => {
     const inspector = document.querySelector(".builder-inspector") as HTMLElement;
     expect(inspector.querySelector(".builder-inspector-avatar")).not.toBeNull();
     expect(inspector.querySelector(".builder-inspector-avatar-fallback")).not.toBeNull();
+  });
+
+  it("uses the top meta row for gender and life dates while preserving the existing save flow", async () => {
+    const snapshot = createSnapshot();
+    let patchPayload: Record<string, unknown> | null = null;
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+      if (url.endsWith("/api/persons/person-1") && init?.method === "PATCH") {
+        patchPayload = JSON.parse(String(init.body));
+        return Response.json(
+          {
+            person: {
+              ...snapshot.people[0],
+              gender: patchPayload.gender,
+            },
+            message: "Данные человека обновлены."
+          },
+          { status: 200 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
+
+    await waitFor(() => {
+      const inspector = document.querySelector(".builder-inspector");
+      expect(inspector).not.toBeNull();
+      expect(within(inspector as HTMLElement).getByRole("button", { name: "Мужчина" })).toBeInTheDocument();
+      expect(within(inspector as HTMLElement).getByRole("button", { name: "Женщина" })).toBeInTheDocument();
+    });
+
+    const inspector = document.querySelector(".builder-inspector") as HTMLElement;
+    const hiddenGenderInput = inspector.querySelector('input[name="gender"]') as HTMLInputElement;
+    const maleButton = within(inspector).getByRole("button", { name: "Мужчина" });
+    const femaleButton = within(inspector).getByRole("button", { name: "Женщина" });
+    const birthDateInput = inspector.querySelector('input[name="birthDate"]') as HTMLInputElement;
+    const deathDateInput = inspector.querySelector('input[name="deathDate"]') as HTMLInputElement;
+
+    expect(hiddenGenderInput.value).toBe("male");
+    expect(birthDateInput.value).toBe("1990-01-01");
+    expect(deathDateInput.value).toBe("");
+
+    fireEvent.click(femaleButton);
+    fireEvent.change(birthDateInput, { target: { value: "1991-02-03" } });
+    fireEvent.change(deathDateInput, { target: { value: "2001-04-05" } });
+
+    await waitFor(() => {
+      expect(hiddenGenderInput.value).toBe("female");
+    });
+
+    await waitFor(() => {
+      expect(patchPayload).toMatchObject({
+        gender: "female",
+        birthDate: "1991-02-03",
+        deathDate: "2001-04-05",
+      });
+    }, { timeout: 1500 });
+
+    await waitFor(() => {
+      expect(within(inspector).getByText("Сохранено ✓")).toBeInTheDocument();
+    }, { timeout: 1500 });
+  });
+
+  it("autosaves the bio field after inactivity, skips duplicate saves, and forces save on blur", async () => {
+    const snapshot = createSnapshot();
+    const patchPayloads: Record<string, unknown>[] = [];
+    const patchResolvers: Array<() => void> = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+      if (url.endsWith("/api/persons/person-1") && init?.method === "PATCH") {
+        const payload = JSON.parse(String(init.body));
+        patchPayloads.push(payload);
+        await new Promise<void>((resolve) => {
+          patchResolvers.push(resolve);
+        });
+        return Response.json(
+          {
+            person: {
+              ...snapshot.people[0],
+              bio: payload.bio ?? null,
+            },
+            message: "Данные человека обновлены."
+          },
+          { status: 200 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
+
+    await waitFor(() => {
+      const inspector = document.querySelector(".builder-inspector");
+      expect(inspector).not.toBeNull();
+      expect(within(inspector as HTMLElement).getByLabelText("Био")).toBeInTheDocument();
+    });
+
+    const inspector = document.querySelector(".builder-inspector") as HTMLElement;
+    const bioTextarea = within(inspector).getByLabelText("Био") as HTMLTextAreaElement;
+
+    fireEvent.change(bioTextarea, { target: { value: "Новая биография" } });
+    expect(patchPayloads).toHaveLength(0);
+
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    expect(patchPayloads).toHaveLength(0);
+
+    await waitFor(() => {
+      expect(patchPayloads).toHaveLength(1);
+    }, { timeout: 1500 });
+    expect(patchPayloads[0]).toMatchObject({ bio: "Новая биография" });
+    expect(within(inspector).getByText("Сохраняется…")).toBeInTheDocument();
+
+    const firstResolve = patchResolvers.shift();
+    expect(firstResolve).toBeDefined();
+    firstResolve?.();
+
+    await waitFor(() => {
+      expect(within(inspector).getByText("Сохранено ✓")).toBeInTheDocument();
+    });
+
+    fireEvent.change(bioTextarea, { target: { value: "Новая биография" } });
+    await new Promise((resolve) => setTimeout(resolve, 950));
+    expect(patchPayloads).toHaveLength(1);
+
+    fireEvent.change(bioTextarea, { target: { value: "Короткая новая биография" } });
+    fireEvent.blur(bioTextarea);
+
+    await waitFor(() => {
+      expect(patchPayloads).toHaveLength(2);
+    }, { timeout: 1000 });
+    expect(patchPayloads[1]).toMatchObject({ bio: "Короткая новая биография" });
+
+    const secondResolve = patchResolvers.shift();
+    expect(secondResolve).toBeDefined();
+    secondResolve?.();
+
+    await waitFor(() => {
+      expect(within(inspector).getByText("Сохранено ✓")).toBeInTheDocument();
+    });
   });
 
   it("shows a transient toast after saving a person instead of an inline success block", async () => {
@@ -311,7 +467,7 @@ describe("builder workspace", () => {
     fireEvent.blur(nameInput);
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("Данные человека обновлены.");
+      expect(screen.getAllByRole("status").some((element) => element.textContent?.includes("Данные человека обновлены."))).toBe(true);
     });
     expect(within(inspector).getByText("Обновленное имя")).toBeInTheDocument();
     expect(within(inspector).queryByText("Полное имя")).not.toBeInTheDocument();
