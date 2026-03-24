@@ -3931,7 +3931,7 @@ body.media-lightbox-open .tree-page-shell {
 
 .builder-inspector-header {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .builder-inspector-copy,
@@ -3948,23 +3948,28 @@ body.media-lightbox-open .tree-page-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  column-gap: 12px;
+  column-gap: 10px;
   min-width: 0;
 }
 
 .builder-inspector-copy-main {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
   flex: 1 1 auto;
 }
 
 .builder-inspector-name-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
+  display: grid;
+  align-items: start;
+  justify-self: start;
+  width: fit-content;
+  max-width: min(100%, 32ch);
   min-width: 0;
-  max-width: 100%;
+}
+
+.builder-inspector-name-row:has(.builder-inspector-name-input) {
+  width: min(100%, 32ch);
 }
 
 .builder-inspector-avatar {
@@ -3972,7 +3977,7 @@ body.media-lightbox-open .tree-page-shell {
   height: 72px;
   justify-self: end;
   align-self: start;
-  margin-top: 2px;
+  margin-top: calc(0.72rem + 8px);
 }
 
 .builder-inspector-avatar-fallback {
@@ -3988,11 +3993,11 @@ body.media-lightbox-open .tree-page-shell {
 
 .builder-inspector-name-button {
   display: inline-grid;
-  grid-template-columns: minmax(0, auto) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: 4px;
-  width: auto;
+  gap: 3px;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
   padding: 4px 6px;
