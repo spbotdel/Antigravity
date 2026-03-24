@@ -1393,9 +1393,9 @@ textarea {
 
   .viewer-info-rail-tab {
     position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
+    top: 88px;
+    left: calc(100% - var(--viewer-rail-width, 420px));
+    height: var(--viewer-collapsed-rail-height, calc(100vh - 160px));
     z-index: 8;
     display: flex;
     flex-direction: column;
@@ -1415,6 +1415,7 @@ textarea {
     cursor: pointer;
     overflow: hidden;
     transition:
+      transform 0.18s ease,
       border-color 0.16s ease,
       box-shadow 0.16s ease,
       background 0.16s ease;
@@ -1435,8 +1436,16 @@ textarea {
     transform: rotate(180deg);
   }
 
+  .viewer-layout-overlay.viewer-panel-open .viewer-info-rail-tab {
+    transform: translateX(0);
+  }
+
   .viewer-layout-overlay.viewer-panel-open .viewer-info-rail {
     transform: translateX(0);
+  }
+
+  .viewer-layout-overlay.viewer-panel-collapsed .viewer-info-rail-tab {
+    transform: translateX(calc(var(--viewer-rail-width, 420px) - var(--viewer-rail-handle-width)));
   }
 
   .viewer-layout-overlay.viewer-panel-collapsed .viewer-info-rail {

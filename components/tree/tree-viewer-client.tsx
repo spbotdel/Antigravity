@@ -356,29 +356,47 @@ export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewe
                 </section>
               ) : null}
             </div>
-            <button
-              type="button"
-              className="viewer-info-rail-tab"
-              aria-controls={infoRailId}
-              aria-expanded={effectivePanelState === "open"}
-              aria-label={toggleLabel}
-              onClick={handleTogglePanel}
-            >
-              <span className="viewer-info-rail-tab-icon" aria-hidden="true">
-                <ArrowLeft className="viewer-info-rail-tab-icon-svg" />
-              </span>
-              <span className="viewer-info-rail-tab-name" title={selectedPerson.full_name}>
-                <span className="viewer-info-rail-tab-name-line viewer-info-rail-tab-name-line-primary">{collapsedTabName.firstName}</span>
-                {collapsedTabName.lastName ? (
-                  <span className="viewer-info-rail-tab-name-line viewer-info-rail-tab-name-line-secondary">{collapsedTabName.lastName}</span>
-                ) : null}
-              </span>
-            </button>
           </>
         ) : (
           <div className="empty-state">Выберите человека, чтобы посмотреть его данные.</div>
         )}
       </Card>
+      {selectedPerson ? (
+        <button
+          type="button"
+          className="viewer-info-rail-tab"
+          aria-controls={infoRailId}
+          aria-expanded={effectivePanelState === "open"}
+          aria-label={toggleLabel}
+          onClick={handleTogglePanel}
+          onWheel={(event) => {
+            const infoRailElement = infoRailRef.current;
+            if (!infoRailElement || effectivePanelState !== "open") {
+              return;
+            }
+
+            if (event.deltaX === 0 && event.deltaY === 0) {
+              return;
+            }
+
+            event.preventDefault();
+            infoRailElement.scrollBy({
+              left: event.deltaX,
+              top: event.deltaY,
+            });
+          }}
+        >
+          <span className="viewer-info-rail-tab-icon" aria-hidden="true">
+            <ArrowLeft className="viewer-info-rail-tab-icon-svg" />
+          </span>
+          <span className="viewer-info-rail-tab-name" title={selectedPerson.full_name}>
+            <span className="viewer-info-rail-tab-name-line viewer-info-rail-tab-name-line-primary">{collapsedTabName.firstName}</span>
+            {collapsedTabName.lastName ? (
+              <span className="viewer-info-rail-tab-name-line viewer-info-rail-tab-name-line-secondary">{collapsedTabName.lastName}</span>
+            ) : null}
+          </span>
+        </button>
+      ) : null}
     </div>
   );
 }
