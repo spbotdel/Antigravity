@@ -2547,7 +2547,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       </div>
                     )}
                     <div className="archive-review-tile-copy">
-                      <strong title={item.file.name}>{item.file.name}</strong>
                       <span>{getBuilderPendingUploadKindLabel(item.file)} • {formatBuilderReviewFileSize(item.file.size)}</span>
                     </div>
                   </article>

@@ -198,7 +198,7 @@ describe("person media gallery", () => {
     expect(document.querySelector("img.person-media-stage-photo-inline")).not.toBeNull();
     expect(screen.getByRole("heading", { name: "Семейное фото" })).toBeInTheDocument();
     expect(screen.getByText("Фото")).toBeInTheDocument();
-    expect(screen.getByText("Семейное видео")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" })).toBeInTheDocument();
     expect(document.querySelector(".person-media-thumb-video-placeholder")).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" }));

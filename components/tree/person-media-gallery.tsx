@@ -182,12 +182,6 @@ function MediaThumb({
         )}
         {isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
       </span>
-      {!compact ? (
-        <span className="person-media-thumb-copy">
-          <strong title={asset.title}>{asset.title}</strong>
-          <span title={getMediaStageSecondaryLabel(asset)}>{getMediaStageSecondaryLabel(asset)}</span>
-        </span>
-      ) : null}
     </button>
   );
 }
