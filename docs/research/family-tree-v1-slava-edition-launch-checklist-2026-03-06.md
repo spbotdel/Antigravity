@@ -3,20 +3,20 @@
 <!-- FRAMEWORK:LAUNCH:START -->
 ## Current Launch Sync
 
-- Updated at (UTC): `2026-03-18 10:37:09Z`
+- Updated at (UTC): `2026-03-22 17:12:23Z`
 - Launch is currently blocked until `Cloudflare R2` rollout is activated and confirmed as the steady-state upload path.
 - Current execution order:
 1. Verify gated `Cloudflare R2` readiness: `CF_R2_*`, bucket CORS, upload-intent metadata, `smoke:media`, and `smoke:media:direct`.
 2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
 3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
 4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
-5. Capture a fresh manual database export and complete the final launch checklist before release decision.
+5. Complete backup/restore rehearsal and the final launch checklist before release decision.
 
 ### Current Validation Signal
 
 - `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
 - `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
-- Latest `smoke:media` artifact `media-storage-report-1773671336869.json` is green.
+- Latest `smoke:media` artifact `media-storage-report-1773931536758.json` is green.
 - Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
 <!-- FRAMEWORK:LAUNCH:END -->
 

@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-03-18 10:37:09Z`
+- Generated at (UTC): `2026-03-22 17:12:23Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -135,10 +135,10 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-03-18 10:37:09Z`
+- Updated at (UTC): `2026-03-22 17:12:23Z`
 - Active branch: `fix/builder-inspector-desktop-align-final`
-- Git status: `STATUS:1 files`
-- Git diff: `DIFF:0 lines`
+- Git status: `STATUS:13 files`
+- Git diff: `DIFF:1008 lines`
 
 ### Detected Stack
 
@@ -169,18 +169,30 @@ The display tree is derived and must not be treated as the canonical domain mode
 
 ### Recently Changed Paths
 
-- `docs/FIX_PLAN_PR1.md`
+- `.claude/ARCHITECTURE.md`
+- `.claude/BACKLOG.md`
+- `.claude/SNAPSHOT.md`
+- `app/globals.css`
+- `components/tree/tree-viewer-client.tsx`
+- `docs/research/family-tree-v1-slava-edition-backup-restore-runbook-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-implementation-plan-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-launch-checklist-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-owner-playbook-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-plan-2026-03-06.md`
+- `next-env.d.ts`
+- `tests/tree-viewer-client.test.tsx`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-03-18 10:37:09Z`
+- Completed at (UTC): `2026-03-22 17:12:23Z`
 - Branch: `fix/builder-inspector-desktop-align-final`
-- Git status summary: `STATUS:1 files`
-- Git diff summary: `DIFF:0 lines`
+- Git status summary: `STATUS:13 files`
+- Git diff summary: `DIFF:1008 lines`
 
-- Session summary: `1` changed files, `0` diff lines, `1` tracked changed paths.
+- Session summary: `13` changed files, `1008` diff lines, `13` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -188,8 +200,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:1 files`)
-- `git_diff`: `success` (`DIFF:0 lines`)
+- `git_status`: `success` (`STATUS:13 files`)
+- `git_diff`: `success` (`DIFF:1008 lines`)
 <!-- FRAMEWORK:SESSION:END -->
 
 ## Current Media Architecture
@@ -201,11 +213,15 @@ The display tree is derived and must not be treated as the canonical domain mode
 - The binary plane is in transitional mode: current file-backed reads still preserve object-storage compatibility, while Cloudflare R2 foundation is already present in env/runtime config for the next migration stage.
 - Architectural boundary remains unchanged: `app/api/media*` stays thin, repository owns media/archive mutations, and rendering consumes repository snapshots rather than issuing direct DB traversal.
 - Active architecture-driving task: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
-- Current regression signal: latest `smoke:media` artifact `media-storage-report-1773671336869.json` is green.
+- Current regression signal: latest `smoke:media` artifact `media-storage-report-1773931536758.json` is green.
 - Server-side Supabase transport is now a first-class runtime rule: native Node fetch is preferred, while the PowerShell bridge remains fallback/debug transport only.
 - Tree runtime now distinguishes between full snapshot consumers and narrow page-data consumers; `audit`, `members`, `media`, and `settings` should stay on specialized loaders instead of drifting back to full snapshots.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
+- "
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
+- Custom marker-driven runtime rule should surface in startup memory.\n")
 
 ## Current Runtime Rules
 
@@ -214,4 +230,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
+- "
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
+- Custom marker-driven runtime rule should surface in startup memory.\n")
 

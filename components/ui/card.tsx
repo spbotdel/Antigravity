@@ -2,20 +2,20 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-function Card({
-  className,
-  size = "default",
-  ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+const Card = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"> & { size?: "default" | "sm" }>(function Card(
+  { className, size = "default", ...props },
+  ref
+) {
   return (
     <div
+      ref={ref}
       data-slot="card"
       data-size={size}
       className={cn("group/card flex flex-col gap-4 overflow-hidden rounded-[12px] bg-card py-5 text-sm text-card-foreground ring-1 ring-[color:var(--panel-border)] shadow-[var(--surface-shadow)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-4 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-[12px] *:[img:last-child]:rounded-b-[12px]", className)}
       {...props}
     />
   );
-}
+});
 
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (

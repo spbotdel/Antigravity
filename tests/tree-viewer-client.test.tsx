@@ -1,11 +1,28 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TreeViewerClient } from "@/components/tree/tree-viewer-client";
 import type { TreeSnapshot } from "@/lib/types";
 
 vi.mock("@/components/tree/family-tree-canvas", () => ({
-  FamilyTreeCanvas: () => <div data-testid="family-tree-canvas" />
+  FamilyTreeCanvas: ({
+    people = [],
+    onSelectPerson,
+    selectedPersonId,
+  }: {
+    people?: Array<{ id: string; full_name: string }>;
+    onSelectPerson?: (personId: string) => void;
+    selectedPersonId?: string | null;
+  }) => (
+    <div data-testid="family-tree-canvas">
+      <div data-testid="canvas-selected-person">{selectedPersonId || "none"}</div>
+      {people.map((person) => (
+        <button key={person.id} type="button" onClick={() => onSelectPerson?.(person.id)}>
+          Выбрать {person.full_name}
+        </button>
+      ))}
+    </div>
+  )
 }));
 
 vi.mock("@/components/tree/person-media-gallery", () => ({
@@ -54,6 +71,21 @@ function createSnapshot(): TreeSnapshot {
         created_at: "2026-03-09T00:00:00.000Z",
         updated_at: "2026-03-09T00:00:00.000Z",
       },
+      {
+        id: "person-2",
+        tree_id: "tree-1",
+        full_name: "Second Person",
+        gender: "female",
+        birth_date: "1992-02-02",
+        death_date: null,
+        birth_place: "Kazan",
+        death_place: null,
+        bio: "Second bio",
+        is_living: true,
+        created_by: null,
+        created_at: "2026-03-09T00:00:00.000Z",
+        updated_at: "2026-03-09T00:00:00.000Z",
+      },
     ],
     parentLinks: [],
     partnerships: [],
@@ -86,6 +118,89 @@ function createSnapshot(): TreeSnapshot {
 }
 
 describe("tree viewer client", () => {
+  it("matches the collapsed rail height to the measured info rail height for each selected person", () => {
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList?.contains("viewer-info-rail")) {
+        const isSecondPerson = this.textContent?.includes("Second bio");
+        const height = isSecondPerson ? 288 : 612;
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: 420,
+          bottom: height,
+          width: 420,
+          height,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    });
+
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay") as HTMLElement;
+    expect(layout.style.getPropertyValue("--viewer-collapsed-rail-height")).toBe("612px");
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Second Person" }));
+    expect(layout.style.getPropertyValue("--viewer-collapsed-rail-height")).toBe("288px");
+
+    rectSpy.mockRestore();
+  });
+
+  it("starts collapsed when a selected person exists and opens from the collapsed tab", () => {
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
+    expect(layout).toHaveClass("viewer-panel-collapsed");
+    expect(screen.queryByRole("button", { name: "Свернуть" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть карточку человека: Demo Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-open");
+    expect(screen.queryByRole("button", { name: "Свернуть" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Свернуть карточку человека: Demo Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-collapsed");
+  });
+
+  it("selecting a person from the tree opens the inspector and keeps it open for later selections", () => {
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
+    expect(layout).toHaveClass("viewer-panel-collapsed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Second Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-open");
+    expect(screen.getByText("Second bio")).toBeInTheDocument();
+    expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-2");
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Demo Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-open");
+    expect(screen.getByText("Bio")).toBeInTheDocument();
+    expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-1");
+  });
+
+  it("does not render an empty collapsed tab when no selected person exists", () => {
+    const snapshot = createSnapshot();
+    snapshot.tree.root_person_id = null;
+    snapshot.people = [];
+    snapshot.media = [];
+    snapshot.personMedia = [];
+
+    render(<TreeViewerClient snapshot={snapshot} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
+    expect(layout).toHaveClass("viewer-panel-open");
+    expect(screen.queryByLabelText(/Открыть карточку человека:/)).not.toBeInTheDocument();
+    expect(screen.getByText("Выберите человека, чтобы посмотреть его данные.")).toBeInTheDocument();
+  });
+
   it("shows avatar preview for the selected person in the info rail", () => {
     render(<TreeViewerClient snapshot={createSnapshot()} />);
 

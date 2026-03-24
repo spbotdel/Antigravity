@@ -3,7 +3,7 @@
 <!-- FRAMEWORK:ENGINEERING:START -->
 ## Current Engineering Sync
 
-- Updated at (UTC): `2026-03-18 10:37:09Z`
+- Updated at (UTC): `2026-03-22 17:12:23Z`
 - Treat the historical phases below as reference coverage. The launch order in this sync block is the current engineering queue.
 - Active engineering stream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 
@@ -13,13 +13,13 @@
 2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
 3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
 4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
-5. Capture a fresh manual database export and complete the final launch checklist before release decision.
+5. Complete backup/restore rehearsal and the final launch checklist before release decision.
 
 ### Current P0 Gaps
 
 - Mandatory `Cloudflare R2` rollout still needs gated verification, activation, and post-activation close-out.
 - Live `EU + RF` UAT is still a launch gate.
-- Manual database export discipline and final launch checklist remain part of release readiness for the current milestone.
+- Backup/restore rehearsal and final launch checklist remain part of release readiness.
 - Archive/viewer/builder/members regression after rollout activation still needs explicit close-out.
 - Preview-variant rollout still needs regression confirmation across archive/viewer/builder.
 
@@ -27,7 +27,7 @@
 
 - `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
 - `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
-- Latest `smoke:media` artifact `media-storage-report-1773671336869.json` is green.
+- Latest `smoke:media` artifact `media-storage-report-1773931536758.json` is green.
 - Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
 <!-- FRAMEWORK:ENGINEERING:END -->
 

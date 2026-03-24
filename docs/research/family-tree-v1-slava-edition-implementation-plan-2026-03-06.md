@@ -3,8 +3,8 @@
 <!-- FRAMEWORK:IMPLEMENTATION:START -->
 ## Current Implementation Sync
 
-- Updated at (UTC): `2026-03-18 10:37:09Z`
-- Workstreams `A-D` are largely materialized in the repo; the active launch-critical sequence is now rollout + regression + UAT + manual export discipline.
+- Updated at (UTC): `2026-03-22 17:12:23Z`
+- Workstreams `A-D` are largely materialized in the repo; the active launch-critical sequence is now rollout + regression + UAT + recovery rehearsal.
 - Active implementation stream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 - Tree-level archive foundation is present in the repo.
 - Preview-variant delivery foundation is present in the repo.
@@ -14,7 +14,7 @@
 
 - Mandatory `Cloudflare R2` rollout still needs gated verification, activation, and post-activation close-out.
 - Live `EU + RF` UAT is still a launch gate.
-- Manual database export discipline and the final launch checklist remain part of release readiness for the current milestone.
+- Backup/restore rehearsal and final launch checklist remain part of release readiness.
 - Archive/viewer/builder/members regression after rollout activation still needs explicit close-out.
 - Preview-variant rollout still needs regression confirmation across archive/viewer/builder.
 
@@ -24,7 +24,7 @@
 2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
 3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
 4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
-5. Capture a fresh manual database export and complete the final launch checklist before release decision.
+5. Complete backup/restore rehearsal and the final launch checklist before release decision.
 <!-- FRAMEWORK:IMPLEMENTATION:END -->
 
 ## 1. Цель документа

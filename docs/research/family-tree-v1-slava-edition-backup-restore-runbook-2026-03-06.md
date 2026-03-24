@@ -3,12 +3,12 @@
 <!-- FRAMEWORK:RECOVERY:START -->
 ## Current Recovery Sync
 
-- Updated at (UTC): `2026-03-18 10:37:09Z`
+- Updated at (UTC): `2026-03-22 17:12:23Z`
 - Active binary-plane assumptions:
   - new uploads must move to `Cloudflare R2` before release
   - legacy Yandex-backed media must remain readable until migration is explicitly closed
 - Before any risky rollout step, capture a fresh backup before changing `CF_R2_ROLLOUT_AT`, storage policy, or bucket CORS.
-- For the current milestone, restore rehearsal is not a launch blocker; the accepted minimum is a fresh manual database export plus clear notes on the active media/storage paths.
+- Restore rehearsal must verify both the active `Cloudflare R2` path and any still-readable legacy compatibility path.
 - Runtime/config already exposes the `Cloudflare R2` foundation; backup notes must therefore track rollout state as operational data.
 <!-- FRAMEWORK:RECOVERY:END -->
 
