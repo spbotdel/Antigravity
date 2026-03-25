@@ -23,6 +23,7 @@ interface PersonMediaGalleryProps {
   onSetAvatar?: (mediaId: string) => Promise<void> | void;
   showStickyFooter?: boolean;
   showStage?: boolean;
+  showViewerAvatarAction?: boolean;
 }
 
 function isPhotoAsset(asset: MediaAsset) {
@@ -245,6 +246,7 @@ export function PersonMediaGallery({
   onSetAvatar,
   showStickyFooter = true,
   showStage = true,
+  showViewerAvatarAction = false,
 }: PersonMediaGalleryProps) {
   const [activeMediaId, setActiveMediaId] = useState<string | null>(media[0]?.id ?? null);
   const [lightboxState, setLightboxState] = useState<LightboxState>("closed");
@@ -481,6 +483,7 @@ export function PersonMediaGallery({
   }
 
   const activeMediaUrl = buildMediaOpenRouteUrl(activeAsset, shareToken);
+  const showLightboxActions = !isInlineRenderableAsset(activeAsset) || (showViewerAvatarAction && canSetAvatar);
   const lightboxContent = isLightboxRendered ? (
     <div
       className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}`}
@@ -513,8 +516,36 @@ export function PersonMediaGallery({
           </button>
         ) : null}
 
-        <div className="media-lightbox-stage media-lightbox-stage-minimal">
-          <MediaPreview asset={activeAsset} shareToken={shareToken} expanded />
+        <div className="media-lightbox-content">
+          <div className="media-lightbox-stage media-lightbox-stage-minimal">
+            <MediaPreview asset={activeAsset} shareToken={shareToken} expanded />
+          </div>
+
+          {showLightboxActions ? (
+            <div className="archive-action-bar media-lightbox-inline-actions">
+              {!isInlineRenderableAsset(activeAsset) ? (
+                <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
+                  {getMediaOpenLabel(activeAsset)}
+                </a>
+              ) : null}
+              {showViewerAvatarAction && canSetAvatar ? (
+                activeAsset.id === avatarMediaId ? (
+                  <span className="members-static-note">Текущее фото профиля</span>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={isAvatarUpdating}
+                    onClick={() => {
+                      void handleSetAvatar(activeAsset.id);
+                    }}
+                  >
+                    {isAvatarUpdating ? "Сохраняю аватар..." : "Сделать фото профиля"}
+                  </Button>
+                )
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {canNavigate ? (

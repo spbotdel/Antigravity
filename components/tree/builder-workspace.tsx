@@ -206,11 +206,13 @@ function formatMediaUploadBytes(value: number | null) {
   }
 
   if (value >= 1024 * 1024 * 1024) {
-    return `${(value / (1024 * 1024 * 1024)).toFixed(1)} ГБ`;
+    const scaledValue = value / (1024 * 1024 * 1024);
+    return `${Number.isInteger(scaledValue) ? scaledValue : scaledValue.toFixed(1)} ГБ`;
   }
 
   if (value >= 1024 * 1024) {
-    return `${(value / (1024 * 1024)).toFixed(1)} МБ`;
+    const scaledValue = value / (1024 * 1024);
+    return `${Number.isInteger(scaledValue) ? scaledValue : scaledValue.toFixed(1)} МБ`;
   }
 
   if (value >= 1024) {
@@ -2456,14 +2458,14 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               setActivePanel("media");
             }}
           >
-            <TabsList className="builder-panel-tabs" aria-label="Панели конструктора">
-              <TabsTrigger className={currentBuilderTab === "info" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"} value="info">
+            <TabsList className="builder-inspector-tabs" aria-label="Панели конструктора">
+              <TabsTrigger className={currentBuilderTab === "info" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="info">
                 Инфо
               </TabsTrigger>
-              <TabsTrigger className={currentBuilderTab === "photo" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"} value="photo">
+              <TabsTrigger className={currentBuilderTab === "photo" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="photo">
                 Фото
               </TabsTrigger>
-              <TabsTrigger className={currentBuilderTab === "video" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"} value="video">
+              <TabsTrigger className={currentBuilderTab === "video" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="video">
                 Видео
               </TabsTrigger>
             </TabsList>
@@ -2627,7 +2629,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                 <div className="builder-section-block builder-relations-section">
                   <div className="builder-section-heading">
                     <h3 className="card-heading">Текущие связи</h3>
-                    <p className="muted-copy">Нужного родственника можно открыть отсюда. Новые связи добавляются через + на карточке дерева.</p>
+                    <p className="muted-copy builder-relations-copy">
+                      Нужного родственника можно открыть отсюда. Новые связи добавляются через + на карточке дерева.
+                    </p>
                   </div>
                   <div className="builder-relation-board">
                     <div className="builder-relation-group">
@@ -2735,34 +2739,53 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
         {activePanel === "person" && !createModeActive && !selectedPersonPending && selectedPerson ? (
           <section className="builder-panel-stack">
-            {renderMediaUploadForm("document")}
-
-            <div className="builder-media-group">
+            <div className="builder-section-block builder-relations-section builder-documents-section">
               <div className="builder-block-heading">
                 <strong>Документы</strong>
-                <p className="muted-copy">Сканы, письма и другие файлы, которые удобнее держать рядом с биографией, а не в фото- или видео-галерее.</p>
               </div>
-              <div className="builder-media-grid">
+              <input
+                id="builder-media-file-input"
+                ref={mediaFileInputRef}
+                className="builder-native-file-input"
+                name="mediaFile"
+                type="file"
+                accept={activeUploadConfig.accept}
+                multiple
+                disabled={isUploadingMedia}
+                aria-label="Документы"
+                onChange={handleMediaFileSelection}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className="builder-documents-upload-button"
+                disabled={isUploadingMedia}
+                onClick={openMediaPickerOrReview}
+              >
+                Загрузить файл
+              </Button>
+              <p className="builder-media-limits-note builder-documents-limits-note">
+                До {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(getBuilderUploadScopeFileSizeLimit("document"))} на файл.
+              </p>
+              <div className="builder-relation-board">
                 {selectedDocumentMedia.length ? (
                   selectedDocumentMedia.map((asset) => (
-                    <article key={asset.id} className="media-card builder-media-card">
-                      <div className="media-meta">
-                        <span>{formatMediaKind(asset.kind)}</span>
-                        <span>{formatMediaVisibility(asset.visibility)}</span>
-                        <span>{getMediaSourceLabel(asset)}</span>
-                      </div>
-                      <h4>{asset.title}</h4>
-                      {asset.caption ? <p>{asset.caption}</p> : null}
-                      <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                        Открыть документ
+                    <article key={asset.id} className="builder-relation-row">
+                      <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className="builder-relation-link">
+                        {asset.title}
                       </a>
-                      <Button type="button" variant="destructive" onClick={async () => await submitJson(`/api/media/${asset.id}`, "DELETE", {})}>
-                        Удалить документ
-                      </Button>
+                      <button
+                        type="button"
+                        className="builder-relation-remove"
+                        aria-label={`Удалить документ «${asset.title}»`}
+                        onClick={async () => await submitJson(`/api/media/${asset.id}`, "DELETE", {})}
+                      >
+                        ×
+                      </button>
                     </article>
                   ))
                 ) : (
-                  <div className="builder-relation-empty">Документы для этого человека пока не добавлены.</div>
+                  <div className="builder-relation-empty builder-relation-empty-inline">Документы не добавлены</div>
                 )}
               </div>
             </div>
@@ -2775,22 +2798,45 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               <>
                 {currentBuilderTab === "photo" ? (
                   <>
-                    <div className="builder-section-block">
-                      <div className="builder-block-heading">
-                        <strong>Галерея фото</strong>
-                        <p className="muted-copy">Фотографии открываются как отдельная галерея: здесь же можно выбрать аватар и пролистать семейные снимки без смешивания с видео.</p>
+                    <div className="builder-section-block builder-photo-tab-section">
+                      <div className="builder-photo-tab-toolbar">
+                        <div className="builder-block-heading">
+                          <strong>Галерея фото</strong>
+                        </div>
+                        <div className="builder-photo-tab-toolbar-row">
+                          <div className="builder-photo-tab-count">
+                            <strong>{formatPhotoUploadCountLabel(selectedPhotoMedia.length)}</strong>
+                          </div>
+                          <div className="archive-action-bar builder-photo-tab-actions">
+                            <input
+                              id="builder-media-file-input"
+                              ref={mediaFileInputRef}
+                              className="builder-native-file-input"
+                              name="mediaFile"
+                              type="file"
+                              accept={activeUploadConfig.accept}
+                              multiple
+                              disabled={isUploadingMedia}
+                              aria-label="Фотографии с устройства"
+                              onChange={handleMediaFileSelection}
+                            />
+                            <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
+                              Загрузить фото
+                            </Button>
+                            <a href={buildSelectedPhotoArchiveHref()} className={buttonVariants({ variant: "ghost" })}>
+                              Перейти в альбом
+                            </a>
+                          </div>
+                        </div>
                       </div>
                       <PersonMediaGallery
                         media={selectedPhotoMedia}
                         emptyTitle="Фотографий пока нет"
                         emptyMessage="Для этого человека пока нет фотографий."
-                        emptyActions={
-                          <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
-                            Загрузить фото
-                          </Button>
-                        }
                         avatarMediaId={selectedPrimaryPhotoMediaId}
                         showStickyFooter={false}
+                        showStage={false}
+                        showViewerAvatarAction
                         onSetAvatar={(mediaId) =>
                           submitJson(`/api/media/${mediaId}`, "PATCH", {
                             personId: selectedPerson.id,
@@ -2798,22 +2844,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                           }).then(() => undefined)
                         }
                       />
-                    </div>
-
-                    {renderMediaUploadForm("photo")}
-
-                    <div className="archive-sticky-footer builder-photo-footer">
-                      <div className="archive-sticky-copy">
-                        <strong>{formatPhotoUploadCountLabel(selectedPhotoMedia.length)}</strong>
-                      </div>
-                      <div className="archive-action-bar">
-                        <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
-                          Загрузить фото
-                        </Button>
-                        <a href={buildSelectedPhotoArchiveHref()} className={buttonVariants({ variant: "ghost" })}>
-                          Перейти в альбом
-                        </a>
-                      </div>
                     </div>
                   </>
                 ) : (

@@ -808,4 +808,38 @@ describe("person media gallery", () => {
 
     expect(onSetAvatar).toHaveBeenCalledWith("media-photo");
   });
+
+  it("allows setting the active photo as avatar from the fullscreen viewer when stage preview is disabled", async () => {
+    const onSetAvatar = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo",
+            title: "Семейное фото",
+            storage_path: "trees/tree-1/media/photo/media-photo/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Второе фото",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+        avatarMediaId="media-photo-2"
+        onSetAvatar={onSetAvatar}
+        showStage={false}
+        showStickyFooter={false}
+        showViewerAvatarAction
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 1: Семейное фото" }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Сделать фото профиля" }));
+    });
+
+    expect(onSetAvatar).toHaveBeenCalledWith("media-photo");
+  });
 });

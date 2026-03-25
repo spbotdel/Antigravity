@@ -243,15 +243,20 @@ describe("builder workspace", () => {
     expect(screen.getByText("Галерея фото")).toBeInTheDocument();
   });
 
-  it("shows document management in info and separate video tab content", async () => {
+  it("shows documents as a flat info list and keeps video content separate", async () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
 
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: "Инфо" })).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("button", { name: "Загрузить документы" })).toBeInTheDocument();
-    expect(screen.getByText("Demo Document")).toBeInTheDocument();
+    expect(screen.getAllByText("Документы")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Загрузить файл" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Demo Document" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Удалить документ «Demo Document»" })).toBeInTheDocument();
+    expect(screen.queryByText("Сканы, письма и другие файлы, которые удобнее держать рядом с биографией, а не в фото- или видео-галерее.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть документ" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить документ" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
@@ -742,7 +747,7 @@ describe("builder workspace", () => {
     expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 видео");
   });
 
-  it("links photo footer to the archive album view", async () => {
+  it("keeps photo actions in a lightweight toolbar above the gallery", async () => {
     render(<BuilderWorkspace snapshot={createSnapshotWithPhoto()} mediaLoaded />);
 
     await waitFor(() => {
@@ -750,10 +755,11 @@ describe("builder workspace", () => {
     });
 
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
-    const footer = screen.getByText("1 фото загружено").closest(".builder-photo-footer");
-    expect(footer).not.toBeNull();
-    expect(within(footer as HTMLElement).getByRole("button", { name: "Загрузить фото" })).toBeInTheDocument();
-    expect(within(footer as HTMLElement).getByRole("link", { name: "Перейти в альбом" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
+    const toolbar = screen.getByText("1 фото загружено").closest(".builder-photo-tab-toolbar");
+    expect(toolbar).not.toBeNull();
+    expect(within(toolbar as HTMLElement).getByRole("button", { name: "Загрузить фото" })).toBeInTheDocument();
+    expect(within(toolbar as HTMLElement).getByRole("link", { name: "Перейти в альбом" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
+    expect(screen.getAllByRole("button", { name: "Загрузить фото" })).toHaveLength(1);
   });
 
   it("renders the shared person photo gallery inside the builder photo tab", async () => {
