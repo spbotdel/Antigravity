@@ -4382,6 +4382,28 @@ body.media-lightbox-open .tree-page-shell {
   background: #f8f6f2;
 }
 
+.builder-relations-section {
+  border-color: rgba(18, 27, 43, 0.03);
+  background: color-mix(in oklab, var(--panel) 94%, white 6%);
+}
+
+.builder-relations-section .builder-section-heading .card-heading {
+  color: color-mix(in oklab, var(--text) 88%, var(--muted) 12%);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.builder-relations-section .builder-section-heading .muted-copy {
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: color-mix(in oklab, var(--muted) 78%, white 22%);
+  font-size: 0.84rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .builder-section-heading {
   display: grid;
   gap: 5px;
@@ -4687,52 +4709,98 @@ body.media-lightbox-open .tree-page-shell {
   background: rgba(201, 74, 66, 0.86);
 }
 
-.builder-relation-board,
+.builder-relation-board {
+  display: grid;
+  gap: 14px;
+}
+
 .builder-relation-group {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .builder-relation-group-title {
-  color: var(--muted);
-  font-size: 0.84rem;
+  color: color-mix(in oklab, var(--muted) 80%, white 20%);
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
-.builder-relation-card {
+.builder-relation-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(18, 27, 43, 0.08);
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.builder-relation-card-copy {
-  display: grid;
-  gap: 4px;
-}
-
-.builder-relation-card-copy strong {
-  font-size: 0.96rem;
-  line-height: 1.2;
-}
-
-.builder-relation-card-copy span {
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-
-.builder-relation-card-actions {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  padding: 3px 0;
+  min-width: 0;
+}
+
+.builder-relation-link {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.96rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: none;
+  text-underline-offset: 0.14em;
+  transition: color 0.18s ease, text-decoration-color 0.18s ease, opacity 0.18s ease;
+}
+
+.builder-relation-link:hover {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--accent-strong) 70%, transparent);
+}
+
+.builder-relation-link:focus-visible {
+  outline: none;
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.builder-relation-link-static {
+  cursor: default;
+}
+
+.builder-relation-link-static:hover {
+  color: var(--text);
+}
+
+.builder-relation-remove {
+  flex: 0 0 auto;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: color-mix(in oklab, var(--muted) 82%, var(--text) 18%);
+  font: inherit;
+  font-size: 1.02rem;
+  line-height: 1;
+  translate: 0 -1px;
+  cursor: pointer;
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.builder-relation-remove:hover {
+  background: rgba(201, 74, 66, 0.06);
+  color: var(--danger);
+}
+
+.builder-relation-remove:focus-visible {
+  outline: none;
+  background: rgba(201, 74, 66, 0.08);
+  color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(201, 74, 66, 0.12);
 }
 
 .builder-relation-empty {
@@ -4741,6 +4809,16 @@ body.media-lightbox-open .tree-page-shell {
   border: 1px dashed rgba(18, 27, 43, 0.14);
   color: var(--muted);
   background: #ffffff;
+}
+
+.builder-relation-empty-inline {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in oklab, var(--muted) 88%, white 12%);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .builder-media-card {
@@ -5663,7 +5741,6 @@ body.media-lightbox-open .tree-page-shell {
   }
 
   .builder-create-context-card,
-  .builder-relation-card,
   .builder-context-card-split {
     display: grid;
   }
@@ -6005,13 +6082,8 @@ body.media-lightbox-open .tree-page-shell {
     flex: 1 1 0;
   }
 
-  .builder-relation-card-actions {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .builder-relation-card-actions > * {
-    flex: 1 1 0;
+  .builder-relation-row {
+    align-items: flex-start;
   }
 
   .pill-link {

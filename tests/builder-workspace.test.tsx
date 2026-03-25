@@ -125,6 +125,89 @@ function createSnapshotWithPhoto(): TreeSnapshot {
   return snapshot;
 }
 
+function createSnapshotWithRelations(): TreeSnapshot {
+  const snapshot = createSnapshot();
+  snapshot.people = [
+    snapshot.people[0],
+    {
+      id: "person-parent-1",
+      tree_id: "tree-1",
+      full_name: "Отец первого",
+      gender: "male",
+      birth_date: null,
+      death_date: null,
+      birth_place: null,
+      death_place: null,
+      bio: null,
+      is_living: true,
+      created_by: null,
+      created_at: "2026-03-09T00:00:00.000Z",
+      updated_at: "2026-03-09T00:00:00.000Z",
+    },
+    {
+      id: "person-child-1",
+      tree_id: "tree-1",
+      full_name: "Новый ребенок",
+      gender: null,
+      birth_date: null,
+      death_date: null,
+      birth_place: null,
+      death_place: null,
+      bio: null,
+      is_living: true,
+      created_by: null,
+      created_at: "2026-03-09T00:00:00.000Z",
+      updated_at: "2026-03-09T00:00:00.000Z",
+    },
+    {
+      id: "person-partner-1",
+      tree_id: "tree-1",
+      full_name: "Елена",
+      gender: "female",
+      birth_date: null,
+      death_date: null,
+      birth_place: null,
+      death_place: null,
+      bio: null,
+      is_living: true,
+      created_by: null,
+      created_at: "2026-03-09T00:00:00.000Z",
+      updated_at: "2026-03-09T00:00:00.000Z",
+    },
+  ];
+  snapshot.parentLinks = [
+    {
+      id: "parent-link-1",
+      tree_id: "tree-1",
+      parent_person_id: "person-parent-1",
+      child_person_id: "person-1",
+      relation_type: "biological",
+      created_at: "2026-03-09T00:00:00.000Z",
+    },
+    {
+      id: "parent-link-2",
+      tree_id: "tree-1",
+      parent_person_id: "person-1",
+      child_person_id: "person-child-1",
+      relation_type: "biological",
+      created_at: "2026-03-09T00:00:00.000Z",
+    },
+  ];
+  snapshot.partnerships = [
+    {
+      id: "partnership-1",
+      tree_id: "tree-1",
+      person_a_id: "person-1",
+      person_b_id: "person-partner-1",
+      status: "partner",
+      start_date: null,
+      end_date: null,
+      created_at: "2026-03-09T00:00:00.000Z",
+    },
+  ];
+  return snapshot;
+}
+
 describe("builder workspace", () => {
   beforeEach(() => {
     window.localStorage.removeItem("antigravity.builder.tree-1.canvasHeight");
@@ -425,6 +508,48 @@ describe("builder workspace", () => {
 
     await waitFor(() => {
       expect(within(inspector).getByText("Сохранено ✓")).toBeInTheDocument();
+    });
+  });
+
+  it("renders current relations as a calm list with clickable names and subtle remove buttons", async () => {
+    const snapshot = createSnapshotWithRelations();
+    const requests: Array<{ url: string; method?: string }> = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      requests.push({ url, method: init?.method });
+
+      if (url.endsWith("/api/relationships/parent-child/parent-link-1") && init?.method === "DELETE") {
+        return Response.json({ message: "Связь удалена." }, { status: 200 });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
+
+    await waitFor(() => {
+      const inspector = document.querySelector(".builder-inspector");
+      expect(inspector).not.toBeNull();
+      expect(within(inspector as HTMLElement).getByText("Текущие связи")).toBeInTheDocument();
+    });
+
+    const inspector = document.querySelector(".builder-inspector") as HTMLElement;
+    expect(within(inspector).queryByText("Родственная связь")).not.toBeInTheDocument();
+    expect(within(inspector).queryByRole("button", { name: "Открыть" })).not.toBeInTheDocument();
+    expect(within(inspector).getByText("Партнёры")).toBeInTheDocument();
+    expect(within(inspector).queryByText("Пары")).not.toBeInTheDocument();
+
+    fireEvent.click(within(inspector).getByRole("button", { name: "Удалить связь с «Отец первого»" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.url.endsWith("/api/relationships/parent-child/parent-link-1") && request.method === "DELETE")).toBe(true);
+    });
+
+    fireEvent.click(within(inspector).getByRole("button", { name: "Елена" }));
+
+    await waitFor(() => {
+      expect(within(document.querySelector(".builder-inspector") as HTMLElement).getByText("Елена")).toBeInTheDocument();
     });
   });
 

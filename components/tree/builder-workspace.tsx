@@ -2624,7 +2624,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           <section className="builder-panel-stack">
             {selectedPerson ? (
               <>
-                <div className="builder-section-block">
+                <div className="builder-section-block builder-relations-section">
                   <div className="builder-section-heading">
                     <h3 className="card-heading">Текущие связи</h3>
                     <p className="muted-copy">Нужного родственника можно открыть отсюда. Новые связи добавляются через + на карточке дерева.</p>
@@ -2635,27 +2635,29 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       {selectedParentLinks.length ? (
                         selectedParentLinks.map((link) => {
                           const parent = peopleById.get(link.parent_person_id);
+                          const parentName = parent?.full_name || "Неизвестный человек";
                           return (
-                            <article key={link.id} className="builder-relation-card">
-                              <div className="builder-relation-card-copy">
-                                <strong>{parent?.full_name || "Неизвестный человек"}</strong>
-                                <span>{formatParentLinkMeta(link.relation_type)}</span>
-                              </div>
-                              <div className="builder-relation-card-actions">
-                                {parent ? (
-                                  <Button type="button" variant="ghost" size="sm" onClick={() => focusPerson(parent.id)}>
-                                    Открыть
-                                  </Button>
-                                ) : null}
-                                <Button type="button" variant="destructive" size="sm" onClick={async () => await removeParentLink(link.id)}>
-                                  Удалить
-                                </Button>
-                              </div>
+                            <article key={link.id} className="builder-relation-row">
+                              {parent ? (
+                                <button type="button" className="builder-relation-link" onClick={() => focusPerson(parent.id)}>
+                                  {parentName}
+                                </button>
+                              ) : (
+                                <span className="builder-relation-link builder-relation-link-static">{parentName}</span>
+                              )}
+                              <button
+                                type="button"
+                                className="builder-relation-remove"
+                                aria-label={`Удалить связь с «${parentName}»`}
+                                onClick={async () => await removeParentLink(link.id)}
+                              >
+                                ×
+                              </button>
                             </article>
                           );
                         })
                       ) : (
-                        <div className="builder-relation-empty">Родители пока не добавлены.</div>
+                        <div className="builder-relation-empty builder-relation-empty-inline">Родители не добавлены</div>
                       )}
                     </div>
 
@@ -2664,58 +2666,62 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       {selectedChildLinks.length ? (
                         selectedChildLinks.map((link) => {
                           const child = peopleById.get(link.child_person_id);
+                          const childName = child?.full_name || "Неизвестный человек";
                           return (
-                            <article key={link.id} className="builder-relation-card">
-                              <div className="builder-relation-card-copy">
-                                <strong>{child?.full_name || "Неизвестный человек"}</strong>
-                                <span>{formatParentLinkMeta(link.relation_type)}</span>
-                              </div>
-                              <div className="builder-relation-card-actions">
-                                {child ? (
-                                  <Button type="button" variant="ghost" size="sm" onClick={() => focusPerson(child.id)}>
-                                    Открыть
-                                  </Button>
-                                ) : null}
-                                <Button type="button" variant="destructive" size="sm" onClick={async () => await removeParentLink(link.id)}>
-                                  Удалить
-                                </Button>
-                              </div>
+                            <article key={link.id} className="builder-relation-row">
+                              {child ? (
+                                <button type="button" className="builder-relation-link" onClick={() => focusPerson(child.id)}>
+                                  {childName}
+                                </button>
+                              ) : (
+                                <span className="builder-relation-link builder-relation-link-static">{childName}</span>
+                              )}
+                              <button
+                                type="button"
+                                className="builder-relation-remove"
+                                aria-label={`Удалить связь с «${childName}»`}
+                                onClick={async () => await removeParentLink(link.id)}
+                              >
+                                ×
+                              </button>
                             </article>
                           );
                         })
                       ) : (
-                        <div className="builder-relation-empty">Дети пока не добавлены.</div>
+                        <div className="builder-relation-empty builder-relation-empty-inline">Дети не добавлены</div>
                       )}
                     </div>
 
                     <div className="builder-relation-group">
-                      <span className="builder-relation-group-title">Пары</span>
+                      <span className="builder-relation-group-title">Партнёры</span>
                       {selectedPartnerships.length ? (
                         selectedPartnerships.map((partnership) => {
                           const partnerId = partnership.person_a_id === selectedPerson.id ? partnership.person_b_id : partnership.person_a_id;
                           const partner = peopleById.get(partnerId);
+                          const partnerName = partner?.full_name || "Неизвестный человек";
 
                           return (
-                            <article key={partnership.id} className="builder-relation-card">
-                              <div className="builder-relation-card-copy">
-                                <strong>{partner?.full_name || "Неизвестный человек"}</strong>
-                                <span>{formatPartnershipStatus(partnership.status)}</span>
-                              </div>
-                              <div className="builder-relation-card-actions">
-                                {partner ? (
-                                  <Button type="button" variant="ghost" size="sm" onClick={() => focusPerson(partner.id)}>
-                                    Открыть
-                                  </Button>
-                                ) : null}
-                                <Button type="button" variant="destructive" size="sm" onClick={async () => await removePartnership(partnership.id)}>
-                                  Удалить
-                                </Button>
-                              </div>
+                            <article key={partnership.id} className="builder-relation-row">
+                              {partner ? (
+                                <button type="button" className="builder-relation-link" onClick={() => focusPerson(partner.id)}>
+                                  {partnerName}
+                                </button>
+                              ) : (
+                                <span className="builder-relation-link builder-relation-link-static">{partnerName}</span>
+                              )}
+                              <button
+                                type="button"
+                                className="builder-relation-remove"
+                                aria-label={`Удалить связь с «${partnerName}»`}
+                                onClick={async () => await removePartnership(partnership.id)}
+                              >
+                                ×
+                              </button>
                             </article>
                           );
                         })
                       ) : (
-                        <div className="builder-relation-empty">Пары пока не добавлены.</div>
+                        <div className="builder-relation-empty builder-relation-empty-inline">Партнёры не добавлены</div>
                       )}
                     </div>
                   </div>
