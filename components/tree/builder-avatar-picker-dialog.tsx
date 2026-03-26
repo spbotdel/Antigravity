@@ -35,7 +35,7 @@ interface BuilderAvatarPickerDialogProps {
 }
 
 type BuilderAvatarPickerStep = "empty" | "select" | "crop";
-const AVATAR_CROP_WHEEL_STEP = 0.05;
+const AVATAR_CROP_WHEEL_STEP = 0.2;
 
 function joinClassNames(...values: Array<string | null | undefined | false>) {
   return values.filter(Boolean).join(" ");
@@ -235,11 +235,7 @@ export function BuilderAvatarPickerDialog({
       >
         <DialogHeader>
           <DialogTitle>Аватар</DialogTitle>
-          <DialogDescription>
-            {step === "crop"
-              ? "Выберите квадратный кадр для аватара. В MVP можно только подвигать фото и немного приблизить его."
-              : "Выберите фотографию, которая будет использоваться как аватар в карточке и на схеме."}
-          </DialogDescription>
+          <DialogDescription>Выберите кадр для аватара</DialogDescription>
         </DialogHeader>
 
         {step === "empty" ? (
@@ -323,7 +319,6 @@ export function BuilderAvatarPickerDialog({
             <div className="builder-avatar-crop-controls">
               <div className="builder-avatar-crop-copy">
                 <strong>{selectedPhoto.title}</strong>
-                <span>Потяните фото в квадрате и при необходимости увеличьте его.</span>
               </div>
               <label className="builder-avatar-zoom-field">
                 Масштаб

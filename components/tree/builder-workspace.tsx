@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
-import { ArrowUpRight, CalendarDays, Pencil } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Camera, Pencil } from "lucide-react";
 import { format as formatDateFn, parseISO } from "date-fns";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -2588,6 +2588,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       {getInspectorAvatarFallback(selectedPerson.full_name)}
                     </span>
                   )}
+                  <span className="builder-inspector-avatar-badge" aria-hidden="true">
+                    <Camera className="builder-inspector-avatar-badge-icon" />
+                  </span>
                 </button>
               ) : null}
             </div>
