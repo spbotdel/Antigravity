@@ -8,6 +8,7 @@ import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } fro
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import type {
+  AvatarCropValue,
   AuditEntry,
   AuditEntryView,
   InviteRecord,
@@ -30,6 +31,7 @@ import type {
   UserRole,
   ViewerActor
 } from "@/lib/types";
+import { getAvatarCropFromRelation, normalizeAvatarCrop } from "@/lib/avatar-crop";
 import { buildAuditEntryViews } from "@/lib/audit-presenter";
 import { buildViewerActor, canSeeMedia, hasRequiredRole, normalizeMembershipRole, resolveTreeRole } from "@/lib/permissions";
 import { getBaseUrl, getFileBackedMediaProvider, getObjectStorageEnv, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, getResendEmailEnv, getShareLinkTokenEncryptionSecret, getStorageBucket, isObjectStorageLikeBackend, isObjectStorageMediaProvider, resolveMediaUploadPlan, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
@@ -948,7 +950,7 @@ async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean
     batchedRequests.push({
       key: "personMedia",
       pathWithQuery:
-        `person_media?select=id,person_id,media_id,is_primary,persons!inner(tree_id)` +
+        `person_media?select=id,person_id,media_id,is_primary,avatar_crop_x,avatar_crop_y,avatar_crop_zoom,persons!inner(tree_id)` +
         `&persons.tree_id=eq.${encodeURIComponent(tree.id)}`
     });
   }
@@ -2559,7 +2561,7 @@ export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMe
   };
 }
 
-export async function setPrimaryPersonMedia(mediaId: string, personId: string) {
+export async function setPrimaryPersonMedia(mediaId: string, personId: string, avatarCrop?: AvatarCropValue) {
   const relation = await fetchAdminFirst<PersonMediaRecord>(
     `person_media?select=*&person_id=eq.${encodeURIComponent(personId)}&media_id=eq.${encodeURIComponent(mediaId)}`,
     "Не удалось загрузить связь человека с медиа."
@@ -2584,9 +2586,53 @@ export async function setPrimaryPersonMedia(mediaId: string, personId: string) {
     `person_media?select=*&person_id=eq.${encodeURIComponent(personId)}&is_primary=eq.true`,
     "Не удалось загрузить текущий аватар."
   );
+  const nextCrop = avatarCrop ? normalizeAvatarCrop(avatarCrop) : getAvatarCropFromRelation(relation);
 
   if (relation.is_primary) {
-    return relation;
+    if (!avatarCrop) {
+      return relation;
+    }
+
+    const updatedRelation = await mutateAdminFirst<PersonMediaRecord>(
+      `person_media?person_id=eq.${encodeURIComponent(personId)}&media_id=eq.${encodeURIComponent(mediaId)}&select=*`,
+      "PATCH",
+      {
+        avatar_crop_x: nextCrop.x,
+        avatar_crop_y: nextCrop.y,
+        avatar_crop_zoom: nextCrop.zoom
+      },
+      "Не удалось обновить кадрирование аватара."
+    );
+
+    if (!updatedRelation) {
+      throw new AppError(400, "Не удалось обновить кадрирование аватара.");
+    }
+
+    queueAuditLog({
+      treeId: media.tree_id,
+      actorUserId: userId,
+      entityType: "person_media",
+      entityId: relation.id,
+      action: "person.avatar_selected",
+      beforeJson: {
+        person_id: relation.person_id,
+        media_id: relation.media_id,
+        is_primary: relation.is_primary,
+        avatar_crop_x: relation.avatar_crop_x ?? null,
+        avatar_crop_y: relation.avatar_crop_y ?? null,
+        avatar_crop_zoom: relation.avatar_crop_zoom ?? null
+      },
+      afterJson: {
+        person_id: updatedRelation.person_id,
+        media_id: updatedRelation.media_id,
+        is_primary: updatedRelation.is_primary,
+        avatar_crop_x: updatedRelation.avatar_crop_x ?? null,
+        avatar_crop_y: updatedRelation.avatar_crop_y ?? null,
+        avatar_crop_zoom: updatedRelation.avatar_crop_zoom ?? null
+      }
+    });
+
+    return updatedRelation;
   }
 
   await mutateAdminRows<never>(
@@ -2599,7 +2645,12 @@ export async function setPrimaryPersonMedia(mediaId: string, personId: string) {
   const updatedRelation = await mutateAdminFirst<PersonMediaRecord>(
     `person_media?person_id=eq.${encodeURIComponent(personId)}&media_id=eq.${encodeURIComponent(mediaId)}&select=*`,
     "PATCH",
-    { is_primary: true },
+    {
+      is_primary: true,
+      avatar_crop_x: nextCrop.x,
+      avatar_crop_y: nextCrop.y,
+      avatar_crop_zoom: nextCrop.zoom
+    },
     "Не удалось назначить фотографию аватаром."
   );
 
@@ -2617,13 +2668,19 @@ export async function setPrimaryPersonMedia(mediaId: string, personId: string) {
       ? {
           person_id: previousPrimary.person_id,
           media_id: previousPrimary.media_id,
-          is_primary: previousPrimary.is_primary
+          is_primary: previousPrimary.is_primary,
+          avatar_crop_x: previousPrimary.avatar_crop_x ?? null,
+          avatar_crop_y: previousPrimary.avatar_crop_y ?? null,
+          avatar_crop_zoom: previousPrimary.avatar_crop_zoom ?? null
         }
       : null,
     afterJson: {
       person_id: updatedRelation.person_id,
       media_id: updatedRelation.media_id,
-      is_primary: updatedRelation.is_primary
+      is_primary: updatedRelation.is_primary,
+      avatar_crop_x: updatedRelation.avatar_crop_x ?? null,
+      avatar_crop_y: updatedRelation.avatar_crop_y ?? null,
+      avatar_crop_zoom: updatedRelation.avatar_crop_zoom ?? null
     }
   });
 

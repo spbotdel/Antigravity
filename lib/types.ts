@@ -98,6 +98,15 @@ export interface PersonMediaRecord {
   person_id: string;
   media_id: string;
   is_primary: boolean;
+  avatar_crop_x?: number | null;
+  avatar_crop_y?: number | null;
+  avatar_crop_zoom?: number | null;
+}
+
+export interface AvatarCropValue {
+  x: number;
+  y: number;
+  zoom: number;
 }
 
 export interface MediaAssetVariantRecord {

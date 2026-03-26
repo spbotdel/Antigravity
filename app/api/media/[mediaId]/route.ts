@@ -36,8 +36,8 @@ export async function PATCH(request: Request, { params }: Params) {
   try {
     const { mediaId } = await params;
     const payload = setPrimaryPersonMediaSchema.parse(await request.json());
-    const relation = await setPrimaryPersonMedia(mediaId, payload.personId);
-    return Response.json({ relation, message: "Фото назначено аватаром." });
+    const relation = await setPrimaryPersonMedia(mediaId, payload.personId, payload.avatarCrop);
+    return Response.json({ relation, message: "Аватар обновлен." });
   } catch (error) {
     return toErrorResponse(error);
   }

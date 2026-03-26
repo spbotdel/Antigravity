@@ -2,6 +2,11 @@ import { z } from "zod";
 
 const mediaVisibilitySchema = z.enum(["public", "members"]);
 const mediaVariantSchema = z.enum(["thumb", "small", "medium"]);
+const avatarCropSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  zoom: z.number().min(1).max(3)
+});
 const mediaVariantPathSchema = z.object({
   variant: mediaVariantSchema,
   storagePath: z.string().trim().min(1)
@@ -99,6 +104,7 @@ export const createTreeMediaAlbumSchema = z.object({
 
 export const setPrimaryPersonMediaSchema = z.object({
   personId: z.string().uuid(),
-  setPrimary: z.literal(true)
+  setPrimary: z.literal(true),
+  avatarCrop: avatarCropSchema.optional()
 });
 

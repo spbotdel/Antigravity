@@ -123,7 +123,12 @@ describe("validators", () => {
   it("accepts avatar selection payloads for person media", () => {
     const result = setPrimaryPersonMediaSchema.safeParse({
       personId: crypto.randomUUID(),
-      setPrimary: true
+      setPrimary: true,
+      avatarCrop: {
+        x: 0.5,
+        y: 0.5,
+        zoom: 1.75
+      }
     });
 
     expect(result.success).toBe(true);

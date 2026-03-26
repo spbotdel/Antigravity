@@ -25,10 +25,12 @@ import {
   FamilyTreeCanvas,
   type FamilyTreeCanvasAction
 } from "@/components/tree/family-tree-canvas";
+import { AvatarCropPreviewImage, BuilderAvatarPickerDialog } from "@/components/tree/builder-avatar-picker-dialog";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
+import { buildPrimaryPersonAvatarCrops, DEFAULT_AVATAR_CROP, getAvatarCropFromRelation } from "@/lib/avatar-crop";
 import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, collectPersonMedia } from "@/lib/tree/display";
 import { formatDate, formatMediaUploadTransportHint, uploadFileWithTransportContract } from "@/lib/utils";
-import type { MediaUploadTargetResponse, ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
+import type { AvatarCropValue, MediaUploadTargetResponse, ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
 
 interface BuilderWorkspaceProps {
   snapshot: TreeSnapshot;
@@ -722,6 +724,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [reviewMediaCaption, setReviewMediaCaption] = useState("");
   const [isVideoAddPanelOpen, setIsVideoAddPanelOpen] = useState(false);
   const [isVideoLinkFormOpen, setIsVideoLinkFormOpen] = useState(false);
+  const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
   const [isEditingPersonName, setIsEditingPersonName] = useState(false);
   const [isSavingPersonName, setIsSavingPersonName] = useState(false);
   const [personNameDraft, setPersonNameDraft] = useState("");
@@ -784,6 +787,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     () => (isClientReady ? buildPersonPhotoPreviewUrls(renderSnapshot) : {}),
     [renderSnapshot.media, renderSnapshot.personMedia, isClientReady]
   );
+  const personAvatarCrops = useMemo(
+    () => (isClientReady ? buildPrimaryPersonAvatarCrops(renderSnapshot) : {}),
+    [renderSnapshot.media, renderSnapshot.personMedia, isClientReady]
+  );
   const selectedPerson = selectedPersonId ? peopleById.get(selectedPersonId) || null : null;
   const selectedPersonPending = Boolean(selectedPerson && isTemporaryPersonId(selectedPerson.id));
   const selectedMedia = selectedPerson ? collectPersonMedia(renderSnapshot, selectedPerson.id) : [];
@@ -801,6 +808,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         )?.media_id || null
       : null;
   const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
+  const selectedAvatarCrop = selectedPerson ? personAvatarCrops[selectedPerson.id] || DEFAULT_AVATAR_CROP : DEFAULT_AVATAR_CROP;
   const selectedPersonEditFormKey = selectedPerson ? selectedPerson.id : "edit-none";
   const anchorPerson = createContext.type === "standalone" ? null : peopleById.get(createContext.anchorPersonId) || null;
   const createHeading = getCreateContextHeading(createContext, anchorPerson);
@@ -881,6 +889,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   useEffect(() => {
     selectedPersonIdRef.current = selectedPersonId;
   }, [selectedPersonId]);
+
+  useEffect(() => {
+    if (!selectedPerson || createModeActive) {
+      setIsAvatarPickerOpen(false);
+    }
+  }, [createModeActive, selectedPerson]);
 
   useEffect(() => {
     personInfoDraftRef.current = buildPersonInfoDraftValue({
@@ -1577,6 +1591,73 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setStatus(payload.message || "Сохранено.");
     await reloadSnapshot();
     return payload;
+  }
+
+  function switchToPhotoTab() {
+    setMediaMode("photo");
+    setActivePanel("media");
+  }
+
+  async function savePersonAvatar(mediaId: string, avatarCrop?: AvatarCropValue) {
+    if (!selectedPerson) {
+      return false;
+    }
+
+    setStatus(null);
+    const payload = await requestJson(`/api/media/${mediaId}`, "PATCH", {
+      personId: selectedPerson.id,
+      setPrimary: true,
+      avatarCrop
+    });
+    if (!payload?.relation) {
+      return false;
+    }
+
+    const nextCrop = getAvatarCropFromRelation(payload.relation);
+    updateSnapshot((prev) => {
+      let relationFound = false;
+      const nextPersonMedia = prev.personMedia.map((relation) => {
+        if (relation.person_id !== selectedPerson.id) {
+          return relation;
+        }
+
+        if (relation.media_id === mediaId) {
+          relationFound = true;
+          return {
+            ...relation,
+            is_primary: true,
+            avatar_crop_x: nextCrop.x,
+            avatar_crop_y: nextCrop.y,
+            avatar_crop_zoom: nextCrop.zoom
+          };
+        }
+
+        return {
+          ...relation,
+          is_primary: false
+        };
+      });
+
+      if (!relationFound) {
+        nextPersonMedia.push({
+          ...payload.relation,
+          person_id: selectedPerson.id,
+          media_id: mediaId,
+          is_primary: true,
+          avatar_crop_x: nextCrop.x,
+          avatar_crop_y: nextCrop.y,
+          avatar_crop_zoom: nextCrop.zoom
+        });
+      }
+
+      return {
+        ...prev,
+        personMedia: nextPersonMedia
+      };
+    });
+
+    setStatus(payload.message || "Аватар обновлен.");
+    return true;
   }
 
   async function setRootPerson(personId: string | null) {
@@ -2401,11 +2482,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                   showStickyFooter={false}
                   onSetAvatar={
                     expandedGalleryMode === "photo" && selectedPerson
-                      ? (mediaId) =>
-                          submitJson(`/api/media/${mediaId}`, "PATCH", {
-                            personId: selectedPerson.id,
-                            setPrimary: true
-                          }).then(() => undefined)
+                      ? (mediaId) => {
+                          const currentRelation = currentSnapshotRef.current.personMedia.find(
+                            (relation) => relation.person_id === selectedPerson.id && relation.media_id === mediaId
+                          );
+                          return savePersonAvatar(mediaId, getAvatarCropFromRelation(currentRelation)).then(() => undefined);
+                        }
                       : undefined
                   }
                 />
@@ -2424,6 +2506,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     parentLinks={currentSnapshot.parentLinks}
                     partnerships={currentSnapshot.partnerships}
                     personPhotoUrls={personPhotoPreviewUrls}
+                    personPhotoCrops={personAvatarCrops}
                     viewportHeightHint={canvasHeight}
                     onPartnershipDateChange={savePartnershipDate}
                     onNodeAction={handleCanvasAction}
@@ -2488,15 +2571,24 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                 )}
               </div>
               {selectedPerson && !createModeActive ? (
-                <div className="person-summary-avatar builder-person-summary-avatar builder-inspector-avatar">
+                <button
+                  type="button"
+                  className="person-summary-avatar builder-person-summary-avatar builder-person-summary-avatar-button builder-inspector-avatar builder-inspector-avatar-button"
+                  aria-label={`Настроить аватар для ${selectedPerson.full_name}`}
+                  onClick={() => setIsAvatarPickerOpen(true)}
+                >
                   {selectedAvatarUrl ? (
-                    <img src={selectedAvatarUrl} alt={`Аватар: ${selectedPerson.full_name}`} />
+                    <AvatarCropPreviewImage
+                      src={selectedAvatarUrl}
+                      alt={`Аватар: ${selectedPerson.full_name}`}
+                      crop={selectedAvatarCrop}
+                    />
                   ) : (
                     <span className="builder-inspector-avatar-fallback" aria-hidden="true">
                       {getInspectorAvatarFallback(selectedPerson.full_name)}
                     </span>
                   )}
-                </div>
+                </button>
               ) : null}
             </div>
             {inspectorDescription ? <p className="muted-copy">{inspectorDescription}</p> : null}
@@ -2883,12 +2975,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         showStage={false}
                         showViewerAvatarAction
                         appendTile={renderPhotoAddTile()}
-                        onSetAvatar={(mediaId) =>
-                          submitJson(`/api/media/${mediaId}`, "PATCH", {
-                            personId: selectedPerson.id,
-                            setPrimary: true
-                          }).then(() => undefined)
-                        }
+                        onSetAvatar={(mediaId) => {
+                          const currentRelation = currentSnapshotRef.current.personMedia.find(
+                            (relation) => relation.person_id === selectedPerson.id && relation.media_id === mediaId
+                          );
+                          return savePersonAvatar(mediaId, getAvatarCropFromRelation(currentRelation)).then(() => undefined);
+                        }}
                       />
                     </div>
                   </>
@@ -2926,6 +3018,19 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         ) : null}
         </Card>
       </div>
+
+      {selectedPerson && !createModeActive ? (
+        <BuilderAvatarPickerDialog
+          open={isAvatarPickerOpen}
+          personName={selectedPerson.full_name}
+          photos={selectedPhotoMedia}
+          currentAvatarMediaId={selectedPrimaryPhotoMediaId}
+          currentAvatarCrop={selectedAvatarCrop}
+          onOpenChange={setIsAvatarPickerOpen}
+          onJumpToPhotos={switchToPhotoTab}
+          onSave={savePersonAvatar}
+        />
+      ) : null}
 
       <Dialog open={isMediaUploadReviewOpen} onOpenChange={(open) => (!open ? requestCloseMediaUploadReview() : null)}>
         <DialogContent className="archive-dialog" aria-label="Проверка файлов перед загрузкой" showCloseButton={false}>

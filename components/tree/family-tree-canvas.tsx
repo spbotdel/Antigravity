@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 
-import type { DisplayTreeNode, ParentLinkRecord, PartnershipRecord, PersonRecord } from "@/lib/types";
+import { buildAvatarSvgImageAttrs } from "@/lib/avatar-crop";
+import type { AvatarCropValue, DisplayTreeNode, ParentLinkRecord, PartnershipRecord, PersonRecord } from "@/lib/types";
 
 const CARD_WIDTH = 248;
 const CARD_HEIGHT = 112;
@@ -321,6 +322,7 @@ interface FamilyTreeCanvasProps {
   parentLinks?: ParentLinkRecord[];
   partnerships?: PartnershipRecord[];
   personPhotoUrls?: Record<string, string>;
+  personPhotoCrops?: Record<string, AvatarCropValue>;
   viewportHeightHint?: number;
 }
 
@@ -1228,6 +1230,7 @@ export function FamilyTreeCanvas({
   parentLinks = [],
   partnerships = [],
   personPhotoUrls = EMPTY_PERSON_PHOTO_URLS,
+  personPhotoCrops = {},
   viewportHeightHint = 0
 }: FamilyTreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1326,13 +1329,13 @@ export function FamilyTreeCanvas({
 
     shadow.append("feDropShadow").attr("dx", 0).attr("dy", 10).attr("stdDeviation", 12).attr("flood-color", "#181b22").attr("flood-opacity", 0.08);
 
-    function registerAvatarPattern(personId: string, source: string) {
+    function registerAvatarPattern(personId: string, source: string, crop?: AvatarCropValue | null) {
       if (avatarPatternByPersonId.has(personId)) {
         return avatarPatternByPersonId.get(personId)!;
       }
 
       const patternId = getAvatarPatternId(personId);
-      defs
+      const image = defs
         .append("pattern")
         .attr("id", patternId)
         .attr("patternUnits", "objectBoundingBox")
@@ -1341,12 +1344,24 @@ export function FamilyTreeCanvas({
         .attr("height", 1)
         .append("image")
         .attr("href", source)
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("width", 1)
-        .attr("height", 1)
-        .attr("preserveAspectRatio", "xMidYMid slice")
         .attr("opacity", 0.96);
+
+      if (crop) {
+        const cropAttrs = buildAvatarSvgImageAttrs(crop);
+        image
+          .attr("x", cropAttrs.x)
+          .attr("y", cropAttrs.y)
+          .attr("width", cropAttrs.width)
+          .attr("height", cropAttrs.height)
+          .attr("preserveAspectRatio", "none");
+      } else {
+        image
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("width", 1)
+          .attr("height", 1)
+          .attr("preserveAspectRatio", "xMidYMid slice");
+      }
 
       avatarPatternByPersonId.set(personId, patternId);
       return patternId;
@@ -1368,7 +1383,7 @@ export function FamilyTreeCanvas({
           return;
         }
 
-        registerAvatarPattern(node.id, badgeImage);
+        registerAvatarPattern(node.id, badgeImage, personPhotoUrls[node.id] ? personPhotoCrops[node.id] || null : null);
       });
 
       const zoom = d3
@@ -1770,7 +1785,7 @@ export function FamilyTreeCanvas({
         return;
       }
 
-      registerAvatarPattern(datum.data.id, badgeImage);
+      registerAvatarPattern(datum.data.id, badgeImage, personPhotoUrls[datum.data.id] ? personPhotoCrops[datum.data.id] || null : null);
     });
     const previewAnchorNode = createPreview
       ? selectPreferredCanvasItem(descendants, createPreview.anchorPersonId, (datum) => datum.data)
@@ -2064,7 +2079,7 @@ export function FamilyTreeCanvas({
       const y = height * VIEWER_FIT_Y_RATIO - bounds.y * scale;
       svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
     }
-  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoUrls, selectedPersonId, viewportHeightHint]);
+  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoCrops, personPhotoUrls, selectedPersonId, viewportHeightHint]);
 
   if (!tree) {
     return (
