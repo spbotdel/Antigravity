@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
-import { CalendarDays, Pencil } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Pencil } from "lucide-react";
 import { format as formatDateFn, parseISO } from "date-fns";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -27,7 +27,6 @@ import {
 } from "@/components/tree/family-tree-canvas";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
 import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, collectPersonMedia } from "@/lib/tree/display";
-import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import { formatDate, formatMediaUploadTransportHint, uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaUploadTargetResponse, ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
 
@@ -115,26 +114,6 @@ function formatPartnershipStatus(value?: string | null) {
   }
 
   return value;
-}
-
-function getMediaOpenLabel(kind: TreeSnapshot["media"][number]["kind"]) {
-  if (kind === "video") {
-    return "Открыть видео";
-  }
-
-  if (kind === "document") {
-    return "Открыть документ";
-  }
-
-  return "Открыть файл";
-}
-
-function getMediaSourceLabel(asset: TreeSnapshot["media"][number]) {
-  if (asset.provider === "yandex_disk") {
-    return "По ссылке";
-  }
-
-  return "Файл";
 }
 
 function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
@@ -741,6 +720,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [isMediaUploadDiscardConfirmOpen, setIsMediaUploadDiscardConfirmOpen] = useState(false);
   const [reviewMediaVisibility, setReviewMediaVisibility] = useState<"public" | "members">("public");
   const [reviewMediaCaption, setReviewMediaCaption] = useState("");
+  const [isVideoAddPanelOpen, setIsVideoAddPanelOpen] = useState(false);
+  const [isVideoLinkFormOpen, setIsVideoLinkFormOpen] = useState(false);
   const [isEditingPersonName, setIsEditingPersonName] = useState(false);
   const [isSavingPersonName, setIsSavingPersonName] = useState(false);
   const [personNameDraft, setPersonNameDraft] = useState("");
@@ -765,7 +746,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const tempPersonResolutionPromisesRef = useRef(new Map<string, Promise<string | null>>());
   const tempPersonResolutionResolversRef = useRef(new Map<string, (personId: string | null) => void>());
   const resolvedTempPersonIdsRef = useRef(new Map<string, string | null>());
-  const mediaUploadFormRef = useRef<HTMLFormElement | null>(null);
   const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const reviewMediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingMediaUploadsRef = useRef<PendingMediaUploadItem[]>([]);
@@ -808,10 +788,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const selectedPersonPending = Boolean(selectedPerson && isTemporaryPersonId(selectedPerson.id));
   const selectedMedia = selectedPerson ? collectPersonMedia(renderSnapshot, selectedPerson.id) : [];
   const selectedStorageMedia = selectedMedia.filter((asset) => asset.provider !== "yandex_disk");
-  const selectedExternalVideos = selectedMedia.filter((asset) => asset.provider === "yandex_disk");
   const selectedPhotoMedia = selectedStorageMedia.filter((asset) => asset.kind === "photo");
   const selectedVideoMedia = selectedMedia.filter((asset) => asset.kind === "video");
-  const selectedLocalVideoMedia = selectedStorageMedia.filter((asset) => asset.kind === "video");
   const selectedDocumentMedia = selectedStorageMedia.filter((asset) => asset.kind === "document");
   const selectedPrimaryPhotoMediaId =
     selectedPerson
@@ -2002,6 +1980,124 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     mediaFileInputRef.current?.click();
   }
 
+  function handleVideoAddPanelOpenChange(open: boolean) {
+    setIsVideoAddPanelOpen(open);
+    if (!open) {
+      setIsVideoLinkFormOpen(false);
+    }
+  }
+
+  function renderMediaAddTileContent(label: string) {
+    return (
+      <span className="person-media-thumb-visual builder-media-add-tile-visual">
+        <span className="builder-media-add-tile-plus" aria-hidden="true">+</span>
+        <span className="builder-media-add-tile-label">{label}</span>
+      </span>
+    );
+  }
+
+  function renderPhotoAddTile() {
+    return (
+      <button
+        type="button"
+        className="person-media-thumb person-media-thumb-compact builder-media-add-tile"
+        aria-label="Добавить фото"
+        onClick={openMediaPickerOrReview}
+      >
+        {renderMediaAddTileContent("Добавить фото")}
+      </button>
+    );
+  }
+
+  function renderVideoAddTile() {
+    return (
+      <Popover open={isVideoAddPanelOpen} onOpenChange={handleVideoAddPanelOpenChange}>
+        <PopoverTrigger
+          className="person-media-thumb person-media-thumb-compact builder-media-add-tile"
+          aria-label="Добавить видео"
+        >
+          {renderMediaAddTileContent("Добавить видео")}
+        </PopoverTrigger>
+        <PopoverContent className="builder-video-add-popover" align="start" sideOffset={8}>
+          {!isVideoLinkFormOpen ? (
+            <div className="archive-action-bar builder-video-add-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                className="builder-video-link-toggle"
+                onClick={() => {
+                  setIsVideoAddPanelOpen(false);
+                  openMediaPickerOrReview();
+                }}
+              >
+                Загрузить видео
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="builder-video-link-toggle"
+                onClick={() => setIsVideoLinkFormOpen(true)}
+              >
+                Видео по ссылке
+              </Button>
+            </div>
+          ) : (
+            <form
+              className="stack-form builder-form-grid builder-video-link-form"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const selectedPersonId = selectedPerson?.id;
+                if (!selectedPersonId) {
+                  setIsVideoLinkFormOpen(false);
+                  setIsVideoAddPanelOpen(false);
+                  return;
+                }
+                const form = new FormData(event.currentTarget);
+                await submitJson("/api/media/complete", "POST", {
+                  treeId: currentSnapshot.tree.id,
+                  personId: selectedPersonId,
+                  mediaId: crypto.randomUUID(),
+                  provider: "yandex_disk",
+                  externalUrl: String(form.get("externalUrl") || "").trim(),
+                  visibility: String(form.get("visibility") || "public"),
+                  title: String(form.get("title") || "").trim(),
+                  caption: String(form.get("caption") || "").trim()
+                });
+
+                event.currentTarget.reset();
+                setIsVideoLinkFormOpen(false);
+                setIsVideoAddPanelOpen(false);
+              }}
+            >
+              <label className="form-field builder-field-span">
+                Ссылка на видео
+                <Input name="externalUrl" type="url" required placeholder="https://disk.yandex.ru/..." />
+              </label>
+              <label className="form-field">
+                Название
+                <Input name="title" required placeholder="Семейная хроника" />
+              </label>
+              <label className="form-field">
+                Видимость
+                <SelectField name="visibility" defaultValue="public">
+                  <option value="public">Всем по ссылке</option>
+                  <option value="members">Только участникам</option>
+                </SelectField>
+              </label>
+              <label className="form-field builder-field-span">
+                Подпись
+                <Textarea name="caption" rows={3} placeholder="Например: оцифрованная запись, семейный архив или внешний видеоплеер" />
+              </label>
+              <Button className="builder-field-span" type="submit">
+                Добавить видео по ссылке
+              </Button>
+            </form>
+          )}
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
   function removePendingMediaUpload(itemId: string) {
     setPendingMediaUploads((items) => {
       const item = items.find((entry) => entry.id === itemId);
@@ -2058,7 +2154,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       return;
     }
 
-    const formElement = mediaUploadFormRef.current;
     const uploadQueue = files.map((file) => ({
       id: crypto.randomUUID(),
       name: file.name,
@@ -2159,7 +2254,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
       if (uploadedCount > 0) {
         await reloadSnapshot();
-        formElement?.reset();
       }
 
       if (uploadedCount > 0) {
@@ -2201,15 +2295,16 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setExpandedGalleryMode(null);
   }
 
-  function buildSelectedPhotoArchiveHref() {
+  function buildSelectedArchiveHref(mode: "photo" | "video") {
+    const selectedMedia = mode === "photo" ? selectedPhotoMedia : selectedVideoMedia;
     const params = new URLSearchParams({
-      mode: "photo",
+      mode,
       view: "albums"
     });
     const actorUserId = currentSnapshot.actor.userId;
     const preferredUploaderUserId =
-      (actorUserId && selectedPhotoMedia.some((asset) => asset.created_by === actorUserId) ? actorUserId : null) ||
-      selectedPhotoMedia.find((asset) => asset.created_by)?.created_by ||
+      (actorUserId && selectedMedia.some((asset) => asset.created_by === actorUserId) ? actorUserId : null) ||
+      selectedMedia.find((asset) => asset.created_by)?.created_by ||
       null;
 
     if (preferredUploaderUserId) {
@@ -2236,46 +2331,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             {mode === "photo" ? "Загрузить фото" : "Загрузить видео"}
           </Button>
         </div>
-      </div>
-    );
-  }
-
-  function renderMediaUploadForm(scope: BuilderUploadScope) {
-    const config = getBuilderUploadScopeConfig(scope);
-
-    return (
-      <div className="builder-section-block">
-        <div className="builder-block-heading">
-          <strong>{config.heading}</strong>
-        </div>
-        <form ref={mediaUploadFormRef} className="stack-form builder-form-grid">
-          <div className="builder-field-span builder-file-picker">
-            <label className="builder-file-picker-label" htmlFor="builder-media-file-input">
-              {config.inputLabel}
-            </label>
-            <input
-              id="builder-media-file-input"
-              ref={mediaFileInputRef}
-              className="builder-native-file-input"
-              name="mediaFile"
-              type="file"
-              accept={config.accept}
-              multiple
-              disabled={isUploadingMedia}
-              onChange={handleMediaFileSelection}
-            />
-            <div className="builder-file-picker-shell">
-              <Button type="button" variant="secondary" disabled={isUploadingMedia} onClick={openMediaPickerOrReview}>
-                {config.chooseButtonLabel}
-              </Button>
-            </div>
-          </div>
-          <div className="builder-upload-feedback builder-field-span">
-            <p className="builder-media-limits-note">
-              За один раз: до {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(getBuilderUploadScopeFileSizeLimit(scope))} на файл.
-            </p>
-          </div>
-        </form>
       </div>
     );
   }
@@ -2423,13 +2478,13 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       />
                     ) : (
                       <button type="button" className="builder-inspector-name-button" aria-label="Редактировать имя человека" onClick={startPersonNameEdit}>
-                        <span className="card-heading builder-inspector-name-text">{inspectorTitle}</span>
+                        <span className="card-heading builder-inspector-name-text person-card-name">{inspectorTitle}</span>
                         <Pencil className="builder-inspector-name-edit-icon" aria-hidden="true" />
                       </button>
                     )}
                   </div>
                 ) : (
-                  <h2 className="card-heading">{inspectorTitle}</h2>
+                  <h2 className="card-heading person-card-name">{inspectorTitle}</h2>
                 )}
               </div>
               {selectedPerson && !createModeActive ? (
@@ -2446,30 +2501,38 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             </div>
             {inspectorDescription ? <p className="muted-copy">{inspectorDescription}</p> : null}
           </div>
-          <Tabs
-            value={currentBuilderTab}
-            onValueChange={(value) => {
-              if (value === "info") {
-                setActivePanel("person");
-                return;
-              }
+          <div className="builder-inspector-tabs-row">
+            <Tabs
+              value={currentBuilderTab}
+              onValueChange={(value) => {
+                if (value === "info") {
+                  setActivePanel("person");
+                  return;
+                }
 
-              setMediaMode(value === "video" ? "video" : "photo");
-              setActivePanel("media");
-            }}
-          >
-            <TabsList className="builder-inspector-tabs" aria-label="Панели конструктора">
-              <TabsTrigger className={currentBuilderTab === "info" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="info">
-                Инфо
-              </TabsTrigger>
-              <TabsTrigger className={currentBuilderTab === "photo" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="photo">
-                Фото
-              </TabsTrigger>
-              <TabsTrigger className={currentBuilderTab === "video" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="video">
-                Видео
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+                setMediaMode(value === "video" ? "video" : "photo");
+                setActivePanel("media");
+              }}
+            >
+              <TabsList className="builder-inspector-tabs" aria-label="Панели конструктора">
+                <TabsTrigger className={currentBuilderTab === "info" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="info">
+                  Инфо
+                </TabsTrigger>
+                <TabsTrigger className={currentBuilderTab === "photo" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="photo">
+                  Фото
+                </TabsTrigger>
+                <TabsTrigger className={currentBuilderTab === "video" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="video">
+                  Видео
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {selectedPerson ? (
+              <a href={buildSelectedArchiveHref(currentBuilderTab === "video" ? "video" : mediaMode === "video" ? "video" : "photo")} className={`${buttonVariants({ variant: "ghost", size: "sm" })} builder-inspector-tab-action`}>
+                <ArrowUpRight aria-hidden="true" />
+                Перейти в альбом
+              </a>
+            ) : null}
+          </div>
         </div>
 
         {createModeActive ? (
@@ -2798,37 +2861,19 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               <>
                 {currentBuilderTab === "photo" ? (
                   <>
-                    <div className="builder-section-block builder-photo-tab-section">
-                      <div className="builder-photo-tab-toolbar">
-                        <div className="builder-block-heading">
-                          <strong>Галерея фото</strong>
-                        </div>
-                        <div className="builder-photo-tab-toolbar-row">
-                          <div className="builder-photo-tab-count">
-                            <strong>{formatPhotoUploadCountLabel(selectedPhotoMedia.length)}</strong>
-                          </div>
-                          <div className="archive-action-bar builder-photo-tab-actions">
-                            <input
-                              id="builder-media-file-input"
-                              ref={mediaFileInputRef}
-                              className="builder-native-file-input"
-                              name="mediaFile"
-                              type="file"
-                              accept={activeUploadConfig.accept}
-                              multiple
-                              disabled={isUploadingMedia}
-                              aria-label="Фотографии с устройства"
-                              onChange={handleMediaFileSelection}
-                            />
-                            <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
-                              Загрузить фото
-                            </Button>
-                            <a href={buildSelectedPhotoArchiveHref()} className={buttonVariants({ variant: "ghost" })}>
-                              Перейти в альбом
-                            </a>
-                          </div>
-                        </div>
-                      </div>
+                    <div className="builder-section-block builder-media-tab-section">
+                      <input
+                        id="builder-media-file-input"
+                        ref={mediaFileInputRef}
+                        className="builder-native-file-input"
+                        name="mediaFile"
+                        type="file"
+                        accept={activeUploadConfig.accept}
+                        multiple
+                        disabled={isUploadingMedia}
+                        aria-label="Фотографии с устройства"
+                        onChange={handleMediaFileSelection}
+                      />
                       <PersonMediaGallery
                         media={selectedPhotoMedia}
                         emptyTitle="Фотографий пока нет"
@@ -2837,6 +2882,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         showStickyFooter={false}
                         showStage={false}
                         showViewerAvatarAction
+                        appendTile={renderPhotoAddTile()}
                         onSetAvatar={(mediaId) =>
                           submitJson(`/api/media/${mediaId}`, "PATCH", {
                             personId: selectedPerson.id,
@@ -2848,157 +2894,27 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                   </>
                 ) : (
                   <>
-                    <div className="builder-section-block">
-                      <div className="builder-block-heading">
-                        <strong>Галерея видео</strong>
-                        <p className="muted-copy">Локальные видео и внешние ролики открываются в одном просмотре, но загружаются разными путями.</p>
-                      </div>
+                    <div className="builder-section-block builder-media-tab-section">
+                      <input
+                        id="builder-media-file-input"
+                        ref={mediaFileInputRef}
+                        className="builder-native-file-input"
+                        name="mediaFile"
+                        type="file"
+                        accept={activeUploadConfig.accept}
+                        multiple
+                        disabled={isUploadingMedia}
+                        aria-label="Видео с устройства"
+                        onChange={handleMediaFileSelection}
+                      />
                       <PersonMediaGallery
                         media={selectedVideoMedia}
                         emptyTitle="Видео пока нет"
                         emptyMessage="Для этого человека пока нет видео."
-                        emptyActions={
-                          <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
-                            Загрузить видео
-                          </Button>
-                        }
                         showStickyFooter={false}
+                        showStage={false}
+                        appendTile={renderVideoAddTile()}
                       />
-                    </div>
-
-                    {renderMediaUploadForm("video")}
-
-                    <div className="builder-section-block">
-                      <div className="builder-block-heading">
-                        <strong>Видео по ссылке</strong>
-                        <p className="muted-copy">Подходит для видео, которое уже лежит в другом сервисе и должно открываться по ссылке без повторной загрузки файла.</p>
-                      </div>
-                      <form
-                        className="stack-form builder-form-grid"
-                        onSubmit={async (event) => {
-                          event.preventDefault();
-                          const form = new FormData(event.currentTarget);
-                          await submitJson("/api/media/complete", "POST", {
-                            treeId: currentSnapshot.tree.id,
-                            personId: selectedPerson.id,
-                            mediaId: crypto.randomUUID(),
-                            provider: "yandex_disk",
-                            externalUrl: String(form.get("externalUrl") || "").trim(),
-                            visibility: String(form.get("visibility") || "public"),
-                            title: String(form.get("title") || "").trim(),
-                            caption: String(form.get("caption") || "").trim()
-                          });
-
-                          event.currentTarget.reset();
-                        }}
-                      >
-                        <label className="form-field builder-field-span">
-                          Ссылка на видео
-                          <Input name="externalUrl" type="url" required placeholder="https://disk.yandex.ru/..." />
-                        </label>
-                        <label className="form-field">
-                          Название
-                          <Input name="title" required placeholder="Семейная хроника" />
-                        </label>
-                        <label className="form-field">
-                          Видимость
-                          <SelectField name="visibility" defaultValue="public">
-                            <option value="public">Всем по ссылке</option>
-                            <option value="members">Только участникам</option>
-                          </SelectField>
-                        </label>
-                        <label className="form-field builder-field-span">
-                          Подпись
-                          <Textarea name="caption" rows={3} placeholder="Например: оцифрованная запись, семейный архив или внешний видеоплеер" />
-                        </label>
-                        <Button className="builder-field-span" type="submit">
-                          Добавить видео по ссылке
-                        </Button>
-                      </form>
-                    </div>
-
-                    <div className="builder-media-library">
-                      <section className="builder-media-group">
-                        <div className="builder-block-heading">
-                          <strong>Локальные видео</strong>
-                          <p className="muted-copy">Файлы, загруженные прямо в архив этого человека.</p>
-                        </div>
-                        <div className="builder-media-grid">
-                          {selectedLocalVideoMedia.length ? (
-                            selectedLocalVideoMedia.map((asset) => (
-                              <article key={asset.id} className="media-card builder-media-card">
-                                <div className="media-meta">
-                                  <span>{formatMediaKind(asset.kind)}</span>
-                                  <span>{formatMediaVisibility(asset.visibility)}</span>
-                                  <span>{getMediaSourceLabel(asset)}</span>
-                                </div>
-                                <h4>{asset.title}</h4>
-                                {asset.caption ? <p>{asset.caption}</p> : null}
-                                <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                                  Открыть видео
-                                </a>
-                                <Button type="button" variant="destructive" onClick={async () => await submitJson(`/api/media/${asset.id}`, "DELETE", {})}>
-                                  Удалить видео
-                                </Button>
-                              </article>
-                            ))
-                          ) : (
-                            <div className="builder-relation-empty">Локально загруженных видео пока нет.</div>
-                          )}
-                        </div>
-                      </section>
-
-                      <section className="builder-media-group">
-                        <div className="builder-block-heading">
-                          <strong>Видео по ссылке</strong>
-                          <p className="muted-copy">Видео, которые открываются во внешнем источнике и не загружаются в архив.</p>
-                        </div>
-                        <div className="builder-media-grid">
-                          {selectedExternalVideos.length ? (
-                            selectedExternalVideos.map((asset) => (
-                              <article key={asset.id} className="media-card builder-media-card">
-                                <div className="media-meta">
-                                  <span>{formatMediaKind(asset.kind)}</span>
-                                  <span>{formatMediaVisibility(asset.visibility)}</span>
-                                  <span>{getMediaSourceLabel(asset)}</span>
-                                </div>
-                                <h4>{asset.title}</h4>
-                                {asset.caption ? <p>{asset.caption}</p> : null}
-                                <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                                  Открыть видео
-                                </a>
-                                <Button type="button" variant="destructive" onClick={async () => await submitJson(`/api/media/${asset.id}`, "DELETE", {})}>
-                                  Удалить ссылку
-                                </Button>
-                              </article>
-                            ))
-                          ) : (
-                            <div className="builder-relation-empty">Внешние видео по ссылке пока не добавлены.</div>
-                          )}
-                        </div>
-                      </section>
-                    </div>
-
-                    <div className="archive-sticky-footer">
-                      <div className="archive-sticky-copy">
-                        <strong>Видео</strong>
-                        <span>{selectedVideoMedia.length} видео в карточке человека</span>
-                      </div>
-                      <div className="archive-action-bar">
-                        {selectedVideoMedia.length ? (
-                          <Button type="button" variant="ghost" onClick={() => openExpandedGallery("video")}>
-                            Показать все
-                          </Button>
-                        ) : null}
-                        {pendingMediaUploads.length ? (
-                          <Button type="button" variant="ghost" onClick={() => setIsMediaUploadReviewOpen(true)}>
-                            Проверить набор
-                          </Button>
-                        ) : null}
-                        <Button type="button" variant="secondary" onClick={() => mediaFileInputRef.current?.click()}>
-                          Выбрать видео
-                        </Button>
-                      </div>
                     </div>
                   </>
                 )}

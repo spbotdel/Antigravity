@@ -13,7 +13,11 @@ vi.mock("@/components/tree/family-tree-canvas", () => ({
 }));
 
 vi.mock("@/components/tree/person-media-gallery", () => ({
-  PersonMediaGallery: () => <div data-testid="person-media-gallery" />,
+  PersonMediaGallery: (props: { appendTile?: unknown }) => (
+    <div data-testid="person-media-gallery">
+      {props.appendTile as any}
+    </div>
+  ),
 }));
 
 vi.mock("@/lib/utils", async () => {
@@ -240,10 +244,11 @@ describe("builder workspace", () => {
       expect(screen.getByRole("tab", { name: "Фото" })).toHaveAttribute("aria-selected", "true");
     });
 
-    expect(screen.getByText("Галерея фото")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Добавить фото" })).toBeInTheDocument();
+    expect(screen.queryByText("Галерея фото")).not.toBeInTheDocument();
   });
 
-  it("shows documents as a flat info list and keeps video content separate", async () => {
+  it("shows documents as a flat info list and keeps video content in a single gallery block", async () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
 
     await waitFor(() => {
@@ -260,8 +265,20 @@ describe("builder workspace", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
-    expect(screen.getByText("Галерея видео")).toBeInTheDocument();
-    expect(screen.getByText("Локально загруженных видео пока нет.")).toBeInTheDocument();
+    expect(screen.queryByText("Галерея видео")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Добавить видео" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Загрузить видео" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Видео по ссылке")).not.toBeInTheDocument();
+    expect(screen.queryByText("Локально загруженных видео пока нет.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Локальные видео")).not.toBeInTheDocument();
+    expect(screen.queryByText("Внешние видео по ссылке пока не добавлены.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Выбрать видео" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Добавить видео" }));
+
+    expect(screen.getByRole("button", { name: "Видео по ссылке" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Загрузить видео" })).toBeInTheDocument();
+    expect(screen.queryByText("Выберите, как добавить видео: загрузить файл с устройства или указать внешнюю ссылку.")).not.toBeInTheDocument();
   });
 
   it("restores the visual root person from localStorage", async () => {
@@ -284,6 +301,25 @@ describe("builder workspace", () => {
       expect(screen.getAllByText("Demo Person").length).toBeGreaterThan(0);
       expect(screen.queryByText("Текущий корень")).not.toBeInTheDocument();
     });
+  });
+
+  it("uses the same shared person-card-name class for the header across info, photo, and video tabs", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Редактировать имя человека" })).toBeInTheDocument();
+    });
+
+    const inspector = document.querySelector(".builder-inspector") as HTMLElement;
+    expect(inspector.querySelector("button.builder-inspector-name-button .person-card-name")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+    expect(inspector.querySelector("h2.person-card-name")).not.toBeNull();
+    expect(inspector.querySelector("button.builder-inspector-name-button")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+    expect(inspector.querySelector("h2.person-card-name")).not.toBeNull();
+    expect(inspector.querySelector("button.builder-inspector-name-button")).toBeNull();
   });
 
   it("saves the header name inline when Enter is pressed", async () => {
@@ -379,11 +415,12 @@ describe("builder workspace", () => {
 
       if (url.endsWith("/api/persons/person-1") && init?.method === "PATCH") {
         patchPayload = JSON.parse(String(init.body));
+        const nextGender = patchPayload?.gender ?? snapshot.people[0].gender;
         return Response.json(
           {
             person: {
               ...snapshot.people[0],
-              gender: patchPayload.gender,
+              gender: nextGender,
             },
             message: "Данные человека обновлены."
           },

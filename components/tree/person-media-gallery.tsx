@@ -19,6 +19,7 @@ interface PersonMediaGalleryProps {
   emptyMessage?: string;
   emptyTitle?: string | null;
   emptyActions?: ReactNode;
+  appendTile?: ReactNode;
   avatarMediaId?: string | null;
   onSetAvatar?: (mediaId: string) => Promise<void> | void;
   showStickyFooter?: boolean;
@@ -242,6 +243,7 @@ export function PersonMediaGallery({
   emptyMessage = "Для этого человека пока не добавлено медиа.",
   emptyTitle = "Галерея пока пуста",
   emptyActions = null,
+  appendTile = null,
   avatarMediaId = null,
   onSetAvatar,
   showStickyFooter = true,
@@ -333,6 +335,32 @@ export function PersonMediaGallery({
     } finally {
       setIsAvatarUpdating(false);
     }
+  }
+
+  function renderAvatarAction() {
+    if (!canSetAvatar) {
+      return null;
+    }
+
+    const isCurrentAvatar = activeAsset?.id === avatarMediaId;
+
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        className={`person-media-avatar-action${isCurrentAvatar ? " person-media-avatar-action-active" : ""}`}
+        disabled={isAvatarUpdating || isCurrentAvatar}
+        onClick={
+          isCurrentAvatar || !activeAsset
+            ? undefined
+            : () => {
+                void handleSetAvatar(activeAsset.id);
+              }
+        }
+      >
+        {isCurrentAvatar ? "Текущее фото профиля" : isAvatarUpdating ? "Сохраняю аватар..." : "Сделать фото профиля"}
+      </Button>
+    );
   }
 
   function handleLightboxTouchStart(event: ReactTouchEvent<HTMLDivElement>) {
@@ -472,13 +500,16 @@ export function PersonMediaGallery({
 
   if (!media.length || !activeAsset) {
     return (
-      <div className="empty-state person-media-empty-state">
-        <div className="empty-state-copy">
-          {emptyTitle ? <strong>{emptyTitle}</strong> : null}
-          {emptyMessage ? <p>{emptyMessage}</p> : null}
+      <section className="person-media-gallery person-media-gallery-empty">
+        <div className="empty-state person-media-empty-state">
+          <div className="empty-state-copy">
+            {emptyTitle ? <strong>{emptyTitle}</strong> : null}
+            {emptyMessage ? <p>{emptyMessage}</p> : null}
+          </div>
+          {emptyActions ? <div className="action-row empty-state-actions">{emptyActions}</div> : null}
         </div>
-        {emptyActions ? <div className="action-row empty-state-actions">{emptyActions}</div> : null}
-      </div>
+        {appendTile ? <div className="person-media-thumb-strip person-media-thumb-strip-empty">{appendTile}</div> : null}
+      </section>
     );
   }
 
@@ -528,22 +559,7 @@ export function PersonMediaGallery({
                   {getMediaOpenLabel(activeAsset)}
                 </a>
               ) : null}
-              {showViewerAvatarAction && canSetAvatar ? (
-                activeAsset.id === avatarMediaId ? (
-                  <span className="members-static-note">Текущее фото профиля</span>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={isAvatarUpdating}
-                    onClick={() => {
-                      void handleSetAvatar(activeAsset.id);
-                    }}
-                  >
-                    {isAvatarUpdating ? "Сохраняю аватар..." : "Сделать фото профиля"}
-                  </Button>
-                )
-              ) : null}
+              {showViewerAvatarAction ? renderAvatarAction() : null}
             </div>
           ) : null}
         </div>
@@ -617,22 +633,7 @@ export function PersonMediaGallery({
                   {getMediaOpenLabel(activeAsset)}
                 </a>
               ) : null}
-              {canSetAvatar ? (
-                activeAsset.id === avatarMediaId ? (
-                  <span className="members-static-note">Текущее фото профиля</span>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={isAvatarUpdating}
-                    onClick={() => {
-                      void handleSetAvatar(activeAsset.id);
-                    }}
-                  >
-                    {isAvatarUpdating ? "Сохраняю аватар..." : "Сделать фото профиля"}
-                  </Button>
-                )
-              ) : null}
+              {renderAvatarAction()}
             </div>
           </article>
         ) : null}
@@ -656,6 +657,7 @@ export function PersonMediaGallery({
                 compact={!showStage}
               />
             ))}
+            {appendTile}
           </div>
         ) : null}
 

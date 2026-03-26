@@ -780,6 +780,21 @@ describe("person media gallery", () => {
     expect(screen.getByRole("button", { name: "Выбрать фото" })).toBeInTheDocument();
   });
 
+  it("keeps the add tile inside the same media grid when the gallery is empty", () => {
+    render(
+      <PersonMediaGallery
+        media={[]}
+        emptyTitle="Видео пока нет"
+        emptyMessage="Когда ролики появятся, они будут собраны здесь."
+        appendTile={<button type="button">Добавить видео</button>}
+      />
+    );
+
+    const grid = document.querySelector(".person-media-thumb-strip.person-media-thumb-strip-empty");
+    expect(grid).not.toBeNull();
+    expect(within(grid as HTMLElement).getByRole("button", { name: "Добавить видео" })).toBeInTheDocument();
+  });
+
   it("allows setting the active photo as avatar from the stage actions", async () => {
     const onSetAvatar = vi.fn().mockResolvedValue(undefined);
 
@@ -841,5 +856,33 @@ describe("person media gallery", () => {
     });
 
     expect(onSetAvatar).toHaveBeenCalledWith("media-photo");
+  });
+
+  it("keeps the current-avatar state as the same capsule control in the fullscreen viewer", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo",
+            title: "Семейное фото",
+            storage_path: "trees/tree-1/media/photo/media-photo/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Второе фото",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+        avatarMediaId="media-photo"
+        onSetAvatar={vi.fn()}
+        showStage={false}
+        showStickyFooter={false}
+        showViewerAvatarAction
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 1: Семейное фото" }));
+
+    expect(screen.getByRole("button", { name: "Текущее фото профиля" })).toBeDisabled();
   });
 });
