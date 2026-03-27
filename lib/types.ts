@@ -147,6 +147,7 @@ export interface TreeMediaAlbumRecord {
   tree_id: string;
   title: string;
   description: string | null;
+  access: MediaVisibility;
   album_kind: TreeMediaAlbumKind;
   uploader_user_id: string | null;
   created_by: string | null;

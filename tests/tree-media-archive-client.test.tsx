@@ -41,6 +41,7 @@ function renderArchiveClient(options?: {
     id: string;
     title: string;
     description: string | null;
+    access?: "public" | "members";
     albumKind: "manual" | "uploader";
     uploaderUserId: string | null;
     count: number;
@@ -82,7 +83,7 @@ function renderArchiveClient(options?: {
       initialView="all"
       initialAlbumId={null}
       allMedia={allMedia}
-      allAlbums={options?.allAlbums || []}
+      allAlbums={(options?.allAlbums || []).map((album) => ({ ...album, access: album.access ?? "members" }))}
       persistedAlbumMediaMap={options?.persistedAlbumMediaMap || {}}
       uploaderLabels={options?.uploaderLabels || []}
     />
@@ -274,6 +275,7 @@ describe("tree media archive client", () => {
           id: "album-1",
           title: "Свадьба",
           description: "Старая подпись",
+          access: "members",
           albumKind: "manual",
           uploaderUserId: null,
           count: 1,
@@ -296,6 +298,7 @@ describe("tree media archive client", () => {
     expect(shell?.querySelectorAll(".archive-album-copy")).toHaveLength(1);
     expect(shell?.querySelectorAll(".archive-album-actions-trigger")).toHaveLength(1);
     expect(shell?.querySelector(".archive-album-cover .archive-album-actions-trigger")).not.toBeNull();
+    expect(shell?.querySelector(".archive-album-access-indicator")).not.toBeNull();
   });
 
   it("shows the same management trigger for uploader albums with enabled edit/delete actions", async () => {
@@ -366,6 +369,7 @@ describe("tree media archive client", () => {
           id: "album-1",
           title: "Свадьба",
           description: "Старая подпись",
+          access: "members",
           albumKind: "manual",
           uploaderUserId: null,
           count: 1,
@@ -387,9 +391,12 @@ describe("tree media archive client", () => {
     fireEvent.click(screen.getByRole("button", { name: "Редактировать" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Редактировать альбом" });
+    expect(document.querySelector(".archive-album-grid")).not.toBeNull();
+    expect(document.querySelector(".archive-grid")).toBeNull();
     expect(within(dialog).getByLabelText("Название")).toHaveValue("Свадьба");
     expect(within(dialog).getByLabelText("Описание")).toHaveValue("Старая подпись");
-    expect(within(dialog).queryByLabelText("Доступ")).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Доступ")).toHaveTextContent("Только для семьи");
+    expect(within(dialog).getByText("Виден всем участникам семейного дерева")).toBeInTheDocument();
 
     fireEvent.change(within(dialog).getByLabelText("Название"), { target: { value: "Поездка" } });
     fireEvent.change(within(dialog).getByLabelText("Описание"), { target: { value: "Новая семейная подпись" } });
@@ -408,6 +415,8 @@ describe("tree media archive client", () => {
     await waitFor(() => {
       expect(screen.getByText("Поездка")).toBeInTheDocument();
     });
+    expect(document.querySelector(".archive-album-grid")).not.toBeNull();
+    expect(document.querySelector(".archive-grid")).toBeNull();
     expect(screen.queryByText("Свадьба")).not.toBeInTheDocument();
     expect(screen.queryByText("Старая подпись")).not.toBeInTheDocument();
   });
@@ -1021,6 +1030,54 @@ describe("tree media archive client", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
     expect(screen.getByRole("button", { name: /Свадьба.*Пользовательский альбом/ })).toBeInTheDocument();
+  });
+
+  it("keeps the album list stable after switching to albums view", async () => {
+    const photo = createMediaAsset({
+      id: "media-photo",
+      title: "Фото из альбома",
+      storage_path: "trees/tree-1/media/photo/media-photo/album-photo.jpg",
+      created_by: null,
+    });
+
+    renderArchiveClient({
+      allMedia: [photo],
+      allAlbums: [
+        {
+          id: "album-1",
+          title: "Свадьба",
+          description: null,
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-photo",
+        },
+        {
+          id: "album-2",
+          title: "Путешествие",
+          description: null,
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-photo",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-1": [photo],
+        "album-2": [photo],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /Пользовательский альбом/ })).toHaveLength(2);
+    });
+
+    expect(document.querySelector(".archive-album-grid")).not.toBeNull();
+    expect(document.querySelectorAll(".archive-album-card")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Открыть фото: Фото из альбома" })).not.toBeInTheDocument();
+    expect(screen.queryByText("2 материалов")).not.toBeInTheDocument();
   });
 
   it("can start directly inside a selected album from the initial query state", () => {

@@ -374,6 +374,7 @@ describe("tree display helpers", () => {
           tree_id: "tree-1",
           title: "От Виктора Петровича",
           description: null,
+          access: "members",
           album_kind: "uploader",
           uploader_user_id: "user-1",
           created_by: "user-1",
@@ -392,6 +393,7 @@ describe("tree display helpers", () => {
     expect(summaries[0]).toMatchObject({
       id: "album-1",
       title: "От Виктора Петровича",
+      access: "members",
       uploaderUserId: "user-1",
       count: 1,
       coverMediaId: "media-1"
@@ -429,6 +431,7 @@ describe("tree display helpers", () => {
     expect(summaries[0]).toMatchObject({
       id: "uploader-user-1",
       title: "От Виктора Петровича",
+      access: "members",
       albumKind: "uploader",
       uploaderUserId: "user-1",
       count: 1,
@@ -480,6 +483,7 @@ describe("tree display helpers", () => {
           tree_id: "tree-1",
           title: "Семейный альбом",
           description: null,
+          access: "members",
           album_kind: "manual",
           uploader_user_id: null,
           created_by: "user-1",

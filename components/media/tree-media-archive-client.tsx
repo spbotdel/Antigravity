@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumRecord } from "@/lib/types";
-import { MoreHorizontalIcon, PlusIcon } from "lucide-react";
+import { LockIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
 
 type MediaMode = "photo" | "video" | "all";
 type ArchiveView = "all" | "albums";
@@ -29,6 +29,7 @@ interface AlbumSummary {
   id: string;
   title: string;
   description: string | null;
+  access: TreeMediaAlbumRecord["access"];
   albumKind: TreeMediaAlbumRecord["album_kind"];
   uploaderUserId: string | null;
   count: number;
@@ -342,6 +343,7 @@ export function TreeMediaArchiveClient({
   const [editingAlbumId, setEditingAlbumId] = useState<string | null>(null);
   const [editAlbumTitle, setEditAlbumTitle] = useState("");
   const [editAlbumDescription, setEditAlbumDescription] = useState("");
+  const [editAlbumAccess, setEditAlbumAccess] = useState<"public" | "members">("members");
   const [isUpdatingAlbum, setIsUpdatingAlbum] = useState(false);
   const [deleteTargetAlbumId, setDeleteTargetAlbumId] = useState<string | null>(null);
   const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
@@ -1203,6 +1205,7 @@ export function TreeMediaArchiveClient({
       treeId,
       title: album.title,
       description: album.description || "",
+      access: album.access,
       albumKind: "uploader",
       uploaderUserId: album.uploaderUserId
     });
@@ -1211,6 +1214,7 @@ export function TreeMediaArchiveClient({
       id: created.id,
       title: created.title,
       description: created.description,
+      access: created.access,
       albumKind: created.album_kind,
       uploaderUserId: created.uploader_user_id,
       count: album.count,
@@ -1239,6 +1243,7 @@ export function TreeMediaArchiveClient({
       setEditingAlbumId(managedAlbum.id);
       setEditAlbumTitle(managedAlbum.title);
       setEditAlbumDescription(managedAlbum.description || "");
+      setEditAlbumAccess(managedAlbum.access);
       setOpenArchiveAlbumActionsId(null);
       setError(null);
     } catch (albumError) {
@@ -1279,13 +1284,15 @@ export function TreeMediaArchiveClient({
       const payload = await requestJson("/api/media/albums", "POST", {
         treeId,
         title: albumTitle,
-        description: albumDescription
+        description: albumDescription,
+        access: "members"
       });
       const album = payload.album as TreeMediaAlbumRecord;
       const summary: AlbumSummary = {
         id: album.id,
         title: album.title,
         description: album.description,
+        access: album.access,
         albumKind: album.album_kind,
         uploaderUserId: album.uploader_user_id,
         count: 0,
@@ -1324,7 +1331,8 @@ export function TreeMediaArchiveClient({
       setIsUpdatingAlbum(true);
       const payload = await requestJson(`/api/media/albums/${editingAlbum.id}`, "PATCH", {
         title: editAlbumTitle,
-        description: editAlbumDescription
+        description: editAlbumDescription,
+        access: editAlbumAccess
       });
       const album = payload.album as TreeMediaAlbumRecord;
 
@@ -1335,6 +1343,7 @@ export function TreeMediaArchiveClient({
                 ...item,
                 title: album.title,
                 description: album.description,
+                access: album.access,
               }
             : item
         )
@@ -1860,7 +1869,7 @@ export function TreeMediaArchiveClient({
       ) : currentAlbums.length ? (
         <div className="archive-album-grid">
           {currentAlbums.map((album) => {
-            const coverUrl = isHydrated ? buildAlbumCoverUrl(album.coverMediaId, allMedia, shareToken) : null;
+            const coverUrl = buildAlbumCoverUrl(album.coverMediaId, allMedia, shareToken);
             const isAlbumActionsOpen = openArchiveAlbumActionsId === album.id;
 
             return (
@@ -1897,14 +1906,20 @@ export function TreeMediaArchiveClient({
                           <button
                             type="button"
                             className="archive-card-menu-item"
-                            onClick={() => void openEditAlbumDialog(album)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void openEditAlbumDialog(album);
+                            }}
                           >
                             Редактировать
                           </button>
                           <button
                             type="button"
                             className="archive-card-menu-item archive-card-menu-item-danger"
-                            onClick={() => void openDeleteAlbumDialog(album)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void openDeleteAlbumDialog(album);
+                            }}
                           >
                             Удалить
                           </button>
@@ -1918,7 +1933,14 @@ export function TreeMediaArchiveClient({
                     )}
                   </div>
                   <div className="archive-album-copy">
-                    <strong>{album.title}</strong>
+                    <div className="archive-album-title-row">
+                      <strong>{album.title}</strong>
+                      {album.access === "members" ? (
+                        <span className="archive-album-access-indicator" title="Только для членов семьи" aria-label="Только для членов семьи">
+                          <LockIcon />
+                        </span>
+                      ) : null}
+                    </div>
                     <span>{album.count} {mode === "all" ? "материалов" : itemLabel}</span>
                     <small>{album.description?.trim() || (album.albumKind === "uploader" ? "Автоальбом загрузившего" : "Пользовательский альбом")}</small>
                   </div>
@@ -2078,6 +2100,18 @@ export function TreeMediaArchiveClient({
               Описание
               <Textarea value={editAlbumDescription} onChange={(event) => setEditAlbumDescription(event.target.value)} rows={4} maxLength={512} />
             </label>
+            <label className="form-field">
+              Доступ
+              <SelectField value={editAlbumAccess} onChange={(event) => setEditAlbumAccess(event.target.value as "public" | "members")} disabled={isUpdatingAlbum}>
+                <option value="members">Только для семьи</option>
+                <option value="public">По ссылке</option>
+              </SelectField>
+            </label>
+            <p className="members-static-note">
+              {editAlbumAccess === "members"
+                ? "Виден всем участникам семейного дерева"
+                : "Любой, у кого есть ссылка, сможет открыть альбом"}
+            </p>
             <DialogFooter className="archive-actions">
               <Button type="button" variant="ghost" disabled={isUpdatingAlbum} onClick={() => setEditingAlbumId(null)}>
                 Отмена

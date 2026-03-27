@@ -167,6 +167,7 @@ describe("audit presenter", () => {
           id: "album-1",
           title: "От Виктора Петровича",
           description: "Общий семейный архив",
+          access: "public",
           album_kind: "uploader"
         },
         created_at: "2026-03-08T12:00:00.000Z"

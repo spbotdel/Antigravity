@@ -17,6 +17,7 @@ type AlbumSummary = {
   id: string;
   title: string;
   description: string | null;
+  access: "public" | "members";
   albumKind: "manual" | "uploader";
   uploaderUserId: string | null;
   count: number;

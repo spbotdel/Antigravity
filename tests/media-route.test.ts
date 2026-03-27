@@ -83,6 +83,7 @@ describe("media route", () => {
       tree_id: "tree-1",
       title: "Семейная поездка",
       description: "Летний архив",
+      access: "members",
       album_kind: "manual",
       uploader_user_id: null,
       created_by: "user-1",
@@ -97,6 +98,7 @@ describe("media route", () => {
         body: JSON.stringify({
           title: "Семейная поездка",
           description: "Летний архив",
+          access: "members",
         })
       }),
       {
@@ -108,6 +110,7 @@ describe("media route", () => {
     expect(updateTreeMediaAlbum).toHaveBeenCalledWith("album-1", {
       title: "Семейная поездка",
       description: "Летний архив",
+      access: "members",
     });
     expect(response.status).toBe(200);
     expect(payload.message).toBe("Альбом обновлен.");

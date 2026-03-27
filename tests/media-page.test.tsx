@@ -112,6 +112,7 @@ describe("media page", () => {
           tree_id: "tree-1",
           title: "Свадьба",
           description: null,
+          access: "members",
           album_kind: "manual",
           uploader_user_id: null,
           created_by: "user-1",

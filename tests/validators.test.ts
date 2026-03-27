@@ -114,7 +114,8 @@ describe("validators", () => {
     const result = createTreeMediaAlbumSchema.safeParse({
       treeId: crypto.randomUUID(),
       title: "День рождения тети Светы",
-      description: "Фото и видео из одного архива"
+      description: "Фото и видео из одного архива",
+      access: "members"
     });
 
     expect(result.success).toBe(true);
@@ -125,6 +126,7 @@ describe("validators", () => {
       treeId: crypto.randomUUID(),
       title: "От Сергея Тест",
       description: "",
+      access: "public",
       albumKind: "uploader",
       uploaderUserId: crypto.randomUUID(),
     });
@@ -135,7 +137,8 @@ describe("validators", () => {
   it("accepts tree media album update payloads", () => {
     const result = updateTreeMediaAlbumSchema.safeParse({
       title: "Обновленный альбом",
-      description: "Новая подпись"
+      description: "Новая подпись",
+      access: "members"
     });
 
     expect(result.success).toBe(true);

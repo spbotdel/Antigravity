@@ -358,6 +358,7 @@ export function buildTreeMediaAlbumSummaries(input: {
         id: album.id,
         title: album.title,
         description: album.description,
+        access: album.access,
         albumKind: album.album_kind,
         uploaderUserId: album.uploader_user_id,
         count: albumMedia.length,
@@ -368,6 +369,7 @@ export function buildTreeMediaAlbumSummaries(input: {
     id: string;
     title: string;
     description: string | null;
+    access: TreeMediaAlbumRecord["access"];
     albumKind: TreeMediaAlbumRecord["album_kind"];
     uploaderUserId: string | null;
     count: number;
@@ -403,6 +405,7 @@ export function buildDerivedUploaderAlbumSummaries(input: {
       id: `uploader-${userId}`,
       title: label,
       description: null,
+      access: "members" as const,
       albumKind: "uploader" as const,
       uploaderUserId: userId,
       count: media.length,

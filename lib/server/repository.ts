@@ -98,6 +98,74 @@ function isMediaAlbumsSchemaUnavailableError(error: unknown) {
   return MEDIA_ALBUMS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
 }
 
+function strictestMediaVisibility(left: MediaVisibility, right: MediaVisibility): MediaVisibility {
+  return left === "members" || right === "members" ? "members" : "public";
+}
+
+type MediaAlbumAccessRow = {
+  media_id: string;
+  tree_media_albums?: {
+    access: MediaVisibility;
+    tree_id: string;
+  } | null;
+};
+
+async function listAlbumAccessRowsForMediaIds(treeId: string, mediaIds: string[]) {
+  const uniqueMediaIds = [...new Set(mediaIds.filter(Boolean))];
+  if (!uniqueMediaIds.length) {
+    return [] as MediaAlbumAccessRow[];
+  }
+
+  try {
+    return await fetchAdminRows<MediaAlbumAccessRow>(
+      `tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access)&media_id=in.${buildUuidInFilter(uniqueMediaIds)}&tree_media_albums.tree_id=eq.${encodeURIComponent(treeId)}`,
+      "Не удалось загрузить доступ альбомов для медиа."
+    );
+  } catch (error) {
+    if (isMediaAlbumsSchemaUnavailableError(error) || isMediaAlbumItemsSchemaUnavailableError(error)) {
+      return [] as MediaAlbumAccessRow[];
+    }
+
+    throw error;
+  }
+}
+
+async function resolveEffectiveMediaVisibilityMap(treeId: string, media: MediaAssetRecord[]) {
+  const effectiveByMediaId = new Map<string, MediaVisibility>(
+    media.map((asset) => [asset.id, asset.visibility] as const)
+  );
+  const albumAccessRows = await listAlbumAccessRowsForMediaIds(treeId, media.map((asset) => asset.id));
+
+  for (const row of albumAccessRows) {
+    const current = effectiveByMediaId.get(row.media_id);
+    if (!current) {
+      continue;
+    }
+
+    const albumAccess = row.tree_media_albums?.access;
+    if (!albumAccess) {
+      continue;
+    }
+
+    effectiveByMediaId.set(row.media_id, strictestMediaVisibility(current, albumAccess));
+  }
+
+  return effectiveByMediaId;
+}
+
+export async function resolveEffectiveMediaAccess(mediaId: string) {
+  const media = await fetchAdminFirst<MediaAssetRecord>(
+    `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,
+    "Не удалось загрузить медиа."
+  );
+  if (!media) {
+    throw new AppError(404, "Медиа не найдено.");
+  }
+
+  const effectiveByMediaId = await resolveEffectiveMediaVisibilityMap(media.tree_id, [media]);
+  return effectiveByMediaId.get(mediaId) || media.visibility;
+}
+
 function mergeInviteAcceptanceRole(currentRole: UserRole | null, inviteRole: UserRole) {
   if (!currentRole) {
     return inviteRole;
@@ -989,7 +1057,10 @@ async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean
         })) as PersonMediaRecord[])
       : [];
 
-  const media = allMedia.filter((item) => canSeeMedia(actor.role, item.visibility, hasShareLinkAccess));
+  const effectiveMediaVisibilityById = includeMedia ? await resolveEffectiveMediaVisibilityMap(tree.id, allMedia) : new Map<string, MediaVisibility>();
+  const media = allMedia.filter((item) =>
+    canSeeMedia(actor.role, effectiveMediaVisibilityById.get(item.id) || item.visibility, hasShareLinkAccess)
+  );
   const visibleMediaIds = new Set(media.map((item) => item.id));
   const personMedia = includeMedia ? allPersonMedia.filter((item) => visibleMediaIds.has(item.media_id)) : [];
 
@@ -1450,7 +1521,13 @@ export async function getTreeMediaPageData(slug: string, options?: { shareToken?
     ),
     listTreeMediaAlbumsForTree(tree.id)
   ]);
-  const media = allMedia.filter((item) => canSeeMedia(actor.role, item.visibility, hasShareLinkAccess));
+  const effectiveMediaVisibilityById = await resolveEffectiveMediaVisibilityMap(tree.id, allMedia);
+  const media = allMedia.filter((item) =>
+    canSeeMedia(actor.role, effectiveMediaVisibilityById.get(item.id) || item.visibility, hasShareLinkAccess)
+  );
+  const albums = albumData.albums.filter((album) => canSeeMedia(actor.role, album.access, hasShareLinkAccess));
+  const visibleAlbumIds = new Set(albums.map((album) => album.id));
+  const items = albumData.items.filter((item) => visibleAlbumIds.has(item.album_id));
   const uploaderLabelsById = await listTreeMediaUploaderLabelsForUserIds(
     media.map((asset) => asset.created_by).filter((value): value is string => Boolean(value))
   );
@@ -1459,8 +1536,8 @@ export async function getTreeMediaPageData(slug: string, options?: { shareToken?
     tree,
     actor,
     media,
-    albums: albumData.albums,
-    items: albumData.items,
+    albums,
+    items,
     uploaderLabelsById
   };
 }
@@ -1494,6 +1571,7 @@ export async function createTreeMediaAlbum(input: {
   treeId: string;
   title: string;
   description?: string | null;
+  access?: MediaVisibility;
   albumKind?: TreeMediaAlbumRecord["album_kind"];
   uploaderUserId?: string | null;
 }) {
@@ -1507,6 +1585,7 @@ export async function createTreeMediaAlbum(input: {
         tree_id: input.treeId,
         title: input.title,
         description: input.description || null,
+        access: input.access || "members",
         album_kind: input.albumKind || "manual",
         uploader_user_id: input.uploaderUserId || null,
         created_by: userId
@@ -1538,7 +1617,7 @@ export async function createTreeMediaAlbum(input: {
   return data;
 }
 
-export async function updateTreeMediaAlbum(albumId: string, input: { title?: string; description?: string | null }) {
+export async function updateTreeMediaAlbum(albumId: string, input: { title?: string; description?: string | null; access?: MediaVisibility }) {
   const before = await fetchAdminFirst<TreeMediaAlbumRecord>(
     `tree_media_albums?select=*&id=eq.${encodeURIComponent(albumId)}`,
     "Не удалось загрузить альбом."
@@ -1557,7 +1636,8 @@ export async function updateTreeMediaAlbum(albumId: string, input: { title?: str
       "PATCH",
       {
         title: input.title ?? before.title,
-        description: input.description === undefined ? before.description : input.description || null
+        description: input.description === undefined ? before.description : input.description || null,
+        access: input.access ?? before.access
       },
       "Не удалось обновить альбом."
     );
@@ -1641,6 +1721,7 @@ async function ensureUploaderTreeMediaAlbum(treeId: string, userId: string, emai
       email,
       displayName: profile?.display_name || null
     }),
+    access: "members",
     albumKind: "uploader",
     uploaderUserId: userId
   });
@@ -2866,8 +2947,9 @@ export async function resolveMediaAccess(
 
   const tree = await getTreeById(media.tree_id);
   const readAccess = await getTreeReadAccess(tree, shareToken);
+  const effectiveVisibility = await resolveEffectiveMediaAccess(mediaId);
 
-  if (!canSeeMedia(readAccess.actor.role, media.visibility, readAccess.hasShareLinkAccess)) {
+  if (!canSeeMedia(readAccess.actor.role, effectiveVisibility, readAccess.hasShareLinkAccess)) {
     throw new AppError(403, "У вас нет доступа к этому медиафайлу.");
   }
 
