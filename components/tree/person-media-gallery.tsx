@@ -715,11 +715,11 @@ export function PersonMediaGallery({
         }
       }}
     >
-      <DialogContent className="archive-confirm-dialog media-lightbox-confirm-dialog" aria-label="Удалить это фото?" showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>Удалить это фото?</DialogTitle>
-          <DialogDescription>
-            {deleteTargetAsset ? `Фотография «${deleteTargetAsset.title}» будет удалена без перезагрузки страницы.` : "Фотография будет удалена без перезагрузки страницы."}
+        <DialogContent className="archive-confirm-dialog media-lightbox-confirm-dialog" aria-label="Удалить это фото?" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Удалить это фото?</DialogTitle>
+            <DialogDescription>
+            {deleteTargetAsset ? `Фото «${deleteTargetAsset.title}» будет удалено.` : "Фото будет удалено."}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="archive-actions">

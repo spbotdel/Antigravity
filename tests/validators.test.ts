@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeMediaAlbumSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema } from "@/lib/validators/media";
+import { addMediaToTreeMediaAlbumSchema, archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeMediaAlbumSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema } from "@/lib/validators/media";
 import { createTreeSchema } from "@/lib/validators/tree";
 import { inviteSchema } from "@/lib/validators/invite";
 
@@ -115,6 +115,16 @@ describe("validators", () => {
       treeId: crypto.randomUUID(),
       title: "День рождения тети Светы",
       description: "Фото и видео из одного архива"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts bulk add-to-album payloads for existing archive media", () => {
+    const result = addMediaToTreeMediaAlbumSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      albumId: crypto.randomUUID(),
+      mediaIds: [crypto.randomUUID(), crypto.randomUUID()]
     });
 
     expect(result.success).toBe(true);

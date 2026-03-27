@@ -3060,6 +3060,7 @@ textarea {
   text-align: left;
   font: inherit;
   cursor: pointer;
+  transition: transform 0.16s ease;
 }
 
 .archive-tile-actions-trigger {
@@ -3118,12 +3119,13 @@ textarea {
   text-align: left;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color 0.16s ease, color 0.16s ease;
+  transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
 }
 
 .archive-card-menu-item:hover,
 .archive-card-menu-item:focus-visible {
-  background: rgba(240, 109, 61, 0.08);
+  background: rgba(240, 109, 61, 0.1);
+  transform: translateX(1px);
   outline: none;
 }
 
@@ -3159,8 +3161,25 @@ textarea {
 .archive-tile-shell-selected .archive-tile-image,
 .archive-tile-shell-selected .archive-tile-placeholder {
   box-shadow:
-    0 0 0 2px rgba(208, 106, 66, 0.42),
-    0 10px 24px rgba(208, 106, 66, 0.14);
+    0 0 0 2px rgba(208, 106, 66, 0.52),
+    0 0 0 6px rgba(208, 106, 66, 0.09),
+    0 10px 24px rgba(208, 106, 66, 0.17);
+}
+
+.archive-tile-shell-selected .archive-tile {
+  transform: translateY(-1px);
+}
+
+.archive-tile-image,
+.archive-tile-placeholder,
+.archive-tile-selector,
+.archive-tile-actions-trigger {
+  transition:
+    box-shadow 0.16s ease,
+    transform 0.16s ease,
+    opacity 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .archive-tile-copy {
@@ -3241,31 +3260,123 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 26px;
+  padding: 12px 15px;
   border: 1px solid rgba(18, 27, 43, 0.08);
-  border-radius: 12px;
-  background: rgba(255, 251, 245, 0.88);
+  border-radius: 14px;
+  background: rgba(255, 251, 245, 0.9);
+  box-shadow: 0 12px 26px rgba(18, 27, 43, 0.06);
+  animation: archive-selection-bar-in 160ms ease-out;
 }
 
 .archive-selection-copy {
   display: grid;
-  gap: 2px;
+  gap: 0;
+}
+
+.archive-selection-count {
+  font-size: 1rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
 }
 
 .archive-selection-copy strong {
-  font-size: 0.95rem;
-  line-height: 1.25;
-}
-
-.archive-selection-copy span {
-  color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.4;
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .archive-selection-actions {
+  align-items: center;
+  gap: 10px;
   justify-content: flex-end;
+}
+
+.archive-selection-action-primary[data-slot="button"] {
+  padding-inline: 14px;
+  font-weight: 550;
+  box-shadow: 0 16px 30px rgba(18, 27, 43, 0.12);
+}
+
+.archive-selection-action-destructive[data-slot="button"] {
+  border-color: rgba(186, 66, 52, 0.24);
+  background: rgba(186, 66, 52, 0.12);
+  box-shadow: none;
+}
+
+.archive-selection-action-destructive[data-slot="button"]:hover {
+  border-color: rgba(186, 66, 52, 0.3);
+  background: rgba(186, 66, 52, 0.18);
+}
+
+.archive-selection-action-cancel[data-slot="button"] {
+  opacity: 0.58;
+}
+
+.archive-selection-action-cancel[data-slot="button"]:hover {
+  opacity: 0.82;
+}
+
+.archive-bulk-album-popover[data-slot="popover-content"] {
+  width: min(280px, calc(100vw - 32px));
+  gap: 14px;
+  padding: 12px 12px 13px;
+  border-radius: 14px;
+  box-shadow: 0 18px 36px rgba(18, 27, 43, 0.12);
+  animation: archive-popover-in 150ms ease-out;
+}
+
+.archive-bulk-album-popover-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.archive-bulk-album-popover-copy strong {
+  font-size: 1rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.archive-bulk-album-popover-copy span {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.archive-bulk-album-popover .archive-field {
+  gap: 10px;
+  color: rgba(28, 36, 51, 0.74);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.archive-bulk-album-actions {
+  margin-top: 2px;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+@keyframes archive-selection-bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes archive-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .archive-actions {

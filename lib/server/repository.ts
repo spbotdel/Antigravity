@@ -1559,6 +1559,45 @@ async function addMediaToTreeMediaAlbums(albumIds: string[], mediaId: string) {
   );
 }
 
+export async function addExistingMediaToTreeMediaAlbum(input: {
+  treeId: string;
+  albumId: string;
+  mediaIds: string[];
+}) {
+  await requireTreeRole(input.treeId, ["owner", "admin"]);
+
+  const album = await fetchAdminFirst<TreeMediaAlbumRecord>(
+    `tree_media_albums?select=*&id=eq.${encodeURIComponent(input.albumId)}&tree_id=eq.${encodeURIComponent(input.treeId)}`,
+    "Не удалось загрузить альбом."
+  );
+
+  if (!album) {
+    throw new AppError(404, "Альбом не найден.");
+  }
+
+  if (album.album_kind !== "manual") {
+    throw new AppError(400, "Добавлять материалы вручную можно только в пользовательский альбом.");
+  }
+
+  const uniqueMediaIds = [...new Set(input.mediaIds.filter(Boolean))];
+  if (!uniqueMediaIds.length) {
+    throw new AppError(400, "Не выбраны материалы для добавления в альбом.");
+  }
+
+  const createdItems: TreeMediaAlbumItemRecord[] = [];
+
+  for (const mediaId of uniqueMediaIds) {
+    const rows = await addMediaToTreeMediaAlbums([input.albumId], mediaId);
+    createdItems.push(...rows);
+  }
+
+  return {
+    items: createdItems,
+    createdCount: createdItems.length,
+    message: createdItems.length === 1 ? "Материал добавлен в альбом." : `Материалы добавлены в альбом: ${createdItems.length}.`
+  };
+}
+
 export async function listAudit(treeId: string, options?: { page?: number; pageSize?: number }): Promise<PaginatedAuditEntryView> {
   await requireTreeRole(treeId, ["owner"]);
   const page = Math.max(1, options?.page || 1);

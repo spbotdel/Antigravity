@@ -919,6 +919,68 @@ describe("builder workspace", () => {
     expect(screen.queryByLabelText("Выбрать медиа media-photo-1")).not.toBeInTheDocument();
   });
 
+  it("clears builder photo selection mode on Escape when no dialog or popover is open", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshotWithPhotos(2)} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько media-photo-1" }));
+
+    expect(screen.getByRole("region", { name: "Действия с выбранными фотографиями" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Действия с выбранными фотографиями" })).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "false");
+  });
+
+  it("does not clear builder photo selection on Escape while a confirmation dialog is open", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshotWithPhotos(2)} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько media-photo-1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+
+    expect(screen.getByRole("dialog", { name: "Удалить выбранные фото?" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(screen.getByRole("dialog", { name: "Удалить выбранные фото?" })).toBeInTheDocument();
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "true");
+  });
+
+  it("does not clear builder photo selection on Escape while a popover is open", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshotWithPhotos(2)} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько media-photo-1" }));
+
+    const popover = document.createElement("div");
+    popover.setAttribute("data-slot", "popover-content");
+    document.body.appendChild(popover);
+
+    try {
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(screen.getByRole("region", { name: "Действия с выбранными фотографиями" })).toBeInTheDocument();
+      expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "true");
+    } finally {
+      popover.remove();
+    }
+  });
+
   it("keeps only download and album actions in the menu for non-owner non-admin roles", async () => {
     const snapshot = createSnapshotWithPhotos(2);
     snapshot.actor.role = "viewer";

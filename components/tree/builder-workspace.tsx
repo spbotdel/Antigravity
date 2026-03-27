@@ -1177,6 +1177,31 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     }
   }, [isPhotoSelectionMode, selectedPhotoMediaCount]);
 
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape" || !isPhotoSelectionMode || !selectedPhotoMediaCount) {
+        return;
+      }
+
+      if (document.body.classList.contains("media-lightbox-open")) {
+        return;
+      }
+
+      if (document.querySelector('[data-slot="dialog-content"]')) {
+        return;
+      }
+
+      if (document.querySelector('[data-slot="popover-content"]')) {
+        return;
+      }
+
+      clearSelectedPhotoMedia();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPhotoSelectionMode, selectedPhotoMediaCount]);
+
   function startCanvasResize(event: PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
     resizeSessionRef.current = {
@@ -3408,7 +3433,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           <DialogHeader>
             <DialogTitle>Удалить выбранные фото?</DialogTitle>
             <DialogDescription>
-              {selectedPhotoMediaCount ? `${selectedPhotoMediaCount} шт. будут удалены без перезагрузки страницы.` : "Выбранные фото будут удалены без перезагрузки страницы."}
+              {selectedPhotoMediaCount ? `${selectedPhotoMediaCount} фото будут удалены.` : "Выбранные фото будут удалены."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="archive-actions">
