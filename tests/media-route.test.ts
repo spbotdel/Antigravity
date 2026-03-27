@@ -17,6 +17,22 @@ describe("media route", () => {
     setPrimaryPersonMedia.mockReset();
   });
 
+  it("passes download mode to GET /api/media/[mediaId] when requested", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
+    resolveMediaAccess.mockResolvedValue({ url: "https://example.com/download-file", kind: "photo" });
+
+    const response = await GET(
+      new Request("http://localhost/api/media/media-1?download=1"),
+      {
+        params: Promise.resolve({ mediaId: "media-1" })
+      }
+    );
+
+    expect(resolveMediaAccess).toHaveBeenCalledWith("media-1", null, null, { download: true });
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://example.com/download-file");
+  });
+
   it("sets a photo as primary person media via PATCH /api/media/[mediaId]", async () => {
     const { PATCH } = await import("@/app/api/media/[mediaId]/route");
     const personId = crypto.randomUUID();

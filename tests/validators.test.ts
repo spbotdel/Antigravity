@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addMediaToTreeMediaAlbumSchema, archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeMediaAlbumSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema } from "@/lib/validators/media";
+import { addMediaToTreeMediaAlbumSchema, archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeMediaAlbumSchema, downloadArchiveMediaSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema } from "@/lib/validators/media";
 import { createTreeSchema } from "@/lib/validators/tree";
 import { inviteSchema } from "@/lib/validators/invite";
 
@@ -124,6 +124,15 @@ describe("validators", () => {
     const result = addMediaToTreeMediaAlbumSchema.safeParse({
       treeId: crypto.randomUUID(),
       albumId: crypto.randomUUID(),
+      mediaIds: [crypto.randomUUID(), crypto.randomUUID()]
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts bulk archive download payloads", () => {
+    const result = downloadArchiveMediaSchema.safeParse({
+      treeId: crypto.randomUUID(),
       mediaIds: [crypto.randomUUID(), crypto.randomUUID()]
     });
 

@@ -527,12 +527,30 @@ function buildPhotoVariantStoragePath(storagePath: string, variant: MediaVariant
   return `${baseDirectory}/variants/${variant}.webp`;
 }
 
-async function createObjectStorageSignedReadUrl(storagePath: string, config = getObjectStorageEnv()) {
+function buildMediaDownloadFilename(media: Pick<MediaAssetRecord, "id" | "title" | "storage_path" | "external_url">) {
+  const trimmedTitle = media.title.trim();
+  if (trimmedTitle) {
+    return trimmedTitle;
+  }
+
+  const rawPath = media.storage_path || media.external_url || "";
+  const baseName = rawPath ? path.basename(rawPath) : "";
+  return baseName || `media-${media.id}`;
+}
+
+async function createObjectStorageSignedReadUrl(
+  storagePath: string,
+  config = getObjectStorageEnv(),
+  options?: { downloadName?: string | null }
+) {
   return getSignedUrl(
     getObjectStorageClient(config),
     new GetObjectCommand({
       Bucket: config.bucket,
-      Key: storagePath
+      Key: storagePath,
+      ...(options?.downloadName
+        ? { ResponseContentDisposition: `attachment; filename="${options.downloadName}"` }
+        : {})
     }),
     { expiresIn: 60 }
   );
@@ -1596,6 +1614,28 @@ export async function addExistingMediaToTreeMediaAlbum(input: {
     createdCount: createdItems.length,
     message: createdItems.length === 1 ? "Материал добавлен в альбом." : `Материалы добавлены в альбом: ${createdItems.length}.`
   };
+}
+
+export async function listExistingArchiveMediaForEditor(input: {
+  treeId: string;
+  mediaIds: string[];
+}) {
+  await requireTreeRole(input.treeId, ["owner", "admin"]);
+
+  const uniqueMediaIds = [...new Set(input.mediaIds.filter(Boolean))];
+  if (!uniqueMediaIds.length) {
+    return [];
+  }
+
+  const media = await fetchAdminRows<MediaAssetRecord>(
+    `media_assets?select=*&tree_id=eq.${encodeURIComponent(input.treeId)}&id=in.${buildUuidInFilter(uniqueMediaIds)}`,
+    "Не удалось загрузить материалы для скачивания."
+  );
+  const mediaById = new Map(media.map((asset) => [asset.id, asset] as const));
+
+  return uniqueMediaIds
+    .map((mediaId) => mediaById.get(mediaId) || null)
+    .filter((asset): asset is MediaAssetRecord => Boolean(asset));
 }
 
 export async function listAudit(treeId: string, options?: { page?: number; pageSize?: number }): Promise<PaginatedAuditEntryView> {
@@ -2726,7 +2766,12 @@ export async function setPrimaryPersonMedia(mediaId: string, personId: string, a
   return updatedRelation;
 }
 
-export async function resolveMediaAccess(mediaId: string, shareToken?: string | null, variant?: MediaVariantName | null) {
+export async function resolveMediaAccess(
+  mediaId: string,
+  shareToken?: string | null,
+  variant?: MediaVariantName | null,
+  options?: { download?: boolean }
+) {
   const media = await fetchAdminFirst<MediaAssetRecord>(
     `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,
     "Не удалось загрузить медиа."
@@ -2772,18 +2817,28 @@ export async function resolveMediaAccess(mediaId: string, shareToken?: string | 
   if (isObjectStorageMediaProvider(media.provider)) {
     const storageEnv = getObjectStorageEnvForMedia(media.created_at);
     const resolvedStoragePath = resolvedVariantPath || media.storage_path;
-    const signedUrl = await createObjectStorageSignedReadUrl(resolvedStoragePath, storageEnv);
+    const signedUrl = await createObjectStorageSignedReadUrl(resolvedStoragePath, storageEnv, {
+      downloadName: options?.download ? buildMediaDownloadFilename(media) : null
+    });
     return { kind: media.kind, url: signedUrl };
   }
 
   if (resolvedVariantPath) {
-    const { data: variantSigned, error: variantSignedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(resolvedVariantPath, 60);
+    const { data: variantSigned, error: variantSignedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(
+      resolvedVariantPath,
+      60,
+      options?.download ? { download: buildMediaDownloadFilename(media) } : undefined
+    );
     if (!variantSignedError && variantSigned) {
       return { kind: media.kind, url: variantSigned.signedUrl };
     }
   }
 
-  const { data: signed, error: signedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(media.storage_path, 60);
+  const { data: signed, error: signedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(
+    media.storage_path,
+    60,
+    options?.download ? { download: buildMediaDownloadFilename(media) } : undefined
+  );
   if (signedError || !signed) throw new AppError(400, signedError?.message || "Не удалось создать подписанную ссылку.");
 
   return { kind: media.kind, url: signed.signedUrl };

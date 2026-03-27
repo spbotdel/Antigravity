@@ -13,9 +13,10 @@ export async function GET(request: Request, { params }: Params) {
     const { mediaId } = await params;
     const searchParams = new URL(request.url).searchParams;
     const shareToken = searchParams.get("share");
+    const download = searchParams.get("download") === "1";
     const rawVariant = searchParams.get("variant");
-    const variant = rawVariant === "thumb" || rawVariant === "small" || rawVariant === "medium" ? rawVariant : null;
-    const result = await resolveMediaAccess(mediaId, shareToken, variant);
+    const variant = !download && (rawVariant === "thumb" || rawVariant === "small" || rawVariant === "medium") ? rawVariant : null;
+    const result = await resolveMediaAccess(mediaId, shareToken, variant, { download });
     return NextResponse.redirect(result.url);
   } catch (error) {
     return toErrorResponse(error);

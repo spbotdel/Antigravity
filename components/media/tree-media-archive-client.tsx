@@ -208,6 +208,15 @@ function buildOpenUrl(asset: MediaAssetRecord, shareToken?: string | null) {
   return buildMediaOpenRouteUrl(asset, shareToken);
 }
 
+function buildDownloadUrl(asset: MediaAssetRecord, shareToken?: string | null) {
+  const params = new URLSearchParams();
+  params.set("download", "1");
+  if (shareToken) {
+    params.set("share", shareToken);
+  }
+  return `/api/media/${asset.id}?${params.toString()}`;
+}
+
 function areStringSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>) {
   if (left.size !== right.size) {
     return false;
@@ -344,6 +353,7 @@ export function TreeMediaArchiveClient({
   const [isAddToAlbumPickerOpen, setIsAddToAlbumPickerOpen] = useState(false);
   const [bulkAddAlbumId, setBulkAddAlbumId] = useState("");
   const [isAddingToAlbum, setIsAddingToAlbum] = useState(false);
+  const [isDownloadingArchiveMedia, setIsDownloadingArchiveMedia] = useState(false);
   const [openArchiveActionsMediaId, setOpenArchiveActionsMediaId] = useState<string | null>(null);
   const [openArchiveAlbumChooserMediaId, setOpenArchiveAlbumChooserMediaId] = useState<string | null>(null);
   const [deleteTargetMediaId, setDeleteTargetMediaId] = useState<string | null>(null);
@@ -938,10 +948,67 @@ export function TreeMediaArchiveClient({
     }
   }
 
+  async function downloadSelectedArchiveMedia() {
+    const mediaIdsToDownload = [...selectedArchiveMediaIds];
+    if (!mediaIdsToDownload.length || isDownloadingArchiveMedia) {
+      return;
+    }
+
+    setError(null);
+
+    if (mediaIdsToDownload.length === 1) {
+      const asset = archiveMedia.find((item) => item.id === mediaIdsToDownload[0]) || null;
+      if (!asset) {
+        setError("Не удалось подготовить файл для скачивания.");
+        return;
+      }
+
+      window.location.assign(buildDownloadUrl(asset, shareToken));
+      return;
+    }
+
+    setIsDownloadingArchiveMedia(true);
+
+    try {
+      const response = await fetch("/api/media/archive/download", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          treeId,
+          mediaIds: mediaIdsToDownload
+        })
+      });
+      const disposition = response.headers.get("Content-Disposition") || "";
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(typeof payload?.error === "string" ? payload.error : "Не удалось подготовить архив для скачивания.");
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const filenameMatch = /filename="([^"]+)"/.exec(disposition);
+      anchor.href = downloadUrl;
+      anchor.download = filenameMatch?.[1] || "archive-media.zip";
+      anchor.style.display = "none";
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Не удалось подготовить архив для скачивания.");
+    } finally {
+      setIsDownloadingArchiveMedia(false);
+    }
+  }
+
   function renderArchiveTile(asset: MediaAssetRecord, items: MediaAssetRecord[]) {
     const imageUrl = asset.kind === "photo" && isHydrated ? buildPhotoUrl(asset, shareToken) : null;
     const secondaryLabel = asset.caption?.trim() || `${getArchiveKindLabel(asset)} • ${getArchiveMediaSourceLabel(asset)}`;
-    const downloadHref = buildOpenUrl(asset, shareToken);
+    const downloadHref = buildDownloadUrl(asset, shareToken);
     const albumOptions = getArchiveAlbumOptionsForAsset(asset);
     const isSelected = selectedArchiveMediaIds.has(asset.id);
     const isActionsMenuOpen = openArchiveActionsMediaId === asset.id;
@@ -1540,7 +1607,22 @@ export function TreeMediaArchiveClient({
                 </div>
               </PopoverContent>
             </Popover>
-            <Button type="button" variant="destructive" className="archive-selection-action-destructive" disabled={isDeletingArchiveMedia || isAddingToAlbum} onClick={() => setIsBulkArchiveDeleteConfirmOpen(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="archive-selection-action-secondary archive-selection-action-download"
+              disabled={isDeletingArchiveMedia || isAddingToAlbum || isDownloadingArchiveMedia}
+              onClick={() => void downloadSelectedArchiveMedia()}
+            >
+              {isDownloadingArchiveMedia ? "Скачиваю..." : "Скачать"}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="archive-selection-action-destructive"
+              disabled={isDeletingArchiveMedia || isAddingToAlbum}
+              onClick={() => setIsBulkArchiveDeleteConfirmOpen(true)}
+            >
               {isDeletingArchiveMedia ? "Удаляю..." : "Удалить"}
             </Button>
             <Button type="button" variant="ghost" className="archive-selection-action-cancel" disabled={isDeletingArchiveMedia || isAddingToAlbum} onClick={clearArchiveSelection}>

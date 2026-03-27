@@ -231,6 +231,7 @@ describe("tree media archive client", () => {
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "Скачать" })).toBeInTheDocument();
     });
+    expect(screen.getByRole("link", { name: "Скачать" })).toHaveAttribute("href", "/api/media/media-photo?download=1");
     expect(screen.getByRole("link", { name: "Перейти к альбому" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Выбрать несколько" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Удалить" })).not.toBeInTheDocument();
@@ -484,6 +485,74 @@ describe("tree media archive client", () => {
       expect(screen.queryByRole("button", { name: "Открыть видео: Архивное видео" })).not.toBeInTheDocument();
     });
     expect(screen.queryByRole("region", { name: "Действия с выбранными материалами" })).not.toBeInTheDocument();
+  });
+
+  it("downloads selected archive media as zip from the selection bar", async () => {
+    const requests: Array<{ url: string; method?: string; body?: unknown }> = [];
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const createObjectURLMock = vi.fn(() => "blob:archive-download");
+    const revokeObjectURLMock = vi.fn();
+    const clickMock = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+
+    URL.createObjectURL = createObjectURLMock;
+    URL.revokeObjectURL = revokeObjectURLMock;
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      requests.push({ url, method: init?.method, body });
+
+      if (url.endsWith("/api/media/archive/download") && init?.method === "POST") {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/zip",
+            "Content-Disposition": 'attachment; filename="archive-media-test.zip"',
+          },
+        });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    vi.spyOn(document, "createElement").mockImplementation(((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === "a") {
+        Object.defineProperty(element, "click", {
+          configurable: true,
+          value: clickMock,
+        });
+      }
+      return element;
+    }) as typeof document.createElement);
+
+    renderArchiveClient();
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Архивное фото»" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Выбрать несколько" })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько" }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть видео: Архивное видео" }));
+
+    fireEvent.click(within(screen.getByRole("region", { name: "Действия с выбранными материалами" })).getByRole("button", { name: "Скачать" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.url.endsWith("/api/media/archive/download") && request.method === "POST")).toBe(true);
+    });
+
+    const downloadRequest = requests.find((request) => request.url.endsWith("/api/media/archive/download") && request.method === "POST");
+    expect(downloadRequest?.body).toMatchObject({
+      treeId: "tree-1",
+      mediaIds: ["media-photo", "media-video"],
+    });
+    expect(createObjectURLMock).toHaveBeenCalled();
+    expect(clickMock).toHaveBeenCalled();
+    expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:archive-download");
+
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
   });
 
   it("shows the bulk add-to-album action in archive selection mode and opens a manual album picker", async () => {
