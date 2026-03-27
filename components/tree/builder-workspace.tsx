@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
 import { ArrowUpRight, CalendarDays, Camera, Pencil } from "lucide-react";
 import { format as formatDateFn, parseISO } from "date-fns";
 
@@ -735,6 +735,8 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [personInfoAutosaveState, setPersonInfoAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [expandedGalleryMode, setExpandedGalleryMode] = useState<"photo" | "video" | null>(null);
   const [canvasHeight, setCanvasHeight] = useState(980);
+  const [builderInspectorWidth, setBuilderInspectorWidth] = useState(440);
+  const [isInspectorResizing, setIsInspectorResizing] = useState(false);
   const storageKeys = useMemo(
     () => ({
       canvasHeight: getBuilderStorageKey(snapshot.tree.id, "canvasHeight"),
@@ -746,6 +748,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   );
   const currentSnapshotRef = useRef(currentSnapshot);
   const resizeSessionRef = useRef<{ startHeight: number; startY: number } | null>(null);
+  const builderLayoutRef = useRef<HTMLDivElement | null>(null);
   const tempPersonResolutionPromisesRef = useRef(new Map<string, Promise<string | null>>());
   const tempPersonResolutionResolversRef = useRef(new Map<string, (personId: string | null) => void>());
   const resolvedTempPersonIdsRef = useRef(new Map<string, string | null>());
@@ -807,6 +810,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             renderSnapshot.media.some((asset) => asset.id === relation.media_id && asset.kind === "photo")
         )?.media_id || null
       : null;
+  const canDeleteSelectedPhotoMedia = currentSnapshot.actor.role === "owner" || currentSnapshot.actor.role === "admin";
   const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
   const selectedAvatarCrop = selectedPerson ? personAvatarCrops[selectedPerson.id] || DEFAULT_AVATAR_CROP : DEFAULT_AVATAR_CROP;
   const selectedPersonEditFormKey = selectedPerson ? selectedPerson.id : "edit-none";
@@ -1087,6 +1091,38 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       setExpandedGalleryMode(null);
     }
   }, [activePanel, currentBuilderTab, expandedGalleryMode]);
+
+  useEffect(() => {
+    if (!isInspectorResizing) {
+      return undefined;
+    }
+
+    function handlePointerMove(event: globalThis.PointerEvent) {
+      const layout = builderLayoutRef.current;
+      if (!layout) {
+        return;
+      }
+
+      const rect = layout.getBoundingClientRect();
+      const nextWidth = rect.right - event.clientX;
+      const maxWidth = Math.min(720, Math.max(420, rect.width - 320));
+      setBuilderInspectorWidth(Math.max(360, Math.min(maxWidth, nextWidth)));
+    }
+
+    function stopResize() {
+      setIsInspectorResizing(false);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+    };
+  }, [isInspectorResizing]);
 
   function startCanvasResize(event: PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -1658,6 +1694,26 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
     setStatus(payload.message || "Аватар обновлен.");
     return true;
+  }
+
+  async function deleteBuilderPhoto(mediaId: string) {
+    setStatus(null);
+    setError(null);
+
+    const { response, payload } = await requestJsonRaw(`/api/media/${mediaId}`, "DELETE", {});
+    if (!response.ok) {
+      const message = payload.error || "Не удалось удалить фото.";
+      setError(message);
+      throw new Error(message);
+    }
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      media: prev.media.filter((asset) => asset.id !== mediaId),
+      personMedia: prev.personMedia.filter((relation) => relation.media_id !== mediaId),
+    }));
+
+    setStatus(payload.message || "Фото удалено.");
   }
 
   async function setRootPerson(personId: string | null) {
@@ -2455,7 +2511,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
   return (
     <>
-      <div className="builder-layout builder-layout-reworked builder-layout-canvas">
+      <div
+        ref={builderLayoutRef}
+        className={`builder-layout builder-layout-reworked builder-layout-canvas${isInspectorResizing ? " builder-layout-resizing" : ""}`}
+        style={{ "--builder-inspector-overlay-width": `${builderInspectorWidth}px` } as CSSProperties}
+      >
         <main className="builder-main">
           <Card className="viewer-stage builder-stage builder-stage-canvas">
             <div className="stage-header builder-stage-header builder-stage-header-overlay">
@@ -2525,6 +2585,16 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             )}
           </Card>
         </main>
+
+        <div
+          className="builder-inspector-resize-handle"
+          aria-label="Изменить ширину карточки человека"
+          role="separator"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setIsInspectorResizing(true);
+          }}
+        />
 
         <Card className="builder-inspector builder-inspector-overlay utility-section-card p-6">
         <div className="builder-inspector-header utility-section-heading">
@@ -2974,10 +3044,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         emptyTitle="Фотографий пока нет"
                         emptyMessage="Для этого человека пока нет фотографий."
                         avatarMediaId={selectedPrimaryPhotoMediaId}
+                        canDeleteMedia={canDeleteSelectedPhotoMedia}
                         showStickyFooter={false}
                         showStage={false}
                         showViewerAvatarAction
                         appendTile={renderPhotoAddTile()}
+                        onDeleteMedia={(mediaId) => deleteBuilderPhoto(mediaId)}
                         onSetAvatar={(mediaId) => {
                           const currentRelation = currentSnapshotRef.current.personMedia.find(
                             (relation) => relation.person_id === selectedPerson.id && relation.media_id === mediaId

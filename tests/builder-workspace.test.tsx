@@ -13,9 +13,23 @@ vi.mock("@/components/tree/family-tree-canvas", () => ({
 }));
 
 vi.mock("@/components/tree/person-media-gallery", () => ({
-  PersonMediaGallery: (props: { appendTile?: unknown }) => (
-    <div data-testid="person-media-gallery">
+  PersonMediaGallery: (props: {
+    appendTile?: unknown;
+    media?: Array<{ id: string }>;
+    canDeleteMedia?: boolean;
+    onDeleteMedia?: (mediaId: string) => Promise<void>;
+  }) => (
+    <div
+      data-testid="person-media-gallery"
+      data-delete-enabled={props.canDeleteMedia && props.onDeleteMedia ? "true" : "false"}
+      data-media-count={String(props.media?.length ?? 0)}
+    >
       {props.appendTile as any}
+      {props.onDeleteMedia && (props.media?.length ?? 0) > 0 ? (
+        <button type="button" onClick={() => void props.onDeleteMedia?.(props.media?.[0]?.id || "")}>
+          Удалить медиа из галереи
+        </button>
+      ) : null}
     </div>
   ),
 }));
@@ -784,7 +798,7 @@ describe("builder workspace", () => {
     expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 видео");
   });
 
-  it("keeps photo actions in a lightweight toolbar above the gallery", async () => {
+  it("keeps photo access lightweight with an album shortcut and a single add tile", async () => {
     render(<BuilderWorkspace snapshot={createSnapshotWithPhoto()} mediaLoaded />);
 
     await waitFor(() => {
@@ -792,11 +806,11 @@ describe("builder workspace", () => {
     });
 
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
-    const toolbar = screen.getByText("1 фото загружено").closest(".builder-photo-tab-toolbar");
-    expect(toolbar).not.toBeNull();
-    expect(within(toolbar as HTMLElement).getByRole("button", { name: "Загрузить фото" })).toBeInTheDocument();
-    expect(within(toolbar as HTMLElement).getByRole("link", { name: "Перейти в альбом" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
-    expect(screen.getAllByRole("button", { name: "Загрузить фото" })).toHaveLength(1);
+
+    expect(screen.getByRole("link", { name: "Перейти в альбом" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
+    expect(screen.getByRole("button", { name: "Добавить фото" })).toBeInTheDocument();
+    expect(screen.queryByText("1 фото загружено")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Загрузить фото" })).not.toBeInTheDocument();
   });
 
   it("renders the shared person photo gallery inside the builder photo tab", async () => {
@@ -809,6 +823,58 @@ describe("builder workspace", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
 
     expect(screen.getByTestId("person-media-gallery")).toBeInTheDocument();
+  });
+
+  it("enables delete scope only for the builder photo gallery", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshotWithPhoto()} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-delete-enabled", "true");
+    expect(screen.getByRole("button", { name: "Удалить медиа из галереи" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-delete-enabled", "false");
+    expect(screen.queryByRole("button", { name: "Удалить медиа из галереи" })).not.toBeInTheDocument();
+  });
+
+  it("deletes a builder photo through the media endpoint and patches the local snapshot without reloading", async () => {
+    const requests: Array<{ url: string; method?: string }> = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      requests.push({ url, method: init?.method });
+
+      if (url.endsWith("/api/media/media-photo-1") && init?.method === "DELETE") {
+        return Response.json({ message: "Медиа удалено." }, { status: 200 });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    render(<BuilderWorkspace snapshot={createSnapshotWithPhoto()} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить медиа из галереи" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.url.endsWith("/api/media/media-photo-1") && request.method === "DELETE")).toBe(true);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-media-count", "0");
+    });
+
+    expect(requests.some((request) => request.url.includes("/api/tree/demo-tree/builder-snapshot"))).toBe(false);
+    expect(screen.getAllByRole("status").some((element) => element.textContent?.includes("Медиа удалено."))).toBe(true);
   });
 
   it("resizes the canvas and persists the updated height", async () => {

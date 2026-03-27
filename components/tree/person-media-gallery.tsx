@@ -1,7 +1,15 @@
 "use client";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -22,6 +30,8 @@ interface PersonMediaGalleryProps {
   appendTile?: ReactNode;
   avatarMediaId?: string | null;
   onSetAvatar?: (mediaId: string) => Promise<void> | void;
+  canDeleteMedia?: boolean;
+  onDeleteMedia?: (mediaId: string) => Promise<void>;
   showStickyFooter?: boolean;
   showStage?: boolean;
   showViewerAvatarAction?: boolean;
@@ -246,6 +256,8 @@ export function PersonMediaGallery({
   appendTile = null,
   avatarMediaId = null,
   onSetAvatar,
+  canDeleteMedia = false,
+  onDeleteMedia,
   showStickyFooter = true,
   showStage = true,
   showViewerAvatarAction = false,
@@ -253,9 +265,12 @@ export function PersonMediaGallery({
   const [activeMediaId, setActiveMediaId] = useState<string | null>(media[0]?.id ?? null);
   const [lightboxState, setLightboxState] = useState<LightboxState>("closed");
   const [isAvatarUpdating, setIsAvatarUpdating] = useState(false);
+  const [deleteTargetMediaId, setDeleteTargetMediaId] = useState<string | null>(null);
+  const [isDeletingMedia, setIsDeletingMedia] = useState(false);
   const lightboxStripRef = useRef<HTMLDivElement | null>(null);
   const lightboxThumbRefs = useRef(new Map<string, HTMLButtonElement>());
   const lightboxGestureRef = useRef(createIdleLightboxGestureState());
+  const pendingDeletedSuccessorIdRef = useRef<string | null>(null);
   const isLightboxOpen = lightboxState === "open";
   const isLightboxClosing = lightboxState === "closing";
   const isLightboxRendered = lightboxState !== "closed";
@@ -278,9 +293,29 @@ export function PersonMediaGallery({
         return currentMediaId;
       }
 
+      const pendingSuccessorId = pendingDeletedSuccessorIdRef.current;
+      if (pendingSuccessorId && media.some((asset) => asset.id === pendingSuccessorId)) {
+        pendingDeletedSuccessorIdRef.current = null;
+        return pendingSuccessorId;
+      }
+
+      pendingDeletedSuccessorIdRef.current = null;
       return media[0]?.id ?? null;
     });
   }, [media]);
+
+  useEffect(() => {
+    if (!media.length) {
+      pendingDeletedSuccessorIdRef.current = null;
+      setDeleteTargetMediaId(null);
+      setLightboxState("closed");
+      return;
+    }
+
+    if (deleteTargetMediaId && !media.some((asset) => asset.id === deleteTargetMediaId)) {
+      setDeleteTargetMediaId(null);
+    }
+  }, [deleteTargetMediaId, media]);
 
   useEffect(() => {
     if (!isLightboxRendered) {
@@ -312,8 +347,10 @@ export function PersonMediaGallery({
   const activeIndex = activeMediaId ? media.findIndex((asset) => asset.id === activeMediaId) : -1;
   const resolvedActiveIndex = activeIndex >= 0 ? activeIndex : 0;
   const activeAsset = media[resolvedActiveIndex] ?? null;
+  const deleteTargetAsset = deleteTargetMediaId ? media.find((asset) => asset.id === deleteTargetMediaId) ?? null : null;
   const canNavigate = media.length > 1;
   const canSetAvatar = Boolean(onSetAvatar && activeAsset && isPhotoAsset(activeAsset));
+  const canDeleteCurrentMedia = Boolean(canDeleteMedia && onDeleteMedia && activeAsset && isPhotoAsset(activeAsset));
 
   function moveSelection(direction: -1 | 1) {
     if (!media.length) {
@@ -334,6 +371,36 @@ export function PersonMediaGallery({
       await onSetAvatar(mediaId);
     } finally {
       setIsAvatarUpdating(false);
+    }
+  }
+
+  async function handleConfirmDeleteMedia() {
+    if (!onDeleteMedia || !deleteTargetMediaId || isDeletingMedia) {
+      return;
+    }
+
+    const currentDeleteIndex = media.findIndex((asset) => asset.id === deleteTargetMediaId);
+    const nextMediaId =
+      currentDeleteIndex >= 0
+        ? media[currentDeleteIndex + 1]?.id ?? media[currentDeleteIndex - 1]?.id ?? null
+        : null;
+
+    pendingDeletedSuccessorIdRef.current = nextMediaId;
+    setIsDeletingMedia(true);
+
+    try {
+      await onDeleteMedia(deleteTargetMediaId);
+      setDeleteTargetMediaId(null);
+      if (nextMediaId) {
+        setActiveMediaId(nextMediaId);
+      } else {
+        pendingDeletedSuccessorIdRef.current = null;
+        setLightboxState("closed");
+      }
+    } catch {
+      pendingDeletedSuccessorIdRef.current = null;
+    } finally {
+      setIsDeletingMedia(false);
     }
   }
 
@@ -514,87 +581,126 @@ export function PersonMediaGallery({
   }
 
   const activeMediaUrl = buildMediaOpenRouteUrl(activeAsset, shareToken);
-  const showLightboxActions = !isInlineRenderableAsset(activeAsset) || (showViewerAvatarAction && canSetAvatar);
+  const showLightboxActions = !isInlineRenderableAsset(activeAsset) || (showViewerAvatarAction && canSetAvatar) || canDeleteCurrentMedia;
   const lightboxContent = isLightboxRendered ? (
-    <div
-      className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Просмотр медиа: ${activeAsset.title}`}
-      onTouchStart={handleLightboxTouchStart}
-      onTouchMove={handleLightboxTouchMove}
-      onTouchEnd={handleLightboxTouchEnd}
-      onTouchCancel={resetLightboxGesture}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          closeLightbox();
-        }
-      }}
-    >
-      <div className="media-lightbox-shell">
-        <button
-          type="button"
-          className="media-lightbox-close"
-          aria-label="Закрыть просмотр"
-          onClick={closeLightbox}
-        >
-          <X className="media-lightbox-control-icon" aria-hidden="true" />
-        </button>
-
-        {canNavigate ? (
-          <button type="button" className="media-lightbox-nav media-lightbox-nav-left" aria-label="Предыдущее медиа" onClick={() => moveSelection(-1)}>
-            <ChevronLeft className="media-lightbox-control-icon" aria-hidden="true" />
+    <>
+      <div
+        className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Просмотр медиа: ${activeAsset.title}`}
+        onTouchStart={handleLightboxTouchStart}
+        onTouchMove={handleLightboxTouchMove}
+        onTouchEnd={handleLightboxTouchEnd}
+        onTouchCancel={resetLightboxGesture}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            closeLightbox();
+          }
+        }}
+      >
+        <div className="media-lightbox-shell">
+          <button
+            type="button"
+            className="media-lightbox-close"
+            aria-label="Закрыть просмотр"
+            onClick={closeLightbox}
+          >
+            <X className="media-lightbox-control-icon" aria-hidden="true" />
           </button>
-        ) : null}
 
-        <div className="media-lightbox-content">
-          <div className="media-lightbox-stage media-lightbox-stage-minimal">
-            <MediaPreview asset={activeAsset} shareToken={shareToken} expanded />
+          {canNavigate ? (
+            <button type="button" className="media-lightbox-nav media-lightbox-nav-left" aria-label="Предыдущее медиа" onClick={() => moveSelection(-1)}>
+              <ChevronLeft className="media-lightbox-control-icon" aria-hidden="true" />
+            </button>
+          ) : null}
+
+          <div className="media-lightbox-content">
+            <div className="media-lightbox-stage media-lightbox-stage-minimal">
+              <MediaPreview asset={activeAsset} shareToken={shareToken} expanded />
+            </div>
+
+            {showLightboxActions ? (
+              <div className="archive-action-bar media-lightbox-inline-actions">
+                {!isInlineRenderableAsset(activeAsset) ? (
+                  <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
+                    {getMediaOpenLabel(activeAsset)}
+                  </a>
+                ) : null}
+                {showViewerAvatarAction ? renderAvatarAction() : null}
+                {canDeleteCurrentMedia ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="person-media-delete-action"
+                    onClick={() => setDeleteTargetMediaId(activeAsset.id)}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    Удалить фото
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
-          {showLightboxActions ? (
-            <div className="archive-action-bar media-lightbox-inline-actions">
-              {!isInlineRenderableAsset(activeAsset) ? (
-                <a href={activeMediaUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
-                  {getMediaOpenLabel(activeAsset)}
-                </a>
-              ) : null}
-              {showViewerAvatarAction ? renderAvatarAction() : null}
-            </div>
+          {canNavigate ? (
+            <button type="button" className="media-lightbox-nav media-lightbox-nav-right" aria-label="Следующее медиа" onClick={() => moveSelection(1)}>
+              <ChevronRight className="media-lightbox-control-icon" aria-hidden="true" />
+            </button>
           ) : null}
         </div>
 
-        {canNavigate ? (
-          <button type="button" className="media-lightbox-nav media-lightbox-nav-right" aria-label="Следующее медиа" onClick={() => moveSelection(1)}>
-            <ChevronRight className="media-lightbox-control-icon" aria-hidden="true" />
-          </button>
+        {media.length > 1 ? (
+          <div ref={lightboxStripRef} className="media-lightbox-strip media-lightbox-strip-fixed">
+            {media.map((asset, index) => (
+              <MediaThumb
+                key={asset.id}
+                asset={asset}
+                active={asset.id === activeAsset.id}
+                shareToken={shareToken}
+                onSelect={() => setActiveMediaId(asset.id)}
+                index={index}
+                isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
+                compact
+                thumbRef={(node) => {
+                  if (node) {
+                    lightboxThumbRefs.current.set(asset.id, node);
+                  } else {
+                    lightboxThumbRefs.current.delete(asset.id);
+                  }
+                }}
+              />
+            ))}
+          </div>
         ) : null}
       </div>
 
-      {media.length > 1 ? (
-        <div ref={lightboxStripRef} className="media-lightbox-strip media-lightbox-strip-fixed">
-          {media.map((asset, index) => (
-            <MediaThumb
-              key={asset.id}
-              asset={asset}
-              active={asset.id === activeAsset.id}
-              shareToken={shareToken}
-              onSelect={() => setActiveMediaId(asset.id)}
-              index={index}
-              isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
-              compact
-              thumbRef={(node) => {
-                if (node) {
-                  lightboxThumbRefs.current.set(asset.id, node);
-                } else {
-                  lightboxThumbRefs.current.delete(asset.id);
-                }
-              }}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
+      <Dialog
+        open={Boolean(deleteTargetMediaId)}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingMedia) {
+            setDeleteTargetMediaId(null);
+          }
+        }}
+      >
+        <DialogContent className="archive-confirm-dialog media-lightbox-confirm-dialog" aria-label="Удалить это фото?" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Удалить это фото?</DialogTitle>
+            <DialogDescription>
+              {deleteTargetAsset ? `Фотография «${deleteTargetAsset.title}» будет удалена без перезагрузки страницы.` : "Фотография будет удалена без перезагрузки страницы."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="archive-actions">
+            <Button type="button" variant="ghost" disabled={isDeletingMedia} onClick={() => setDeleteTargetMediaId(null)}>
+              Отмена
+            </Button>
+            <Button type="button" disabled={isDeletingMedia} onClick={() => void handleConfirmDeleteMedia()}>
+              {isDeletingMedia ? "Удаляю..." : "Удалить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   ) : null;
 
   return (

@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { vi } from "vitest";
 
@@ -139,6 +140,33 @@ function swipeElement(element: Element, points: { startX: number; startY: number
     touches: [],
     changedTouches: [endTouch],
   });
+}
+
+function StatefulDeleteGallery({
+  initialMedia,
+  onDelete,
+}: {
+  initialMedia: TreeSnapshot["media"];
+  onDelete?: (mediaId: string) => Promise<void>;
+}) {
+  const [media, setMedia] = useState(initialMedia);
+
+  return (
+    <PersonMediaGallery
+      media={media}
+      showStage={false}
+      showStickyFooter={false}
+      canDeleteMedia={Boolean(onDelete)}
+      onDeleteMedia={
+        onDelete
+          ? async (mediaId) => {
+              await onDelete(mediaId);
+              setMedia((currentMedia) => currentMedia.filter((asset) => asset.id !== mediaId));
+            }
+          : undefined
+      }
+    />
+  );
 }
 
 describe("person media gallery", () => {
@@ -884,5 +912,133 @@ describe("person media gallery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Показать медиа 1: Семейное фото" }));
 
     expect(screen.getByRole("button", { name: "Текущее фото профиля" })).toBeDisabled();
+  });
+
+  it("keeps delete controls out of read-only lightbox usage by default", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo",
+            title: "Семейное фото",
+            storage_path: "trees/tree-1/media/photo/media-photo/photo.jpg"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 1: Семейное фото" }));
+
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Семейное фото" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить фото" })).not.toBeInTheDocument();
+  });
+
+  it("deletes the current builder photo from the lightbox and moves to the next photo when it exists", async () => {
+    const onDelete = vi.fn(async () => undefined);
+
+    render(
+      <StatefulDeleteGallery
+        initialMedia={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-3",
+            title: "Фото 3",
+            storage_path: "trees/tree-1/media/photo/media-photo-3/photo.jpg"
+          })
+        ]}
+        onDelete={onDelete}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Фото 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить фото" }));
+
+    expect(screen.getByRole("dialog", { name: "Удалить это фото?" })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    });
+
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalledWith("media-photo-2");
+    });
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 3" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Удалить это фото?" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Показать медиа 2: Фото 2" })).not.toBeInTheDocument();
+  });
+
+  it("moves to the previous photo when the last opened builder photo is deleted", async () => {
+    const onDelete = vi.fn(async () => undefined);
+
+    render(
+      <StatefulDeleteGallery
+        initialMedia={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+        onDelete={onDelete}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Фото 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить фото" }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    });
+
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalledWith("media-photo-2");
+    });
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" })).toBeInTheDocument();
+  });
+
+  it("closes the builder lightbox after deleting the last remaining photo", async () => {
+    const onDelete = vi.fn(async () => undefined);
+
+    render(
+      <StatefulDeleteGallery
+        initialMedia={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          })
+        ]}
+        onDelete={onDelete}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 1: Фото 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить фото" }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    });
+
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalledWith("media-photo-1");
+    });
+    expect(screen.queryByRole("dialog", { name: "Просмотр медиа: Фото 1" })).not.toBeInTheDocument();
+    expect(screen.getByText("Для этого человека пока не добавлено медиа.")).toBeInTheDocument();
   });
 });
