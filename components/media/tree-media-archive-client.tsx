@@ -1577,7 +1577,7 @@ export function TreeMediaArchiveClient({
             <Popover open={isAddToAlbumPickerOpen} onOpenChange={setIsAddToAlbumPickerOpen}>
               <PopoverTrigger
                 render={
-                  <Button type="button" className="archive-selection-action-primary" disabled={isDeletingArchiveMedia || isAddingToAlbum || !manualAlbums.length} />
+                  <Button type="button" className="archive-selection-action archive-selection-action-primary" disabled={isDeletingArchiveMedia || isAddingToAlbum || !manualAlbums.length} />
                 }
               >
                 Добавить в альбом
@@ -1610,7 +1610,7 @@ export function TreeMediaArchiveClient({
             <Button
               type="button"
               variant="outline"
-              className="archive-selection-action-secondary archive-selection-action-download"
+              className="archive-selection-action archive-selection-action-secondary archive-selection-action-download"
               disabled={isDeletingArchiveMedia || isAddingToAlbum || isDownloadingArchiveMedia}
               onClick={() => void downloadSelectedArchiveMedia()}
             >
@@ -1619,13 +1619,13 @@ export function TreeMediaArchiveClient({
             <Button
               type="button"
               variant="destructive"
-              className="archive-selection-action-destructive"
+              className="archive-selection-action archive-selection-action-destructive"
               disabled={isDeletingArchiveMedia || isAddingToAlbum}
               onClick={() => setIsBulkArchiveDeleteConfirmOpen(true)}
             >
               {isDeletingArchiveMedia ? "Удаляю..." : "Удалить"}
             </Button>
-            <Button type="button" variant="ghost" className="archive-selection-action-cancel" disabled={isDeletingArchiveMedia || isAddingToAlbum} onClick={clearArchiveSelection}>
+            <Button type="button" variant="ghost" className="archive-selection-action archive-selection-action-cancel" disabled={isDeletingArchiveMedia || isAddingToAlbum} onClick={clearArchiveSelection}>
               Отмена
             </Button>
           </div>
