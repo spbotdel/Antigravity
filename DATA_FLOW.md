@@ -95,7 +95,29 @@ Flow:
 2. owner-only settings access is checked
 3. settings form renders directly from snapshot tree/person data
 
-### 1.5 Audit page
+### 1.5 Media page
+
+Path:
+- `app/tree/[slug]/media/page.tsx`
+
+Flow:
+1. route resolves tree slug and optional `share` token
+2. `getTreeMediaPageData(...)` loads the specialized page context instead of a full tree snapshot
+3. repository returns:
+- tree
+- actor
+- visible media
+- album summaries
+- album item relations
+4. page builds `albumMediaMap` plus persisted/derived album summaries
+5. page passes the result to `TreeMediaArchiveClient`
+6. archive client renders gallery view, album view, per-card actions, selection mode, bulk album add, and bulk download without a full page reload
+
+Important:
+- album summaries now include album-level `access`
+- media visible on this page should already be filtered by effective access, not only raw file visibility
+
+### 1.6 Audit page
 
 Path:
 - `app/tree/[slug]/audit/page.tsx`
@@ -235,12 +257,22 @@ Flow:
 3. repository checks:
 - tree access
 - share-link or membership access
-- media visibility
+- effective media visibility
 4. if file-backed media:
 - signed URL is generated for the configured storage backend
+  - when `download=1`, the signed URL is prepared for attachment-friendly single-file download
 5. if legacy external URL:
 - external URL is returned as redirect target
 6. browser follows redirect
+
+Important:
+- read enforcement should flow through:
+  `resolveMediaAccess(...)`
+  →
+  `resolveEffectiveMediaAccess(mediaId)`
+- effective media visibility is the strictest of:
+  - file `visibility`
+  - every linked album `access`
 
 ### 5.3 Delete flow
 
@@ -250,6 +282,43 @@ Flow:
 3. file is removed from storage if `storage_path` exists
 4. metadata row is deleted
 5. audit event is written
+
+### 5.4 Archive Album Mutation Flow
+
+Routes:
+- `app/api/media/albums/route.ts`
+- `app/api/media/albums/items/route.ts`
+
+Flow:
+1. archive client validates current tree context and selection state locally
+2. request payload is validated in `lib/validators/media.ts`
+3. repository checks tree edit access
+4. repository creates either:
+- a new manual album, or
+- new `tree_media_album_items` rows for existing media -> album relations
+5. client patches `albumMediaMap` locally
+6. album summaries and counts recompute from the updated `albumMediaMap`
+
+Important:
+- client skips already-related media ids before bulk add-to-album
+- database uniqueness on `(album_id, media_id)` remains the final duplicate guard
+- album create/update routes now also write album-level `access`
+- adding a file to a stricter album changes its effective access through repository logic, not by mutating file visibility in UI
+
+### 5.5 Archive Download Flow
+
+Routes:
+- `app/api/media/[mediaId]/route.ts?download=1`
+- `app/api/media/archive/download/route.ts`
+
+Flow:
+1. single-item archive download uses `/api/media/:id?download=1`
+2. bulk archive download posts selected media ids to `/api/media/archive/download`
+3. repository resolves the existing archive media rows for the current editor
+4. route prepares the attachment response:
+- direct attachment redirect for one item
+- generated `.zip` for multiple items
+5. archive client triggers a file save in the browser without reloading the page
 
 ## 6. Invite Flow
 

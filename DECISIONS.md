@@ -613,6 +613,48 @@ This reduces the chance that a mobile polish change for inline gallery quietly b
 
 ---
 
+# 2026-03-27 — Archive album access is a hard upper bound for files inside it
+
+### Decision
+
+Tree-level archive albums now carry their own access:
+
+- `members`
+- `public`
+
+File access is enforced by the strictest context:
+
+- file `visibility`
+- every linked album `access`
+
+The single repository entry point for this rule is:
+
+- `resolveEffectiveMediaAccess(mediaId)`
+
+### Why
+
+The product promise for a private family archive is:
+
+- if an album is closed to family only, nothing inside it should remain wider by accident
+
+Keeping file access wider than its enclosing album would create a direct mismatch between:
+
+- what the UI implies
+- what the signed file route actually allows
+
+### Consequence
+
+Future work must preserve these rules:
+
+- file `visibility` remains authored state
+- album `access` is a limiting boundary
+- effective file visibility is computed, not stored as a third permanent truth column
+- `resolveMediaAccess(...)` must enforce through `resolveEffectiveMediaAccess(...)`
+- tightening may close access immediately through effective visibility
+- loosening must not silently widen files unless their own authored visibility and all other album constraints already allow it
+
+---
+
 # How to update this file
 
 Add a new entry when:

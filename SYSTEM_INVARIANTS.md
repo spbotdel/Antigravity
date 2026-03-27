@@ -181,6 +181,22 @@ Media access must respect:
 
 ---
 
+### 12.1 Archive album access is a hard upper bound for files inside it
+
+If an archive file belongs to one or more albums, its effective visibility must be the strictest of:
+
+- the file's own `visibility`
+- every linked album `access`
+
+Implications:
+
+- a file must never be effectively wider than the most restricted album containing it
+- `members` is stricter than `public`
+- effective visibility is computed in repository logic, not in UI
+- the system must not rely on separate ad hoc access checks in multiple places
+
+---
+
 # Data Integrity Invariants
 
 ### 13. Deletion must be explicit
