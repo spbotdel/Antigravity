@@ -177,11 +177,17 @@ function buildPersistedArchiveAlbumSummaries(input: {
           : input.albumMediaMap[album.id] || [];
       const albumMedia = input.kind ? albumAllMedia.filter((asset) => asset.kind === input.kind) : albumAllMedia;
       const cover =
-        albumMedia.find((asset) => asset.kind === "photo") ||
-        albumAllMedia.find((asset) => asset.kind === "photo") ||
-        albumMedia[0] ||
-        albumAllMedia[0] ||
-        null;
+        input.kind === "video"
+          ? albumMedia.find((asset) => asset.kind === "video") || null
+          : input.kind === "photo"
+            ? albumMedia.find((asset) => asset.kind === "photo") ||
+              albumAllMedia.find((asset) => asset.kind === "photo") ||
+              null
+            : albumMedia.find((asset) => asset.kind === "photo") ||
+              albumAllMedia.find((asset) => asset.kind === "photo") ||
+              albumMedia[0] ||
+              albumAllMedia[0] ||
+              null;
 
       return {
         ...album,
@@ -259,18 +265,6 @@ function getArchiveOpenLabel(asset: MediaAssetRecord) {
   return "Открыть оригинал";
 }
 
-function getArchiveKindLabel(asset: MediaAssetRecord) {
-  if (asset.kind === "video") {
-    return "Видео";
-  }
-
-  if (asset.kind === "document") {
-    return "Документ";
-  }
-
-  return "Фото";
-}
-
 function getArchiveMediaSourceLabel(asset: MediaAssetRecord) {
   return asset.provider === "yandex_disk" ? "По ссылке" : "Файл";
 }
@@ -286,6 +280,16 @@ function buildAlbumCoverUrl(coverMediaId: string | null, media: MediaAssetRecord
   }
 
   return buildPhotoUrl(cover, shareToken);
+}
+
+function renderArchivePlaceholder(kind: MediaAssetRecord["kind"] | "file") {
+  const isVideo = kind === "video";
+
+  return (
+    <div className={`archive-tile-placeholder${isVideo ? " archive-tile-placeholder-video" : ""}`}>
+      <span className={`archive-tile-placeholder-mark${isVideo ? " archive-tile-placeholder-mark-video" : ""}`} aria-hidden="true" />
+    </div>
+  );
 }
 
 function buildPendingArchiveUploadItem(file: File): PendingArchiveUploadItem {
@@ -335,6 +339,13 @@ export function TreeMediaArchiveClient({
   const [isCreatingAlbum, setIsCreatingAlbum] = useState(false);
   const [albumTitle, setAlbumTitle] = useState("");
   const [albumDescription, setAlbumDescription] = useState("");
+  const [editingAlbumId, setEditingAlbumId] = useState<string | null>(null);
+  const [editAlbumTitle, setEditAlbumTitle] = useState("");
+  const [editAlbumDescription, setEditAlbumDescription] = useState("");
+  const [isUpdatingAlbum, setIsUpdatingAlbum] = useState(false);
+  const [deleteTargetAlbumId, setDeleteTargetAlbumId] = useState<string | null>(null);
+  const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
+  const [dismissedUploaderAlbumUserIds, setDismissedUploaderAlbumUserIds] = useState<Set<string>>(() => new Set());
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(initialView === "albums" ? initialAlbumId : null);
   const [reviewAlbumId, setReviewAlbumId] = useState<string>("");
   const [reviewVisibility, setReviewVisibility] = useState<"public" | "members">("members");
@@ -356,6 +367,7 @@ export function TreeMediaArchiveClient({
   const [isDownloadingArchiveMedia, setIsDownloadingArchiveMedia] = useState(false);
   const [openArchiveActionsMediaId, setOpenArchiveActionsMediaId] = useState<string | null>(null);
   const [openArchiveAlbumChooserMediaId, setOpenArchiveAlbumChooserMediaId] = useState<string | null>(null);
+  const [openArchiveAlbumActionsId, setOpenArchiveAlbumActionsId] = useState<string | null>(null);
   const [deleteTargetMediaId, setDeleteTargetMediaId] = useState<string | null>(null);
   const [isDeletingArchiveMedia, setIsDeletingArchiveMedia] = useState(false);
   const [isBulkArchiveDeleteConfirmOpen, setIsBulkArchiveDeleteConfirmOpen] = useState(false);
@@ -486,13 +498,16 @@ export function TreeMediaArchiveClient({
     );
     return [
       ...persisted,
-      ...derived.filter((album) => !album.uploaderUserId || !persistedUploaderIds.has(album.uploaderUserId))
+      ...derived.filter((album) =>
+        !album.uploaderUserId ||
+        (!persistedUploaderIds.has(album.uploaderUserId) && !dismissedUploaderAlbumUserIds.has(album.uploaderUserId))
+      )
     ];
   }
 
-  const allAlbumSummaries = useMemo(() => mergeAlbums(persistedAllAlbumSummaries, allDerivedAlbums), [persistedAllAlbumSummaries, allDerivedAlbums]);
-  const photoAlbumSummaries = useMemo(() => mergeAlbums(persistedPhotoAlbumSummaries, photoDerivedAlbums), [persistedPhotoAlbumSummaries, photoDerivedAlbums]);
-  const videoAlbumSummaries = useMemo(() => mergeAlbums(persistedVideoAlbumSummaries, videoDerivedAlbums), [persistedVideoAlbumSummaries, videoDerivedAlbums]);
+  const allAlbumSummaries = useMemo(() => mergeAlbums(persistedAllAlbumSummaries, allDerivedAlbums), [persistedAllAlbumSummaries, allDerivedAlbums, dismissedUploaderAlbumUserIds]);
+  const photoAlbumSummaries = useMemo(() => mergeAlbums(persistedPhotoAlbumSummaries, photoDerivedAlbums), [persistedPhotoAlbumSummaries, photoDerivedAlbums, dismissedUploaderAlbumUserIds]);
+  const videoAlbumSummaries = useMemo(() => mergeAlbums(persistedVideoAlbumSummaries, videoDerivedAlbums), [persistedVideoAlbumSummaries, videoDerivedAlbums, dismissedUploaderAlbumUserIds]);
   const manualAlbums = useMemo(
     () => persistedAllAlbumSummaries.filter((album) => album.albumKind === "manual"),
     [persistedAllAlbumSummaries]
@@ -525,6 +540,8 @@ export function TreeMediaArchiveClient({
   const activeUpload = activeUploads.find((item) => item.status === "uploading" || item.status === "finalizing") || null;
   const selectedAlbum = selectedAlbumId ? currentAlbums.find((album) => album.id === selectedAlbumId) || null : null;
   const activeContextAlbum = view === "albums" ? selectedAlbum : null;
+  const editingAlbum = editingAlbumId ? persistedAllAlbums.find((album) => album.id === editingAlbumId) || null : null;
+  const deleteTargetAlbum = deleteTargetAlbumId ? persistedAllAlbums.find((album) => album.id === deleteTargetAlbumId) || null : null;
   const reviewTargetAlbumId = selectedAlbum?.albumKind === "manual" ? selectedAlbum.id : reviewAlbumId || null;
   const reviewTargetAlbum = reviewTargetAlbumId ? persistedAllAlbums.find((album) => album.id === reviewTargetAlbumId) || null : null;
   const selectedAlbumMedia = useMemo(() => {
@@ -552,6 +569,7 @@ export function TreeMediaArchiveClient({
     setBulkAddAlbumId("");
     setOpenArchiveActionsMediaId(null);
     setOpenArchiveAlbumChooserMediaId(null);
+    setOpenArchiveAlbumActionsId(null);
   }, [mode, view, selectedAlbumId]);
 
   useEffect(() => {
@@ -1007,7 +1025,6 @@ export function TreeMediaArchiveClient({
 
   function renderArchiveTile(asset: MediaAssetRecord, items: MediaAssetRecord[]) {
     const imageUrl = asset.kind === "photo" && isHydrated ? buildPhotoUrl(asset, shareToken) : null;
-    const secondaryLabel = asset.caption?.trim() || `${getArchiveKindLabel(asset)} • ${getArchiveMediaSourceLabel(asset)}`;
     const downloadHref = buildDownloadUrl(asset, shareToken);
     const albumOptions = getArchiveAlbumOptionsForAsset(asset);
     const isSelected = selectedArchiveMediaIds.has(asset.id);
@@ -1147,15 +1164,8 @@ export function TreeMediaArchiveClient({
           {imageUrl ? (
             <img src={imageUrl} alt="" loading="lazy" className="archive-tile-image" />
           ) : (
-            <div className={`archive-tile-placeholder${asset.kind === "video" ? " archive-tile-placeholder-video" : ""}`}>
-              <span>{asset.kind === "video" ? "▶" : asset.kind === "document" ? "DOC" : "IMG"}</span>
-            </div>
+            renderArchivePlaceholder(asset.kind)
           )}
-          {asset.kind !== "photo" ? <span className="archive-tile-badge">{asset.kind === "video" ? "Видео" : "Файл"}</span> : null}
-          <div className="archive-tile-copy">
-            <strong title={asset.title}>{asset.title}</strong>
-            <span title={secondaryLabel}>{secondaryLabel}</span>
-          </div>
         </button>
       </div>
     );
@@ -1173,13 +1183,87 @@ export function TreeMediaArchiveClient({
     });
   }
 
-  async function requestJson(url: string, method: string, body: unknown) {
+  function openCreateAlbumDialog() {
+    setAlbumTitle("Новый альбом");
+    setAlbumDescription("");
+    setIsCreateAlbumOpen(true);
+  }
+
+  async function ensureManagedAlbum(album: AlbumSummary) {
+    const persisted = persistedAllAlbums.find((item) => item.id === album.id) || null;
+    if (persisted) {
+      return persisted;
+    }
+
+    if (album.albumKind !== "uploader" || !album.uploaderUserId) {
+      return album;
+    }
+
+    const payload = await requestJson("/api/media/albums", "POST", {
+      treeId,
+      title: album.title,
+      description: album.description || "",
+      albumKind: "uploader",
+      uploaderUserId: album.uploaderUserId
+    });
+    const created = payload.album as TreeMediaAlbumRecord;
+    const summary: AlbumSummary = {
+      id: created.id,
+      title: created.title,
+      description: created.description,
+      albumKind: created.album_kind,
+      uploaderUserId: created.uploader_user_id,
+      count: album.count,
+      coverMediaId: album.coverMediaId
+    };
+
+    setPersistedAllAlbums((current) => {
+      const next = current.filter((item) => !(item.albumKind === "uploader" && item.uploaderUserId === summary.uploaderUserId));
+      return [summary, ...next];
+    });
+    setDismissedUploaderAlbumUserIds((current) => {
+      if (!summary.uploaderUserId) {
+        return current;
+      }
+      const next = new Set(current);
+      next.delete(summary.uploaderUserId);
+      return next;
+    });
+
+    return summary;
+  }
+
+  async function openEditAlbumDialog(album: AlbumSummary) {
+    try {
+      const managedAlbum = await ensureManagedAlbum(album);
+      setEditingAlbumId(managedAlbum.id);
+      setEditAlbumTitle(managedAlbum.title);
+      setEditAlbumDescription(managedAlbum.description || "");
+      setOpenArchiveAlbumActionsId(null);
+      setError(null);
+    } catch (albumError) {
+      setError(albumError instanceof Error ? albumError.message : "Не удалось подготовить альбом к редактированию.");
+    }
+  }
+
+  async function openDeleteAlbumDialog(album: AlbumSummary) {
+    try {
+      const managedAlbum = await ensureManagedAlbum(album);
+      setDeleteTargetAlbumId(managedAlbum.id);
+      setOpenArchiveAlbumActionsId(null);
+      setError(null);
+    } catch (albumError) {
+      setError(albumError instanceof Error ? albumError.message : "Не удалось подготовить альбом к удалению.");
+    }
+  }
+
+  async function requestJson(url: string, method: string, body?: unknown) {
     const response = await fetch(url, {
       method,
-      headers: {
+      headers: body === undefined ? undefined : {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(body)
+      body: body === undefined ? undefined : JSON.stringify(body)
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -1226,6 +1310,77 @@ export function TreeMediaArchiveClient({
       setError(albumError instanceof Error ? albumError.message : "Не удалось создать альбом.");
     } finally {
       setIsCreatingAlbum(false);
+    }
+  }
+
+  async function handleEditAlbum(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingAlbum) {
+      return;
+    }
+
+    try {
+      setIsUpdatingAlbum(true);
+      const payload = await requestJson(`/api/media/albums/${editingAlbum.id}`, "PATCH", {
+        title: editAlbumTitle,
+        description: editAlbumDescription
+      });
+      const album = payload.album as TreeMediaAlbumRecord;
+
+      setPersistedAllAlbums((current) =>
+        current.map((item) =>
+          item.id === album.id
+            ? {
+                ...item,
+                title: album.title,
+                description: album.description,
+              }
+            : item
+        )
+      );
+      setEditingAlbumId(null);
+      setStatus(payload.message || "Альбом обновлен.");
+      setError(null);
+    } catch (albumError) {
+      setError(albumError instanceof Error ? albumError.message : "Не удалось обновить альбом.");
+    } finally {
+      setIsUpdatingAlbum(false);
+    }
+  }
+
+  async function deleteAlbum() {
+    if (!deleteTargetAlbum) {
+      return;
+    }
+
+    try {
+      setIsDeletingAlbum(true);
+      const payload = await requestJson(`/api/media/albums/${deleteTargetAlbum.id}`, "DELETE");
+
+      setPersistedAllAlbums((current) => current.filter((item) => item.id !== deleteTargetAlbum.id));
+      setAlbumMediaMap((current) => {
+        const next = { ...current };
+        delete next[deleteTargetAlbum.id];
+        return next;
+      });
+      if (deleteTargetAlbum.albumKind === "uploader" && deleteTargetAlbum.uploaderUserId) {
+        setDismissedUploaderAlbumUserIds((current) => {
+          const next = new Set(current);
+          next.add(deleteTargetAlbum.uploaderUserId as string);
+          return next;
+        });
+      }
+      if (selectedAlbumId === deleteTargetAlbum.id) {
+        setSelectedAlbumId(null);
+      }
+      setDeleteTargetAlbumId(null);
+      setStatus(payload.message || "Альбом удален.");
+      setError(null);
+    } catch (albumError) {
+      setError(albumError instanceof Error ? albumError.message : "Не удалось удалить альбом.");
+    } finally {
+      setIsDeletingAlbum(false);
     }
   }
 
@@ -1386,7 +1541,7 @@ export function TreeMediaArchiveClient({
     if (nextValue === CREATE_ALBUM_OPTION_VALUE) {
       setResumeUploadReviewAfterAlbumCreate(true);
       setIsUploadReviewOpen(false);
-      setIsCreateAlbumOpen(true);
+      openCreateAlbumDialog();
       return;
     }
 
@@ -1481,14 +1636,14 @@ export function TreeMediaArchiveClient({
 
   function renderArchiveEmptyState(input: {
     title: string;
-    description: string;
+    description?: string | null;
     actions?: ReactNode;
   }) {
     return (
       <div className="empty-state archive-empty-state">
         <div className="empty-state-copy">
           <strong>{input.title}</strong>
-          <p>{input.description}</p>
+          {input.description ? <p>{input.description}</p> : null}
         </div>
         {input.actions ? <div className="action-row empty-state-actions">{input.actions}</div> : null}
       </div>
@@ -1515,10 +1670,12 @@ export function TreeMediaArchiveClient({
             <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
               {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
             </Button>
-            <Button type="button" variant="secondary" onClick={() => setIsCreateAlbumOpen(true)}>
-              <PlusIcon />
-              Создать альбом
-            </Button>
+            {!activeContextAlbum ? (
+              <Button type="button" variant="secondary" onClick={openCreateAlbumDialog}>
+                <PlusIcon />
+                Создать альбом
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -1562,7 +1719,15 @@ export function TreeMediaArchiveClient({
           <TabsTrigger className={`pill-link${view === "all" ? " pill-link-active" : ""}`} value="all">
             Все
           </TabsTrigger>
-          <TabsTrigger className={`pill-link${view === "albums" ? " pill-link-active" : ""}`} value="albums">
+          <TabsTrigger
+            className={`pill-link${view === "albums" ? " pill-link-active" : ""}`}
+            value="albums"
+            onClick={() => {
+              if (view === "albums" && selectedAlbumId) {
+                setSelectedAlbumId(null);
+              }
+            }}
+          >
             Альбомы
           </TabsTrigger>
         </TabsList>
@@ -1661,7 +1826,7 @@ export function TreeMediaArchiveClient({
                 <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
                   {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
                 </Button>
-                <Button type="button" variant="secondary" onClick={() => setIsCreateAlbumOpen(true)}>
+                <Button type="button" variant="secondary" onClick={openCreateAlbumDialog}>
                   <PlusIcon />
                   Создать альбом
                 </Button>
@@ -1672,9 +1837,6 @@ export function TreeMediaArchiveClient({
       ) : selectedAlbum ? (
         <>
           <div className="archive-subheader">
-            <Button type="button" variant="ghost" className="archive-subheader-back" onClick={() => setSelectedAlbumId(null)}>
-              Назад к альбомам
-            </Button>
             <div className="archive-subheader-copy">
               <strong>{selectedAlbum.title}</strong>
               <span>{selectedAlbumMedia.length} {mode === "all" ? "материалов" : itemLabel}</span>
@@ -1686,19 +1848,11 @@ export function TreeMediaArchiveClient({
             </div>
           ) : (
             renderArchiveEmptyState({
-              title: mode === "all" ? `В альбоме «${selectedAlbum.title}» пока пусто` : `В альбоме «${selectedAlbum.title}» пока нет материалов этого типа`,
-              description: canEdit
-                ? "Добавьте сюда файлы или вернитесь к альбомам и выберите другую подборку."
-                : "Когда в выбранном альбоме появятся материалы этого типа, они откроются здесь.",
+              title: mode === "photo" ? "В этом альбоме пока нет фото" : mode === "video" ? "В этом альбоме пока нет видео" : "В этом альбоме пока нет медиа",
               actions: canEdit ? (
-                <>
-                  <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
-                    {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={() => setSelectedAlbumId(null)}>
-                    Назад к альбомам
-                  </Button>
-                </>
+                <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                  {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
+                </Button>
               ) : null
             })
           )}
@@ -1707,24 +1861,69 @@ export function TreeMediaArchiveClient({
         <div className="archive-album-grid">
           {currentAlbums.map((album) => {
             const coverUrl = isHydrated ? buildAlbumCoverUrl(album.coverMediaId, allMedia, shareToken) : null;
+            const isAlbumActionsOpen = openArchiveAlbumActionsId === album.id;
 
             return (
-              <button key={album.id} type="button" className="archive-album-card" onClick={() => setSelectedAlbumId(album.id)}>
-                <div className="archive-album-cover">
-                  {coverUrl ? (
-                    <img src={coverUrl} alt="" loading="lazy" className="archive-album-image" />
-                  ) : (
-                    <div className="archive-tile-placeholder">
-                      <span>{mode === "video" ? "▶" : "IMG"}</span>
-                    </div>
-                  )}
+              <div key={album.id} className="archive-album-card-shell">
+                <div
+                  className="archive-album-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedAlbumId(album.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedAlbumId(album.id);
+                    }
+                  }}
+                >
+                  <div className="archive-album-cover">
+                    {canEdit ? (
+                      <Popover
+                        open={isAlbumActionsOpen}
+                        onOpenChange={(open) => {
+                          setOpenArchiveAlbumActionsId(open ? album.id : null);
+                        }}
+                      >
+                        <PopoverTrigger
+                          className="archive-album-actions-trigger"
+                          aria-label={`Открыть действия для альбома «${album.title}»`}
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <MoreHorizontalIcon className="archive-tile-actions-trigger-icon" />
+                        </PopoverTrigger>
+                        <PopoverContent className="archive-card-actions-popover" align="end" side="bottom" sideOffset={8}>
+                          <button
+                            type="button"
+                            className="archive-card-menu-item"
+                            onClick={() => void openEditAlbumDialog(album)}
+                          >
+                            Редактировать
+                          </button>
+                          <button
+                            type="button"
+                            className="archive-card-menu-item archive-card-menu-item-danger"
+                            onClick={() => void openDeleteAlbumDialog(album)}
+                          >
+                            Удалить
+                          </button>
+                        </PopoverContent>
+                      </Popover>
+                    ) : null}
+                    {coverUrl ? (
+                      <img src={coverUrl} alt="" loading="lazy" className="archive-album-image" />
+                    ) : (
+                      renderArchivePlaceholder(mode === "video" ? "video" : "photo")
+                    )}
+                  </div>
+                  <div className="archive-album-copy">
+                    <strong>{album.title}</strong>
+                    <span>{album.count} {mode === "all" ? "материалов" : itemLabel}</span>
+                    <small>{album.description?.trim() || (album.albumKind === "uploader" ? "Автоальбом загрузившего" : "Пользовательский альбом")}</small>
+                  </div>
                 </div>
-                <div className="archive-album-copy">
-                  <strong>{album.title}</strong>
-                  <span>{album.count} {mode === "all" ? "материалов" : itemLabel}</span>
-                  <small>{album.description?.trim() || (album.albumKind === "uploader" ? "Автоальбом загрузившего" : "Пользовательский альбом")}</small>
-                </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -1735,7 +1934,7 @@ export function TreeMediaArchiveClient({
             ? "Создайте первый альбом для поездки, праздника или другой общей серии."
             : "Когда владелец или редактор соберет альбомы, они появятся здесь.",
           actions: canEdit ? (
-            <Button type="button" variant="secondary" onClick={() => setIsCreateAlbumOpen(true)}>
+            <Button type="button" variant="secondary" onClick={openCreateAlbumDialog}>
               <PlusIcon />
               Создать альбом
             </Button>
@@ -1743,39 +1942,19 @@ export function TreeMediaArchiveClient({
         })
       )}
 
-      <div className="archive-sticky-footer">
-        <div className="archive-sticky-copy">
-          <strong>{activeContextAlbum ? activeContextAlbum.title : modeLabel}</strong>
-          <span>
-            {activeContextAlbum
-              ? `${selectedAlbumMedia.length} ${mode === "all" ? "материалов" : itemLabel} в альбоме`
-              : `${currentMedia.length} ${mode === "all" ? "материалов" : itemLabel} в текущем режиме`}
-          </span>
-        </div>
-        <div className="archive-action-bar">
-          {view === "albums" && activeContextAlbum ? (
-            <Button type="button" variant="ghost" onClick={() => setSelectedAlbumId(null)}>
-              Назад к альбомам
-            </Button>
-          ) : null}
-          {view === "all" && visibleItems < currentMedia.length ? (
+      {!activeContextAlbum && view === "all" && visibleItems < currentMedia.length ? (
+        <div className="archive-sticky-footer">
+          <div className="archive-sticky-copy">
+            <strong>{modeLabel}</strong>
+            <span>{`${currentMedia.length} ${mode === "all" ? "материалов" : itemLabel} в текущем режиме`}</span>
+          </div>
+          <div className="archive-action-bar">
             <Button type="button" variant="ghost" onClick={() => setVisibleItems((current) => current + INITIAL_TILE_LIMIT)}>
               Показать еще
             </Button>
-          ) : null}
-          {canEdit ? (
-            <>
-              <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
-                {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => setIsCreateAlbumOpen(true)}>
-                <PlusIcon />
-                Создать альбом
-              </Button>
-            </>
-          ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {isMediaViewerOpen && activeViewerAsset ? (
         <div
@@ -1864,9 +2043,7 @@ export function TreeMediaArchiveClient({
                       {imageUrl ? (
                         <img src={imageUrl} alt="" loading="lazy" className="archive-tile-image" />
                       ) : (
-                        <div className={`archive-tile-placeholder${asset.kind === "video" ? " archive-tile-placeholder-video" : ""}`}>
-                          <span>{asset.kind === "video" ? "▶" : asset.kind === "document" ? "DOC" : "IMG"}</span>
-                        </div>
+                        renderArchivePlaceholder(asset.kind)
                       )}
                     </button>
                   );
@@ -1876,6 +2053,70 @@ export function TreeMediaArchiveClient({
           </div>
         </div>
       ) : null}
+
+      <Dialog
+        open={Boolean(editingAlbumId)}
+        onOpenChange={(open) => {
+          if (!open && !isUpdatingAlbum) {
+            setEditingAlbumId(null);
+          }
+        }}
+      >
+        <DialogContent className="archive-dialog" aria-label="Редактировать альбом" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Редактировать альбом</DialogTitle>
+            <DialogDescription>
+              Обновите название и описание альбома.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="stack-form archive-album-form" onSubmit={handleEditAlbum}>
+            <label className="form-field">
+              Название
+              <Input value={editAlbumTitle} onChange={(event) => setEditAlbumTitle(event.target.value)} required maxLength={120} />
+            </label>
+            <label className="form-field">
+              Описание
+              <Textarea value={editAlbumDescription} onChange={(event) => setEditAlbumDescription(event.target.value)} rows={4} maxLength={512} />
+            </label>
+            <DialogFooter className="archive-actions">
+              <Button type="button" variant="ghost" disabled={isUpdatingAlbum} onClick={() => setEditingAlbumId(null)}>
+                Отмена
+              </Button>
+              <Button type="submit" disabled={isUpdatingAlbum}>
+                {isUpdatingAlbum ? "Сохраняю..." : "Сохранить"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deleteTargetAlbumId)}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingAlbum) {
+            setDeleteTargetAlbumId(null);
+          }
+        }}
+      >
+        <DialogContent className="archive-confirm-dialog" aria-label="Удалить альбом?" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Удалить альбом?</DialogTitle>
+            <DialogDescription>
+              {deleteTargetAlbum
+                ? `Альбом «${deleteTargetAlbum.title}» будет удален. Файлы и видео останутся в семейном архиве.`
+                : "Альбом будет удален. Файлы и видео останутся в семейном архиве."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="archive-actions">
+            <Button type="button" variant="ghost" disabled={isDeletingAlbum} onClick={() => setDeleteTargetAlbumId(null)}>
+              Отмена
+            </Button>
+            <Button type="button" variant="destructive" disabled={isDeletingAlbum} onClick={() => void deleteAlbum()}>
+              {isDeletingAlbum ? "Удаляю..." : "Удалить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={isCreateAlbumOpen}
@@ -1979,9 +2220,7 @@ export function TreeMediaArchiveClient({
                     ) : item.previewUrl ? (
                       <img src={item.previewUrl} alt="" className="archive-tile-image" />
                     ) : (
-                      <div className={`archive-tile-placeholder${item.file.type.startsWith("video/") ? " archive-tile-placeholder-video" : ""}`}>
-                        <span>{item.file.type.startsWith("video/") ? "▶" : "DOC"}</span>
-                      </div>
+                      renderArchivePlaceholder(item.file.type.startsWith("video/") ? "video" : "file")
                     )}
                     <div className="archive-review-tile-copy">
                       <strong title={item.file.name}>{item.file.name}</strong>

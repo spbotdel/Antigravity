@@ -1538,6 +1538,92 @@ export async function createTreeMediaAlbum(input: {
   return data;
 }
 
+export async function updateTreeMediaAlbum(albumId: string, input: { title?: string; description?: string | null }) {
+  const before = await fetchAdminFirst<TreeMediaAlbumRecord>(
+    `tree_media_albums?select=*&id=eq.${encodeURIComponent(albumId)}`,
+    "Не удалось загрузить альбом."
+  );
+
+  if (!before) {
+    throw new AppError(404, "Альбом не найден.");
+  }
+
+  const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
+  let data: TreeMediaAlbumRecord | null = null;
+
+  try {
+    data = await mutateAdminFirst<TreeMediaAlbumRecord>(
+      `tree_media_albums?id=eq.${encodeURIComponent(albumId)}&select=*`,
+      "PATCH",
+      {
+        title: input.title ?? before.title,
+        description: input.description === undefined ? before.description : input.description || null
+      },
+      "Не удалось обновить альбом."
+    );
+  } catch (error) {
+    if (isMediaAlbumsSchemaUnavailableError(error)) {
+      throw new AppError(503, "Альбомы пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    throw error;
+  }
+
+  if (!data) {
+    throw new AppError(400, "Не удалось обновить альбом.");
+  }
+
+  queueAuditLog({
+    treeId: before.tree_id,
+    actorUserId: userId,
+    entityType: "media_album",
+    entityId: albumId,
+    action: "media_album.updated",
+    beforeJson: before,
+    afterJson: data
+  });
+
+  return data;
+}
+
+export async function deleteTreeMediaAlbum(albumId: string) {
+  const before = await fetchAdminFirst<TreeMediaAlbumRecord>(
+    `tree_media_albums?select=*&id=eq.${encodeURIComponent(albumId)}`,
+    "Не удалось загрузить альбом."
+  );
+
+  if (!before) {
+    throw new AppError(404, "Альбом не найден.");
+  }
+
+  const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
+
+  try {
+    await mutateAdminRows<never>(
+      `tree_media_albums?id=eq.${encodeURIComponent(albumId)}`,
+      "DELETE",
+      undefined,
+      "Не удалось удалить альбом."
+    );
+  } catch (error) {
+    if (isMediaAlbumsSchemaUnavailableError(error)) {
+      throw new AppError(503, "Альбомы пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    throw error;
+  }
+
+  queueAuditLog({
+    treeId: before.tree_id,
+    actorUserId: userId,
+    entityType: "media_album",
+    entityId: albumId,
+    action: "media_album.deleted",
+    beforeJson: before,
+    afterJson: null
+  });
+}
+
 async function ensureUploaderTreeMediaAlbum(treeId: string, userId: string, email: string | null) {
   const existing = await fetchAdminFirst<TreeMediaAlbumRecord>(
     `tree_media_albums?select=*&tree_id=eq.${encodeURIComponent(treeId)}&album_kind=eq.uploader&uploader_user_id=eq.${encodeURIComponent(userId)}`,

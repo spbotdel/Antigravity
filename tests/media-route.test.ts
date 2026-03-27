@@ -3,11 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const resolveMediaAccess = vi.fn();
 const deleteMedia = vi.fn();
 const setPrimaryPersonMedia = vi.fn();
+const updateTreeMediaAlbum = vi.fn();
+const deleteTreeMediaAlbum = vi.fn();
 
 vi.mock("@/lib/server/repository", () => ({
   resolveMediaAccess,
   deleteMedia,
   setPrimaryPersonMedia,
+  updateTreeMediaAlbum,
+  deleteTreeMediaAlbum,
 }));
 
 describe("media route", () => {
@@ -15,6 +19,8 @@ describe("media route", () => {
     resolveMediaAccess.mockReset();
     deleteMedia.mockReset();
     setPrimaryPersonMedia.mockReset();
+    updateTreeMediaAlbum.mockReset();
+    deleteTreeMediaAlbum.mockReset();
   });
 
   it("passes download mode to GET /api/media/[mediaId] when requested", async () => {
@@ -68,5 +74,59 @@ describe("media route", () => {
     expect(payload.message).toBe("Аватар обновлен.");
     expect(payload.relation.is_primary).toBe(true);
     expect(payload.relation.avatar_crop_zoom).toBe(avatarCrop.zoom);
+  });
+
+  it("updates a tree media album via PATCH /api/media/albums/[albumId]", async () => {
+    const { PATCH } = await import("@/app/api/media/albums/[albumId]/route");
+    updateTreeMediaAlbum.mockResolvedValue({
+      id: "album-1",
+      tree_id: "tree-1",
+      title: "Семейная поездка",
+      description: "Летний архив",
+      album_kind: "manual",
+      uploader_user_id: null,
+      created_by: "user-1",
+      created_at: "2026-03-27T00:00:00.000Z",
+      updated_at: "2026-03-27T00:00:00.000Z",
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/media/albums/album-1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: "Семейная поездка",
+          description: "Летний архив",
+        })
+      }),
+      {
+        params: Promise.resolve({ albumId: "album-1" })
+      }
+    );
+    const payload = await response.json();
+
+    expect(updateTreeMediaAlbum).toHaveBeenCalledWith("album-1", {
+      title: "Семейная поездка",
+      description: "Летний архив",
+    });
+    expect(response.status).toBe(200);
+    expect(payload.message).toBe("Альбом обновлен.");
+    expect(payload.album.title).toBe("Семейная поездка");
+  });
+
+  it("deletes a tree media album via DELETE /api/media/albums/[albumId]", async () => {
+    const { DELETE } = await import("@/app/api/media/albums/[albumId]/route");
+
+    const response = await DELETE(
+      new Request("http://localhost/api/media/albums/album-1", { method: "DELETE" }),
+      {
+        params: Promise.resolve({ albumId: "album-1" })
+      }
+    );
+    const payload = await response.json();
+
+    expect(deleteTreeMediaAlbum).toHaveBeenCalledWith("album-1");
+    expect(response.status).toBe(200);
+    expect(payload.message).toBe("Альбом удален.");
   });
 });

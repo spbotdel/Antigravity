@@ -99,7 +99,18 @@ export const completeArchiveMediaSchema = z.object({
 export const createTreeMediaAlbumSchema = z.object({
   treeId: z.string().uuid(),
   title: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(512).optional().or(z.literal("")),
+  albumKind: z.enum(["manual", "uploader"]).optional(),
+  uploaderUserId: z.string().uuid().optional().nullable()
+}).refine((value) => value.albumKind !== "uploader" || Boolean(value.uploaderUserId), {
+  message: "Для автоальбома нужен uploaderUserId."
+});
+
+export const updateTreeMediaAlbumSchema = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
   description: z.string().trim().max(512).optional().or(z.literal(""))
+}).refine((value) => value.title !== undefined || value.description !== undefined, {
+  message: "Нужно передать хотя бы одно поле для обновления."
 });
 
 export const addMediaToTreeMediaAlbumSchema = z.object({

@@ -48,6 +48,7 @@ function renderArchiveClient(options?: {
   }>;
   persistedAlbumMediaMap?: Record<string, MediaAssetRecord[]>;
   canEdit?: boolean;
+  uploaderLabels?: Array<{ userId: string; label: string }>;
 }) {
   const allMedia = options?.allMedia || [
     createMediaAsset({
@@ -83,7 +84,7 @@ function renderArchiveClient(options?: {
       allMedia={allMedia}
       allAlbums={options?.allAlbums || []}
       persistedAlbumMediaMap={options?.persistedAlbumMediaMap || {}}
-      uploaderLabels={[]}
+      uploaderLabels={options?.uploaderLabels || []}
     />
   );
 }
@@ -182,15 +183,15 @@ describe("tree media archive client", () => {
     expect(within(dialog).getByRole("img", { name: "Архивное фото" })).toHaveAttribute("src", "/api/media/media-photo?variant=medium");
   });
 
-  it("renders sticky archive actions for the current context", () => {
+  it("keeps only the top archive action group by default", () => {
     renderArchiveClient();
 
-    expect(screen.getAllByRole("button", { name: "Загрузить файлы" }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: "Создать альбом" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("3 материалов в текущем режиме")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Загрузить файлы" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Создать альбом" })).toHaveLength(1);
+    expect(screen.queryByText("3 материалов в текущем режиме")).not.toBeInTheDocument();
   });
 
-  it("shows visible tile copy and album descriptions in the archive grid", () => {
+  it("keeps the archive grid visual-first while preserving album descriptions", () => {
     const photo = createMediaAsset({
       id: "media-photo",
       title: "Семейный портрет",
@@ -216,11 +217,260 @@ describe("tree media archive client", () => {
       },
     });
 
-    expect(screen.getByText("Семейный портрет")).toBeInTheDocument();
-    expect(screen.getByText("Главная фотография архива")).toBeInTheDocument();
+    expect(screen.queryByText("Семейный портрет")).not.toBeInTheDocument();
+    expect(screen.queryByText("Главная фотография архива")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
     expect(screen.getByText("Большая семейная подборка со свадьбы")).toBeInTheDocument();
+  });
+
+  it("does not use photo album covers in video albums view", () => {
+    const photo = createMediaAsset({
+      id: "media-photo",
+      title: "Семейный портрет",
+      storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+    });
+
+    const view = renderArchiveClient({
+      allMedia: [photo],
+      allAlbums: [
+        {
+          id: "album-1",
+          title: "Свадьба",
+          description: "Большая семейная подборка",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-photo",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-1": [photo],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    const albumGrid = view.container.querySelector(".archive-album-grid");
+    expect(albumGrid).not.toBeNull();
+    expect(albumGrid?.querySelectorAll(".archive-album-image")).toHaveLength(0);
+    expect(albumGrid?.querySelectorAll(".archive-tile-placeholder-video")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Загрузить видео" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Создать альбом" })).toHaveLength(1);
+  });
+
+  it("shows a management trigger for manual album cards without changing the main card structure", () => {
+    const photo = createMediaAsset({
+      id: "media-photo",
+      title: "Семейный портрет",
+      storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+    });
+
+    const view = renderArchiveClient({
+      allMedia: [photo],
+      allAlbums: [
+        {
+          id: "album-1",
+          title: "Свадьба",
+          description: "Старая подпись",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-photo",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-1": [photo],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    expect(screen.getByRole("button", { name: "Открыть действия для альбома «Свадьба»" })).toBeInTheDocument();
+
+    const shell = view.container.querySelector(".archive-album-card-shell");
+    expect(shell).not.toBeNull();
+    expect(shell?.querySelectorAll(".archive-album-card")).toHaveLength(1);
+    expect(shell?.querySelectorAll(".archive-album-cover")).toHaveLength(1);
+    expect(shell?.querySelectorAll(".archive-album-copy")).toHaveLength(1);
+    expect(shell?.querySelectorAll(".archive-album-actions-trigger")).toHaveLength(1);
+    expect(shell?.querySelector(".archive-album-cover .archive-album-actions-trigger")).not.toBeNull();
+  });
+
+  it("shows the same management trigger for uploader albums with enabled edit/delete actions", async () => {
+    renderArchiveClient({
+      allMedia: [
+        createMediaAsset({
+          id: "media-photo",
+          title: "Семейный портрет",
+          storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+          created_by: "user-1",
+        }),
+      ],
+      uploaderLabels: [{ userId: "user-1", label: "От Вячеслава" }],
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    expect(screen.getByText("От Вячеслава")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для альбома «От Вячеслава»" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Редактировать" })).toBeEnabled();
+    });
+    expect(screen.getByRole("button", { name: "Удалить" })).toBeEnabled();
+    expect(screen.queryByText("Автоальбом создается автоматически и пока не редактируется.")).not.toBeInTheDocument();
+  });
+
+  it("opens an edit dialog from the album card menu and updates the manual album", async () => {
+    const photo = createMediaAsset({
+      id: "media-photo",
+      title: "Семейный портрет",
+      storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+    });
+
+    const requests: Array<{ url: string; method?: string; body?: unknown }> = [];
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      requests.push({ url, method: init?.method, body });
+
+      if (url.endsWith("/api/media/albums/album-1") && init?.method === "PATCH") {
+        return Response.json(
+          {
+            album: {
+              id: "album-1",
+              tree_id: "tree-1",
+              title: "Поездка",
+              description: "Новая семейная подпись",
+              album_kind: "manual",
+              uploader_user_id: null,
+              created_by: "user-1",
+              created_at: "2026-03-27T00:00:00.000Z",
+              updated_at: "2026-03-27T00:00:00.000Z",
+            },
+            message: "Альбом обновлен.",
+          },
+          { status: 200 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    renderArchiveClient({
+      allMedia: [photo],
+      allAlbums: [
+        {
+          id: "album-1",
+          title: "Свадьба",
+          description: "Старая подпись",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-photo",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-1": [photo],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для альбома «Свадьба»" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Редактировать" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Редактировать альбом" });
+    expect(within(dialog).getByLabelText("Название")).toHaveValue("Свадьба");
+    expect(within(dialog).getByLabelText("Описание")).toHaveValue("Старая подпись");
+    expect(within(dialog).queryByLabelText("Доступ")).not.toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText("Название"), { target: { value: "Поездка" } });
+    fireEvent.change(within(dialog).getByLabelText("Описание"), { target: { value: "Новая семейная подпись" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.url.endsWith("/api/media/albums/album-1") && request.method === "PATCH")).toBe(true);
+    });
+
+    const patchRequest = requests.find((request) => request.url.endsWith("/api/media/albums/album-1") && request.method === "PATCH");
+    expect(patchRequest?.body).toMatchObject({
+      title: "Поездка",
+      description: "Новая семейная подпись",
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Поездка")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Свадьба")).not.toBeInTheDocument();
+    expect(screen.queryByText("Старая подпись")).not.toBeInTheDocument();
+  });
+
+  it("opens a delete dialog from the album card menu and removes only the album card", async () => {
+    const photo = createMediaAsset({
+      id: "media-photo",
+      title: "Семейный портрет",
+      storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+    });
+
+    const requests: Array<{ url: string; method?: string }> = [];
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      requests.push({ url, method: init?.method });
+
+      if (url.endsWith("/api/media/albums/album-1") && init?.method === "DELETE") {
+        return Response.json({ message: "Альбом удален." }, { status: 200 });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    renderArchiveClient({
+      allMedia: [photo],
+      allAlbums: [
+        {
+          id: "album-1",
+          title: "Свадьба",
+          description: "Старая подпись",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-photo",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-1": [photo],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для альбома «Свадьба»" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Удалить" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Удалить альбом?" });
+    expect(within(dialog).getByText(/Файлы и видео останутся в семейном архиве/i)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.url.endsWith("/api/media/albums/album-1") && request.method === "DELETE")).toBe(true);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /Свадьба.*Старая подпись/ })).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Все" }));
+    expect(screen.getByRole("button", { name: "Открыть фото: Семейный портрет" })).toBeInTheDocument();
   });
 
   it("shows only download and album actions in the archive card menu for read-only viewers", async () => {
@@ -368,6 +618,22 @@ describe("tree media archive client", () => {
 
     expect(screen.getByText("Выбрано: 2")).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Просмотр архива: Архивное видео" })).not.toBeInTheDocument();
+  });
+
+  it("keeps video archive mode on the normal media grid without album management leakage", () => {
+    const view = renderArchiveClient();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+
+    const grid = view.container.querySelector(".archive-grid");
+    expect(grid).not.toBeNull();
+    expect(screen.getAllByRole("button", { name: "Загрузить видео" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Создать альбом" })).toHaveLength(1);
+    expect(screen.queryByText("2 видео в текущем режиме")).not.toBeInTheDocument();
+    expect(grid?.querySelectorAll(".archive-tile-shell")).toHaveLength(2);
+    expect(grid?.querySelectorAll(".archive-tile")).toHaveLength(2);
+    expect(grid?.querySelectorAll(".archive-tile-actions-trigger")).toHaveLength(2);
+    expect(grid?.querySelectorAll(".archive-album-actions-trigger")).toHaveLength(0);
   });
 
   it("clears archive selection mode on Escape when no archive overlay is open", async () => {
@@ -703,7 +969,7 @@ describe("tree media archive client", () => {
     expect(within(emptyState as HTMLElement).getByRole("button", { name: "Создать альбом" })).toBeInTheDocument();
   });
 
-  it("opens album view and keeps album-specific sticky actions", () => {
+  it("opens album detail as a single header with a media grid", () => {
     const photo = createMediaAsset({
       id: "media-photo",
       title: "Фото из альбома",
@@ -738,11 +1004,23 @@ describe("tree media archive client", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
     fireEvent.click(screen.getByRole("button", { name: /Свадьба.*Пользовательский альбом/ }));
 
-    expect(screen.getAllByRole("button", { name: "Назад к альбомам" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("2 материалов в альбоме")).toBeInTheDocument();
+    expect(screen.getAllByText("Свадьба")).toHaveLength(1);
+    expect(screen.getByText("2 материалов")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Загрузить/ })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Создать альбом" })).not.toBeInTheDocument();
+    expect(screen.queryByText("2 материалов в альбоме")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Свадьба.*Пользовательский альбом/ })).not.toBeInTheDocument();
+
+    const grid = document.querySelector(".archive-grid");
+    expect(grid).not.toBeNull();
+    expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть фото: Фото из альбома" })).toBeInTheDocument();
+    expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть видео: Видео из альбома" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Открыть фото: Фото из альбома" }));
     expect(screen.getByRole("dialog", { name: "Просмотр архива: Фото из альбома" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    expect(screen.getByRole("button", { name: /Свадьба.*Пользовательский альбом/ })).toBeInTheDocument();
   });
 
   it("can start directly inside a selected album from the initial query state", () => {
@@ -769,8 +1047,10 @@ describe("tree media archive client", () => {
     );
 
     expect(screen.getAllByText("От Вячеслава").length).toBeGreaterThan(0);
-    expect(screen.getByText("1 фото в альбоме")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Назад к альбомам" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("1 фото")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    expect(screen.getByText("От Вячеслава")).toBeInTheDocument();
   });
 
   it("keeps the selected manual album while switching between photo and video modes", () => {
@@ -809,16 +1089,16 @@ describe("tree media archive client", () => {
     fireEvent.click(screen.getByRole("button", { name: /Свадьба.*Пользовательский альбом/ }));
 
     expect(screen.getAllByText("Свадьба").length).toBeGreaterThan(0);
-    expect(screen.getByText("2 материалов в альбоме")).toBeInTheDocument();
+    expect(screen.getByText("2 материалов")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
     expect(screen.getAllByText("Свадьба").length).toBeGreaterThan(0);
-    expect(screen.getByText("1 видео в альбоме")).toBeInTheDocument();
+    expect(screen.getByText("1 видео")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Открыть видео: Видео из альбома" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
     expect(screen.getAllByText("Свадьба").length).toBeGreaterThan(0);
-    expect(screen.getByText("1 фото в альбоме")).toBeInTheDocument();
+    expect(screen.getByText("1 фото")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Открыть фото: Фото из альбома" })).toBeInTheDocument();
   });
 
@@ -853,12 +1133,13 @@ describe("tree media archive client", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
     expect(screen.getAllByText("Семейный альбом").length).toBeGreaterThan(0);
-    expect(screen.getByText("0 видео в альбоме")).toBeInTheDocument();
-    expect(screen.getByText("В альбоме «Семейный альбом» пока нет материалов этого типа")).toBeInTheDocument();
-    const emptyState = screen.getByText("В альбоме «Семейный альбом» пока нет материалов этого типа").closest(".empty-state");
+    expect(screen.getByText("0 видео")).toBeInTheDocument();
+    expect(screen.getByText("В этом альбоме пока нет видео")).toBeInTheDocument();
+    const emptyState = screen.getByText("В этом альбоме пока нет видео").closest(".empty-state");
     expect(emptyState).not.toBeNull();
     expect(within(emptyState as HTMLElement).getByRole("button", { name: "Загрузить видео" })).toBeInTheDocument();
-    expect(within(emptyState as HTMLElement).getByRole("button", { name: "Назад к альбомам" })).toBeInTheDocument();
+    expect(within(emptyState as HTMLElement).queryByText(/материалов этого типа/i)).not.toBeInTheDocument();
+    expect(within(emptyState as HTMLElement).queryByRole("button", { name: "Назад к альбомам" })).not.toBeInTheDocument();
   });
 
   it("shows upload progress without the old transport hint noise", async () => {
@@ -995,6 +1276,7 @@ describe("tree media archive client", () => {
     renderArchiveClient();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Создать альбом" })[0]);
+    expect(screen.getByLabelText("Название")).toHaveValue("Новый альбом");
     fireEvent.change(screen.getByLabelText("Название"), { target: { value: "Новый альбом" } });
     const dialog = screen.getByRole("dialog", { name: "Создать альбом" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Создать альбом" }));

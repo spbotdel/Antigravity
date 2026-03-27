@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addMediaToTreeMediaAlbumSchema, archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeMediaAlbumSchema, downloadArchiveMediaSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema } from "@/lib/validators/media";
+import { addMediaToTreeMediaAlbumSchema, archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeMediaAlbumSchema, downloadArchiveMediaSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema, updateTreeMediaAlbumSchema } from "@/lib/validators/media";
 import { createTreeSchema } from "@/lib/validators/tree";
 import { inviteSchema } from "@/lib/validators/invite";
 
@@ -115,6 +115,27 @@ describe("validators", () => {
       treeId: crypto.randomUUID(),
       title: "День рождения тети Светы",
       description: "Фото и видео из одного архива"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts uploader tree media album creation payloads", () => {
+    const result = createTreeMediaAlbumSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      title: "От Сергея Тест",
+      description: "",
+      albumKind: "uploader",
+      uploaderUserId: crypto.randomUUID(),
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts tree media album update payloads", () => {
+    const result = updateTreeMediaAlbumSchema.safeParse({
+      title: "Обновленный альбом",
+      description: "Новая подпись"
     });
 
     expect(result.success).toBe(true);
