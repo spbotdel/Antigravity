@@ -13,13 +13,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SelectField } from "@/components/ui/select-field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumRecord } from "@/lib/types";
-import { PlusIcon } from "lucide-react";
+import { MoreHorizontalIcon, PlusIcon } from "lucide-react";
 
 type MediaMode = "photo" | "video" | "all";
 type ArchiveView = "all" | "albums";
@@ -201,6 +202,20 @@ function buildOpenUrl(asset: MediaAssetRecord, shareToken?: string | null) {
   return buildMediaOpenRouteUrl(asset, shareToken);
 }
 
+function areStringSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>) {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function isPhotoAsset(asset: MediaAssetRecord) {
   return asset.kind === "photo";
 }
@@ -318,6 +333,11 @@ export function TreeMediaArchiveClient({
   const [viewerMediaIds, setViewerMediaIds] = useState<string[]>([]);
   const [viewerMediaId, setViewerMediaId] = useState<string | null>(null);
   const [isMediaViewerOpen, setIsMediaViewerOpen] = useState(false);
+  const [isArchiveSelectionMode, setIsArchiveSelectionMode] = useState(false);
+  const [selectedArchiveMediaIds, setSelectedArchiveMediaIds] = useState<Set<string>>(() => new Set());
+  const [deleteTargetMediaId, setDeleteTargetMediaId] = useState<string | null>(null);
+  const [isDeletingArchiveMedia, setIsDeletingArchiveMedia] = useState(false);
+  const [isBulkArchiveDeleteConfirmOpen, setIsBulkArchiveDeleteConfirmOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -476,6 +496,7 @@ export function TreeMediaArchiveClient({
     }
     return allAlbumSummaries;
   }, [allAlbumSummaries, mode, photoAlbumSummaries, videoAlbumSummaries]);
+  const selectedArchiveMediaCount = selectedArchiveMediaIds.size;
 
   const visibleMedia = currentMedia.slice(0, visibleItems);
   const modeLabel = mode === "photo" ? "Фото" : mode === "video" ? "Видео" : "Все медиа";
@@ -501,6 +522,31 @@ export function TreeMediaArchiveClient({
       return asset.kind === mode;
     });
   }, [albumMediaMap, currentMedia, mode, selectedAlbum]);
+
+  useEffect(() => {
+    setIsArchiveSelectionMode(false);
+    setSelectedArchiveMediaIds(new Set());
+    setIsBulkArchiveDeleteConfirmOpen(false);
+  }, [mode, view, selectedAlbumId]);
+
+  useEffect(() => {
+    const availableArchiveMediaIds = new Set(archiveMedia.map((asset) => asset.id));
+    setSelectedArchiveMediaIds((currentSelection) => {
+      const nextSelection = new Set([...currentSelection].filter((mediaId) => availableArchiveMediaIds.has(mediaId)));
+      return areStringSetsEqual(currentSelection, nextSelection) ? currentSelection : nextSelection;
+    });
+  }, [archiveMedia]);
+
+  useEffect(() => {
+    if (!selectedArchiveMediaCount) {
+      if (isArchiveSelectionMode) {
+        setIsArchiveSelectionMode(false);
+      }
+      if (isBulkArchiveDeleteConfirmOpen) {
+        setIsBulkArchiveDeleteConfirmOpen(false);
+      }
+    }
+  }, [isArchiveSelectionMode, isBulkArchiveDeleteConfirmOpen, selectedArchiveMediaCount]);
   const viewerMedia = useMemo(
     () =>
       viewerMediaIds
@@ -511,6 +557,7 @@ export function TreeMediaArchiveClient({
   const viewerIndex = viewerMediaId ? viewerMedia.findIndex((asset) => asset.id === viewerMediaId) : -1;
   const resolvedViewerIndex = viewerIndex >= 0 ? viewerIndex : 0;
   const activeViewerAsset = viewerMedia[resolvedViewerIndex] || null;
+  const deleteTargetAsset = deleteTargetMediaId ? archiveMedia.find((asset) => asset.id === deleteTargetMediaId) || null : null;
   const canNavigateViewer = viewerMedia.length > 1;
   const pendingUploadsSummary = useMemo(() => buildPendingUploadSummary(pendingUploads), [pendingUploads]);
   const activeUploadCompletedCount = activeUploads.filter((item) => item.status === "done").length;
@@ -582,31 +629,221 @@ export function TreeMediaArchiveClient({
     setViewerMediaId(viewerMedia[nextIndex]?.id || null);
   }
 
+  function clearArchiveSelection() {
+    setIsArchiveSelectionMode(false);
+    setSelectedArchiveMediaIds(new Set());
+    setIsBulkArchiveDeleteConfirmOpen(false);
+  }
+
+  function toggleArchiveSelection(mediaId: string) {
+    if (!canEdit) {
+      return;
+    }
+
+    setSelectedArchiveMediaIds((currentSelection) => {
+      const nextSelection = new Set(currentSelection);
+      if (nextSelection.has(mediaId)) {
+        nextSelection.delete(mediaId);
+      } else {
+        nextSelection.add(mediaId);
+      }
+      return nextSelection;
+    });
+  }
+
+  function startArchiveSelectionMode(mediaId: string) {
+    if (!canEdit) {
+      return;
+    }
+
+    setIsArchiveSelectionMode(true);
+    setSelectedArchiveMediaIds((currentSelection) => new Set([...currentSelection, mediaId]));
+  }
+
+  function buildArchiveAlbumHrefForAsset(asset: MediaAssetRecord) {
+    const baseMode = asset.kind === "photo" ? "photo" : asset.kind === "video" ? "video" : "all";
+    const params = new URLSearchParams({
+      mode: baseMode,
+      view: "albums",
+    });
+
+    if (selectedAlbum?.albumKind === "manual" && selectedAlbumMedia.some((item) => item.id === asset.id)) {
+      params.set("album", selectedAlbum.id);
+      return `/tree/${slug}/media?${params.toString()}`;
+    }
+
+    const matchingManualAlbumId = Object.entries(albumMediaMap).find(([, items]) => items.some((item) => item.id === asset.id))?.[0] || null;
+    if (matchingManualAlbumId) {
+      params.set("album", matchingManualAlbumId);
+      return `/tree/${slug}/media?${params.toString()}`;
+    }
+
+    if (asset.created_by) {
+      params.set("album", `uploader-${asset.created_by}`);
+    }
+
+    return `/tree/${slug}/media?${params.toString()}`;
+  }
+
+  function patchDeletedArchiveMedia(mediaIds: Iterable<string>) {
+    const deletedMediaIds = new Set(mediaIds);
+    if (!deletedMediaIds.size) {
+      return;
+    }
+
+    setArchiveMedia((current) => current.filter((asset) => !deletedMediaIds.has(asset.id)));
+    setAlbumMediaMap((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([albumId, items]) => [albumId, items.filter((asset) => !deletedMediaIds.has(asset.id))])
+      )
+    );
+    setViewerMediaIds((current) => current.filter((mediaId) => !deletedMediaIds.has(mediaId)));
+  }
+
+  async function requestArchiveMediaDelete(mediaId: string) {
+    return requestJson(`/api/media/${mediaId}`, "DELETE", {});
+  }
+
+  async function deleteSingleArchiveMedia() {
+    if (!deleteTargetMediaId || isDeletingArchiveMedia) {
+      return;
+    }
+
+    setStatus(null);
+    setError(null);
+    setIsDeletingArchiveMedia(true);
+
+    try {
+      const payload = await requestArchiveMediaDelete(deleteTargetMediaId);
+      patchDeletedArchiveMedia([deleteTargetMediaId]);
+      setDeleteTargetMediaId(null);
+      setStatus(payload.message || "Медиа удалено.");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Не удалось удалить материал.");
+    } finally {
+      setIsDeletingArchiveMedia(false);
+    }
+  }
+
+  async function deleteSelectedArchiveMedia() {
+    const mediaIdsToDelete = [...selectedArchiveMediaIds];
+    if (!mediaIdsToDelete.length || isDeletingArchiveMedia) {
+      return;
+    }
+
+    setStatus(null);
+    setError(null);
+    setIsDeletingArchiveMedia(true);
+
+    const deletedMediaIds: string[] = [];
+    let firstErrorMessage: string | null = null;
+
+    try {
+      for (const mediaId of mediaIdsToDelete) {
+        try {
+          await requestArchiveMediaDelete(mediaId);
+          deletedMediaIds.push(mediaId);
+        } catch (deleteError) {
+          if (!firstErrorMessage) {
+            firstErrorMessage = deleteError instanceof Error ? deleteError.message : "Не удалось удалить выбранные материалы.";
+          }
+        }
+      }
+
+      if (deletedMediaIds.length) {
+        patchDeletedArchiveMedia(deletedMediaIds);
+      }
+
+      clearArchiveSelection();
+
+      if (deletedMediaIds.length === mediaIdsToDelete.length) {
+        setStatus(`Удалено ${deletedMediaIds.length} ${deletedMediaIds.length === 1 ? "материал" : deletedMediaIds.length < 5 ? "материала" : "материалов"}.`);
+      } else if (deletedMediaIds.length > 0) {
+        setStatus(`Удалено ${deletedMediaIds.length} из ${mediaIdsToDelete.length} материалов.`);
+      }
+
+      if (firstErrorMessage) {
+        setError(firstErrorMessage);
+      }
+    } finally {
+      setIsDeletingArchiveMedia(false);
+    }
+  }
+
   function renderArchiveTile(asset: MediaAssetRecord, items: MediaAssetRecord[]) {
     const imageUrl = asset.kind === "photo" && isHydrated ? buildPhotoUrl(asset, shareToken) : null;
     const secondaryLabel = asset.caption?.trim() || `${getArchiveKindLabel(asset)} • ${getArchiveMediaSourceLabel(asset)}`;
+    const downloadHref = buildOpenUrl(asset, shareToken);
+    const albumHref = buildArchiveAlbumHrefForAsset(asset);
+    const isSelected = selectedArchiveMediaIds.has(asset.id);
 
     return (
-      <button
-        key={asset.id}
-        type="button"
-        className="archive-tile"
-        aria-label={`${asset.kind === "photo" ? "Открыть фото" : asset.kind === "video" ? "Открыть видео" : "Открыть файл"}: ${asset.title}`}
-        onClick={() => openMediaViewer(asset.id, items)}
-      >
-        {imageUrl ? (
-          <img src={imageUrl} alt="" loading="lazy" className="archive-tile-image" />
+      <div key={asset.id} className={`archive-tile-shell${isSelected ? " archive-tile-shell-selected" : ""}`}>
+        {!isArchiveSelectionMode ? (
+          <Popover>
+            <PopoverTrigger className="archive-tile-actions-trigger" aria-label={`Открыть действия для «${asset.title}»`}>
+              <MoreHorizontalIcon className="archive-tile-actions-trigger-icon" />
+            </PopoverTrigger>
+            <PopoverContent className="archive-card-actions-popover" align="end" side="bottom" sideOffset={8}>
+              <a href={downloadHref} target="_blank" rel="noreferrer" className="archive-card-menu-item">
+                Скачать
+              </a>
+              <a href={albumHref} className="archive-card-menu-item">
+                Перейти к альбому
+              </a>
+              {canEdit ? (
+                <button type="button" className="archive-card-menu-item" onClick={() => startArchiveSelectionMode(asset.id)}>
+                  Выбрать несколько
+                </button>
+              ) : null}
+              {canEdit ? (
+                <button type="button" className="archive-card-menu-item archive-card-menu-item-danger" onClick={() => setDeleteTargetMediaId(asset.id)}>
+                  Удалить
+                </button>
+              ) : null}
+            </PopoverContent>
+          </Popover>
         ) : (
-          <div className={`archive-tile-placeholder${asset.kind === "video" ? " archive-tile-placeholder-video" : ""}`}>
-            <span>{asset.kind === "video" ? "▶" : asset.kind === "document" ? "DOC" : "IMG"}</span>
-          </div>
+          <label className="archive-tile-selector">
+            <input
+              type="checkbox"
+              className="archive-tile-checkbox"
+              checked={isSelected}
+              aria-label={`Выбрать медиа ${asset.title}`}
+              onChange={() => toggleArchiveSelection(asset.id)}
+              onClick={(event) => event.stopPropagation()}
+            />
+            <span className="media-selection-indicator" aria-hidden="true">
+              <span className="media-selection-checkmark">✓</span>
+            </span>
+          </label>
         )}
-        {asset.kind !== "photo" ? <span className="archive-tile-badge">{asset.kind === "video" ? "Видео" : "Файл"}</span> : null}
-        <div className="archive-tile-copy">
-          <strong title={asset.title}>{asset.title}</strong>
-          <span title={secondaryLabel}>{secondaryLabel}</span>
-        </div>
-      </button>
+        <button
+          type="button"
+          className="archive-tile"
+          aria-label={`${asset.kind === "photo" ? "Открыть фото" : asset.kind === "video" ? "Открыть видео" : "Открыть файл"}: ${asset.title}`}
+          onClick={() => {
+            if (isArchiveSelectionMode) {
+              toggleArchiveSelection(asset.id);
+              return;
+            }
+            openMediaViewer(asset.id, items);
+          }}
+        >
+          {imageUrl ? (
+            <img src={imageUrl} alt="" loading="lazy" className="archive-tile-image" />
+          ) : (
+            <div className={`archive-tile-placeholder${asset.kind === "video" ? " archive-tile-placeholder-video" : ""}`}>
+              <span>{asset.kind === "video" ? "▶" : asset.kind === "document" ? "DOC" : "IMG"}</span>
+            </div>
+          )}
+          {asset.kind !== "photo" ? <span className="archive-tile-badge">{asset.kind === "video" ? "Видео" : "Файл"}</span> : null}
+          <div className="archive-tile-copy">
+            <strong title={asset.title}>{asset.title}</strong>
+            <span title={secondaryLabel}>{secondaryLabel}</span>
+          </div>
+        </button>
+      </div>
     );
   }
 
@@ -1017,6 +1254,23 @@ export function TreeMediaArchiveClient({
         </TabsList>
       </Tabs>
 
+      {canEdit && isArchiveSelectionMode && selectedArchiveMediaCount ? (
+        <div className="archive-selection-bar" role="region" aria-label="Действия с выбранными материалами">
+          <div className="archive-selection-copy">
+            <strong>Выбрано: {selectedArchiveMediaCount}</strong>
+            <span>{selectedArchiveMediaCount} {selectedArchiveMediaCount === 1 ? "материал" : selectedArchiveMediaCount < 5 ? "материала" : "материалов"} готово к удалению.</span>
+          </div>
+          <div className="archive-action-bar archive-selection-actions">
+            <Button type="button" disabled={isDeletingArchiveMedia} onClick={() => setIsBulkArchiveDeleteConfirmOpen(true)}>
+              {isDeletingArchiveMedia ? "Удаляю..." : "Удалить"}
+            </Button>
+            <Button type="button" variant="ghost" disabled={isDeletingArchiveMedia} onClick={clearArchiveSelection}>
+              Отмена
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {view === "all" ? (
         currentMedia.length ? (
           <>
@@ -1411,6 +1665,64 @@ export function TreeMediaArchiveClient({
             </Button>
             <Button type="button" onClick={discardPendingUploads}>
               Закрыть
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deleteTargetMediaId)}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingArchiveMedia) {
+            setDeleteTargetMediaId(null);
+          }
+        }}
+      >
+        <DialogContent className="archive-confirm-dialog" aria-label="Удалить этот материал?" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>
+              {deleteTargetAsset?.kind === "photo"
+                ? "Удалить это фото?"
+                : deleteTargetAsset?.kind === "video"
+                  ? "Удалить это видео?"
+                  : "Удалить этот материал?"}
+            </DialogTitle>
+            <DialogDescription>
+              {deleteTargetAsset ? `Материал «${deleteTargetAsset.title}» будет удален без перезагрузки страницы.` : "Материал будет удален без перезагрузки страницы."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="archive-actions">
+            <Button type="button" variant="ghost" disabled={isDeletingArchiveMedia} onClick={() => setDeleteTargetMediaId(null)}>
+              Отмена
+            </Button>
+            <Button type="button" disabled={isDeletingArchiveMedia} onClick={() => void deleteSingleArchiveMedia()}>
+              {isDeletingArchiveMedia ? "Удаляю..." : "Удалить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isBulkArchiveDeleteConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingArchiveMedia) {
+            setIsBulkArchiveDeleteConfirmOpen(false);
+          }
+        }}
+      >
+        <DialogContent className="archive-confirm-dialog" aria-label="Удалить выбранные фото?" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Удалить выбранные фото?</DialogTitle>
+            <DialogDescription>
+              {selectedArchiveMediaCount ? `${selectedArchiveMediaCount} шт. будут удалены без перезагрузки страницы.` : "Выбранные материалы будут удалены без перезагрузки страницы."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="archive-actions">
+            <Button type="button" variant="ghost" disabled={isDeletingArchiveMedia} onClick={() => setIsBulkArchiveDeleteConfirmOpen(false)}>
+              Отмена
+            </Button>
+            <Button type="button" disabled={isDeletingArchiveMedia} onClick={() => void deleteSelectedArchiveMedia()}>
+              {isDeletingArchiveMedia ? "Удаляю..." : "Удалить"}
             </Button>
           </DialogFooter>
         </DialogContent>

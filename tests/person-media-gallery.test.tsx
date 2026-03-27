@@ -169,6 +169,47 @@ function StatefulDeleteGallery({
   );
 }
 
+function StatefulSelectableGallery({
+  initialMedia,
+}: {
+  initialMedia: TreeSnapshot["media"];
+}) {
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(() => new Set());
+
+  return (
+    <PersonMediaGallery
+      media={initialMedia}
+      showStage={false}
+      showStickyFooter={false}
+      showInlineMediaActions
+      canManageInlineMediaActions
+      getInlineMediaAlbumHref={() => "/tree/demo-tree/media?mode=photo&view=albums"}
+      selectionMode={selectionMode}
+      canSelectMedia
+      selectedMediaIds={selectedMediaIds}
+      onStartMediaSelection={(mediaId) => {
+        setSelectionMode(true);
+        setSelectedMediaIds(new Set([mediaId]));
+      }}
+      onToggleMediaSelection={(mediaId) => {
+        setSelectedMediaIds((currentSelection) => {
+          const nextSelection = new Set(currentSelection);
+          if (nextSelection.has(mediaId)) {
+            nextSelection.delete(mediaId);
+          } else {
+            nextSelection.add(mediaId);
+          }
+          if (!nextSelection.size) {
+            setSelectionMode(false);
+          }
+          return nextSelection;
+        });
+      }}
+    />
+  );
+}
+
 describe("person media gallery", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -933,6 +974,167 @@ describe("person media gallery", () => {
 
     expect(screen.getByRole("dialog", { name: "Просмотр медиа: Семейное фото" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Удалить фото" })).not.toBeInTheDocument();
+  });
+
+  it("renders the per-card actions menu only when explicit builder action props are passed", () => {
+    const media = [
+      createMediaAsset({
+        id: "media-photo-1",
+        title: "Фото 1",
+        storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+      }),
+      createMediaAsset({
+        id: "media-photo-2",
+        title: "Фото 2",
+        storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+      })
+    ];
+
+    const { rerender } = render(
+      <PersonMediaGallery media={media} showStage={false} showStickyFooter={false} />
+    );
+
+    expect(screen.queryByRole("checkbox", { name: "Выбрать медиа 1: Фото 1" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть действия для «Фото 1»" })).not.toBeInTheDocument();
+
+    rerender(
+      <PersonMediaGallery
+        media={media}
+        showStage={false}
+        showStickyFooter={false}
+        showInlineMediaActions
+        getInlineMediaAlbumHref={() => "/tree/demo-tree/media?mode=photo&view=albums"}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Открыть действия для «Фото 1»" })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Выбрать медиа 1: Фото 1" })).not.toBeInTheDocument();
+  });
+
+  it("filters per-card menu actions by explicit manage capability", async () => {
+    const media = [
+      createMediaAsset({
+        id: "media-photo-1",
+        title: "Фото 1",
+        storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+      })
+    ];
+
+    const { unmount } = render(
+      <PersonMediaGallery
+        media={media}
+        showStage={false}
+        showStickyFooter={false}
+        showInlineMediaActions
+        getInlineMediaAlbumHref={() => "/tree/demo-tree/media?mode=photo&view=albums"}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Фото 1»" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Скачать" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("link", { name: "Перейти к альбому" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Выбрать несколько" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить" })).not.toBeInTheDocument();
+
+    unmount();
+
+    render(
+      <PersonMediaGallery
+        media={media}
+        showStage={false}
+        showStickyFooter={false}
+        showInlineMediaActions
+        canManageInlineMediaActions
+        getInlineMediaAlbumHref={() => "/tree/demo-tree/media?mode=photo&view=albums"}
+        canSelectMedia
+        onStartMediaSelection={vi.fn()}
+        canDeleteMedia
+        onDeleteMedia={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Фото 1»" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Выбрать несколько" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Удалить" })).toBeInTheDocument();
+  });
+
+  it("renders selection checkboxes only when selection mode is explicitly active", () => {
+    const media = [
+      createMediaAsset({
+        id: "media-photo-1",
+        title: "Фото 1",
+        storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+      }),
+      createMediaAsset({
+        id: "media-photo-2",
+        title: "Фото 2",
+        storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+      })
+    ];
+
+    const { rerender } = render(
+      <PersonMediaGallery
+        media={media}
+        showStage={false}
+        showStickyFooter={false}
+        canSelectMedia
+        selectedMediaIds={new Set(["media-photo-1"])}
+        onToggleMediaSelection={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole("checkbox", { name: "Выбрать медиа 1: Фото 1" })).not.toBeInTheDocument();
+
+    rerender(
+      <PersonMediaGallery
+        media={media}
+        showStage={false}
+        showStickyFooter={false}
+        selectionMode
+        canSelectMedia
+        selectedMediaIds={new Set(["media-photo-1"])}
+        onToggleMediaSelection={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("checkbox", { name: "Выбрать медиа 1: Фото 1" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Выбрать медиа 2: Фото 2" })).not.toBeChecked();
+  });
+
+  it("enters selection mode from the per-card menu and then toggles selection without opening the lightbox", () => {
+    render(
+      <StatefulSelectableGallery
+        initialMedia={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Фото 1»" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько" }));
+
+    expect(screen.getByRole("checkbox", { name: "Выбрать медиа 1: Фото 1" })).toBeChecked();
+    expect(screen.queryByRole("dialog", { name: "Просмотр медиа: Фото 1" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Фото 2" }));
+
+    expect(screen.getByRole("checkbox", { name: "Выбрать медиа 2: Фото 2" })).toBeChecked();
+    expect(screen.queryByRole("dialog", { name: "Просмотр медиа: Фото 1" })).not.toBeInTheDocument();
   });
 
   it("deletes the current builder photo from the lightbox and moves to the next photo when it exists", async () => {

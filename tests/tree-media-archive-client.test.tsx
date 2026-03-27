@@ -223,6 +223,118 @@ describe("tree media archive client", () => {
     expect(screen.getByText("Большая семейная подборка со свадьбы")).toBeInTheDocument();
   });
 
+  it("shows only download and album actions in the archive card menu for read-only viewers", async () => {
+    renderArchiveClient({ canEdit: false });
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Архивное фото»" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Скачать" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("link", { name: "Перейти к альбому" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Выбрать несколько" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить" })).not.toBeInTheDocument();
+  });
+
+  it("starts archive selection mode from the card menu and toggles cards instead of opening the viewer", async () => {
+    renderArchiveClient();
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Архивное фото»" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Выбрать несколько" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько" }));
+
+    expect(screen.getByRole("region", { name: "Действия с выбранными материалами" })).toBeInTheDocument();
+    expect(screen.getByText("Выбрано: 1")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Выбрать медиа Архивное фото" })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть видео: Архивное видео" }));
+
+    expect(screen.getByText("Выбрано: 2")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Просмотр архива: Архивное видео" })).not.toBeInTheDocument();
+  });
+
+  it("deletes a single archive media item from the card menu and updates the grid without reload", async () => {
+    const requests: Array<{ url: string; method?: string }> = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      requests.push({ url, method: init?.method });
+
+      if (url.endsWith("/api/media/media-photo") && init?.method === "DELETE") {
+        return Response.json({ message: "Медиа удалено." }, { status: 200 });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    renderArchiveClient();
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Архивное фото»" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Удалить" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    expect(screen.getByRole("dialog", { name: "Удалить это фото?" })).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Удалить это фото?" })).getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.url.endsWith("/api/media/media-photo") && request.method === "DELETE")).toBe(true);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Открыть фото: Архивное фото" })).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Медиа удалено.")).toBeInTheDocument();
+  });
+
+  it("bulk deletes selected archive media from the archive page action bar", async () => {
+    const requests: Array<{ url: string; method?: string }> = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      requests.push({ url, method: init?.method });
+
+      if (
+        (url.endsWith("/api/media/media-photo") || url.endsWith("/api/media/media-video")) &&
+        init?.method === "DELETE"
+      ) {
+        return Response.json({ message: "Медиа удалено." }, { status: 200 });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    renderArchiveClient();
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Архивное фото»" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Выбрать несколько" })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть видео: Архивное видео" }));
+    expect(screen.getByText("Выбрано: 2")).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("region", { name: "Действия с выбранными материалами" })).getByRole("button", { name: "Удалить" }));
+    expect(screen.getByRole("dialog", { name: "Удалить выбранные фото?" })).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Удалить выбранные фото?" })).getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.url.endsWith("/api/media/media-photo") && request.method === "DELETE")).toBe(true);
+      expect(requests.some((request) => request.url.endsWith("/api/media/media-video") && request.method === "DELETE")).toBe(true);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Открыть фото: Архивное фото" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Открыть видео: Архивное видео" })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole("region", { name: "Действия с выбранными материалами" })).not.toBeInTheDocument();
+  });
+
   it("shows contextual empty-state actions when the current archive mode is empty", () => {
     renderArchiveClient({ allMedia: [] });
 

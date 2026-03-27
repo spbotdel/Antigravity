@@ -15,15 +15,56 @@ vi.mock("@/components/tree/family-tree-canvas", () => ({
 vi.mock("@/components/tree/person-media-gallery", () => ({
   PersonMediaGallery: (props: {
     appendTile?: unknown;
-    media?: Array<{ id: string }>;
+    media?: Array<{ id: string; title?: string }>;
     canDeleteMedia?: boolean;
     onDeleteMedia?: (mediaId: string) => Promise<void>;
+    showInlineMediaActions?: boolean;
+    canManageInlineMediaActions?: boolean;
+    getInlineMediaAlbumHref?: (asset: { id: string; title?: string }) => string | null;
+    selectionMode?: boolean;
+    canSelectMedia?: boolean;
+    selectedMediaIds?: ReadonlySet<string>;
+    onToggleMediaSelection?: (mediaId: string) => void;
+    onStartMediaSelection?: (mediaId: string) => void;
   }) => (
     <div
       data-testid="person-media-gallery"
       data-delete-enabled={props.canDeleteMedia && props.onDeleteMedia ? "true" : "false"}
+      data-select-enabled={props.selectionMode && props.canSelectMedia && props.onToggleMediaSelection ? "true" : "false"}
+      data-actions-enabled={props.showInlineMediaActions && !props.selectionMode ? "true" : "false"}
       data-media-count={String(props.media?.length ?? 0)}
     >
+      {(props.media || []).map((item) =>
+        props.showInlineMediaActions && !props.selectionMode ? (
+          <div key={`actions-${item.id}`}>
+            <button type="button">Открыть действия для {item.id}</button>
+            <a href={`/api/media/${item.id}`}>Скачать {item.id}</a>
+            <a href={props.getInlineMediaAlbumHref?.(item) || "#"}>Перейти к альбому {item.id}</a>
+            {props.canManageInlineMediaActions && props.onStartMediaSelection ? (
+              <button type="button" onClick={() => props.onStartMediaSelection?.(item.id)}>
+                Выбрать несколько {item.id}
+              </button>
+            ) : null}
+            {props.canManageInlineMediaActions && props.onDeleteMedia ? (
+              <button type="button" onClick={() => void props.onDeleteMedia?.(item.id)}>
+                Удалить медиа {item.id}
+              </button>
+            ) : null}
+          </div>
+        ) : null
+      )}
+      {(props.media || []).map((item) =>
+        props.selectionMode && props.canSelectMedia && props.onToggleMediaSelection ? (
+          <label key={`select-${item.id}`}>
+            <input
+              type="checkbox"
+              aria-label={`Выбрать медиа ${item.id}`}
+              checked={props.selectedMediaIds?.has(item.id) ?? false}
+              onChange={() => props.onToggleMediaSelection?.(item.id)}
+            />
+          </label>
+        ) : null
+      )}
       {props.appendTile as any}
       {props.onDeleteMedia && (props.media?.length ?? 0) > 0 ? (
         <button type="button" onClick={() => void props.onDeleteMedia?.(props.media?.[0]?.id || "")}>
@@ -140,6 +181,32 @@ function createSnapshotWithPhoto(): TreeSnapshot {
       is_primary: true,
     },
   ];
+  return snapshot;
+}
+
+function createSnapshotWithPhotos(count: number): TreeSnapshot {
+  const snapshot = createSnapshot();
+  snapshot.media = Array.from({ length: count }, (_, index) => ({
+    id: `media-photo-${index + 1}`,
+    tree_id: "tree-1",
+    kind: "photo" as const,
+    provider: "object_storage" as const,
+    visibility: "members" as const,
+    storage_path: `trees/tree-1/media/photo/media-photo-${index + 1}/photo.jpg`,
+    external_url: null,
+    title: `Demo Photo ${index + 1}`,
+    caption: null,
+    mime_type: "image/jpeg",
+    size_bytes: 1024,
+    created_by: null,
+    created_at: "2026-03-09T00:00:00.000Z",
+  }));
+  snapshot.personMedia = Array.from({ length: count }, (_, index) => ({
+    id: `person-media-photo-${index + 1}`,
+    person_id: "person-1",
+    media_id: `media-photo-${index + 1}`,
+    is_primary: index === 0,
+  }));
   return snapshot;
 }
 
@@ -825,7 +892,54 @@ describe("builder workspace", () => {
     expect(screen.getByTestId("person-media-gallery")).toBeInTheDocument();
   });
 
-  it("enables delete scope only for the builder photo gallery", async () => {
+  it("enters bulk selection mode from the per-card menu and clears it on cancel", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshotWithPhotos(2)} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-actions-enabled", "true");
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "false");
+    expect(screen.queryByRole("region", { name: "Действия с выбранными фотографиями" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько media-photo-1" }));
+
+    expect(screen.getByRole("region", { name: "Действия с выбранными фотографиями" })).toBeInTheDocument();
+    expect(screen.getByText("Выбрано: 1")).toBeInTheDocument();
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "true");
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-actions-enabled", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+
+    expect(screen.queryByRole("region", { name: "Действия с выбранными фотографиями" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "false");
+    expect(screen.queryByLabelText("Выбрать медиа media-photo-1")).not.toBeInTheDocument();
+  });
+
+  it("keeps only download and album actions in the menu for non-owner non-admin roles", async () => {
+    const snapshot = createSnapshotWithPhotos(2);
+    snapshot.actor.role = "viewer";
+
+    render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "false");
+    expect(screen.getByRole("link", { name: "Скачать media-photo-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Перейти к альбому media-photo-1" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Выбрать несколько media-photo-1" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить медиа media-photo-1" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Выбрать медиа media-photo-1")).not.toBeInTheDocument();
+  });
+
+  it("shows the full per-card action set for owner in the builder photo gallery", async () => {
     render(<BuilderWorkspace snapshot={createSnapshotWithPhoto()} mediaLoaded />);
 
     await waitFor(() => {
@@ -835,12 +949,15 @@ describe("builder workspace", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
 
     expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-delete-enabled", "true");
-    expect(screen.getByRole("button", { name: "Удалить медиа из галереи" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Скачать media-photo-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Перейти к альбому media-photo-1" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
+    expect(screen.getByRole("button", { name: "Выбрать несколько media-photo-1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Удалить медиа media-photo-1" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
     expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-delete-enabled", "false");
-    expect(screen.queryByRole("button", { name: "Удалить медиа из галереи" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Удалить медиа media-photo-1" })).not.toBeInTheDocument();
   });
 
   it("deletes a builder photo through the media endpoint and patches the local snapshot without reloading", async () => {
@@ -864,7 +981,7 @@ describe("builder workspace", () => {
     });
 
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
-    fireEvent.click(screen.getByRole("button", { name: "Удалить медиа из галереи" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить медиа media-photo-1" }));
 
     await waitFor(() => {
       expect(requests.some((request) => request.url.endsWith("/api/media/media-photo-1") && request.method === "DELETE")).toBe(true);
@@ -875,6 +992,54 @@ describe("builder workspace", () => {
 
     expect(requests.some((request) => request.url.includes("/api/tree/demo-tree/builder-snapshot"))).toBe(false);
     expect(screen.getAllByRole("status").some((element) => element.textContent?.includes("Медиа удалено."))).toBe(true);
+  });
+
+  it("bulk deletes selected builder photos through the existing media endpoint and clears selection", async () => {
+    const requests: Array<{ url: string; method?: string }> = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      requests.push({ url, method: init?.method });
+
+      if (
+        (url.endsWith("/api/media/media-photo-1") || url.endsWith("/api/media/media-photo-2")) &&
+        init?.method === "DELETE"
+      ) {
+        return Response.json({ message: "Медиа удалено." }, { status: 200 });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    render(<BuilderWorkspace snapshot={createSnapshotWithPhotos(3)} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько media-photo-1" }));
+    fireEvent.click(screen.getByLabelText("Выбрать медиа media-photo-2"));
+
+    expect(screen.getByText("Выбрано: 2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    expect(screen.getByRole("dialog", { name: "Удалить выбранные фото?" })).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Удалить выбранные фото?" })).getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.url.endsWith("/api/media/media-photo-1") && request.method === "DELETE")).toBe(true);
+      expect(requests.some((request) => request.url.endsWith("/api/media/media-photo-2") && request.method === "DELETE")).toBe(true);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-media-count", "1");
+    });
+
+    expect(screen.queryByRole("region", { name: "Действия с выбранными фотографиями" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Выбрать медиа media-photo-3")).not.toBeInTheDocument();
+    expect(requests.some((request) => request.url.includes("/api/tree/demo-tree/builder-snapshot"))).toBe(false);
+    expect(screen.getAllByRole("status").some((element) => element.textContent?.includes("Удалено 2 фото."))).toBe(true);
   });
 
   it("resizes the canvas and persists the updated height", async () => {

@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
@@ -32,6 +33,14 @@ interface PersonMediaGalleryProps {
   onSetAvatar?: (mediaId: string) => Promise<void> | void;
   canDeleteMedia?: boolean;
   onDeleteMedia?: (mediaId: string) => Promise<void>;
+  showInlineMediaActions?: boolean;
+  canManageInlineMediaActions?: boolean;
+  getInlineMediaAlbumHref?: (asset: MediaAsset) => string | null;
+  selectionMode?: boolean;
+  canSelectMedia?: boolean;
+  selectedMediaIds?: ReadonlySet<string>;
+  onToggleMediaSelection?: (mediaId: string) => void;
+  onStartMediaSelection?: (mediaId: string) => void;
   showStickyFooter?: boolean;
   showStage?: boolean;
   showViewerAvatarAction?: boolean;
@@ -151,6 +160,8 @@ function MediaThumb({
   isAvatar,
   compact = false,
   thumbRef,
+  selectionControl,
+  actionMenu,
 }: {
   asset: MediaAsset;
   active: boolean;
@@ -160,12 +171,26 @@ function MediaThumb({
   isAvatar: boolean;
   compact?: boolean;
   thumbRef?: (node: HTMLButtonElement | null) => void;
+  selectionControl?: {
+    selected: boolean;
+    onToggle: () => void;
+  };
+  actionMenu?: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    downloadHref: string;
+    albumHref: string;
+    showSelectAction: boolean;
+    showDeleteAction: boolean;
+    onStartSelection: () => void;
+    onDelete: () => void;
+  };
 }) {
   const mediaUrl = isPhotoAsset(asset)
     ? buildPhotoPreviewRouteUrl(asset, "thumb", shareToken)
     : buildMediaRouteUrl(asset.id, { shareToken });
 
-  return (
+  const thumbButton = (
     <button
       type="button"
       ref={thumbRef}
@@ -195,6 +220,76 @@ function MediaThumb({
         {isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
       </span>
     </button>
+  );
+
+  if (!selectionControl && !actionMenu) {
+    return thumbButton;
+  }
+
+  return (
+    <div className={`person-media-thumb-shell${selectionControl?.selected ? " person-media-thumb-shell-selected" : ""}${compact ? " person-media-thumb-shell-compact" : ""}`}>
+      {actionMenu ? (
+        <Popover open={actionMenu.open} onOpenChange={actionMenu.onOpenChange}>
+          <PopoverTrigger className="person-media-thumb-actions-trigger" aria-label={`Открыть действия для «${asset.title}»`}>
+            ...
+          </PopoverTrigger>
+          <PopoverContent className="builder-media-card-actions-popover" align="end" side="bottom" sideOffset={8}>
+            <a
+              href={actionMenu.downloadHref}
+              target="_blank"
+              rel="noreferrer"
+              className="builder-media-card-menu-item"
+              onClick={() => actionMenu.onOpenChange(false)}
+            >
+              Скачать
+            </a>
+            <a href={actionMenu.albumHref} className="builder-media-card-menu-item" onClick={() => actionMenu.onOpenChange(false)}>
+              Перейти к альбому
+            </a>
+            {actionMenu.showSelectAction ? (
+              <button
+                type="button"
+                className="builder-media-card-menu-item"
+                onClick={() => {
+                  actionMenu.onStartSelection();
+                  actionMenu.onOpenChange(false);
+                }}
+              >
+                Выбрать несколько
+              </button>
+            ) : null}
+            {actionMenu.showDeleteAction ? (
+              <button
+                type="button"
+                className="builder-media-card-menu-item builder-media-card-menu-item-danger"
+                onClick={() => {
+                  actionMenu.onDelete();
+                  actionMenu.onOpenChange(false);
+                }}
+              >
+                Удалить
+              </button>
+            ) : null}
+          </PopoverContent>
+        </Popover>
+      ) : null}
+      {selectionControl ? (
+        <label className="person-media-thumb-selector">
+          <input
+            type="checkbox"
+            className="person-media-thumb-checkbox"
+            checked={selectionControl.selected}
+            aria-label={`Выбрать медиа ${index + 1}: ${asset.title}`}
+            onChange={() => selectionControl.onToggle()}
+            onClick={(event) => event.stopPropagation()}
+          />
+          <span className="media-selection-indicator" aria-hidden="true">
+            <span className="media-selection-checkmark">✓</span>
+          </span>
+        </label>
+      ) : null}
+      {thumbButton}
+    </div>
   );
 }
 
@@ -258,6 +353,14 @@ export function PersonMediaGallery({
   onSetAvatar,
   canDeleteMedia = false,
   onDeleteMedia,
+  showInlineMediaActions = false,
+  canManageInlineMediaActions = false,
+  getInlineMediaAlbumHref,
+  selectionMode = false,
+  canSelectMedia = false,
+  selectedMediaIds,
+  onToggleMediaSelection,
+  onStartMediaSelection,
   showStickyFooter = true,
   showStage = true,
   showViewerAvatarAction = false,
@@ -267,6 +370,7 @@ export function PersonMediaGallery({
   const [isAvatarUpdating, setIsAvatarUpdating] = useState(false);
   const [deleteTargetMediaId, setDeleteTargetMediaId] = useState<string | null>(null);
   const [isDeletingMedia, setIsDeletingMedia] = useState(false);
+  const [openInlineActionsMediaId, setOpenInlineActionsMediaId] = useState<string | null>(null);
   const lightboxStripRef = useRef<HTMLDivElement | null>(null);
   const lightboxThumbRefs = useRef(new Map<string, HTMLButtonElement>());
   const lightboxGestureRef = useRef(createIdleLightboxGestureState());
@@ -351,6 +455,27 @@ export function PersonMediaGallery({
   const canNavigate = media.length > 1;
   const canSetAvatar = Boolean(onSetAvatar && activeAsset && isPhotoAsset(activeAsset));
   const canDeleteCurrentMedia = Boolean(canDeleteMedia && onDeleteMedia && activeAsset && isPhotoAsset(activeAsset));
+  const canSelectInlineMedia = Boolean(canSelectMedia && !showStage && selectedMediaIds && onToggleMediaSelection);
+  const isInlineSelectionMode = Boolean(selectionMode && canSelectInlineMedia);
+  const canShowInlineActionsMenu = Boolean(showInlineMediaActions && !showStage && !isInlineSelectionMode && getInlineMediaAlbumHref);
+  const resolvedSelectedMediaIds = selectedMediaIds ?? new Set<string>();
+  const resolvedToggleMediaSelection = onToggleMediaSelection ?? (() => undefined);
+  const resolvedStartMediaSelection = onStartMediaSelection ?? (() => undefined);
+  const resolvedInlineMediaAlbumHref = getInlineMediaAlbumHref ?? (() => null);
+  const canShowInlineSelectionAction = Boolean(canManageInlineMediaActions && canSelectMedia && onStartMediaSelection);
+  const canShowInlineDeleteAction = Boolean(canManageInlineMediaActions && onDeleteMedia);
+
+  useEffect(() => {
+    if (!canShowInlineActionsMenu && openInlineActionsMediaId) {
+      setOpenInlineActionsMediaId(null);
+    }
+  }, [canShowInlineActionsMenu, openInlineActionsMediaId]);
+
+  useEffect(() => {
+    if (openInlineActionsMediaId && !media.some((asset) => asset.id === openInlineActionsMediaId)) {
+      setOpenInlineActionsMediaId(null);
+    }
+  }, [media, openInlineActionsMediaId]);
 
   function moveSelection(direction: -1 | 1) {
     if (!media.length) {
@@ -581,6 +706,33 @@ export function PersonMediaGallery({
   }
 
   const activeMediaUrl = buildMediaOpenRouteUrl(activeAsset, shareToken);
+  const deleteConfirmDialog = Boolean(deleteTargetMediaId) ? (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !isDeletingMedia) {
+          setDeleteTargetMediaId(null);
+        }
+      }}
+    >
+      <DialogContent className="archive-confirm-dialog media-lightbox-confirm-dialog" aria-label="Удалить это фото?" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Удалить это фото?</DialogTitle>
+          <DialogDescription>
+            {deleteTargetAsset ? `Фотография «${deleteTargetAsset.title}» будет удалена без перезагрузки страницы.` : "Фотография будет удалена без перезагрузки страницы."}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="archive-actions">
+          <Button type="button" variant="ghost" disabled={isDeletingMedia} onClick={() => setDeleteTargetMediaId(null)}>
+            Отмена
+          </Button>
+          <Button type="button" disabled={isDeletingMedia} onClick={() => void handleConfirmDeleteMedia()}>
+            {isDeletingMedia ? "Удаляю..." : "Удалить"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  ) : null;
   const showLightboxActions = !isInlineRenderableAsset(activeAsset) || (showViewerAvatarAction && canSetAvatar) || canDeleteCurrentMedia;
   const lightboxContent = isLightboxRendered ? (
     <>
@@ -675,31 +827,6 @@ export function PersonMediaGallery({
         ) : null}
       </div>
 
-      <Dialog
-        open={Boolean(deleteTargetMediaId)}
-        onOpenChange={(open) => {
-          if (!open && !isDeletingMedia) {
-            setDeleteTargetMediaId(null);
-          }
-        }}
-      >
-        <DialogContent className="archive-confirm-dialog media-lightbox-confirm-dialog" aria-label="Удалить это фото?" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>Удалить это фото?</DialogTitle>
-            <DialogDescription>
-              {deleteTargetAsset ? `Фотография «${deleteTargetAsset.title}» будет удалена без перезагрузки страницы.` : "Фотография будет удалена без перезагрузки страницы."}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="archive-actions">
-            <Button type="button" variant="ghost" disabled={isDeletingMedia} onClick={() => setDeleteTargetMediaId(null)}>
-              Отмена
-            </Button>
-            <Button type="button" disabled={isDeletingMedia} onClick={() => void handleConfirmDeleteMedia()}>
-              {isDeletingMedia ? "Удаляю..." : "Удалить"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   ) : null;
 
@@ -753,6 +880,10 @@ export function PersonMediaGallery({
                 active={asset.id === activeAsset.id}
                 shareToken={shareToken}
                 onSelect={() => {
+                  if (isInlineSelectionMode) {
+                    resolvedToggleMediaSelection(asset.id);
+                    return;
+                  }
                   setActiveMediaId(asset.id);
                   if (!showStage) {
                     openLightbox();
@@ -761,6 +892,28 @@ export function PersonMediaGallery({
                 index={index}
                 isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
                 compact={!showStage}
+                selectionControl={
+                  isInlineSelectionMode
+                    ? {
+                        selected: resolvedSelectedMediaIds.has(asset.id),
+                        onToggle: () => resolvedToggleMediaSelection(asset.id),
+                      }
+                    : undefined
+                }
+                actionMenu={
+                  canShowInlineActionsMenu
+                    ? {
+                        open: openInlineActionsMediaId === asset.id,
+                        onOpenChange: (open) => setOpenInlineActionsMediaId(open ? asset.id : null),
+                        downloadHref: buildMediaOpenRouteUrl(asset, shareToken),
+                        albumHref: resolvedInlineMediaAlbumHref(asset) || "#",
+                        showSelectAction: canShowInlineSelectionAction,
+                        showDeleteAction: canShowInlineDeleteAction,
+                        onStartSelection: () => resolvedStartMediaSelection(asset.id),
+                        onDelete: () => setDeleteTargetMediaId(asset.id),
+                      }
+                    : undefined
+                }
               />
             ))}
             {appendTile}
@@ -788,6 +941,7 @@ export function PersonMediaGallery({
       </section>
 
       {lightboxContent && typeof document !== "undefined" ? createPortal(lightboxContent, document.body) : null}
+      {deleteConfirmDialog}
     </>
   );
 }
