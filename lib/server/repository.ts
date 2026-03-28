@@ -13,6 +13,7 @@ import type {
   AuditEntryView,
   InviteRecord,
   MediaAssetRecord,
+  MediaVisibility,
   MediaUploadTargetResponse,
   MediaAssetVariantRecord,
   MediaVariantName,
@@ -26,6 +27,7 @@ import type {
   ShareLinkRecord,
   TreeRecord,
   TreeMediaAlbumItemRecord,
+  TreeMediaAlbumMediaKind,
   TreeMediaAlbumRecord,
   TreeSnapshot,
   UserRole,
@@ -100,6 +102,22 @@ function isMediaAlbumsSchemaUnavailableError(error: unknown) {
 
 function strictestMediaVisibility(left: MediaVisibility, right: MediaVisibility): MediaVisibility {
   return left === "members" || right === "members" ? "members" : "public";
+}
+
+function isTreeMediaAlbumMediaKind(value: MediaAssetRecord["kind"]): value is TreeMediaAlbumMediaKind {
+  return value === "photo" || value === "video";
+}
+
+function getTreeMediaAlbumKindMismatchMessage(albumKind: TreeMediaAlbumMediaKind, mediaKind: MediaAssetRecord["kind"]) {
+  if (mediaKind === "document") {
+    return "В альбомы можно добавлять только фото и видео.";
+  }
+
+  if (albumKind === "photo") {
+    return "В фотоальбом нельзя добавить видео.";
+  }
+
+  return "В видеоальбом нельзя добавить фото.";
 }
 
 type MediaAlbumAccessRow = {
@@ -1435,11 +1453,11 @@ export async function revokeShareLink(shareLinkId: string) {
   return data;
 }
 
-async function listTreeMediaAlbumsForTree(treeId: string) {
+async function listTreeMediaAlbumsForTree(treeId: string, kind?: TreeMediaAlbumMediaKind) {
   let albums: TreeMediaAlbumRecord[] = [];
   try {
     albums = await fetchAdminRows<TreeMediaAlbumRecord>(
-      `tree_media_albums?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
+      `tree_media_albums?select=*&tree_id=eq.${encodeURIComponent(treeId)}${kind ? `&kind=eq.${encodeURIComponent(kind)}` : ""}&order=created_at.desc`,
       "Не удалось загрузить альбомы семейного архива."
     );
   } catch (error) {
@@ -1474,10 +1492,10 @@ async function listTreeMediaAlbumsForTree(treeId: string) {
   };
 }
 
-export async function listTreeMediaAlbums(treeId: string, shareToken?: string | null) {
+export async function listTreeMediaAlbums(treeId: string, shareToken?: string | null, kind?: TreeMediaAlbumMediaKind) {
   const tree = await getTreeById(treeId);
   await getTreeReadAccess(tree, shareToken);
-  return listTreeMediaAlbumsForTree(treeId);
+  return listTreeMediaAlbumsForTree(treeId, kind);
 }
 
 async function listTreeMediaUploaderLabelsForUserIds(userIds: string[]) {
@@ -1571,6 +1589,7 @@ export async function createTreeMediaAlbum(input: {
   treeId: string;
   title: string;
   description?: string | null;
+  kind: TreeMediaAlbumMediaKind;
   access?: MediaVisibility;
   albumKind?: TreeMediaAlbumRecord["album_kind"];
   uploaderUserId?: string | null;
@@ -1585,6 +1604,7 @@ export async function createTreeMediaAlbum(input: {
         tree_id: input.treeId,
         title: input.title,
         description: input.description || null,
+        kind: input.kind,
         access: input.access || "members",
         album_kind: input.albumKind || "manual",
         uploader_user_id: input.uploaderUserId || null,
@@ -1704,9 +1724,9 @@ export async function deleteTreeMediaAlbum(albumId: string) {
   });
 }
 
-async function ensureUploaderTreeMediaAlbum(treeId: string, userId: string, email: string | null) {
+async function ensureUploaderTreeMediaAlbum(treeId: string, userId: string, email: string | null, kind: TreeMediaAlbumMediaKind) {
   const existing = await fetchAdminFirst<TreeMediaAlbumRecord>(
-    `tree_media_albums?select=*&tree_id=eq.${encodeURIComponent(treeId)}&album_kind=eq.uploader&uploader_user_id=eq.${encodeURIComponent(userId)}`,
+    `tree_media_albums?select=*&tree_id=eq.${encodeURIComponent(treeId)}&album_kind=eq.uploader&uploader_user_id=eq.${encodeURIComponent(userId)}&kind=eq.${encodeURIComponent(kind)}`,
     "Не удалось загрузить автоальбом загрузившего."
   );
 
@@ -1721,22 +1741,80 @@ async function ensureUploaderTreeMediaAlbum(treeId: string, userId: string, emai
       email,
       displayName: profile?.display_name || null
     }),
+    kind,
     access: "members",
     albumKind: "uploader",
     uploaderUserId: userId
   });
 }
 
-async function addMediaToTreeMediaAlbums(albumIds: string[], mediaId: string) {
+async function listTreeMediaAlbumsByIds(treeId: string, albumIds: string[]) {
+  const uniqueAlbumIds = [...new Set(albumIds.filter(Boolean))];
+  if (!uniqueAlbumIds.length) {
+    return [] as TreeMediaAlbumRecord[];
+  }
+
+  return fetchAdminRows<TreeMediaAlbumRecord>(
+    `tree_media_albums?select=*&tree_id=eq.${encodeURIComponent(treeId)}&id=in.${buildUuidInFilter(uniqueAlbumIds)}`,
+    "Не удалось загрузить альбомы."
+  );
+}
+
+async function assertMediaKindMatchesAlbums(treeId: string, albumIds: string[], mediaId: string) {
+  const uniqueAlbumIds = [...new Set(albumIds.filter(Boolean))];
+  if (!uniqueAlbumIds.length) {
+    return;
+  }
+
+  const [albums, media] = await Promise.all([
+    listTreeMediaAlbumsByIds(treeId, uniqueAlbumIds),
+    fetchAdminFirst<MediaAssetRecord>(
+      `media_assets?select=*&tree_id=eq.${encodeURIComponent(treeId)}&id=eq.${encodeURIComponent(mediaId)}`,
+      "Не удалось загрузить материал."
+    )
+  ]);
+
+  if (albums.length !== uniqueAlbumIds.length) {
+    throw new AppError(404, "Альбом не найден.");
+  }
+
+  if (!media) {
+    throw new AppError(404, "Материал не найден.");
+  }
+
+  if (!isTreeMediaAlbumMediaKind(media.kind)) {
+    throw new AppError(400, "В альбомы можно добавлять только фото и видео.");
+  }
+
+  for (const album of albums) {
+    if (album.kind !== media.kind) {
+      throw new AppError(400, getTreeMediaAlbumKindMismatchMessage(album.kind, media.kind));
+    }
+  }
+}
+
+async function addMediaToTreeMediaAlbums(treeId: string, albumIds: string[], mediaId: string) {
   const uniqueAlbumIds = [...new Set(albumIds.filter(Boolean))];
   if (!uniqueAlbumIds.length) {
     return [];
   }
 
+  await assertMediaKindMatchesAlbums(treeId, uniqueAlbumIds, mediaId);
+  const existingItems = await fetchAdminRows<TreeMediaAlbumItemRecord>(
+    `tree_media_album_items?select=*&media_id=eq.${encodeURIComponent(mediaId)}&album_id=in.${buildUuidInFilter(uniqueAlbumIds)}`,
+    "Не удалось проверить текущие связи материала с альбомами."
+  );
+  const existingAlbumIds = new Set(existingItems.map((item) => item.album_id));
+  const missingAlbumIds = uniqueAlbumIds.filter((albumId) => !existingAlbumIds.has(albumId));
+
+  if (!missingAlbumIds.length) {
+    return [] as TreeMediaAlbumItemRecord[];
+  }
+
   return mutateAdminRows<TreeMediaAlbumItemRecord>(
     "tree_media_album_items",
     "POST",
-    uniqueAlbumIds.map((albumId) => ({
+    missingAlbumIds.map((albumId) => ({
       album_id: albumId,
       media_id: mediaId
     })),
@@ -1772,7 +1850,7 @@ export async function addExistingMediaToTreeMediaAlbum(input: {
   const createdItems: TreeMediaAlbumItemRecord[] = [];
 
   for (const mediaId of uniqueMediaIds) {
-    const rows = await addMediaToTreeMediaAlbums([input.albumId], mediaId);
+    const rows = await addMediaToTreeMediaAlbums(input.treeId, [input.albumId], mediaId);
     createdItems.push(...rows);
   }
 
@@ -2779,14 +2857,13 @@ export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMe
     }
   }
 
-  const uploaderAlbum = await ensureUploaderTreeMediaAlbum(input.treeId, userId, user?.email || null);
-  const albumIds = [uploaderAlbum.id];
-  if ("albumId" in input && input.albumId && input.albumId !== uploaderAlbum.id) {
-    albumIds.push(input.albumId);
-  }
+  const uploaderAlbum = isTreeMediaAlbumMediaKind(kind)
+    ? await ensureUploaderTreeMediaAlbum(input.treeId, userId, user?.email || null, kind)
+    : null;
+  const albumIds = [...new Set([uploaderAlbum?.id || null, "albumId" in input ? input.albumId || null : null].filter((value): value is string => Boolean(value)))];
 
   try {
-    await addMediaToTreeMediaAlbums(albumIds, input.mediaId);
+    await addMediaToTreeMediaAlbums(input.treeId, albumIds, input.mediaId);
   } catch (error) {
     throw toRepositoryReadError(error, "Не удалось добавить материал в семейный архив.");
   }
@@ -2803,7 +2880,7 @@ export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMe
 
   return {
     media: data,
-    uploaderAlbumId: uploaderAlbum.id
+    uploaderAlbumId: uploaderAlbum?.id || null
   };
 }
 

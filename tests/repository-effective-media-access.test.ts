@@ -21,7 +21,7 @@ vi.mock("@/lib/server/auth", () => ({
   requireAuthenticatedUserId: mocks.requireAuthenticatedUserId,
 }));
 
-import { getTreeMediaPageData, resolveEffectiveMediaAccess, resolveMediaAccess } from "@/lib/server/repository";
+import { addExistingMediaToTreeMediaAlbum, getTreeMediaPageData, resolveEffectiveMediaAccess, resolveMediaAccess } from "@/lib/server/repository";
 
 function mediaRow(overrides?: Partial<Record<string, unknown>>) {
   return {
@@ -171,6 +171,7 @@ describe("repository effective media access", () => {
             tree_id: "tree-1",
             title: "Закрытый альбом",
             description: null,
+            kind: "photo",
             access: "members",
             album_kind: "manual",
             uploader_user_id: null,
@@ -207,5 +208,148 @@ describe("repository effective media access", () => {
     expect(result.media).toHaveLength(0);
     expect(result.albums).toHaveLength(0);
     expect(result.items).toHaveLength(0);
+  });
+
+  it("rejects adding a video file into a photo album", async () => {
+    mocks.requireAuthenticatedUserId.mockResolvedValue("user-1");
+    mocks.fetchSupabaseAdminRestJson.mockImplementation(async (pathWithQuery) => {
+      if (pathWithQuery === "trees?select=*&id=eq.tree-1&limit=1") {
+        return [treeRow()];
+      }
+
+      if (pathWithQuery === "tree_memberships?select=*&tree_id=eq.tree-1&user_id=eq.user-1&status=eq.active&limit=1") {
+        return [];
+      }
+
+      if (pathWithQuery === "tree_media_albums?select=*&id=eq.album-1&tree_id=eq.tree-1&limit=1") {
+        return [{
+          id: "album-1",
+          tree_id: "tree-1",
+          title: "Фотоархив",
+          description: null,
+          kind: "photo",
+          access: "members",
+          album_kind: "manual",
+          uploader_user_id: null,
+          created_by: "user-1",
+          created_at: "2026-03-27T00:00:00.000Z",
+          updated_at: "2026-03-27T00:00:00.000Z",
+        }];
+      }
+
+      if (pathWithQuery === "tree_media_albums?select=*&tree_id=eq.tree-1&id=in.(album-1)") {
+        return [{
+          id: "album-1",
+          tree_id: "tree-1",
+          title: "Фотоархив",
+          description: null,
+          kind: "photo",
+          access: "members",
+          album_kind: "manual",
+          uploader_user_id: null,
+          created_by: "user-1",
+          created_at: "2026-03-27T00:00:00.000Z",
+          updated_at: "2026-03-27T00:00:00.000Z",
+        }];
+      }
+
+      if (pathWithQuery === "media_assets?select=*&tree_id=eq.tree-1&id=eq.media-1&limit=1") {
+        return [mediaRow({
+          kind: "video",
+          mime_type: "video/mp4",
+          storage_path: "trees/tree-1/media/video/media-1/original.mp4",
+        })];
+      }
+
+      throw new Error(`Unexpected request: ${pathWithQuery}`);
+    });
+
+    await expect(
+      addExistingMediaToTreeMediaAlbum({
+        treeId: "tree-1",
+        albumId: "album-1",
+        mediaIds: ["media-1"],
+      })
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "В фотоальбом нельзя добавить видео.",
+    });
+  });
+
+  it("skips existing album-media links instead of inserting the same pair twice", async () => {
+    mocks.requireAuthenticatedUserId.mockResolvedValue("user-1");
+    const mutateRequests: string[] = [];
+
+    mocks.fetchSupabaseAdminRestJson.mockImplementation(async (pathWithQuery, options) => {
+      if (pathWithQuery === "trees?select=*&id=eq.tree-1&limit=1") {
+        return [treeRow()];
+      }
+
+      if (pathWithQuery === "tree_memberships?select=*&tree_id=eq.tree-1&user_id=eq.user-1&status=eq.active&limit=1") {
+        return [];
+      }
+
+      if (pathWithQuery === "tree_media_albums?select=*&id=eq.album-1&tree_id=eq.tree-1&limit=1") {
+        return [{
+          id: "album-1",
+          tree_id: "tree-1",
+          title: "Фотоархив",
+          description: null,
+          kind: "photo",
+          access: "members",
+          album_kind: "manual",
+          uploader_user_id: null,
+          created_by: "user-1",
+          created_at: "2026-03-27T00:00:00.000Z",
+          updated_at: "2026-03-27T00:00:00.000Z",
+        }];
+      }
+
+      if (pathWithQuery === "tree_media_albums?select=*&tree_id=eq.tree-1&id=in.(album-1)") {
+        return [{
+          id: "album-1",
+          tree_id: "tree-1",
+          title: "Фотоархив",
+          description: null,
+          kind: "photo",
+          access: "members",
+          album_kind: "manual",
+          uploader_user_id: null,
+          created_by: "user-1",
+          created_at: "2026-03-27T00:00:00.000Z",
+          updated_at: "2026-03-27T00:00:00.000Z",
+        }];
+      }
+
+      if (pathWithQuery === "media_assets?select=*&tree_id=eq.tree-1&id=eq.media-1&limit=1") {
+        return [mediaRow()];
+      }
+
+      if (pathWithQuery === "tree_media_album_items?select=*&media_id=eq.media-1&album_id=in.(album-1)") {
+        return [{
+          id: "item-existing",
+          album_id: "album-1",
+          media_id: "media-1",
+          created_at: "2026-03-27T00:00:00.000Z",
+        }];
+      }
+
+      if (pathWithQuery === "tree_media_album_items" && options?.method === "POST") {
+        mutateRequests.push(pathWithQuery);
+        return [];
+      }
+
+      throw new Error(`Unexpected request: ${pathWithQuery}`);
+    });
+
+    const result = await addExistingMediaToTreeMediaAlbum({
+      treeId: "tree-1",
+      albumId: "album-1",
+      mediaIds: ["media-1"],
+    });
+
+    expect(result.createdCount).toBe(0);
+    expect(result.items).toHaveLength(0);
+    expect(mutateRequests).toHaveLength(0);
   });
 });

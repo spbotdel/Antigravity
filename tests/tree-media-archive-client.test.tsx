@@ -41,6 +41,7 @@ function renderArchiveClient(options?: {
     id: string;
     title: string;
     description: string | null;
+    kind?: "photo" | "video";
     access?: "public" | "members";
     albumKind: "manual" | "uploader";
     uploaderUserId: string | null;
@@ -50,6 +51,9 @@ function renderArchiveClient(options?: {
   persistedAlbumMediaMap?: Record<string, MediaAssetRecord[]>;
   canEdit?: boolean;
   uploaderLabels?: Array<{ userId: string; label: string }>;
+  initialMode?: "photo" | "video" | "all";
+  initialView?: "all" | "albums";
+  initialAlbumId?: string | null;
 }) {
   const allMedia = options?.allMedia || [
     createMediaAsset({
@@ -79,11 +83,11 @@ function renderArchiveClient(options?: {
       treeId="tree-1"
       slug="demo-family"
       canEdit={options?.canEdit ?? true}
-      initialMode="all"
-      initialView="all"
-      initialAlbumId={null}
+      initialMode={options?.initialMode ?? "all"}
+      initialView={options?.initialView ?? "all"}
+      initialAlbumId={options?.initialAlbumId ?? null}
       allMedia={allMedia}
-      allAlbums={(options?.allAlbums || []).map((album) => ({ ...album, access: album.access ?? "members" }))}
+      allAlbums={(options?.allAlbums || []).map((album) => ({ ...album, kind: album.kind ?? "photo", access: album.access ?? "members" }))}
       persistedAlbumMediaMap={options?.persistedAlbumMediaMap || {}}
       uploaderLabels={options?.uploaderLabels || []}
     />
@@ -254,11 +258,10 @@ describe("tree media archive client", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
 
     const albumGrid = view.container.querySelector(".archive-album-grid");
-    expect(albumGrid).not.toBeNull();
-    expect(albumGrid?.querySelectorAll(".archive-album-image")).toHaveLength(0);
-    expect(albumGrid?.querySelectorAll(".archive-tile-placeholder-video")).toHaveLength(1);
+    expect(albumGrid).toBeNull();
+    expect(screen.queryByRole("button", { name: /Свадьба.*Пользовательский альбом/ })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Загрузить видео" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Создать альбом" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Создать альбом" })).toHaveLength(2);
   });
 
   it("shows a management trigger for manual album cards without changing the main card structure", () => {
@@ -347,6 +350,8 @@ describe("tree media archive client", () => {
               tree_id: "tree-1",
               title: "Поездка",
               description: "Новая семейная подпись",
+              kind: "photo",
+              access: "members",
               album_kind: "manual",
               uploader_user_id: null,
               created_by: "user-1",
@@ -984,13 +989,6 @@ describe("tree media archive client", () => {
       title: "Фото из альбома",
       storage_path: "trees/tree-1/media/photo/media-photo/album-photo.jpg",
     });
-    const video = createMediaAsset({
-      id: "media-video",
-      kind: "video",
-      title: "Видео из альбома",
-      mime_type: "video/mp4",
-      storage_path: "trees/tree-1/media/video/media-video/album-video.mp4",
-    });
 
     renderArchiveClient({
       allAlbums: [
@@ -998,32 +996,33 @@ describe("tree media archive client", () => {
           id: "album-1",
           title: "Свадьба",
           description: null,
+          kind: "photo",
           albumKind: "manual",
           uploaderUserId: null,
-          count: 2,
+          count: 1,
           coverMediaId: "media-photo",
         },
       ],
       persistedAlbumMediaMap: {
-        "album-1": [photo, video],
+        "album-1": [photo],
       },
-      allMedia: [photo, video],
+      allMedia: [photo],
     });
 
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
     fireEvent.click(screen.getByRole("button", { name: /Свадьба.*Пользовательский альбом/ }));
 
     expect(screen.getAllByText("Свадьба")).toHaveLength(1);
-    expect(screen.getByText("2 материалов")).toBeInTheDocument();
+    expect(screen.getByText("1 фото")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Загрузить/ })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Создать альбом" })).not.toBeInTheDocument();
-    expect(screen.queryByText("2 материалов в альбоме")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 фото в альбоме")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Свадьба.*Пользовательский альбом/ })).not.toBeInTheDocument();
 
     const grid = document.querySelector(".archive-grid");
     expect(grid).not.toBeNull();
     expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть фото: Фото из альбома" })).toBeInTheDocument();
-    expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть видео: Видео из альбома" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Открыть фото: Фото из альбома" }));
     expect(screen.getByRole("dialog", { name: "Просмотр архива: Фото из альбома" })).toBeInTheDocument();
@@ -1042,23 +1041,25 @@ describe("tree media archive client", () => {
 
     renderArchiveClient({
       allMedia: [photo],
-      allAlbums: [
-        {
-          id: "album-1",
-          title: "Свадьба",
-          description: null,
-          albumKind: "manual",
-          uploaderUserId: null,
-          count: 1,
+        allAlbums: [
+          {
+            id: "album-1",
+            title: "Свадьба",
+            description: null,
+            kind: "photo",
+            albumKind: "manual",
+            uploaderUserId: null,
+            count: 1,
           coverMediaId: "media-photo",
         },
-        {
-          id: "album-2",
-          title: "Путешествие",
-          description: null,
-          albumKind: "manual",
-          uploaderUserId: null,
-          count: 1,
+          {
+            id: "album-2",
+            title: "Путешествие",
+            description: null,
+            kind: "photo",
+            albumKind: "manual",
+            uploaderUserId: null,
+            count: 1,
           coverMediaId: "media-photo",
         },
       ],
@@ -1095,7 +1096,7 @@ describe("tree media archive client", () => {
         canEdit
         initialMode="photo"
         initialView="albums"
-        initialAlbumId="uploader-user-1"
+        initialAlbumId="uploader-user-1-photo"
         allMedia={[photo]}
         allAlbums={[]}
         persistedAlbumMediaMap={{}}
@@ -1110,7 +1111,7 @@ describe("tree media archive client", () => {
     expect(screen.getByText("От Вячеслава")).toBeInTheDocument();
   });
 
-  it("keeps the selected manual album while switching between photo and video modes", () => {
+  it("shows different manual album lists in photo and video tabs", () => {
     const photo = createMediaAsset({
       id: "media-photo",
       title: "Фото из альбома",
@@ -1127,39 +1128,44 @@ describe("tree media archive client", () => {
     renderArchiveClient({
       allAlbums: [
         {
-          id: "album-1",
-          title: "Свадьба",
+          id: "album-photo",
+          title: "Фотоальбом",
           description: null,
+          kind: "photo",
           albumKind: "manual",
           uploaderUserId: null,
-          count: 2,
+          count: 1,
           coverMediaId: "media-photo",
+        },
+        {
+          id: "album-video",
+          title: "Видеоальбом",
+          description: null,
+          kind: "video",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-video",
         },
       ],
       persistedAlbumMediaMap: {
-        "album-1": [photo, video],
+        "album-photo": [photo],
+        "album-video": [video],
       },
       allMedia: [photo, video],
     });
 
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
-    fireEvent.click(screen.getByRole("button", { name: /Свадьба.*Пользовательский альбом/ }));
-
-    expect(screen.getAllByText("Свадьба").length).toBeGreaterThan(0);
-    expect(screen.getByText("2 материалов")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Фотоальбом.*Пользовательский альбом/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Видеоальбом.*Пользовательский альбом/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
-    expect(screen.getAllByText("Свадьба").length).toBeGreaterThan(0);
-    expect(screen.getByText("1 видео")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Открыть видео: Видео из альбома" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
-    expect(screen.getAllByText("Свадьба").length).toBeGreaterThan(0);
-    expect(screen.getByText("1 фото")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Открыть фото: Фото из альбома" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Видеоальбом.*Пользовательский альбом/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Фотоальбом.*Пользовательский альбом/ })).not.toBeInTheDocument();
   });
 
-  it("keeps a manual album open and shows an empty state when the selected mode has no items", () => {
+  it("drops a photo album from the albums tab after switching into video mode", () => {
     const photo = createMediaAsset({
       id: "media-photo",
       title: "Фото из альбома",
@@ -1172,6 +1178,7 @@ describe("tree media archive client", () => {
           id: "album-1",
           title: "Семейный альбом",
           description: null,
+          kind: "photo",
           albumKind: "manual",
           uploaderUserId: null,
           count: 1,
@@ -1189,14 +1196,10 @@ describe("tree media archive client", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
-    expect(screen.getAllByText("Семейный альбом").length).toBeGreaterThan(0);
-    expect(screen.getByText("0 видео")).toBeInTheDocument();
-    expect(screen.getByText("В этом альбоме пока нет видео")).toBeInTheDocument();
-    const emptyState = screen.getByText("В этом альбоме пока нет видео").closest(".empty-state");
+    expect(screen.queryByText("Семейный альбом")).not.toBeInTheDocument();
+    const emptyState = screen.getByText("Альбомов для этого раздела пока нет").closest(".empty-state");
     expect(emptyState).not.toBeNull();
-    expect(within(emptyState as HTMLElement).getByRole("button", { name: "Загрузить видео" })).toBeInTheDocument();
-    expect(within(emptyState as HTMLElement).queryByText(/материалов этого типа/i)).not.toBeInTheDocument();
-    expect(within(emptyState as HTMLElement).queryByRole("button", { name: "Назад к альбомам" })).not.toBeInTheDocument();
+    expect(within(emptyState as HTMLElement).getByRole("button", { name: "Создать альбом" })).toBeInTheDocument();
   });
 
   it("shows upload progress without the old transport hint noise", async () => {
@@ -1277,6 +1280,118 @@ describe("tree media archive client", () => {
     expect(screen.getByText("Материал сохранен в семейный архив.")).toBeInTheDocument();
   });
 
+  it("inherits album access by default and hides visibility selection when uploading into a specific album", async () => {
+    const requests: Array<{ url: string; method?: string; body?: unknown }> = [];
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      requests.push({ url, method: init?.method, body });
+
+      if (url.includes("/api/media/archive/upload-intent")) {
+        return Response.json(
+          {
+            mediaId: "archive-upload-public-1",
+            kind: "photo",
+            path: "trees/tree-1/media/photo/archive-upload-public-1/archive-photo.jpg",
+            bucket: "bucket-1",
+            signedUrl: "https://example.com/original",
+            token: null,
+            uploadProvider: "object_storage",
+            configuredBackend: "cloudflare_r2",
+            resolvedUploadBackend: "cloudflare_r2",
+            rolloutState: "cloudflare_rollout_active",
+            forceProxyUpload: true,
+            uploadMode: "proxy",
+            variantUploadMode: "server_proxy",
+            variantTargets: [],
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/archive/complete")) {
+        return Response.json(
+          {
+            message: "Материал сохранен в семейный архив.",
+            uploaderAlbumId: "album-uploader-public-1",
+            media: createMediaAsset({
+              id: "archive-upload-public-1",
+              title: "album-photo.jpg",
+              visibility: "public",
+              storage_path: "trees/tree-1/media/photo/archive-upload-public-1/archive-photo.jpg",
+            }),
+          },
+          { status: 201 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    const photo = createMediaAsset({
+      id: "media-photo",
+      title: "Фото из альбома",
+      created_by: null,
+      storage_path: "trees/tree-1/media/photo/media-photo/album-photo.jpg",
+    });
+
+    const view = renderArchiveClient({
+      initialMode: "photo",
+      initialView: "albums",
+      initialAlbumId: "album-1",
+      allMedia: [photo],
+      allAlbums: [
+        {
+          id: "album-1",
+          title: "Открытый альбом",
+          description: "Альбом для семьи по ссылке",
+          kind: "photo",
+          access: "public",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-photo",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-1": [photo],
+      },
+    });
+
+    const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], "album-photo.jpg", { type: "image/jpeg" });
+
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+    fireEvent.change(input);
+
+    const dialog = await screen.findByRole("dialog", { name: "Подготовка загрузки" });
+    expect(within(dialog).getByText("Новые материалы попадут в альбом «Открытый альбом».")).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Видимость")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("Новые материалы унаследуют доступ альбома: по ссылке.")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Сохранить 1" }));
+
+    await waitFor(() => {
+      expect(uploadFileWithTransportContract).toHaveBeenCalled();
+    });
+
+    const uploadIntentRequest = requests.find((request) => request.url.includes("/api/media/archive/upload-intent"));
+    const completeRequest = requests.find((request) => request.url.includes("/api/media/archive/complete"));
+
+    expect(uploadIntentRequest?.body).toMatchObject({
+      visibility: "public",
+      title: "album-photo.jpg",
+    });
+    expect(completeRequest?.body).toMatchObject({
+      albumId: "album-1",
+      visibility: "public",
+      title: "album-photo.jpg",
+    });
+  });
+
   it("shows a video preview tile in the archive upload review dialog for local video files", async () => {
     const view = renderArchiveClient();
     const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
@@ -1294,11 +1409,15 @@ describe("tree media archive client", () => {
     expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 видео");
   });
 
-  it("shows a pending state while creating an album", async () => {
+  it("shows a pending state while creating an album and defaults access to members", async () => {
+    const requests: Array<{ url: string; method?: string; body?: unknown }> = [];
     vi.spyOn(global, "fetch").mockImplementation(
-      async (input) =>
+      async (input, init) =>
         new Promise((resolve) => {
           const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+          const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+          requests.push({ url, method: init?.method, body });
+
           if (url.includes("/api/media/albums")) {
             setTimeout(
               () =>
@@ -1311,6 +1430,8 @@ describe("tree media archive client", () => {
                         tree_id: "tree-1",
                         title: "Новый альбом",
                         description: "",
+                        kind: "photo",
+                        access: "members",
                         album_kind: "manual",
                         uploader_user_id: null,
                         created_by: "user-1",
@@ -1334,6 +1455,8 @@ describe("tree media archive client", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "Создать альбом" })[0]);
     expect(screen.getByLabelText("Название")).toHaveValue("Новый альбом");
+    expect(screen.getByLabelText("Доступ")).toHaveTextContent("Только для семьи");
+    expect(screen.getByText("Виден всем участникам семейного дерева")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Название"), { target: { value: "Новый альбом" } });
     const dialog = screen.getByRole("dialog", { name: "Создать альбом" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Создать альбом" }));
@@ -1341,5 +1464,76 @@ describe("tree media archive client", () => {
     expect(screen.getByRole("button", { name: "Создаю альбом..." })).toBeDisabled();
 
     await screen.findByText("Альбом создан.");
+
+    const createRequest = requests.find((request) => request.url.includes("/api/media/albums") && request.method === "POST");
+    expect(createRequest?.body).toMatchObject({
+      title: "Новый альбом",
+      kind: "photo",
+      access: "members",
+    });
+  });
+
+  it("persists selected public access during album creation and renders the album without a lock icon", async () => {
+    const requests: Array<{ url: string; method?: string; body?: unknown }> = [];
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      requests.push({ url, method: init?.method, body });
+
+      if (url.includes("/api/media/albums") && init?.method === "POST") {
+        return Response.json(
+          {
+            message: "Альбом создан.",
+            album: {
+              id: "album-public-1",
+              tree_id: "tree-1",
+              title: "Открытый альбом",
+              description: "Для всех по ссылке",
+              kind: "photo",
+              access: "public",
+              album_kind: "manual",
+              uploader_user_id: null,
+              created_by: "user-1",
+              created_at: "2026-03-13T00:00:00.000Z",
+              updated_at: "2026-03-13T00:00:00.000Z",
+            },
+          },
+          { status: 201 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    renderArchiveClient();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Создать альбом" })[0]);
+    const dialog = screen.getByRole("dialog", { name: "Создать альбом" });
+    const accessCombobox = within(dialog).getByRole("combobox", { name: /Доступ/ });
+    const accessHiddenInput = accessCombobox.parentElement?.querySelector('input[aria-hidden="true"]') as HTMLInputElement | null;
+    fireEvent.change(within(dialog).getByLabelText("Название"), { target: { value: "Открытый альбом" } });
+    fireEvent.change(within(dialog).getByLabelText("Описание"), { target: { value: "Для всех по ссылке" } });
+    expect(accessHiddenInput).not.toBeNull();
+    fireEvent.change(accessHiddenInput as HTMLInputElement, { target: { value: "public" } });
+    fireEvent.input(accessHiddenInput as HTMLInputElement, { target: { value: "public" } });
+    await waitFor(() => {
+      expect(accessCombobox).toHaveTextContent("По ссылке");
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Создать альбом" }));
+
+    await screen.findByText("Альбом создан.");
+
+    const createRequest = requests.find((request) => request.url.includes("/api/media/albums") && request.method === "POST");
+    expect(createRequest?.body).toMatchObject({
+      title: "Открытый альбом",
+      access: "public",
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    const createdAlbumButton = screen.getByRole("button", { name: /Открытый альбом.*Для всех по ссылке/ });
+    expect(createdAlbumButton).toBeInTheDocument();
+    const createdAlbumShell = createdAlbumButton.closest(".archive-album-card-shell");
+    expect(createdAlbumShell).not.toBeNull();
+    expect(createdAlbumShell?.querySelector(".archive-album-access-indicator")).toBeNull();
   });
 });

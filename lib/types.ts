@@ -7,6 +7,7 @@ export type MediaStorageBackend = "supabase" | "object_storage" | "cloudflare_r2
 export type MediaUploadRolloutState = "steady_state" | "cloudflare_rollout_gated" | "cloudflare_rollout_active";
 export type MediaVariantName = "thumb" | "small" | "medium";
 export type TreeMediaAlbumKind = "manual" | "uploader";
+export type TreeMediaAlbumMediaKind = Extract<MediaKind, "photo" | "video">;
 export type UploadMode = "direct" | "proxy";
 export type VariantUploadMode = "server_proxy" | "none";
 export type InviteMethod = "link" | "email";
@@ -147,6 +148,7 @@ export interface TreeMediaAlbumRecord {
   tree_id: string;
   title: string;
   description: string | null;
+  kind: TreeMediaAlbumMediaKind;
   access: MediaVisibility;
   album_kind: TreeMediaAlbumKind;
   uploader_user_id: string | null;

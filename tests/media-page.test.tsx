@@ -112,6 +112,7 @@ describe("media page", () => {
           tree_id: "tree-1",
           title: "Свадьба",
           description: null,
+          kind: "photo",
           access: "members",
           album_kind: "manual",
           uploader_user_id: null,
@@ -142,7 +143,7 @@ describe("media page", () => {
     expect(screen.getByRole("heading", { name: "Demo Family" })).toBeInTheDocument();
     expect(screen.getByText("1 фото")).toBeInTheDocument();
     expect(screen.getByText("1 видео")).toBeInTheDocument();
-    expect(screen.getByText("2 альбомов")).toBeInTheDocument();
+    expect(screen.getByText("3 альбомов")).toBeInTheDocument();
     expect(screen.getByTestId("tree-nav")).toHaveTextContent("share:none;edit:true");
     expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("share:none;edit:true;mode:video;view:albums;album:none;media:2;albums:1");
   });
@@ -222,10 +223,10 @@ describe("media page", () => {
     render(
       await MediaPage({
         params: Promise.resolve({ slug: "demo-family" }),
-        searchParams: Promise.resolve({ mode: "photo", view: "albums", album: "uploader-user-1" }),
+        searchParams: Promise.resolve({ mode: "photo", view: "albums", album: "uploader-user-1-photo" }),
       })
     );
 
-    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("album:uploader-user-1");
+    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("album:uploader-user-1-photo");
   });
 });

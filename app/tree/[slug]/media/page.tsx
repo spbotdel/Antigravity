@@ -17,6 +17,7 @@ type AlbumSummary = {
   id: string;
   title: string;
   description: string | null;
+  kind: "photo" | "video";
   access: "public" | "members";
   albumKind: "manual" | "uploader";
   uploaderUserId: string | null;
@@ -106,13 +107,13 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   ): AlbumSummary[] {
     const persistedUploaderIds = new Set(
       persisted
-        .map((album) => album.uploaderUserId)
-        .filter((value): value is string => Boolean(value))
+        .filter((album): album is AlbumSummary & { uploaderUserId: string } => Boolean(album.uploaderUserId))
+        .map((album) => `${album.uploaderUserId}:${album.kind}`)
     );
 
     return [
       ...persisted,
-      ...derived.filter((album) => !album.uploaderUserId || !persistedUploaderIds.has(album.uploaderUserId))
+      ...derived.filter((album) => !album.uploaderUserId || !persistedUploaderIds.has(`${album.uploaderUserId}:${album.kind}`))
     ];
   }
 

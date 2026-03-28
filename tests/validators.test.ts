@@ -115,6 +115,7 @@ describe("validators", () => {
       treeId: crypto.randomUUID(),
       title: "День рождения тети Светы",
       description: "Фото и видео из одного архива",
+      kind: "photo",
       access: "members"
     });
 
@@ -126,6 +127,7 @@ describe("validators", () => {
       treeId: crypto.randomUUID(),
       title: "От Сергея Тест",
       description: "",
+      kind: "video",
       access: "public",
       albumKind: "uploader",
       uploaderUserId: crypto.randomUUID(),

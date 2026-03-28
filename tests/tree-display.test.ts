@@ -374,6 +374,7 @@ describe("tree display helpers", () => {
           tree_id: "tree-1",
           title: "От Виктора Петровича",
           description: null,
+          kind: "photo",
           access: "members",
           album_kind: "uploader",
           uploader_user_id: "user-1",
@@ -393,6 +394,7 @@ describe("tree display helpers", () => {
     expect(summaries[0]).toMatchObject({
       id: "album-1",
       title: "От Виктора Петровича",
+      kind: "photo",
       access: "members",
       uploaderUserId: "user-1",
       count: 1,
@@ -429,8 +431,9 @@ describe("tree display helpers", () => {
 
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toMatchObject({
-      id: "uploader-user-1",
+      id: "uploader-user-1-photo",
       title: "От Виктора Петровича",
+      kind: "photo",
       access: "members",
       albumKind: "uploader",
       uploaderUserId: "user-1",
@@ -469,7 +472,7 @@ describe("tree display helpers", () => {
     expect(map["album-1"]?.[0]?.id).toBe("media-1");
   });
 
-  it("keeps manual albums visible in filtered mode even when the current mode has zero items", () => {
+  it("filters out albums whose explicit kind does not match the current media mode", () => {
     const summaries = buildTreeMediaAlbumSummaries({
       media: [
         {
@@ -483,6 +486,7 @@ describe("tree display helpers", () => {
           tree_id: "tree-1",
           title: "Семейный альбом",
           description: null,
+          kind: "photo",
           access: "members",
           album_kind: "manual",
           uploader_user_id: null,
@@ -495,13 +499,7 @@ describe("tree display helpers", () => {
       kind: "video"
     });
 
-    expect(summaries).toHaveLength(1);
-    expect(summaries[0]).toMatchObject({
-      id: "album-1",
-      title: "Семейный альбом",
-      count: 0,
-      coverMediaId: "media-1"
-    });
+    expect(summaries).toHaveLength(0);
   });
 
   it("builds preview photo URLs per person and prefers primary photos", () => {

@@ -28,7 +28,7 @@ import {
 import { AvatarCropPreviewImage, BuilderAvatarPickerDialog } from "@/components/tree/builder-avatar-picker-dialog";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
 import { buildPrimaryPersonAvatarCrops, DEFAULT_AVATAR_CROP, getAvatarCropFromRelation } from "@/lib/avatar-crop";
-import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, collectPersonMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, buildUploaderAlbumSyntheticId, collectPersonMedia } from "@/lib/tree/display";
 import { formatDate, formatMediaUploadTransportHint, uploadFileWithTransportContract } from "@/lib/utils";
 import type { AvatarCropValue, MediaUploadTargetResponse, ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
 
@@ -2616,7 +2616,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       null;
 
     if (preferredUploaderUserId) {
-      params.set("album", `uploader-${preferredUploaderUserId}`);
+      params.set("album", buildUploaderAlbumSyntheticId(preferredUploaderUserId, mode));
     }
 
     return `/tree/${currentSnapshot.tree.slug}/media?${params.toString()}`;
@@ -2629,7 +2629,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     });
 
     if (asset.created_by) {
-      params.set("album", `uploader-${asset.created_by}`);
+      params.set("album", buildUploaderAlbumSyntheticId(asset.created_by, "photo"));
     }
 
     return `/tree/${currentSnapshot.tree.slug}/media?${params.toString()}`;

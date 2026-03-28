@@ -1,4 +1,4 @@
-import type { DisplayTreeNode, MediaAssetRecord, MediaKind, MediaVariantName, ParentLinkRecord, PartnershipRecord, TreeMediaAlbumItemRecord, TreeMediaAlbumRecord, TreeSnapshot } from "@/lib/types";
+import type { DisplayTreeNode, MediaAssetRecord, MediaKind, MediaVariantName, ParentLinkRecord, PartnershipRecord, TreeMediaAlbumItemRecord, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord, TreeSnapshot } from "@/lib/types";
 
 const PHOTO_VARIANT_ROLLOUT_AT_MS = Date.parse("2026-03-08T00:00:00Z");
 
@@ -73,6 +73,10 @@ export function buildPhotoPreviewRouteUrl(
   }
 
   return buildMediaRouteUrl(asset.id, { shareToken });
+}
+
+export function buildUploaderAlbumSyntheticId(userId: string, kind: TreeMediaAlbumMediaKind) {
+  return `uploader-${userId}-${kind}`;
 }
 
 export function buildDisplayTree(snapshot: TreeSnapshot): DisplayTreeNode | null {
@@ -327,7 +331,7 @@ export function buildTreeMediaAlbumSummaries(input: {
   albums: TreeMediaAlbumRecord[];
   items: TreeMediaAlbumItemRecord[];
   albumMediaMap?: Record<string, TreeSnapshot["media"]>;
-  kind?: Extract<MediaKind, "photo" | "video">;
+  kind?: TreeMediaAlbumMediaKind;
 }) {
   const mediaById = new Map(input.media.map((asset) => [asset.id, asset] as const));
   const albumMediaIdsByAlbumId = new Map<string, string[]>();
@@ -341,23 +345,23 @@ export function buildTreeMediaAlbumSummaries(input: {
   }
 
   return input.albums
+    .filter((album) => !input.kind || album.kind === input.kind)
     .map((album) => {
       const albumAllMedia =
         input.albumMediaMap?.[album.id] ||
         (albumMediaIdsByAlbumId.get(album.id) || [])
           .map((mediaId) => mediaById.get(mediaId))
           .filter(Boolean) as TreeSnapshot["media"];
-      const albumMedia = albumAllMedia.filter((asset) => !input.kind || asset.kind === input.kind);
+      const albumMedia = albumAllMedia.filter((asset) => asset.kind === album.kind);
       const cover =
         albumMedia.find((asset) => asset.kind === "photo") ||
-        albumAllMedia.find((asset) => asset.kind === "photo") ||
-        albumMedia[0] ||
-        albumAllMedia[0];
+        albumMedia[0];
 
       return {
         id: album.id,
         title: album.title,
         description: album.description,
+        kind: album.kind,
         access: album.access,
         albumKind: album.album_kind,
         uploaderUserId: album.uploader_user_id,
@@ -369,6 +373,7 @@ export function buildTreeMediaAlbumSummaries(input: {
     id: string;
     title: string;
     description: string | null;
+    kind: TreeMediaAlbumRecord["kind"];
     access: TreeMediaAlbumRecord["access"];
     albumKind: TreeMediaAlbumRecord["album_kind"];
     uploaderUserId: string | null;
@@ -379,32 +384,41 @@ export function buildTreeMediaAlbumSummaries(input: {
 
 export function buildDerivedUploaderAlbumSummaries(input: {
   media: TreeSnapshot["media"];
-  kind?: Extract<MediaKind, "photo" | "video">;
+  kind?: TreeMediaAlbumMediaKind;
   uploaderLabelsById: Map<string, string>;
 }) {
-  const grouped = new Map<string, TreeSnapshot["media"]>();
+  const grouped = new Map<string, { userId: string; kind: TreeMediaAlbumMediaKind; media: TreeSnapshot["media"] }>();
 
   for (const asset of input.media) {
     if (!asset.created_by) {
+      continue;
+    }
+    if (asset.kind !== "photo" && asset.kind !== "video") {
       continue;
     }
     if (input.kind && asset.kind !== input.kind) {
       continue;
     }
 
-    const current = grouped.get(asset.created_by) || [];
-    current.push(asset);
-    grouped.set(asset.created_by, current);
+    const key = `${asset.created_by}:${asset.kind}`;
+    const current = grouped.get(key) || {
+      userId: asset.created_by,
+      kind: asset.kind,
+      media: [] as TreeSnapshot["media"]
+    };
+    current.media.push(asset);
+    grouped.set(key, current);
   }
 
-  return [...grouped.entries()].map(([userId, media]) => {
+  return [...grouped.values()].map(({ userId, kind, media }) => {
     const cover = media.find((asset) => asset.kind === "photo") || media[0];
     const label = input.uploaderLabelsById.get(userId) || "От участника";
 
     return {
-      id: `uploader-${userId}`,
+      id: buildUploaderAlbumSyntheticId(userId, kind),
       title: label,
       description: null,
+      kind,
       access: "members" as const,
       albumKind: "uploader" as const,
       uploaderUserId: userId,

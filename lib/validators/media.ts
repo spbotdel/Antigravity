@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const mediaVisibilitySchema = z.enum(["public", "members"]);
+const treeMediaAlbumKindSchema = z.enum(["photo", "video"]);
 const mediaVariantSchema = z.enum(["thumb", "small", "medium"]);
 const avatarCropSchema = z.object({
   x: z.number().min(0).max(1),
@@ -100,6 +101,7 @@ export const createTreeMediaAlbumSchema = z.object({
   treeId: z.string().uuid(),
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().max(512).optional().or(z.literal("")),
+  kind: treeMediaAlbumKindSchema,
   access: mediaVisibilitySchema.optional(),
   albumKind: z.enum(["manual", "uploader"]).optional(),
   uploaderUserId: z.string().uuid().optional().nullable()

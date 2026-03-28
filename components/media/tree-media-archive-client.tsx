@@ -17,9 +17,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SelectField } from "@/components/ui/select-field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries } from "@/lib/tree/display";
+import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
-import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumRecord } from "@/lib/types";
+import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
 import { LockIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
 
 type MediaMode = "photo" | "video" | "all";
@@ -29,6 +29,7 @@ interface AlbumSummary {
   id: string;
   title: string;
   description: string | null;
+  kind: TreeMediaAlbumRecord["kind"];
   access: TreeMediaAlbumRecord["access"];
   albumKind: TreeMediaAlbumRecord["album_kind"];
   uploaderUserId: string | null;
@@ -74,6 +75,31 @@ interface PendingArchiveUploadItem {
 }
 
 type ArchiveUploadStatus = "queued" | "uploading" | "finalizing" | "done" | "error";
+
+function getAlbumCompatibleKindForFile(file: File): TreeMediaAlbumMediaKind | null {
+  if (file.type.startsWith("image/")) {
+    return "photo";
+  }
+
+  if (file.type.startsWith("video/")) {
+    return "video";
+  }
+
+  return null;
+}
+
+function getAlbumCompatibleKindForAsset(asset: MediaAssetRecord): TreeMediaAlbumMediaKind | null {
+  return asset.kind === "photo" || asset.kind === "video" ? asset.kind : null;
+}
+
+function resolveSingleAlbumKind(kinds: Array<TreeMediaAlbumMediaKind | null>): TreeMediaAlbumMediaKind | null {
+  const uniqueKinds = [...new Set(kinds.filter((value): value is TreeMediaAlbumMediaKind => Boolean(value)))];
+  return uniqueKinds.length === 1 ? uniqueKinds[0] : null;
+}
+
+function getUploaderAlbumSummaryKey(album: Pick<AlbumSummary, "uploaderUserId" | "kind">) {
+  return album.uploaderUserId ? `${album.uploaderUserId}:${album.kind}` : null;
+}
 
 function getArchiveMaxMediaFileSizeBytes(file: File) {
   if (file.type.startsWith("video/")) {
@@ -169,26 +195,19 @@ function buildPersistedArchiveAlbumSummaries(input: {
   kind?: Extract<MediaMode, "photo" | "video">;
 }) {
   return input.albums
+    .filter((album) => !input.kind || album.kind === input.kind)
     .map((album) => {
       const albumAllMedia =
         album.albumKind === "uploader" && album.uploaderUserId
           ? input.albumMediaMap[album.id]?.length
             ? input.albumMediaMap[album.id]
-            : input.media.filter((asset) => asset.created_by === album.uploaderUserId)
-          : input.albumMediaMap[album.id] || [];
-      const albumMedia = input.kind ? albumAllMedia.filter((asset) => asset.kind === input.kind) : albumAllMedia;
+            : input.media.filter((asset) => asset.created_by === album.uploaderUserId && asset.kind === album.kind)
+          : (input.albumMediaMap[album.id] || []).filter((asset) => asset.kind === album.kind);
+      const albumMedia = albumAllMedia.filter((asset) => asset.kind === album.kind);
       const cover =
-        input.kind === "video"
-          ? albumMedia.find((asset) => asset.kind === "video") || null
-          : input.kind === "photo"
-            ? albumMedia.find((asset) => asset.kind === "photo") ||
-              albumAllMedia.find((asset) => asset.kind === "photo") ||
-              null
-            : albumMedia.find((asset) => asset.kind === "photo") ||
-              albumAllMedia.find((asset) => asset.kind === "photo") ||
-              albumMedia[0] ||
-              albumAllMedia[0] ||
-              null;
+        albumMedia.find((asset) => asset.kind === "photo") ||
+        albumMedia[0] ||
+        null;
 
       return {
         ...album,
@@ -343,11 +362,13 @@ export function TreeMediaArchiveClient({
   const [editingAlbumId, setEditingAlbumId] = useState<string | null>(null);
   const [editAlbumTitle, setEditAlbumTitle] = useState("");
   const [editAlbumDescription, setEditAlbumDescription] = useState("");
+  const [createAlbumAccess, setCreateAlbumAccess] = useState<"public" | "members">("members");
   const [editAlbumAccess, setEditAlbumAccess] = useState<"public" | "members">("members");
   const [isUpdatingAlbum, setIsUpdatingAlbum] = useState(false);
   const [deleteTargetAlbumId, setDeleteTargetAlbumId] = useState<string | null>(null);
   const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
-  const [dismissedUploaderAlbumUserIds, setDismissedUploaderAlbumUserIds] = useState<Set<string>>(() => new Set());
+  const [createAlbumKind, setCreateAlbumKind] = useState<TreeMediaAlbumMediaKind>("photo");
+  const [dismissedUploaderAlbumKeys, setDismissedUploaderAlbumKeys] = useState<Set<string>>(() => new Set());
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(initialView === "albums" ? initialAlbumId : null);
   const [reviewAlbumId, setReviewAlbumId] = useState<string>("");
   const [reviewVisibility, setReviewVisibility] = useState<"public" | "members">("members");
@@ -495,25 +516,26 @@ export function TreeMediaArchiveClient({
   );
 
   function mergeAlbums(persisted: AlbumSummary[], derived: AlbumSummary[]) {
-    const persistedUploaderIds = new Set(
-      persisted.map((album) => album.uploaderUserId).filter((value): value is string => Boolean(value))
+    const persistedUploaderKeys = new Set(
+      persisted
+        .map((album) => getUploaderAlbumSummaryKey(album))
+        .filter((value): value is string => Boolean(value))
     );
     return [
       ...persisted,
       ...derived.filter((album) =>
         !album.uploaderUserId ||
-        (!persistedUploaderIds.has(album.uploaderUserId) && !dismissedUploaderAlbumUserIds.has(album.uploaderUserId))
+        (() => {
+          const uploaderKey = getUploaderAlbumSummaryKey(album);
+          return uploaderKey ? !persistedUploaderKeys.has(uploaderKey) && !dismissedUploaderAlbumKeys.has(uploaderKey) : true;
+        })()
       )
     ];
   }
 
-  const allAlbumSummaries = useMemo(() => mergeAlbums(persistedAllAlbumSummaries, allDerivedAlbums), [persistedAllAlbumSummaries, allDerivedAlbums, dismissedUploaderAlbumUserIds]);
-  const photoAlbumSummaries = useMemo(() => mergeAlbums(persistedPhotoAlbumSummaries, photoDerivedAlbums), [persistedPhotoAlbumSummaries, photoDerivedAlbums, dismissedUploaderAlbumUserIds]);
-  const videoAlbumSummaries = useMemo(() => mergeAlbums(persistedVideoAlbumSummaries, videoDerivedAlbums), [persistedVideoAlbumSummaries, videoDerivedAlbums, dismissedUploaderAlbumUserIds]);
-  const manualAlbums = useMemo(
-    () => persistedAllAlbumSummaries.filter((album) => album.albumKind === "manual"),
-    [persistedAllAlbumSummaries]
-  );
+  const allAlbumSummaries = useMemo(() => mergeAlbums(persistedAllAlbumSummaries, allDerivedAlbums), [persistedAllAlbumSummaries, allDerivedAlbums, dismissedUploaderAlbumKeys]);
+  const photoAlbumSummaries = useMemo(() => mergeAlbums(persistedPhotoAlbumSummaries, photoDerivedAlbums), [persistedPhotoAlbumSummaries, photoDerivedAlbums, dismissedUploaderAlbumKeys]);
+  const videoAlbumSummaries = useMemo(() => mergeAlbums(persistedVideoAlbumSummaries, videoDerivedAlbums), [persistedVideoAlbumSummaries, videoDerivedAlbums, dismissedUploaderAlbumKeys]);
 
   const currentMedia = useMemo(() => {
     if (mode === "photo") {
@@ -534,7 +556,41 @@ export function TreeMediaArchiveClient({
     }
     return allAlbumSummaries;
   }, [allAlbumSummaries, mode, photoAlbumSummaries, videoAlbumSummaries]);
+  const currentManualAlbums = useMemo(
+    () => currentAlbums.filter((album) => album.albumKind === "manual"),
+    [currentAlbums]
+  );
   const selectedArchiveMediaCount = selectedArchiveMediaIds.size;
+  const selectedArchiveAlbumKind = useMemo(
+    () =>
+      resolveSingleAlbumKind(
+        [...selectedArchiveMediaIds]
+          .map((mediaId) => archiveMedia.find((asset) => asset.id === mediaId) || null)
+          .filter((asset): asset is MediaAssetRecord => Boolean(asset))
+          .map((asset) => getAlbumCompatibleKindForAsset(asset))
+      ),
+    [archiveMedia, selectedArchiveMediaIds]
+  );
+  const manualAlbums = useMemo(
+    () =>
+      selectedArchiveMediaCount
+        ? selectedArchiveAlbumKind
+          ? currentManualAlbums.filter((album) => album.kind === selectedArchiveAlbumKind)
+          : []
+        : currentManualAlbums,
+    [currentManualAlbums, selectedArchiveAlbumKind, selectedArchiveMediaCount]
+  );
+  const pendingUploadAlbumKind = useMemo(
+    () => resolveSingleAlbumKind(pendingUploads.map((item) => getAlbumCompatibleKindForFile(item.file))),
+    [pendingUploads]
+  );
+  const reviewManualAlbums = useMemo(
+    () =>
+      pendingUploadAlbumKind
+        ? persistedAllAlbumSummaries.filter((album) => album.albumKind === "manual" && album.kind === pendingUploadAlbumKind)
+        : [],
+    [pendingUploadAlbumKind, persistedAllAlbumSummaries]
+  );
 
   const visibleMedia = currentMedia.slice(0, visibleItems);
   const modeLabel = mode === "photo" ? "Фото" : mode === "video" ? "Видео" : "Все медиа";
@@ -544,24 +600,26 @@ export function TreeMediaArchiveClient({
   const activeContextAlbum = view === "albums" ? selectedAlbum : null;
   const editingAlbum = editingAlbumId ? persistedAllAlbums.find((album) => album.id === editingAlbumId) || null : null;
   const deleteTargetAlbum = deleteTargetAlbumId ? persistedAllAlbums.find((album) => album.id === deleteTargetAlbumId) || null : null;
-  const reviewTargetAlbumId = selectedAlbum?.albumKind === "manual" ? selectedAlbum.id : reviewAlbumId || null;
+  const isReviewAlbumPinned = Boolean(
+    selectedAlbum?.albumKind === "manual" && pendingUploadAlbumKind && selectedAlbum.kind === pendingUploadAlbumKind
+  );
+  const reviewTargetAlbumId =
+    isReviewAlbumPinned
+      ? selectedAlbum?.id || null
+      : reviewAlbumId || null;
   const reviewTargetAlbum = reviewTargetAlbumId ? persistedAllAlbums.find((album) => album.id === reviewTargetAlbumId) || null : null;
+  const isAlbumTargetedUpload = Boolean(reviewTargetAlbum);
   const selectedAlbumMedia = useMemo(() => {
     if (!selectedAlbum) {
       return [];
     }
 
     if (selectedAlbum.albumKind === "uploader" && selectedAlbum.uploaderUserId) {
-      return currentMedia.filter((asset) => asset.created_by === selectedAlbum.uploaderUserId);
+      return currentMedia.filter((asset) => asset.created_by === selectedAlbum.uploaderUserId && asset.kind === selectedAlbum.kind);
     }
 
-    return (albumMediaMap[selectedAlbum.id] || []).filter((asset) => {
-      if (mode === "all") {
-        return true;
-      }
-      return asset.kind === mode;
-    });
-  }, [albumMediaMap, currentMedia, mode, selectedAlbum]);
+    return (albumMediaMap[selectedAlbum.id] || []).filter((asset) => asset.kind === selectedAlbum.kind);
+  }, [albumMediaMap, currentMedia, selectedAlbum]);
 
   useEffect(() => {
     setIsArchiveSelectionMode(false);
@@ -606,6 +664,39 @@ export function TreeMediaArchiveClient({
       setBulkAddAlbumId(manualAlbums[0]?.id || "");
     }
   }, [bulkAddAlbumId, manualAlbums]);
+
+  useEffect(() => {
+    if (mode === "photo" || mode === "video") {
+      setCreateAlbumKind(mode);
+      return;
+    }
+
+    if (selectedAlbum?.albumKind === "manual") {
+      setCreateAlbumKind(selectedAlbum.kind);
+      return;
+    }
+
+    if (pendingUploadAlbumKind) {
+      setCreateAlbumKind(pendingUploadAlbumKind);
+    }
+  }, [mode, pendingUploadAlbumKind, selectedAlbum]);
+
+  useEffect(() => {
+    const compatibleAlbumIds = new Set(reviewManualAlbums.map((album) => album.id));
+    setReviewAlbumId((currentReviewAlbumId) => {
+      if (selectedAlbum?.albumKind === "manual" && pendingUploadAlbumKind && selectedAlbum.kind === pendingUploadAlbumKind) {
+        return selectedAlbum.id;
+      }
+
+      return currentReviewAlbumId && compatibleAlbumIds.has(currentReviewAlbumId) ? currentReviewAlbumId : "";
+    });
+  }, [pendingUploadAlbumKind, reviewManualAlbums, selectedAlbum]);
+
+  useEffect(() => {
+    if (reviewTargetAlbum) {
+      setReviewVisibility(reviewTargetAlbum.access);
+    }
+  }, [reviewTargetAlbum]);
 
   useEffect(() => {
     if (isArchiveSelectionMode && openArchiveActionsMediaId) {
@@ -813,9 +904,12 @@ export function TreeMediaArchiveClient({
     }
 
     if (asset.created_by) {
+      const uploaderAlbumKind = getAlbumCompatibleKindForAsset(asset);
       const uploaderAlbum =
-        allAlbumSummaries.find((album) => album.id === `uploader-${asset.created_by}`) ||
-        allAlbumSummaries.find((album) => album.albumKind === "uploader" && album.uploaderUserId === asset.created_by) ||
+        (uploaderAlbumKind
+          ? allAlbumSummaries.find((album) => album.id === buildUploaderAlbumSyntheticId(asset.created_by as string, uploaderAlbumKind)) ||
+            allAlbumSummaries.find((album) => album.albumKind === "uploader" && album.uploaderUserId === asset.created_by && album.kind === uploaderAlbumKind)
+          : null) ||
         null;
 
       if (uploaderAlbum) {
@@ -1188,6 +1282,10 @@ export function TreeMediaArchiveClient({
   function openCreateAlbumDialog() {
     setAlbumTitle("Новый альбом");
     setAlbumDescription("");
+    setCreateAlbumAccess("members");
+    if (mode === "photo" || mode === "video") {
+      setCreateAlbumKind(mode);
+    }
     setIsCreateAlbumOpen(true);
   }
 
@@ -1205,6 +1303,7 @@ export function TreeMediaArchiveClient({
       treeId,
       title: album.title,
       description: album.description || "",
+      kind: album.kind,
       access: album.access,
       albumKind: "uploader",
       uploaderUserId: album.uploaderUserId
@@ -1214,6 +1313,7 @@ export function TreeMediaArchiveClient({
       id: created.id,
       title: created.title,
       description: created.description,
+      kind: created.kind,
       access: created.access,
       albumKind: created.album_kind,
       uploaderUserId: created.uploader_user_id,
@@ -1222,15 +1322,16 @@ export function TreeMediaArchiveClient({
     };
 
     setPersistedAllAlbums((current) => {
-      const next = current.filter((item) => !(item.albumKind === "uploader" && item.uploaderUserId === summary.uploaderUserId));
+      const next = current.filter((item) => getUploaderAlbumSummaryKey(item) !== getUploaderAlbumSummaryKey(summary));
       return [summary, ...next];
     });
-    setDismissedUploaderAlbumUserIds((current) => {
-      if (!summary.uploaderUserId) {
+    setDismissedUploaderAlbumKeys((current) => {
+      const uploaderKey = getUploaderAlbumSummaryKey(summary);
+      if (!uploaderKey) {
         return current;
       }
       const next = new Set(current);
-      next.delete(summary.uploaderUserId);
+      next.delete(uploaderKey);
       return next;
     });
 
@@ -1285,13 +1386,15 @@ export function TreeMediaArchiveClient({
         treeId,
         title: albumTitle,
         description: albumDescription,
-        access: "members"
+        kind: createAlbumKind,
+        access: createAlbumAccess
       });
       const album = payload.album as TreeMediaAlbumRecord;
       const summary: AlbumSummary = {
         id: album.id,
         title: album.title,
         description: album.description,
+        kind: album.kind,
         access: album.access,
         albumKind: album.album_kind,
         uploaderUserId: album.uploader_user_id,
@@ -1301,6 +1404,7 @@ export function TreeMediaArchiveClient({
       setPersistedAllAlbums((current) => [summary, ...current]);
       setAlbumTitle("");
       setAlbumDescription("");
+      setCreateAlbumAccess("members");
       const shouldResumeReview = resumeUploadReviewAfterAlbumCreate;
       if (shouldResumeReview) {
         setReviewAlbumId(album.id);
@@ -1374,11 +1478,14 @@ export function TreeMediaArchiveClient({
         return next;
       });
       if (deleteTargetAlbum.albumKind === "uploader" && deleteTargetAlbum.uploaderUserId) {
-        setDismissedUploaderAlbumUserIds((current) => {
-          const next = new Set(current);
-          next.add(deleteTargetAlbum.uploaderUserId as string);
-          return next;
-        });
+        const uploaderKey = getUploaderAlbumSummaryKey(deleteTargetAlbum);
+        if (uploaderKey) {
+          setDismissedUploaderAlbumKeys((current) => {
+            const next = new Set(current);
+            next.add(uploaderKey);
+            return next;
+          });
+        }
       }
       if (selectedAlbumId === deleteTargetAlbum.id) {
         setSelectedAlbumId(null);
@@ -1524,12 +1631,14 @@ export function TreeMediaArchiveClient({
     }
 
     const nextItems = files.map(buildPendingArchiveUploadItem);
-      setPendingUploads((current) => [...current, ...nextItems]);
-      if (selectedAlbum?.albumKind === "manual") {
-        setReviewAlbumId(selectedAlbum.id);
-      }
-      setIsUploadReviewOpen(true);
-      setError(null);
+    const nextPendingUploads = [...pendingUploadsRef.current, ...nextItems];
+    const nextPendingUploadKind = resolveSingleAlbumKind(nextPendingUploads.map((item) => getAlbumCompatibleKindForFile(item.file)));
+    setPendingUploads((current) => [...current, ...nextItems]);
+    if (selectedAlbum?.albumKind === "manual" && nextPendingUploadKind && selectedAlbum.kind === nextPendingUploadKind) {
+      setReviewAlbumId(selectedAlbum.id);
+    }
+    setIsUploadReviewOpen(true);
+    setError(null);
 
     if (event.target instanceof HTMLInputElement) {
       event.target.value = "";
@@ -2175,6 +2284,29 @@ export function TreeMediaArchiveClient({
               <Input value={albumTitle} onChange={(event) => setAlbumTitle(event.target.value)} required maxLength={120} />
             </label>
             <label className="form-field">
+              Тип альбома
+              <SelectField
+                value={createAlbumKind}
+                onChange={(event) => setCreateAlbumKind(event.target.value as TreeMediaAlbumMediaKind)}
+                disabled={mode !== "all" || isCreatingAlbum}
+              >
+                <option value="photo">Фото</option>
+                <option value="video">Видео</option>
+              </SelectField>
+            </label>
+            <label className="form-field">
+              Доступ
+              <SelectField value={createAlbumAccess} onChange={(event) => setCreateAlbumAccess(event.target.value as "public" | "members")} disabled={isCreatingAlbum}>
+                <option value="members">Только для семьи</option>
+                <option value="public">По ссылке</option>
+              </SelectField>
+            </label>
+            <p className="members-static-note">
+              {createAlbumAccess === "members"
+                ? "Виден всем участникам семейного дерева"
+                : "Любой, у кого есть ссылка, сможет открыть альбом"}
+            </p>
+            <label className="form-field">
               Описание
               <Textarea value={albumDescription} onChange={(event) => setAlbumDescription(event.target.value)} rows={4} maxLength={512} />
             </label>
@@ -2204,12 +2336,12 @@ export function TreeMediaArchiveClient({
             <div className="archive-review-summary" aria-label="Сводка выбранных файлов">
               {pendingUploadsSummary}
             </div>
-            {selectedAlbum?.albumKind !== "manual" ? (
+            {!isReviewAlbumPinned && pendingUploadAlbumKind ? (
               <label className="form-field archive-field archive-review-field-span">
                 Куда сохранить (можно выбрать альбом)
                 <SelectField value={reviewAlbumId} onChange={(event) => handleReviewAlbumChange(event.target.value)}>
                   <option value="">Только в общий архив</option>
-                  {manualAlbums.map((album) => (
+                  {reviewManualAlbums.map((album) => (
                     <option key={album.id} value={album.id}>
                       {album.title}
                     </option>
@@ -2218,14 +2350,30 @@ export function TreeMediaArchiveClient({
                 </SelectField>
               </label>
             ) : null}
+            {!pendingUploadAlbumKind ? (
+              <p className="members-static-note">
+                В альбом можно сохранять только однородный набор фото или видео. Смешанные наборы и документы сохраняются только в общий архив.
+              </p>
+            ) : null}
             <div className="archive-review-metadata">
-              <label className="form-field archive-field">
-                Видимость
-                <SelectField value={reviewVisibility} onChange={(event) => setReviewVisibility(event.target.value as "public" | "members")}>
-                  <option value="members">Только членам семьи</option>
-                  <option value="public">Всем по ссылке</option>
-                </SelectField>
-              </label>
+              {isAlbumTargetedUpload ? (
+                <div className="form-field archive-field">
+                  <strong>Доступ альбома</strong>
+                  <p className="members-static-note">
+                    {reviewTargetAlbum?.access === "members"
+                      ? "Новые материалы унаследуют доступ альбома: только для семьи."
+                      : "Новые материалы унаследуют доступ альбома: по ссылке."}
+                  </p>
+                </div>
+              ) : (
+                <label className="form-field archive-field">
+                  Видимость
+                  <SelectField value={reviewVisibility} onChange={(event) => setReviewVisibility(event.target.value as "public" | "members")}>
+                    <option value="members">Только членам семьи</option>
+                    <option value="public">Всем по ссылке</option>
+                  </SelectField>
+                </label>
+              )}
               <label className="form-field archive-field">
                 Подпись
                 <Textarea

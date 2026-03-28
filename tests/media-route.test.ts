@@ -83,6 +83,7 @@ describe("media route", () => {
       tree_id: "tree-1",
       title: "Семейная поездка",
       description: "Летний архив",
+      kind: "photo",
       access: "members",
       album_kind: "manual",
       uploader_user_id: null,
