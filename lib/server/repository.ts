@@ -3385,6 +3385,26 @@ export async function resolveMediaAccess(
   return { kind: media.kind, url: signed.signedUrl };
 }
 
+export async function getMediaSummary(mediaId: string, shareToken?: string | null) {
+  const media = await fetchAdminFirst<MediaAssetRecord>(
+    `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,
+    "Не удалось загрузить медиа."
+  );
+  if (!media) {
+    throw new AppError(404, "Медиа не найдено.");
+  }
+
+  const tree = await getTreeById(media.tree_id);
+  const readAccess = await getTreeReadAccess(tree, shareToken);
+  const effectiveVisibility = await resolveEffectiveMediaAccess(mediaId);
+
+  if (!canSeeMedia(readAccess.actor.role, effectiveVisibility, readAccess.hasShareLinkAccess)) {
+    throw new AppError(403, "У вас нет доступа к этому медиафайлу.");
+  }
+
+  return media;
+}
+
 export async function deleteMedia(mediaId: string) {
   const before = await fetchAdminFirst<MediaAssetRecord>(
     `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,

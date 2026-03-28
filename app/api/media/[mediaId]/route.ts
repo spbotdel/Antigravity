@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { toErrorResponse } from "@/lib/server/errors";
-import { deleteMedia, resolveMediaAccess, setPrimaryPersonMedia } from "@/lib/server/repository";
+import { deleteMedia, getMediaSummary, resolveMediaAccess, setPrimaryPersonMedia } from "@/lib/server/repository";
 import { setPrimaryPersonMediaSchema } from "@/lib/validators/media";
 
 interface Params {
@@ -14,8 +14,13 @@ export async function GET(request: Request, { params }: Params) {
     const searchParams = new URL(request.url).searchParams;
     const shareToken = searchParams.get("share");
     const download = searchParams.get("download") === "1";
+    const summary = searchParams.get("summary") === "1";
     const rawVariant = searchParams.get("variant");
     const variant = !download && (rawVariant === "thumb" || rawVariant === "small" || rawVariant === "medium") ? rawVariant : null;
+    if (summary) {
+      const media = await getMediaSummary(mediaId, shareToken);
+      return Response.json({ media });
+    }
     const result = await resolveMediaAccess(mediaId, shareToken, variant, { download });
     return NextResponse.redirect(result.url);
   } catch (error) {

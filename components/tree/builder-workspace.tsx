@@ -773,6 +773,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const reviewMediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingMediaUploadsRef = useRef<PendingMediaUploadItem[]>([]);
+  const pendingVideoPreviewPollIdsRef = useRef(new Set<string>());
   const selectedPersonIdRef = useRef<string | null>(selectedPersonId);
   const personInfoDraftRef = useRef({ gender: "", birthDate: "", deathDate: "", bio: "" });
   const lastSavedPersonInfoRef = useRef({ gender: "", birthDate: "", deathDate: "", bio: "" });
@@ -1306,6 +1307,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       for (const item of pendingMediaUploadsRef.current) {
         revokePendingMediaUploadPreview(item);
       }
+      pendingVideoPreviewPollIdsRef.current.clear();
     };
   }, []);
 
@@ -1705,6 +1707,49 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setStatus(payload.message || "Сохранено.");
     await reloadSnapshot();
     return payload;
+  }
+
+  async function pollBuilderVideoPreviewUntilReady(mediaId: string) {
+    if (pendingVideoPreviewPollIdsRef.current.has(mediaId)) {
+      return;
+    }
+
+    pendingVideoPreviewPollIdsRef.current.add(mediaId);
+
+    try {
+      for (let attempt = 0; attempt < 18; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, attempt < 6 ? 2000 : 5000));
+
+        const response = await fetch(
+          new URL(`/api/tree/${currentSnapshotRef.current.tree.slug}/builder-snapshot?includeMedia=1`, window.location.origin).toString(),
+          { cache: "no-store" }
+        );
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload) {
+          continue;
+        }
+
+        const nextSnapshot = payload as TreeSnapshot;
+        if (!nextSnapshot || !Array.isArray(nextSnapshot.media)) {
+          continue;
+        }
+        const refreshedMedia = nextSnapshot.media.find((asset) => asset.id === mediaId) || null;
+        if (!refreshedMedia) {
+          break;
+        }
+
+        updateSnapshot((prev) => ({
+          ...prev,
+          media: prev.media.map((asset) => (asset.id === mediaId ? refreshedMedia : asset))
+        }));
+
+        if (refreshedMedia.preview_status !== "pending" && refreshedMedia.preview_status !== "processing") {
+          break;
+        }
+      }
+    } finally {
+      pendingVideoPreviewPollIdsRef.current.delete(mediaId);
+    }
   }
 
   function switchToPhotoTab() {
@@ -2528,7 +2573,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             message: "Сохраняется..."
           });
 
-          await requestJsonOrThrow("/api/media/complete", "POST", {
+          const completePayload = await requestJsonOrThrow("/api/media/complete", "POST", {
             treeId: currentSnapshotRef.current.tree.id,
             personId: selectedPerson.id,
             mediaId: request.mediaId,
@@ -2543,6 +2588,15 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             mimeType: file.type,
             sizeBytes: file.size
           });
+
+          const createdMedia =
+            completePayload && typeof completePayload === "object" && "media" in completePayload
+              ? completePayload.media as TreeSnapshot["media"][number]
+              : null;
+
+          if (createdMedia?.kind === "video" && createdMedia.provider === "cloudflare_r2" && createdMedia.preview_status === "pending") {
+            void pollBuilderVideoPreviewUntilReady(createdMedia.id);
+          }
 
           uploadedCount += 1;
           updateMediaUploadItem(queueItem.id, {

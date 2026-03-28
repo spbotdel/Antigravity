@@ -439,6 +439,7 @@ export function TreeMediaArchiveClient({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const reviewFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingUploadsRef = useRef<PendingArchiveUploadItem[]>([]);
+  const pendingVideoPreviewPollIdsRef = useRef(new Set<string>());
   const uploaderLabelsById = useMemo(() => new Map(uploaderLabels.map((item) => [item.userId, item.label] as const)), [uploaderLabels]);
   const [albumMediaMap, setAlbumMediaMap] = useState<Record<string, MediaAssetRecord[]>>(persistedAlbumMediaMap);
 
@@ -467,6 +468,7 @@ export function TreeMediaArchiveClient({
           URL.revokeObjectURL(item.previewUrl);
         }
       }
+      pendingVideoPreviewPollIdsRef.current.clear();
     };
   }, []);
 
@@ -1424,6 +1426,54 @@ export function TreeMediaArchiveClient({
     return payload;
   }
 
+  async function pollArchiveVideoPreviewUntilReady(mediaId: string) {
+    if (pendingVideoPreviewPollIdsRef.current.has(mediaId)) {
+      return;
+    }
+
+    pendingVideoPreviewPollIdsRef.current.add(mediaId);
+
+    try {
+      for (let attempt = 0; attempt < 18; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, attempt < 6 ? 2000 : 5000));
+        const params = new URLSearchParams();
+        params.set("summary", "1");
+        if (shareToken) {
+          params.set("share", shareToken);
+        }
+
+        const response = await fetch(`/api/media/${mediaId}?${params.toString()}`, {
+          cache: "no-store"
+        }).catch(() => null);
+        if (!response || !response.ok) {
+          continue;
+        }
+
+        const payload = await response.json().catch(() => null);
+        const refreshedMedia = payload?.media as MediaAssetRecord | undefined;
+        if (!refreshedMedia) {
+          continue;
+        }
+
+        setArchiveMedia((current) => current.map((asset) => (asset.id === mediaId ? refreshedMedia : asset)));
+        setAlbumMediaMap((current) =>
+          Object.fromEntries(
+            Object.entries(current).map(([albumId, items]) => [
+              albumId,
+              items.map((asset) => (asset.id === mediaId ? refreshedMedia : asset))
+            ])
+          )
+        );
+
+        if (refreshedMedia.preview_status !== "pending" && refreshedMedia.preview_status !== "processing") {
+          break;
+        }
+      }
+    } finally {
+      pendingVideoPreviewPollIdsRef.current.delete(mediaId);
+    }
+  }
+
   async function handleCreateAlbum(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
@@ -1659,6 +1709,10 @@ export function TreeMediaArchiveClient({
         )
       );
       setError(null);
+
+      if (createdMedia.kind === "video" && createdMedia.provider === "cloudflare_r2" && createdMedia.preview_status === "pending") {
+        void pollArchiveVideoPreviewUntilReady(createdMedia.id);
+      }
     }
 
     setStatus(files.length === 1 ? "Материал сохранен в семейный архив." : `Материалы сохранены: ${files.length}.`);
@@ -2024,7 +2078,7 @@ export function TreeMediaArchiveClient({
       ) : currentAlbums.length ? (
         <div className="archive-album-grid">
           {currentAlbums.map((album) => {
-            const coverUrl = buildAlbumCoverUrl(album.coverMediaId, allMedia, shareToken);
+            const coverUrl = buildAlbumCoverUrl(album.coverMediaId, archiveMedia, shareToken);
             const isAlbumActionsOpen = openArchiveAlbumActionsId === album.id;
 
             return (
