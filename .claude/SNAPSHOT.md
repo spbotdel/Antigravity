@@ -46,6 +46,8 @@
 - [x] Tree-level `/tree/[slug]/media` archive foundation is in place with navigation, page shell, and archive client.
 - [x] Archive album persistence exists for manual albums and uploader albums.
 - [x] Archive albums now have explicit `kind` (`photo | video`), and uploader albums are scoped by `(uploader, kind)`.
+- [x] Uploader albums are now treated as virtual albums:
+  count, cover and detail contents derive from all visible media matching `(tree, created_by, kind)`.
 - [x] Album/file access model is now implemented in code:
   `effective_access = strictest(file.visibility, every album.access containing this file)`.
 - [x] Remote schema rollout for `tree_media_albums.access` was recovered manually and linked migration history is reconciled.
@@ -70,6 +72,7 @@
 - [ ] The tree-level family archive now has sticky actions and a large viewer/lightbox, but broader album/mobile/end-to-end QA is still unfinished.
 - [ ] Full manual runtime verification for album/file effective access is still pending even though repository-level coverage is green.
 - [ ] Manual end-to-end QA for repeated multi-photo upload into one selected album is still pending even though repository linking is now idempotent.
+- [ ] Manual runtime QA should still confirm uploader virtual album semantics on non-test content after recent resets/migrations.
 - [ ] Builder canvas resize and overlay inspector still need practical QA on desktop, tablet and mobile widths.
 - [ ] Members/invite/share-link flows need end-to-end validation against live API responses and clipboard behavior.
 - [ ] Manual memory notes must stay aligned with the actual workstream after each `/fi`.
@@ -97,6 +100,8 @@
 - Detected archive upload review flow with pending batch state and discard confirmation.
 - Detected explicit album typing and uploader-per-kind archive model:
   albums persist `kind`, tabs render from explicit album kind, and legacy mixed test albums were reset.
+- Detected uploader virtual album semantics:
+  uploader card count, uploader cover and uploader detail contents now derive from the same visible media set by `(tree, created_by, kind)`.
 - Detected album/file access enforcement in repository and archive UI:
   albums store `access`, cards show family-only indicator, and media reads use effective access resolution.
 - Detected manual remote recovery of pending migrations:
@@ -118,6 +123,8 @@
 - Effective archive media access must stay repository-owned:
   `resolveMediaAccess(...)` must delegate to `resolveEffectiveMediaAccess(...)`.
 - Archive albums must keep explicit `kind`; do not infer album type from current contents.
+- Uploader albums must stay virtual:
+  do not narrow uploader album card/detail semantics to persisted `tree_media_album_items`.
 - Archive album linking must stay idempotent:
   repository code should insert only missing `(album_id, media_id)` pairs.
 

@@ -199,9 +199,7 @@ function buildPersistedArchiveAlbumSummaries(input: {
     .map((album) => {
       const albumAllMedia =
         album.albumKind === "uploader" && album.uploaderUserId
-          ? input.albumMediaMap[album.id]?.length
-            ? input.albumMediaMap[album.id]
-            : input.media.filter((asset) => asset.created_by === album.uploaderUserId && asset.kind === album.kind)
+          ? input.media.filter((asset) => asset.created_by === album.uploaderUserId && asset.kind === album.kind)
           : (input.albumMediaMap[album.id] || []).filter((asset) => asset.kind === album.kind);
       const albumMedia = albumAllMedia.filter((asset) => asset.kind === album.kind);
       const cover =

@@ -351,7 +351,25 @@ describe("tree display helpers", () => {
   it("builds album summaries filtered by media kind", () => {
     const summaries = buildTreeMediaAlbumSummaries({
       media: [
-        ...snapshot.media,
+        {
+          ...snapshot.media[0],
+          created_by: "user-1"
+        },
+        {
+          id: "media-photo-2",
+          tree_id: "tree-1",
+          kind: "photo",
+          provider: "supabase_storage",
+          visibility: "public",
+          storage_path: "trees/tree-1/media/photo/media-photo-2/file.jpg",
+          external_url: null,
+          title: "Photo 2",
+          caption: null,
+          mime_type: "image/jpeg",
+          size_bytes: 1024,
+          created_by: "user-1",
+          created_at: new Date().toISOString()
+        },
         {
           id: "media-video",
           tree_id: "tree-1",
@@ -397,7 +415,7 @@ describe("tree display helpers", () => {
       kind: "photo",
       access: "members",
       uploaderUserId: "user-1",
-      count: 1,
+      count: 2,
       coverMediaId: "media-1"
     });
   });

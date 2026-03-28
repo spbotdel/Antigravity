@@ -348,10 +348,12 @@ export function buildTreeMediaAlbumSummaries(input: {
     .filter((album) => !input.kind || album.kind === input.kind)
     .map((album) => {
       const albumAllMedia =
-        input.albumMediaMap?.[album.id] ||
-        (albumMediaIdsByAlbumId.get(album.id) || [])
-          .map((mediaId) => mediaById.get(mediaId))
-          .filter(Boolean) as TreeSnapshot["media"];
+        album.album_kind === "uploader" && album.uploader_user_id
+          ? input.media.filter((asset) => asset.created_by === album.uploader_user_id && asset.kind === album.kind)
+          : input.albumMediaMap?.[album.id] ||
+            (albumMediaIdsByAlbumId.get(album.id) || [])
+              .map((mediaId) => mediaById.get(mediaId))
+              .filter(Boolean) as TreeSnapshot["media"];
       const albumMedia = albumAllMedia.filter((asset) => asset.kind === album.kind);
       const cover =
         albumMedia.find((asset) => asset.kind === "photo") ||

@@ -213,6 +213,22 @@ Implications:
 
 ---
 
+### 12.3 Uploader albums are virtual views over uploader media
+
+If an album has uploader semantics:
+
+- its count must derive from all visible media matching `(tree_id, created_by, kind)`
+- its cover must derive from that same media set
+- its detail contents must derive from that same media set
+
+Implications:
+
+- uploader album summary semantics must not depend on persisted `tree_media_album_items`
+- persisted uploader album rows may still carry metadata, access behavior, and stable UI identity
+- manual album semantics remain relation-based, uploader album semantics remain virtual-view-based
+
+---
+
 # Data Integrity Invariants
 
 ### 13. Deletion must be explicit

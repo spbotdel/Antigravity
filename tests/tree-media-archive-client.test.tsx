@@ -329,6 +329,64 @@ describe("tree media archive client", () => {
     expect(screen.queryByText("Автоальбом создается автоматически и пока не редактируется.")).not.toBeInTheDocument();
   });
 
+  it("keeps uploader album card count aligned with uploader album detail contents even when persisted links are partial", async () => {
+    const firstPhoto = createMediaAsset({
+      id: "media-photo-1",
+      title: "Первое фото",
+      storage_path: "trees/tree-1/media/photo/media-photo-1/archive-photo.jpg",
+      created_by: "user-1",
+    });
+    const secondPhoto = createMediaAsset({
+      id: "media-photo-2",
+      title: "Второе фото",
+      storage_path: "trees/tree-1/media/photo/media-photo-2/archive-photo.jpg",
+      created_by: "user-1",
+    });
+    const thirdPhoto = createMediaAsset({
+      id: "media-photo-3",
+      title: "Третье фото",
+      storage_path: "trees/tree-1/media/photo/media-photo-3/archive-photo.jpg",
+      created_by: "user-1",
+    });
+
+    renderArchiveClient({
+      allMedia: [firstPhoto, secondPhoto, thirdPhoto],
+      allAlbums: [
+        {
+          id: "album-uploader-photo",
+          title: "От Вячеслава",
+          description: null,
+          kind: "photo",
+          access: "members",
+          albumKind: "uploader",
+          uploaderUserId: "user-1",
+          count: 1,
+          coverMediaId: "media-photo-1",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-uploader-photo": [firstPhoto],
+      },
+      uploaderLabels: [{ userId: "user-1", label: "От Вячеслава" }],
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    expect(screen.getByRole("button", { name: /От Вячеслава.*3 фото/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /От Вячеслава.*3 фото/ }));
+
+    expect(screen.getAllByText("От Вячеслава").length).toBeGreaterThan(0);
+    expect(screen.getByText("3 фото")).toBeInTheDocument();
+
+    const grid = document.querySelector(".archive-grid.archive-grid-album");
+    expect(grid).not.toBeNull();
+    expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть фото: Первое фото" })).toBeInTheDocument();
+    expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть фото: Второе фото" })).toBeInTheDocument();
+    expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть фото: Третье фото" })).toBeInTheDocument();
+  });
+
   it("opens an edit dialog from the album card menu and updates the manual album", async () => {
     const photo = createMediaAsset({
       id: "media-photo",

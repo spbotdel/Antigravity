@@ -309,6 +309,8 @@ Important:
 - adding a file to a stricter album changes its effective access through repository logic, not by mutating file visibility in UI
 - album-link writes should be idempotent:
   repository code must skip already existing `(album_id, media_id)` pairs instead of re-inserting them
+- uploader album summary semantics are virtual:
+  card count and cover should derive from visible media by `(created_by, kind, tree)`, not from persisted album-item rows
 
 ### 5.5 Archive Download Flow
 
@@ -340,6 +342,20 @@ Important:
 - this is a UX default, not a repository access rule change
 - effective access still remains the strictest of file visibility and every linked album access
 - uploader-album and selected-album linking may overlap in code paths, so repository linking must stay idempotent
+
+### 5.7 Uploader Album Summary And Detail Flow
+
+Flow:
+1. repository/page loads visible archive media for the current actor
+2. uploader album summaries are derived from visible media grouped by:
+- `created_by`
+- `kind`
+3. uploader album detail view resolves from that same grouped visible-media set
+
+Important:
+- persisted uploader album rows may still provide metadata and access behavior
+- uploader album card count must match uploader album detail count because both derive from the same virtual media set
+- this virtual-view rule is specific to uploader albums; manual albums still follow persisted album-item relations
 
 ## 6. Invite Flow
 

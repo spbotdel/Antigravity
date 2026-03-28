@@ -768,6 +768,51 @@ Future work must preserve these rules:
 
 ---
 
+# 2026-03-28 — Uploader albums are virtual archive albums
+
+### Decision
+
+Uploader/system albums such as `От Сергей Тест` are virtual albums.
+
+For uploader albums, the source of truth for summary and detail semantics is the visible media set matching:
+
+- `tree_id`
+- `created_by`
+- `kind`
+
+This applies to:
+
+- album card count
+- album card cover/preview
+- album detail contents
+
+Persisted uploader album rows still matter only for:
+
+- metadata
+- access / edit / delete behavior
+- stable album identity in UI
+
+Persisted `tree_media_album_items` must not be treated as the semantic source of truth for uploader album summary behavior, even when such links exist.
+
+### Why
+
+Uploader albums are intended as a convenient archive view over one uploader's visible media for one media kind.
+
+If uploader album cards use persisted `tree_media_album_items`, while album detail uses all visible media by `(created_by, kind)`, the product shows contradictory counts and broken expectations.
+
+That mismatch is a product-model problem, not a presentation problem.
+
+### Consequence
+
+Future work must preserve these rules:
+
+- uploader album card count and uploader album detail must always be derived from the same virtual media set
+- uploader album cover must also be derived from that same media set
+- manual albums may keep using persisted album-item relations as their source of truth
+- persisted uploader album rows may exist, but they must not narrow uploader album count/detail semantics to linked items only
+
+---
+
 # How to update this file
 
 Add a new entry when:
