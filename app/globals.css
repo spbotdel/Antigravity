@@ -2960,6 +2960,7 @@ textarea {
 .archive-review-body,
 .archive-review-grid,
 .archive-grid,
+.archive-grid-album,
 .archive-album-grid,
 .archive-album-card,
 .archive-album-copy,
@@ -3035,6 +3036,12 @@ textarea {
 .archive-grid {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   align-items: stretch;
+}
+
+.archive-grid-album {
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  align-items: start;
+  gap: 16px;
 }
 
 .archive-tile-shell {
@@ -3257,6 +3264,12 @@ textarea {
   display: block;
   border-radius: 12px;
   background: rgba(18, 27, 43, 0.06);
+}
+
+.archive-grid-album .archive-tile-image,
+.archive-grid-album .archive-tile-video,
+.archive-grid-album .archive-tile-placeholder {
+  aspect-ratio: 5 / 4;
 }
 
 .archive-tile-placeholder,
@@ -7257,6 +7270,10 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
     grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
   }
 
+  .archive-grid-album {
+    grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  }
+
   .archive-album-grid {
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   }
@@ -7551,6 +7568,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
   }
 
   .archive-grid,
+  .archive-grid-album,
   .archive-album-grid,
   .person-media-thumb-strip,
   .media-lightbox-strip,

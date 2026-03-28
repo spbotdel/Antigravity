@@ -634,6 +634,48 @@ Do not treat this as a `video-only` problem or a `filmstrip-only` problem unless
 
 ---
 
+# 18. Archive Upload Fails With Duplicate `(album_id, media_id)` Key Violation
+
+### Symptom
+
+Archive upload or album-targeted upload fails with errors such as:
+
+- `duplicate key value violates unique constraint "tree_media_album_items_album_id_media_id_key"`
+
+### Likely Cause
+
+Repository album-link logic attempted to insert the same `(album_id, media_id)` pair twice.
+
+Typical overlap zones:
+
+- selected manual album during archive upload
+- uploader auto-album linking
+- repeated completion/retry path for the same uploaded media
+
+### First Checks
+
+1. Inspect `completeArchiveMediaUpload(...)` in `lib/server/repository.ts`.
+2. Inspect `addMediaToTreeMediaAlbums(...)` in `lib/server/repository.ts`.
+3. Verify whether repository code checks for an existing album-item row before insert.
+4. Confirm whether uploader-album and manual target album could both point to the same final pair or whether the same completion path re-ran.
+
+### Typical Fix
+
+Do not weaken the unique constraint.
+
+Keep database integrity as-is and make repository linking idempotent:
+
+- fetch existing album-item rows for the candidate `(album_id, media_id)` pairs
+- insert only missing pairs
+
+### Relevant Files
+
+- `lib/server/repository.ts`
+- `components/media/tree-media-archive-client.tsx`
+- `app/api/media/archive/complete/route.ts`
+
+---
+
 # Practical Rule
 
 Before modifying production code, always determine which category the issue belongs to:

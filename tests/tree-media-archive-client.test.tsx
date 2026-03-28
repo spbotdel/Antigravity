@@ -1022,6 +1022,7 @@ describe("tree media archive client", () => {
 
     const grid = document.querySelector(".archive-grid");
     expect(grid).not.toBeNull();
+    expect(grid).toHaveClass("archive-grid-album");
     expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть фото: Фото из альбома" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Открыть фото: Фото из альбома" }));

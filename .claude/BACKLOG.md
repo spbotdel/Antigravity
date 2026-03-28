@@ -2,7 +2,7 @@
 
 *Operational task backlog only.*
 
-*Updated: 2026-03-27*
+*Updated: 2026-03-28*
 
 ## Wave 1 — Current Execution
 
@@ -61,10 +61,18 @@ Operational note:
 ### High Priority
 
 - [ ] Подтвердить, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий.
+- [x] Ввести явные typed albums для архива:
+  `kind = photo | video`, split uploader albums by kind, and reset legacy mixed test albums through migration.
+- [x] Дать выбирать album `access` прямо в create flow и не откладывать privacy choice до edit-only path.
+- [x] Упростить upload в выбранный альбом:
+  по умолчанию наследовать `album.access` вместо повторного ручного выбора visibility.
+- [x] Сделать archive album linking идемпотентным, чтобы повторная попытка не падала на duplicate `(album_id, media_id)`.
 - [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
 - [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
 - [ ] Провести ручную runtime-проверку album/file access rollout:
   файл без альбомов, файл в public album, файл в members album, файл в нескольких альбомах со смешанным доступом.
+- [ ] Провести ручную runtime-проверку typed album behavior:
+  фотоальбомы только во вкладке `Фото`, видеоальбомы только во вкладке `Видео`, uploader albums отдельно по kind.
 - [ ] Довести variant architecture до green regression: `thumb/small/medium` должны стабильно использоваться в archive/viewer/builder, а оригинал открываться только явно.
 - [ ] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
 - [ ] Завершить текущий pass по `family-tree-canvas`: age-aware avatars, fallback badge states, читаемость карточек и стабильное выделение выбранного узла в viewer и builder.

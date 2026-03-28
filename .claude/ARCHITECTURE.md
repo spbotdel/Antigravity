@@ -206,9 +206,16 @@ The display tree is derived and must not be treated as the canonical domain mode
 
 - Person-linked media and tree-level archive now coexist: the worktree contains `/tree/[slug]/media`, archive client UI, archive upload endpoints, and persisted album wiring.
 - Archive organization is modeled through `tree_media_albums` and album items, with both manual albums and uploader albums supported.
+- Archive albums now also carry explicit media `kind`:
+  `photo | video`.
+- Uploader albums are no longer single per uploader only:
+  they are now scoped by `(uploader_user_id, kind)`.
 - Archive albums now also carry their own `access` (`members | public`) in addition to file-level `media_assets.visibility`.
 - Effective file visibility is enforced by repository logic through:
   `resolveEffectiveMediaAccess(mediaId)`.
+- Album-targeted upload review now defaults file visibility from the selected album's `access`, while the repository still enforces strictest effective access.
+- Archive album linking is now repository-idempotent:
+  existing `(album_id, media_id)` pairs must be skipped before insert instead of failing on duplicate-key as normal flow.
 - The archive read surface now includes a large in-app viewer/lightbox and sticky footer actions, so gallery browsing no longer depends on narrow cards or external tab jumps.
 - Photo delivery already has a variant-aware foundation: preview reads may use `thumb/small/medium`, while originals should remain an explicit full-view path.
 - The binary plane is in transitional mode: current file-backed reads still preserve object-storage compatibility, while Cloudflare R2 foundation is already present in env/runtime config for the next migration stage.
@@ -218,7 +225,7 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Server-side Supabase transport is now a first-class runtime rule: native Node fetch is preferred, while the PowerShell bridge remains fallback/debug transport only.
 - Tree runtime now distinguishes between full snapshot consumers and narrow page-data consumers; `audit`, `members`, `media`, and `settings` should stay on specialized loaders instead of drifting back to full snapshots.
 - Current schema rollout note:
-  `tree_media_albums.access` was applied to the linked remote database manually, and migration history was reconciled after CLI transport failures.
+  `tree_media_albums.access` was applied to the linked remote database manually after earlier CLI transport failures, and `20260328043000_tree_media_albums_media_kind_v1.sql` is now also applied on the linked active remote database.
 - Remaining architecture-level QA:
   runtime verification of effective file access is still pending even though repository-level tests are green.
 
@@ -229,4 +236,7 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Effective archive media access must stay repository-owned:
   `resolveMediaAccess(...)` must delegate to `resolveEffectiveMediaAccess(...)`.
+- Archive albums must keep explicit server-side `kind`; album type must not be inferred from current contents.
+- Archive album linking must stay idempotent:
+  `tree_media_album_items(album_id, media_id)` uniqueness remains strict, and repository code should insert only missing pairs.
 

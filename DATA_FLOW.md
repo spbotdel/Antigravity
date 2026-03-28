@@ -302,8 +302,13 @@ Flow:
 Important:
 - client skips already-related media ids before bulk add-to-album
 - database uniqueness on `(album_id, media_id)` remains the final duplicate guard
+- manual album create now writes both:
+  - album `kind`
+  - album `access`
 - album create/update routes now also write album-level `access`
 - adding a file to a stricter album changes its effective access through repository logic, not by mutating file visibility in UI
+- album-link writes should be idempotent:
+  repository code must skip already existing `(album_id, media_id)` pairs instead of re-inserting them
 
 ### 5.5 Archive Download Flow
 
@@ -319,6 +324,22 @@ Flow:
 - direct attachment redirect for one item
 - generated `.zip` for multiple items
 5. archive client triggers a file save in the browser without reloading the page
+
+### 5.6 Archive Upload Review Flow For Selected Albums
+
+Flow:
+1. user opens archive upload review while a specific manual album is the current target
+2. client resolves the selected review album
+3. upload review defaults file visibility from that album's `access`
+4. UI may simplify the dialog by hiding the standalone visibility selector for album-targeted upload
+5. completion route still persists authored file visibility and then links the file into:
+- uploader album of the same `kind`
+- selected manual album, when present
+
+Important:
+- this is a UX default, not a repository access rule change
+- effective access still remains the strictest of file visibility and every linked album access
+- uploader-album and selected-album linking may overlap in code paths, so repository linking must stay idempotent
 
 ## 6. Invite Flow
 

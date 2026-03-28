@@ -655,6 +655,119 @@ Future work must preserve these rules:
 
 ---
 
+# 2026-03-28 — Archive albums have explicit media kind and legacy mixed test albums are reset
+
+### Decision
+
+Tree-level archive albums now have a required explicit media kind:
+
+- `photo`
+- `video`
+
+Album kind is authored server-side state.
+
+It must not be inferred dynamically from current album contents.
+
+The same product rule also applies to uploader albums:
+
+- uploader albums are scoped by `(uploader_user_id, kind)`
+- one uploader may therefore have one photo uploader album and one video uploader album inside the same tree
+
+Existing legacy archive albums were treated as disposable test data and reset during the migration rollout.
+
+No backfill or auto-classification path is part of this decision.
+
+### Why
+
+Showing the same persisted albums in both `Фото` and `Видео` tabs created a direct UX and data-model mismatch.
+
+If album kind were derived from current contents instead of stored explicitly:
+
+- tab filtering would stay ambiguous
+- empty albums would have no stable type
+- mixed or legacy contents would keep forcing compatibility heuristics
+
+The product now prefers a strict explicit model over legacy flexibility.
+
+### Consequence
+
+Future work must preserve these rules:
+
+- manual albums must always be created with explicit `kind`
+- uploader albums must also carry explicit `kind`
+- album contents must stay same-kind only
+- archive UI should render album lists from explicit `album.kind`, not from content inference
+- migrations and runtime code should assume that old mixed test albums were intentionally discarded, not preserved
+
+---
+
+# 2026-03-28 — Album-targeted archive upload inherits album access by default, but effective access stays strictest
+
+### Decision
+
+When the archive upload review flow targets a specific album, file visibility should default to that album's `access`.
+
+The UI should not force the user to repeat the same privacy choice for album-targeted uploads.
+
+This is a UX default only.
+
+The repository access model remains unchanged:
+
+- file `visibility` is still authored state
+- effective access is still the strictest of file visibility and every enclosing album access
+
+### Why
+
+Once album access became selectable at creation time, asking for file visibility again during upload into that same album created redundant and confusing UX.
+
+The user intent in that flow is usually:
+
+- choose the album
+- inherit the album privacy
+
+not:
+
+- choose album privacy
+- then immediately restate the same visibility choice for each file
+
+### Consequence
+
+Future work must preserve these rules:
+
+- upload into a selected album should default to the album's current `access`
+- standalone archive upload may still expose normal file visibility choice
+- this UX shortcut must not weaken the strictest-rule access model
+- repository and DB logic must continue enforcing effective access independently of UI defaults
+
+---
+
+# 2026-03-28 — Archive album linking must be idempotent
+
+### Decision
+
+Application-level album linking for archive media must be idempotent.
+
+If a `(album_id, media_id)` relation already exists, repository code should skip it instead of attempting a second insert.
+
+### Why
+
+The database uniqueness constraint on `tree_media_album_items(album_id, media_id)` is correct and must remain in place.
+
+However, archive upload and album-targeting paths can legitimately re-enter album-linking logic through retries, overlapping uploader-album/manual-album handling, or repeated completion calls.
+
+In that situation, treating an existing link as an error creates avoidable runtime failure even though the desired final state already exists.
+
+### Consequence
+
+Future work must preserve these rules:
+
+- keep the unique constraint
+- do not use duplicate-key exceptions as normal control flow
+- repository album-link writes should insert only missing pairs
+- uploader-album and selected-album flows may overlap, so deduping must happen before insert
+
+---
+
 # How to update this file
 
 Add a new entry when:

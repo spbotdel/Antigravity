@@ -2,7 +2,7 @@
 
 *Operational memory only. Not the canonical architecture document.*
 
-*Last updated: 2026-03-27*
+*Last updated: 2026-03-28*
 
 ## Current State
 
@@ -12,7 +12,7 @@
 - Backend/data layer: `Supabase` auth, database, RLS + S3-compatible object storage
 - Dev environment: linked to Supabase project `untwxmiqqwepopeepzqe`
 - Legacy static viewer: preserved in `legacy/` and old `index.html`, but no longer the main runtime
-- Current workstream: family archive foundation, uploader/manual albums, album/file access enforcement, variant-aware media delivery, and Cloudflare R2 groundwork are already in the worktree; current effort should now shift to runtime verification of effective access, archive/viewer polishing, broader QA, and migration sequencing
+- Current workstream: family archive foundation, typed photo/video albums, album/file access enforcement, inherited album-targeted upload access, variant-aware media delivery, and Cloudflare R2 groundwork are already in the worktree; current effort should now shift to runtime verification, archive/viewer polishing, broader QA, and migration sequencing
 - Target media platform: `Cloudflare` for the next binary/media delivery stage, while the current Yandex path remains transitional compatibility.
 
 ## Current Active Task
@@ -45,10 +45,15 @@
 - [x] `smoke:media` now persists a JSON report artifact in `tests/artifacts/`.
 - [x] Tree-level `/tree/[slug]/media` archive foundation is in place with navigation, page shell, and archive client.
 - [x] Archive album persistence exists for manual albums and uploader albums.
+- [x] Archive albums now have explicit `kind` (`photo | video`), and uploader albums are scoped by `(uploader, kind)`.
 - [x] Album/file access model is now implemented in code:
   `effective_access = strictest(file.visibility, every album.access containing this file)`.
 - [x] Remote schema rollout for `tree_media_albums.access` was recovered manually and linked migration history is reconciled.
+- [x] Remote schema rollout for `tree_media_albums.kind` is now applied on the linked active database through migration `20260328043000_tree_media_albums_media_kind_v1.sql`.
 - [x] Archive upload review flow exists with batch confirmation and discard guard.
+- [x] Album create flow now selects `access` at creation time instead of deferring privacy choice to edit-only flow.
+- [x] Upload into a selected album now inherits that album's `access` by default in the review UI.
+- [x] Archive album linking is now idempotent and no longer relies on duplicate-key failure for already existing `(album_id, media_id)` rows.
 - [x] Archive surface now includes a large in-app viewer/lightbox and sticky bottom actions for the current context.
 - [x] Variant-aware media delivery foundation exists for `thumb/small/medium` photo previews.
 - [x] Cloudflare R2 runtime/config foundation is present for the next media storage stage.
@@ -64,6 +69,7 @@
 - [ ] Preview variant foundations exist, but rollout and QA are still incomplete; originals should not leak back into archive/viewer/builder previews.
 - [ ] The tree-level family archive now has sticky actions and a large viewer/lightbox, but broader album/mobile/end-to-end QA is still unfinished.
 - [ ] Full manual runtime verification for album/file effective access is still pending even though repository-level coverage is green.
+- [ ] Manual end-to-end QA for repeated multi-photo upload into one selected album is still pending even though repository linking is now idempotent.
 - [ ] Builder canvas resize and overlay inspector still need practical QA on desktop, tablet and mobile widths.
 - [ ] Members/invite/share-link flows need end-to-end validation against live API responses and clipboard behavior.
 - [ ] Manual memory notes must stay aligned with the actual workstream after each `/fi`.
@@ -73,6 +79,9 @@
 
 - [ ] Convert the Cloudflare target into an explicit migration sequence: rollout gating, direct upload, Stream, and Queues.
 - [ ] Finish archive album/mobile QA now that sticky actions and the large viewer/lightbox are in place.
+- [ ] Manually verify typed album behavior in runtime:
+  photo albums only in `Фото`, video albums only in `Видео`, and uploader albums split by kind.
+- [ ] Manually verify repeated multi-file upload into one selected album after the idempotent link fix.
 - [ ] Manually verify the accepted album/file access model in runtime:
   no albums, public album, members album, and mixed-album cases.
 - [ ] Switch tree cards, side rails, archive tiles, and media galleries to preview variants by default and confirm legacy fallbacks.
@@ -86,11 +95,17 @@
 - Primary captured workstream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 - Detected foundation: tree-level `Медиа` route, archive client, archive upload endpoints, and persisted album model are present in the worktree.
 - Detected archive upload review flow with pending batch state and discard confirmation.
+- Detected explicit album typing and uploader-per-kind archive model:
+  albums persist `kind`, tabs render from explicit album kind, and legacy mixed test albums were reset.
 - Detected album/file access enforcement in repository and archive UI:
   albums store `access`, cards show family-only indicator, and media reads use effective access resolution.
 - Detected manual remote recovery of pending migrations:
   `20260326164000_person_media_avatar_crop_v1.sql`
   `20260327194500_tree_media_albums_access_v1.sql`
+- Detected active remote rollout of:
+  `20260328043000_tree_media_albums_media_kind_v1.sql`
+- Detected album create-time access selection plus album-targeted upload inheritance of `album.access`.
+- Detected repository-side idempotent album linking for archive media.
 - Detected variant-aware media delivery foundation for photo previews (`thumb/small/medium`).
 - Detected Cloudflare R2 foundation in env/runtime config and supporting project files.
 - Latest `smoke:media` artifact `media-storage-report-1773931536758.json` is green.
@@ -102,4 +117,7 @@
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Effective archive media access must stay repository-owned:
   `resolveMediaAccess(...)` must delegate to `resolveEffectiveMediaAccess(...)`.
+- Archive albums must keep explicit `kind`; do not infer album type from current contents.
+- Archive album linking must stay idempotent:
+  repository code should insert only missing `(album_id, media_id)` pairs.
 

@@ -1961,7 +1961,7 @@ export function TreeMediaArchiveClient({
             </div>
           </div>
           {selectedAlbumMedia.length ? (
-            <div className="archive-grid">
+            <div className="archive-grid archive-grid-album">
               {selectedAlbumMedia.map((asset) => renderArchiveTile(asset, selectedAlbumMedia))}
             </div>
           ) : (

@@ -197,6 +197,22 @@ Implications:
 
 ---
 
+### 12.2 Archive album kind is explicit and must not be inferred
+
+If an archive album exists, it must carry explicit media kind:
+
+- `photo`
+- `video`
+
+Implications:
+
+- album type must not be derived from current contents
+- empty albums must still have stable type
+- uploader albums are also kind-scoped, not just uploader-scoped
+- a file must never be linked into an album of different kind
+
+---
+
 # Data Integrity Invariants
 
 ### 13. Deletion must be explicit
@@ -226,6 +242,23 @@ Code may depend on database schema elements such as:
 If code expects them, the corresponding migration must exist remotely.
 
 Migration drift is a runtime correctness issue.
+
+---
+
+### 14.1 Archive album linking must be idempotent
+
+Archive album linking may be reached through:
+
+- direct add-to-album
+- archive upload completion
+- uploader-album plus selected-album overlap
+- retry-like repeated completion paths
+
+Implications:
+
+- repository logic must skip already existing `(album_id, media_id)` pairs
+- the unique constraint on `tree_media_album_items(album_id, media_id)` remains required
+- the system must not rely on duplicate-key failures as normal behavior
 
 ---
 
