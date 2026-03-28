@@ -3,7 +3,7 @@
 <!-- FRAMEWORK:ENGINEERING:START -->
 ## Current Engineering Sync
 
-- Updated at (UTC): `2026-03-22 17:12:23Z`
+- Updated at (UTC): `2026-03-28 15:36:50Z`
 - Treat the historical phases below as reference coverage. The launch order in this sync block is the current engineering queue.
 - Active engineering stream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 

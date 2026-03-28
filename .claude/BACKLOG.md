@@ -12,7 +12,7 @@
 - [x] Show the full absolute tree URL in `Настройки` and add copy action
 - [ ] Finish the remaining local Wave 1 builder/media/archive cleanup from the live pass:
   calmer copy/labels, final affordance cleanup, and any last UI-only deltas that do not require hosted staging
-- [ ] Keep video thumbnail generation out of scope for Wave 1
+- [x] Add `cloudflare_r2` video thumbnail generation plus live optimistic UI refresh without changing the server thumb as source of truth
 
 Status note:
 - local `Wave 1` validation is currently green on `npm test`, `npm run build`, `npm run smoke:media`, `npm run smoke:auth`, and `npm run smoke:e2e`
@@ -61,18 +61,8 @@ Operational note:
 ### High Priority
 
 - [ ] Подтвердить, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий.
-- [x] Ввести явные typed albums для архива:
-  `kind = photo | video`, split uploader albums by kind, and reset legacy mixed test albums through migration.
-- [x] Дать выбирать album `access` прямо в create flow и не откладывать privacy choice до edit-only path.
-- [x] Упростить upload в выбранный альбом:
-  по умолчанию наследовать `album.access` вместо повторного ручного выбора visibility.
-- [x] Сделать archive album linking идемпотентным, чтобы повторная попытка не падала на duplicate `(album_id, media_id)`.
 - [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
 - [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
-- [ ] Провести ручную runtime-проверку album/file access rollout:
-  файл без альбомов, файл в public album, файл в members album, файл в нескольких альбомах со смешанным доступом.
-- [ ] Провести ручную runtime-проверку typed album behavior:
-  фотоальбомы только во вкладке `Фото`, видеоальбомы только во вкладке `Видео`, uploader albums отдельно по kind.
 - [ ] Довести variant architecture до green regression: `thumb/small/medium` должны стабильно использоваться в archive/viewer/builder, а оригинал открываться только явно.
 - [ ] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
 - [ ] Завершить текущий pass по `family-tree-canvas`: age-aware avatars, fallback badge states, читаемость карточек и стабильное выделение выбранного узла в viewer и builder.
@@ -87,7 +77,6 @@ Operational note:
 - [ ] Добить единый light visual system для `Настройки`, `Журнал`, `Участники`, builder и viewer.
 - [ ] Проверить аватары и карточки дерева на кейсах без фото, с кириллицей в gender, с детьми и пожилыми, чтобы визуальные fallback-и были предсказуемыми.
 - [ ] Уточнить, какие из новых проектных документов должны оставаться обязательным startup context, а какие достаточно держать как справочные.
-- [ ] Сверить hosted/runtime поведение после manual remote migration recovery с локальным repository coverage, чтобы не осталось расхождения между тестами и реальным доступом.
 - [ ] Подготовить следующий smoke cycle после текущих UI правок и обновления memory-файлов.
 
 ### Low Priority

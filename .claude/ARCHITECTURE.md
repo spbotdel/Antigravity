@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-03-27 10:49:23Z`
+- Generated at (UTC): `2026-03-28 15:36:50Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -135,10 +135,10 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-03-27 10:49:23Z`
+- Updated at (UTC): `2026-03-28 15:36:50Z`
 - Active branch: `fix/builder-inspector-desktop-align-final`
-- Git status: `STATUS:11 files`
-- Git diff: `DIFF:363 lines`
+- Git status: `STATUS:9 files`
+- Git diff: `DIFF:325 lines`
 
 ### Detected Stack
 
@@ -172,8 +172,6 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `.claude/ARCHITECTURE.md`
 - `.claude/BACKLOG.md`
 - `.claude/SNAPSHOT.md`
-- `DATA_FLOW.md`
-- `REPO_MAP.md`
 - `docs/research/family-tree-v1-slava-edition-backup-restore-runbook-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-implementation-plan-2026-03-06.md`
@@ -185,12 +183,12 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-03-27 10:49:23Z`
+- Completed at (UTC): `2026-03-28 15:36:50Z`
 - Branch: `fix/builder-inspector-desktop-align-final`
-- Git status summary: `STATUS:11 files`
-- Git diff summary: `DIFF:363 lines`
+- Git status summary: `STATUS:9 files`
+- Git diff summary: `DIFF:325 lines`
 
-- Session summary: `11` changed files, `363` diff lines, `11` tracked changed paths.
+- Session summary: `9` changed files, `325` diff lines, `9` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -198,51 +196,32 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:11 files`)
-- `git_diff`: `success` (`DIFF:363 lines`)
+- `git_status`: `success` (`STATUS:9 files`)
+- `git_diff`: `success` (`DIFF:325 lines`)
 <!-- FRAMEWORK:SESSION:END -->
 
 ## Current Media Architecture
 
 - Person-linked media and tree-level archive now coexist: the worktree contains `/tree/[slug]/media`, archive client UI, archive upload endpoints, and persisted album wiring.
 - Archive organization is modeled through `tree_media_albums` and album items, with both manual albums and uploader albums supported.
-- Archive albums now also carry explicit media `kind`:
-  `photo | video`.
-- Uploader albums are no longer single per uploader only:
-  they are now scoped by `(uploader_user_id, kind)`.
-- Uploader albums are also virtual summary/detail views:
-  card count, card cover and album detail contents must derive from visible media by `(tree_id, created_by, kind)`, not from persisted album-item rows.
-- In `Все медиа`, uploader albums are additionally merged by `uploader_user_id` for browsing, while `Фото` and `Видео` still keep uploader albums split by kind.
-- Archive albums now also carry their own `access` (`members | public`) in addition to file-level `media_assets.visibility`.
-- Effective file visibility is enforced by repository logic through:
-  `resolveEffectiveMediaAccess(mediaId)`.
-- Album-targeted upload review now defaults file visibility from the selected album's `access`, while the repository still enforces strictest effective access.
-- Archive album linking is now repository-idempotent:
-  existing `(album_id, media_id)` pairs must be skipped before insert instead of failing on duplicate-key as normal flow.
+- Archive albums now carry explicit `kind` and `access`, uploader albums remain virtual views over uploader media, and combined `Все медиа` keeps uploader albums merged by uploader identity.
+- Effective archive media access remains repository-owned through `resolveEffectiveMediaAccess(...)`, so album constraints stay the hard upper bound for enclosed files.
 - The archive read surface now includes a large in-app viewer/lightbox and sticky footer actions, so gallery browsing no longer depends on narrow cards or external tab jumps.
 - Photo delivery already has a variant-aware foundation: preview reads may use `thumb/small/medium`, while originals should remain an explicit full-view path.
+- New `cloudflare_r2` video uploads now also get server-generated `thumb` previews through the async preview pipeline backed by `media_asset_variants`.
+- Builder and archive UI now bridge the upload gap with temporary optimistic local video previews and swap to the canonical server thumb when preview generation reaches `ready`.
 - The binary plane is in transitional mode: current file-backed reads still preserve object-storage compatibility, while Cloudflare R2 foundation is already present in env/runtime config for the next migration stage.
-- Architectural boundary remains unchanged: `app/api/media*` stays thin, repository owns media/archive mutations and effective access calculation, and rendering consumes repository snapshots rather than issuing direct DB traversal.
+- Architectural boundary remains unchanged: `app/api/media*` stays thin, repository owns media/archive mutations, and rendering consumes repository snapshots rather than issuing direct DB traversal.
 - Active architecture-driving task: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 - Current regression signal: latest `smoke:media` artifact `media-storage-report-1773931536758.json` is green.
 - Server-side Supabase transport is now a first-class runtime rule: native Node fetch is preferred, while the PowerShell bridge remains fallback/debug transport only.
 - Tree runtime now distinguishes between full snapshot consumers and narrow page-data consumers; `audit`, `members`, `media`, and `settings` should stay on specialized loaders instead of drifting back to full snapshots.
-- Current schema rollout note:
-  `tree_media_albums.access` was applied to the linked remote database manually after earlier CLI transport failures, and `20260328043000_tree_media_albums_media_kind_v1.sql` is now also applied on the linked active remote database.
-- Remaining architecture-level QA:
-  runtime verification of effective file access is still pending even though repository-level tests are green.
 
 ## Current Runtime Rules
 
 - Server-side Supabase transport is `native-first`: `lib/supabase/admin-rest.ts` and `lib/supabase/server-fetch.ts` should prefer native Node fetch and use the PowerShell bridge only as fallback or explicit override.
 - Tree pages should not default to `getTreeSnapshot(...)`: `audit`, `members`, `media`, and `settings` now rely on specialized repository page-data loaders, while full snapshots remain for real snapshot consumers such as viewer and snapshot APIs.
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
-- Effective archive media access must stay repository-owned:
-  `resolveMediaAccess(...)` must delegate to `resolveEffectiveMediaAccess(...)`.
-- Archive albums must keep explicit server-side `kind`; album type must not be inferred from current contents.
-- Uploader albums must stay virtual archive views:
-  persisted uploader album rows may carry metadata/access/identity, but uploader summary/detail semantics must derive from visible media by `(created_by, kind, tree)`.
-- `Все медиа` must collapse uploader albums to one card per uploader; kind-specific archive modes must keep uploader albums separated by `kind`.
-- Archive album linking must stay idempotent:
-  `tree_media_album_items(album_id, media_id)` uniqueness remains strict, and repository code should insert only missing pairs.
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
 
