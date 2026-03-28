@@ -3374,6 +3374,57 @@ textarea {
   height: 100%;
 }
 
+.archive-album-cover-layout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: 3px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.archive-album-cover-layout::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(18, 27, 43, 0) 40%, rgba(18, 27, 43, 0.08) 100%);
+  z-index: 1;
+}
+
+.archive-album-cover-layout-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.archive-album-cover-layout-three {
+  grid-template-columns: minmax(0, 2.35fr) minmax(0, 1fr);
+}
+
+.archive-album-preview-column {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.archive-album-preview-tile {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: rgba(18, 27, 43, 0.06);
+}
+
+.archive-album-preview-media {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: cover;
+  display: block;
+  border-radius: 0;
+}
+
 .archive-tile-placeholder-video {
   background: linear-gradient(180deg, rgba(18, 27, 43, 0.88), rgba(34, 48, 73, 0.94));
 }
@@ -3900,6 +3951,7 @@ textarea {
 .archive-album-cover {
   position: relative;
   min-height: 0;
+  display: block;
 }
 
 .archive-album-copy {

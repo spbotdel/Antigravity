@@ -1,7 +1,7 @@
 "use client";
 
 import { PlayIcon } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 
 import { buildMediaOpenRouteUrl, type MediaThumbSource } from "@/lib/tree/display";
 import type { MediaAssetRecord } from "@/lib/types";
@@ -33,6 +33,10 @@ interface MediaThumbVisualProps {
   mediaClassName: string;
   placeholder: ReactNode;
   overlayContent?: ReactNode;
+  showToneOverlay?: boolean;
+  showVideoChrome?: boolean;
+  containerStyle?: CSSProperties;
+  mediaStyle?: CSSProperties;
 }
 
 export function MediaThumbVisual({
@@ -42,7 +46,11 @@ export function MediaThumbVisual({
   containerClassName,
   mediaClassName,
   placeholder,
-  overlayContent
+  overlayContent,
+  showToneOverlay = true,
+  showVideoChrome = true,
+  containerStyle,
+  mediaStyle
 }: MediaThumbVisualProps) {
   const [durationLabel, setDurationLabel] = useState<string | null>(() => durationLabelCache.get(asset.id) || null);
 
@@ -100,13 +108,14 @@ export function MediaThumbVisual({
   const overlayToneClassName = asset.kind === "video" ? "media-thumb-overlay-video" : "media-thumb-overlay-photo";
 
   return (
-    <div className={`${containerClassName} media-thumb-visual`}>
+    <div className={`${containerClassName} media-thumb-visual`} style={containerStyle}>
       {thumbSource.kind === "image" ? (
-        <img src={thumbSource.src} alt="" loading="lazy" className={mediaClassName} />
+        <img src={thumbSource.src} alt="" loading="lazy" className={mediaClassName} style={mediaStyle} />
       ) : (
         <video
           src={thumbSource.src}
           className={mediaClassName}
+          style={mediaStyle}
           muted
           playsInline
           preload="metadata"
@@ -122,9 +131,9 @@ export function MediaThumbVisual({
         />
       )}
 
-      <span className={`media-thumb-overlay ${overlayToneClassName}`} aria-hidden="true" />
+      {showToneOverlay ? <span className={`media-thumb-overlay ${overlayToneClassName}`} aria-hidden="true" /> : null}
 
-      {asset.kind === "video" ? (
+      {asset.kind === "video" && showVideoChrome ? (
         <>
           <span className="media-thumb-play" aria-hidden="true">
             <PlayIcon className="media-thumb-play-icon" />

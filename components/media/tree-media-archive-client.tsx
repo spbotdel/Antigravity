@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SelectField } from "@/components/ui/select-field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId, resolveMediaThumbSource } from "@/lib/tree/display";
+import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId, resolveMediaThumbSource, type MediaThumbSource } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
 import { LockIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
@@ -231,6 +231,63 @@ interface ActiveArchiveUploadItem {
   message: string | null;
 }
 
+interface AlbumPreviewItem {
+  asset: MediaAssetRecord;
+  thumbSource: Exclude<MediaThumbSource, null>;
+}
+
+const ARCHIVE_ALBUM_LAYOUT_STYLE: CSSProperties = {
+  position: "relative",
+  width: "100%",
+  height: "100%",
+  display: "grid",
+  gap: "3px",
+  overflow: "hidden",
+  isolation: "isolate",
+};
+
+const ARCHIVE_ALBUM_LAYOUT_TWO_STYLE: CSSProperties = {
+  ...ARCHIVE_ALBUM_LAYOUT_STYLE,
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+};
+
+const ARCHIVE_ALBUM_LAYOUT_THREE_STYLE: CSSProperties = {
+  ...ARCHIVE_ALBUM_LAYOUT_STYLE,
+  gridTemplateColumns: "minmax(0, 2.35fr) minmax(0, 1fr)",
+};
+
+const ARCHIVE_ALBUM_PREVIEW_COLUMN_STYLE: CSSProperties = {
+  minWidth: 0,
+  display: "grid",
+  gap: "3px",
+  gridTemplateRows: "repeat(2, minmax(0, 1fr))",
+};
+
+const ARCHIVE_ALBUM_PREVIEW_TILE_STYLE: CSSProperties = {
+  width: "100%",
+  height: "100%",
+  minWidth: 0,
+  minHeight: 0,
+  background: "rgba(18, 27, 43, 0.06)",
+};
+
+const ARCHIVE_ALBUM_PREVIEW_MEDIA_STYLE: CSSProperties = {
+  width: "100%",
+  height: "100%",
+  aspectRatio: "auto",
+  objectFit: "cover",
+  display: "block",
+  borderRadius: 0,
+};
+
+const ARCHIVE_ALBUM_PREVIEW_OVERLAY_STYLE: CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  background: "linear-gradient(180deg, rgba(18, 27, 43, 0) 40%, rgba(18, 27, 43, 0.08) 100%)",
+  zIndex: 1,
+};
+
 function buildPersistedArchiveAlbumSummaries(input: {
   albums: AlbumSummary[];
   media: MediaAssetRecord[];
@@ -257,6 +314,23 @@ function buildPersistedArchiveAlbumSummaries(input: {
       };
     })
     .filter(Boolean) as AlbumSummary[];
+}
+
+function getArchiveAlbumSourceMedia(
+  album: Pick<AlbumSummary, "id" | "kind" | "albumKind" | "uploaderUserId">,
+  currentMedia: MediaAssetRecord[],
+  currentAlbumMediaMap: Record<string, MediaAssetRecord[]>
+) {
+  if (album.albumKind === "uploader" && album.uploaderUserId) {
+    return currentMedia.filter((asset) =>
+      asset.created_by === album.uploaderUserId &&
+      (album.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === album.kind)
+    );
+  }
+
+  return (currentAlbumMediaMap[album.id] || []).filter((asset) =>
+    album.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === album.kind
+  );
 }
 
 function buildStageUrl(asset: MediaAssetRecord, shareToken?: string | null, expanded = false) {
@@ -1340,6 +1414,98 @@ export function TreeMediaArchiveClient({
     );
   }
 
+  function getAlbumPreviewItems(album: AlbumSummary): AlbumPreviewItem[] {
+    const albumMedia = getArchiveAlbumSourceMedia(album, currentMedia, albumMediaMap);
+    const cover = album.coverMediaId ? albumMedia.find((asset) => asset.id === album.coverMediaId) || null : null;
+    const orderedMedia = cover ? [cover, ...albumMedia.filter((asset) => asset.id !== cover.id)] : albumMedia;
+    const previewItems: AlbumPreviewItem[] = [];
+
+    for (const asset of orderedMedia) {
+      const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
+      if (!thumbSource) {
+        continue;
+      }
+
+      previewItems.push({
+        asset,
+        thumbSource,
+      });
+
+      if (previewItems.length === 3) {
+        break;
+      }
+    }
+
+    return previewItems;
+  }
+
+  function renderArchiveAlbumPreviewTile(item: AlbumPreviewItem, className: string) {
+    return (
+      <MediaThumbVisual
+        key={item.asset.id}
+        asset={item.asset}
+        thumbSource={item.thumbSource}
+        shareToken={shareToken}
+        containerClassName={className}
+        mediaClassName="archive-album-image archive-album-preview-media"
+        placeholder={null}
+        showToneOverlay={false}
+        showVideoChrome={false}
+        containerStyle={ARCHIVE_ALBUM_PREVIEW_TILE_STYLE}
+        mediaStyle={ARCHIVE_ALBUM_PREVIEW_MEDIA_STYLE}
+      />
+    );
+  }
+
+  function renderArchiveAlbumCover(album: AlbumSummary) {
+    const previewItems = getAlbumPreviewItems(album);
+
+    if (!previewItems.length) {
+      return renderArchivePlaceholder(mode === "video" ? "video" : "photo");
+    }
+
+    if (previewItems.length === 1) {
+      const [cover] = previewItems;
+      return (
+        <MediaThumbVisual
+          asset={cover.asset}
+          thumbSource={cover.thumbSource}
+          shareToken={shareToken}
+          containerClassName="archive-album-cover-visual"
+          mediaClassName={cover.thumbSource.kind === "image" ? "archive-album-image" : "archive-album-image archive-tile-video"}
+          placeholder={null}
+        />
+      );
+    }
+
+    if (previewItems.length === 2) {
+      return (
+        <div
+          className="archive-album-cover-layout archive-album-cover-layout-two"
+          data-preview-count="2"
+          style={ARCHIVE_ALBUM_LAYOUT_TWO_STYLE}
+        >
+          {previewItems.map((item) => renderArchiveAlbumPreviewTile(item, "archive-album-preview-tile"))}
+          <span className="archive-album-cover-tone" aria-hidden="true" style={ARCHIVE_ALBUM_PREVIEW_OVERLAY_STYLE} />
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className="archive-album-cover-layout archive-album-cover-layout-three"
+        data-preview-count="3"
+        style={ARCHIVE_ALBUM_LAYOUT_THREE_STYLE}
+      >
+        {renderArchiveAlbumPreviewTile(previewItems[0], "archive-album-preview-tile archive-album-preview-tile-primary")}
+        <div className="archive-album-preview-column" style={ARCHIVE_ALBUM_PREVIEW_COLUMN_STYLE}>
+          {previewItems.slice(1, 3).map((item) => renderArchiveAlbumPreviewTile(item, "archive-album-preview-tile"))}
+        </div>
+        <span className="archive-album-cover-tone" aria-hidden="true" style={ARCHIVE_ALBUM_PREVIEW_OVERLAY_STYLE} />
+      </div>
+    );
+  }
+
   function switchMode(nextMode: MediaMode) {
     startTransition(() => {
       setMode(nextMode);
@@ -2107,8 +2273,6 @@ export function TreeMediaArchiveClient({
       ) : currentAlbums.length ? (
         <div className="archive-album-grid">
           {currentAlbums.map((album) => {
-            const cover = archiveMedia.find((asset) => asset.id === album.coverMediaId) || null;
-            const coverSource = cover ? resolveMediaThumbSource(cover, shareToken, optimisticVideoPreviewUrls) : null;
             const isAlbumActionsOpen = openArchiveAlbumActionsId === album.id;
 
             return (
@@ -2165,18 +2329,7 @@ export function TreeMediaArchiveClient({
                         </PopoverContent>
                       </Popover>
                     ) : null}
-                    {coverSource && cover ? (
-                      <MediaThumbVisual
-                        asset={cover}
-                        thumbSource={coverSource}
-                        shareToken={shareToken}
-                        containerClassName="archive-album-cover-visual"
-                        mediaClassName={coverSource.kind === "image" ? "archive-album-image" : "archive-album-image archive-tile-video"}
-                        placeholder={null}
-                      />
-                    ) : (
-                      renderArchivePlaceholder(mode === "video" ? "video" : "photo")
-                    )}
+                    {renderArchiveAlbumCover(album)}
                   </div>
                   <div className="archive-album-copy">
                     <div className="archive-album-title-row">

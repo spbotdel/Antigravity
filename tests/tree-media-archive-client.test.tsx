@@ -184,12 +184,114 @@ describe("tree media archive client", () => {
     const albumImage = document.querySelector(".archive-album-image");
     expect(albumImage).not.toBeNull();
     expect(albumImage).toHaveAttribute("src", "/api/media/media-photo?variant=thumb");
+    expect(document.querySelector(".archive-album-cover-layout")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Свадьба.*Пользовательский альбом/ }));
     fireEvent.click(screen.getByRole("button", { name: "Открыть фото: Архивное фото" }));
 
     const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное фото" });
     expect(within(dialog).getByRole("img", { name: "Архивное фото" })).toHaveAttribute("src", "/api/media/media-photo?variant=medium");
+  });
+
+  it("renders two previewable album items as a clean split cover", () => {
+    const photoOne = createMediaAsset({
+      id: "media-photo-1",
+      title: "Первое фото",
+      storage_path: "trees/tree-1/media/photo/media-photo-1/archive-photo-1.jpg",
+    });
+    const photoTwo = createMediaAsset({
+      id: "media-photo-2",
+      title: "Второе фото",
+      storage_path: "trees/tree-1/media/photo/media-photo-2/archive-photo-2.jpg",
+    });
+
+    renderArchiveClient({
+      allAlbums: [
+        {
+          id: "album-2-up",
+          title: "Летняя поездка",
+          description: null,
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 2,
+          coverMediaId: "media-photo-1",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-2-up": [photoOne, photoTwo],
+      },
+      allMedia: [photoOne, photoTwo],
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    const albumButton = screen.getByRole("button", { name: /Летняя поездка.*Пользовательский альбом/ });
+    const albumShell = albumButton.closest(".archive-album-card-shell");
+    expect(albumShell).not.toBeNull();
+    expect(albumShell?.querySelector(".archive-album-cover-layout-two")).not.toBeNull();
+    expect(albumShell?.querySelectorAll(".archive-album-preview-tile")).toHaveLength(2);
+
+    const previewImages = albumShell?.querySelectorAll(".archive-album-preview-media");
+    expect(previewImages).toHaveLength(2);
+    expect(previewImages?.[0]).toHaveAttribute("src", "/api/media/media-photo-1?variant=thumb");
+    expect(previewImages?.[1]).toHaveAttribute("src", "/api/media/media-photo-2?variant=thumb");
+  });
+
+  it("renders three or more previewable album items as a dominant preview with a stacked side rail", () => {
+    const photoOne = createMediaAsset({
+      id: "media-photo-1",
+      title: "Первое фото",
+      storage_path: "trees/tree-1/media/photo/media-photo-1/archive-photo-1.jpg",
+    });
+    const photoTwo = createMediaAsset({
+      id: "media-photo-2",
+      title: "Второе фото",
+      storage_path: "trees/tree-1/media/photo/media-photo-2/archive-photo-2.jpg",
+    });
+    const photoThree = createMediaAsset({
+      id: "media-photo-3",
+      title: "Третье фото",
+      storage_path: "trees/tree-1/media/photo/media-photo-3/archive-photo-3.jpg",
+    });
+    const photoFour = createMediaAsset({
+      id: "media-photo-4",
+      title: "Четвертое фото",
+      storage_path: "trees/tree-1/media/photo/media-photo-4/archive-photo-4.jpg",
+    });
+
+    renderArchiveClient({
+      allAlbums: [
+        {
+          id: "album-3-up",
+          title: "Большой семейный альбом",
+          description: null,
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 4,
+          coverMediaId: "media-photo-1",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-3-up": [photoOne, photoTwo, photoThree, photoFour],
+      },
+      allMedia: [photoOne, photoTwo, photoThree, photoFour],
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    const albumButton = screen.getByRole("button", { name: /Большой семейный альбом.*Пользовательский альбом/ });
+    const albumShell = albumButton.closest(".archive-album-card-shell");
+    expect(albumShell).not.toBeNull();
+    expect(albumShell?.querySelector(".archive-album-cover-layout-three")).not.toBeNull();
+    expect(albumShell?.querySelector(".archive-album-preview-tile-primary")).not.toBeNull();
+    expect(albumShell?.querySelector(".archive-album-preview-column")).not.toBeNull();
+    expect(albumShell?.querySelectorAll(".archive-album-preview-tile")).toHaveLength(3);
+
+    const previewImages = albumShell?.querySelectorAll(".archive-album-preview-media");
+    expect(previewImages).toHaveLength(3);
+    expect(previewImages?.[0]).toHaveAttribute("src", "/api/media/media-photo-1?variant=thumb");
+    expect(previewImages?.[1]).toHaveAttribute("src", "/api/media/media-photo-2?variant=thumb");
+    expect(previewImages?.[2]).toHaveAttribute("src", "/api/media/media-photo-3?variant=thumb");
   });
 
   it("uses generated thumbs for ready cloudflare video tiles and video album covers", async () => {
