@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { MediaThumbVisual } from "@/components/media/media-thumb-visual";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SelectField } from "@/components/ui/select-field";
@@ -1322,10 +1323,15 @@ export function TreeMediaArchiveClient({
             openMediaViewer(asset.id, items);
           }}
         >
-          {thumbSource?.kind === "image" ? (
-            <img src={thumbSource.src} alt="" loading="lazy" className="archive-tile-image" />
-          ) : thumbSource?.kind === "video" ? (
-            <video src={thumbSource.src} className="archive-tile-video" muted playsInline preload="metadata" />
+          {thumbSource ? (
+            <MediaThumbVisual
+              asset={asset}
+              thumbSource={thumbSource}
+              shareToken={shareToken}
+              containerClassName="archive-thumb-visual"
+              mediaClassName={thumbSource.kind === "image" ? "archive-tile-image" : "archive-tile-video"}
+              placeholder={null}
+            />
           ) : (
             renderArchivePlaceholder(asset.kind)
           )}
@@ -2159,10 +2165,15 @@ export function TreeMediaArchiveClient({
                         </PopoverContent>
                       </Popover>
                     ) : null}
-                    {coverSource?.kind === "image" ? (
-                      <img src={coverSource.src} alt="" loading="lazy" className="archive-album-image" />
-                    ) : coverSource?.kind === "video" ? (
-                      <video src={coverSource.src} className="archive-album-image archive-tile-video" muted playsInline preload="metadata" />
+                    {coverSource && cover ? (
+                      <MediaThumbVisual
+                        asset={cover}
+                        thumbSource={coverSource}
+                        shareToken={shareToken}
+                        containerClassName="archive-album-cover-visual"
+                        mediaClassName={coverSource.kind === "image" ? "archive-album-image" : "archive-album-image archive-tile-video"}
+                        placeholder={null}
+                      />
                     ) : (
                       renderArchivePlaceholder(mode === "video" ? "video" : "photo")
                     )}
@@ -2297,10 +2308,15 @@ export function TreeMediaArchiveClient({
                       className={`archive-viewer-thumb${asset.id === activeViewerAsset.id ? " archive-viewer-thumb-active" : ""}`}
                       onClick={() => setViewerMediaId(asset.id)}
                     >
-                      {thumbSource?.kind === "image" ? (
-                        <img src={thumbSource.src} alt="" loading="lazy" className="archive-tile-image" />
-                      ) : thumbSource?.kind === "video" ? (
-                        <video src={thumbSource.src} className="archive-tile-video" muted playsInline preload="metadata" />
+                      {thumbSource ? (
+                        <MediaThumbVisual
+                          asset={asset}
+                          thumbSource={thumbSource}
+                          shareToken={shareToken}
+                          containerClassName="archive-viewer-thumb-visual"
+                          mediaClassName={thumbSource.kind === "image" ? "archive-tile-image" : "archive-tile-video"}
+                          placeholder={null}
+                        />
                       ) : (
                         renderArchivePlaceholder(asset.kind)
                       )}

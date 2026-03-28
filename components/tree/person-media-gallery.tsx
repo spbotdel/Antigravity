@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { MediaThumbVisual } from "@/components/media/media-thumb-visual";
 import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -201,12 +202,19 @@ function MediaThumb({
       aria-label={`Показать медиа ${index + 1}: ${asset.title}`}
       onClick={onSelect}
     >
-      <span className="person-media-thumb-visual">
-        {thumbSource?.kind === "image" ? (
-          <img src={mediaUrl} alt="" loading="lazy" />
-        ) : thumbSource?.kind === "video" ? (
-          <video src={mediaUrl} className="person-media-thumb-video" muted playsInline preload="metadata" />
-        ) : asset.kind === "video" ? (
+      {thumbSource ? (
+        <MediaThumbVisual
+          asset={asset}
+          thumbSource={thumbSource}
+          shareToken={shareToken}
+          containerClassName="person-media-thumb-visual"
+          mediaClassName={thumbSource.kind === "image" ? "" : "person-media-thumb-video"}
+          placeholder={null}
+          overlayContent={isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
+        />
+      ) : (
+        <span className="person-media-thumb-visual">
+          {asset.kind === "video" ? (
           <span
             className={`person-media-thumb-video-placeholder${compact ? " person-media-thumb-video-placeholder-compact" : ""}`}
             aria-hidden="true"
@@ -216,13 +224,14 @@ function MediaThumb({
             </span>
             <span className="person-media-thumb-video-label">Видео</span>
           </span>
-        ) : (
-          <span className="person-media-thumb-icon" aria-hidden="true">
-            DOC
-          </span>
-        )}
-        {isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
-      </span>
+          ) : (
+            <span className="person-media-thumb-icon" aria-hidden="true">
+              DOC
+            </span>
+          )}
+          {isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
+        </span>
+      )}
     </button>
   );
 
