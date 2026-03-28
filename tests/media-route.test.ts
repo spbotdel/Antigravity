@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const resolveMediaAccess = vi.fn();
+const getMediaSummary = vi.fn();
 const deleteMedia = vi.fn();
 const setPrimaryPersonMedia = vi.fn();
 const updateTreeMediaAlbum = vi.fn();
@@ -8,6 +9,7 @@ const deleteTreeMediaAlbum = vi.fn();
 
 vi.mock("@/lib/server/repository", () => ({
   resolveMediaAccess,
+  getMediaSummary,
   deleteMedia,
   setPrimaryPersonMedia,
   updateTreeMediaAlbum,
@@ -17,6 +19,7 @@ vi.mock("@/lib/server/repository", () => ({
 describe("media route", () => {
   beforeEach(() => {
     resolveMediaAccess.mockReset();
+    getMediaSummary.mockReset();
     deleteMedia.mockReset();
     setPrimaryPersonMedia.mockReset();
     updateTreeMediaAlbum.mockReset();
@@ -53,6 +56,26 @@ describe("media route", () => {
     expect(resolveMediaAccess).toHaveBeenCalledWith("media-1", null, "thumb", { download: false });
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://example.com/video-thumb.webp");
+  });
+
+  it("returns media summary JSON when summary mode is requested", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
+    getMediaSummary.mockResolvedValue({
+      id: "media-1",
+      preview_status: "ready"
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/media/media-1?summary=1"),
+      {
+        params: Promise.resolve({ mediaId: "media-1" })
+      }
+    );
+    const payload = await response.json();
+
+    expect(getMediaSummary).toHaveBeenCalledWith("media-1", null);
+    expect(response.status).toBe(200);
+    expect(payload.media.preview_status).toBe("ready");
   });
 
   it("sets a photo as primary person media via PATCH /api/media/[mediaId]", async () => {

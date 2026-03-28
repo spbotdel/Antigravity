@@ -14,7 +14,7 @@ import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildMediaThumbRouteUrl, buildPhotoPreviewRouteUrl } from "@/lib/tree/display";
+import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl, resolveMediaThumbSource } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import type { TreeSnapshot } from "@/lib/types";
 
@@ -25,6 +25,7 @@ type LightboxGestureAxis = "undetermined" | "horizontal" | "vertical";
 interface PersonMediaGalleryProps {
   media: MediaAsset[];
   shareToken?: string | null;
+  optimisticVideoPreviewUrls?: Readonly<Record<string, string>>;
   emptyMessage?: string;
   emptyTitle?: string | null;
   emptyActions?: ReactNode;
@@ -155,6 +156,7 @@ function MediaThumb({
   asset,
   active,
   shareToken,
+  optimisticVideoPreviewUrls,
   onSelect,
   index,
   isAvatar,
@@ -166,6 +168,7 @@ function MediaThumb({
   asset: MediaAsset;
   active: boolean;
   shareToken?: string | null;
+  optimisticVideoPreviewUrls?: Readonly<Record<string, string>>;
   onSelect: () => void;
   index: number;
   isAvatar: boolean;
@@ -186,8 +189,8 @@ function MediaThumb({
     onDelete: () => void;
   };
 }) {
-  const thumbUrl = buildMediaThumbRouteUrl(asset, shareToken);
-  const mediaUrl = thumbUrl || buildMediaRouteUrl(asset.id, { shareToken });
+  const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
+  const mediaUrl = thumbSource?.src || buildMediaRouteUrl(asset.id, { shareToken });
 
   const thumbButton = (
     <button
@@ -199,8 +202,10 @@ function MediaThumb({
       onClick={onSelect}
     >
       <span className="person-media-thumb-visual">
-        {thumbUrl ? (
+        {thumbSource?.kind === "image" ? (
           <img src={mediaUrl} alt="" loading="lazy" />
+        ) : thumbSource?.kind === "video" ? (
+          <video src={mediaUrl} className="person-media-thumb-video" muted playsInline preload="metadata" />
         ) : asset.kind === "video" ? (
           <span
             className={`person-media-thumb-video-placeholder${compact ? " person-media-thumb-video-placeholder-compact" : ""}`}
@@ -344,6 +349,7 @@ function MediaPreview({
 export function PersonMediaGallery({
   media,
   shareToken,
+  optimisticVideoPreviewUrls,
   emptyMessage = "Для этого человека пока не добавлено медиа.",
   emptyTitle = "Галерея пока пуста",
   emptyActions = null,
@@ -809,6 +815,7 @@ export function PersonMediaGallery({
                 asset={asset}
                 active={asset.id === activeAsset.id}
                 shareToken={shareToken}
+                optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                 onSelect={() => setActiveMediaId(asset.id)}
                 index={index}
                 isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
@@ -878,6 +885,7 @@ export function PersonMediaGallery({
                 asset={asset}
                 active={asset.id === activeAsset.id}
                 shareToken={shareToken}
+                optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                 onSelect={() => {
                   if (isInlineSelectionMode) {
                     resolvedToggleMediaSelection(asset.id);

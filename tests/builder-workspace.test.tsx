@@ -15,7 +15,8 @@ vi.mock("@/components/tree/family-tree-canvas", () => ({
 vi.mock("@/components/tree/person-media-gallery", () => ({
   PersonMediaGallery: (props: {
     appendTile?: unknown;
-    media?: Array<{ id: string; title?: string }>;
+    media?: Array<{ id: string; title?: string; kind?: string; provider?: string; preview_status?: string | null }>;
+    optimisticVideoPreviewUrls?: Readonly<Record<string, string>>;
     canDeleteMedia?: boolean;
     onDeleteMedia?: (mediaId: string) => Promise<void>;
     showInlineMediaActions?: boolean;
@@ -34,6 +35,23 @@ vi.mock("@/components/tree/person-media-gallery", () => ({
       data-actions-enabled={props.showInlineMediaActions && !props.selectionMode ? "true" : "false"}
       data-media-count={String(props.media?.length ?? 0)}
     >
+      {(props.media || []).map((item) =>
+        props.optimisticVideoPreviewUrls?.[item.id] ? (
+          <img
+            key={`thumb-${item.id}`}
+            className="person-media-thumb-visual"
+            src={props.optimisticVideoPreviewUrls[item.id]}
+            alt=""
+          />
+        ) : item.kind === "video" && item.provider === "cloudflare_r2" && item.preview_status === "ready" ? (
+          <img
+            key={`server-thumb-${item.id}`}
+            className="person-media-thumb-visual"
+            src={`/api/media/${item.id}?variant=thumb`}
+            alt=""
+          />
+        ) : null
+      )}
       {(props.media || []).map((item) =>
         props.showInlineMediaActions && !props.selectionMode ? (
           <div key={`actions-${item.id}`}>
@@ -875,6 +893,131 @@ describe("builder workspace", () => {
     expect(screen.queryByText("family-video.mp4")).not.toBeInTheDocument();
     expect(screen.getByText("Видео • 3 Б")).toBeInTheDocument();
     expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 видео");
+  });
+
+  it("updates a newly uploaded cloudflare video to its generated preview without full page reload", async () => {
+    const snapshot = createSnapshot();
+    let snapshotPolls = 0;
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+      if (url.includes("/api/media/upload-intent")) {
+        return Response.json(
+          {
+            mediaId: "builder-video-pending-1",
+            kind: "video",
+            path: "trees/tree-1/media/video/builder-video-pending-1/video.webm",
+            bucket: "bucket-1",
+            signedUrl: "https://example.com/original",
+            token: null,
+            uploadProvider: "cloudflare_r2",
+            configuredBackend: "cloudflare_r2",
+            resolvedUploadBackend: "cloudflare_r2",
+            rolloutState: "cloudflare_rollout_active",
+            forceProxyUpload: false,
+            uploadMode: "direct",
+            variantUploadMode: "none",
+            variantTargets: [],
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/complete")) {
+        return Response.json(
+          {
+            message: "Файл сохранен.",
+            media: {
+              id: "builder-video-pending-1",
+              tree_id: "tree-1",
+              kind: "video",
+              provider: "cloudflare_r2",
+              visibility: "members",
+              storage_path: "trees/tree-1/media/video/builder-video-pending-1/video.webm",
+              external_url: null,
+              title: "family-video.webm",
+              caption: "",
+              mime_type: "video/webm",
+              size_bytes: 3,
+              preview_status: "pending",
+              preview_error: null,
+              preview_attempt_count: 0,
+              preview_claimed_at: null,
+              created_by: "user-1",
+              created_at: "2026-03-28T00:00:00.000Z",
+            }
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/tree/demo-tree/builder-snapshot?includeMedia=1")) {
+        snapshotPolls += 1;
+        return Response.json(
+          {
+            ...snapshot,
+            media: [
+              {
+                id: "builder-video-pending-1",
+                tree_id: "tree-1",
+                kind: "video",
+                provider: "cloudflare_r2",
+                visibility: "members",
+                storage_path: "trees/tree-1/media/video/builder-video-pending-1/video.webm",
+                external_url: null,
+                title: "family-video.webm",
+                caption: "",
+                mime_type: "video/webm",
+                size_bytes: 3,
+                preview_status: snapshotPolls >= 2 ? "ready" : "pending",
+                preview_error: null,
+                preview_attempt_count: 1,
+                preview_claimed_at: null,
+                created_by: "user-1",
+                created_at: "2026-03-28T00:00:00.000Z",
+              }
+            ],
+            personMedia: [
+              {
+                id: "pm-video-1",
+                person_id: "person-1",
+                media_id: "builder-video-pending-1",
+                is_primary: false,
+              }
+            ]
+          },
+          { status: 200 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Видео" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+
+    const input = screen.getByLabelText("Видео с устройства") as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], "family-video.webm", { type: "video/webm" });
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+    fireEvent.change(input);
+
+    const dialog = await screen.findByRole("dialog", { name: "Проверка файлов перед загрузкой" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Сохранить 1" }));
+
+    await waitFor(() => {
+      const thumbImage = document.querySelector('img[src="/api/media/builder-video-pending-1?variant=thumb"]');
+      expect(thumbImage).not.toBeNull();
+      expect(thumbImage).toHaveAttribute("src", "/api/media/builder-video-pending-1?variant=thumb");
+    }, { timeout: 5000 });
   });
 
   it("keeps photo access lightweight with an album shortcut and a single add tile", async () => {

@@ -81,6 +81,26 @@ export function hasCloudflareVideoPreview(
   return asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready";
 }
 
+export type MediaThumbSource =
+  | { kind: "image"; src: string }
+  | { kind: "video"; src: string }
+  | null;
+
+function getOptimisticCloudflareVideoPreviewUrl(
+  asset: Pick<MediaAssetRecord, "id" | "kind" | "provider" | "preview_status">,
+  optimisticVideoPreviewUrls?: Readonly<Record<string, string>>
+) {
+  if (asset.kind !== "video" || asset.provider !== "cloudflare_r2") {
+    return null;
+  }
+
+  if (asset.preview_status !== "pending" && asset.preview_status !== "processing") {
+    return null;
+  }
+
+  return optimisticVideoPreviewUrls?.[asset.id] || null;
+}
+
 export function buildMediaThumbRouteUrl(
   asset: Pick<MediaAssetRecord, "id" | "kind" | "created_at" | "provider" | "preview_status">,
   shareToken?: string | null
@@ -91,6 +111,30 @@ export function buildMediaThumbRouteUrl(
 
   if (hasCloudflareVideoPreview(asset)) {
     return buildMediaRouteUrl(asset.id, { shareToken, variant: "thumb" });
+  }
+
+  return null;
+}
+
+export function resolveMediaThumbSource(
+  asset: Pick<MediaAssetRecord, "id" | "kind" | "created_at" | "provider" | "preview_status">,
+  shareToken?: string | null,
+  optimisticVideoPreviewUrls?: Readonly<Record<string, string>>
+): MediaThumbSource {
+  const thumbUrl = buildMediaThumbRouteUrl(asset, shareToken);
+  if (thumbUrl) {
+    return {
+      kind: "image",
+      src: thumbUrl
+    };
+  }
+
+  const optimisticVideoUrl = getOptimisticCloudflareVideoPreviewUrl(asset, optimisticVideoPreviewUrls);
+  if (optimisticVideoUrl) {
+    return {
+      kind: "video",
+      src: optimisticVideoUrl
+    };
   }
 
   return null;

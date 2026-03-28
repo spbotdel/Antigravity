@@ -233,6 +233,100 @@ describe("tree media archive client", () => {
     expect(albumImage).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
   });
 
+  it("updates a newly uploaded cloudflare video album cover to its generated preview without a full page reload", async () => {
+    let summaryCalls = 0;
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+      if (url.includes("/api/media/archive/upload-intent")) {
+        return Response.json(
+          {
+            mediaId: "archive-video-pending-1",
+            kind: "video",
+            path: "trees/tree-1/media/video/archive-video-pending-1/archive-video.webm",
+            bucket: "bucket-1",
+            signedUrl: "https://example.com/original",
+            token: null,
+            uploadProvider: "cloudflare_r2",
+            configuredBackend: "cloudflare_r2",
+            resolvedUploadBackend: "cloudflare_r2",
+            rolloutState: "cloudflare_rollout_active",
+            forceProxyUpload: false,
+            uploadMode: "direct",
+            variantUploadMode: "none",
+            variantTargets: [],
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/archive/complete")) {
+        return Response.json(
+          {
+            message: "Материал сохранен в семейный архив.",
+            uploaderAlbumId: "album-uploader-1",
+            media: createMediaAsset({
+              id: "archive-video-pending-1",
+              kind: "video",
+              provider: "cloudflare_r2",
+              preview_status: "pending",
+              title: "archive-video.webm",
+              mime_type: "video/webm",
+              storage_path: "trees/tree-1/media/video/archive-video-pending-1/archive-video.webm",
+            }),
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/archive-video-pending-1?summary=1")) {
+        summaryCalls += 1;
+        return Response.json(
+          {
+            media: createMediaAsset({
+              id: "archive-video-pending-1",
+              kind: "video",
+              provider: "cloudflare_r2",
+              preview_status: summaryCalls >= 2 ? "ready" : "pending",
+              title: "archive-video.webm",
+              mime_type: "video/webm",
+              storage_path: "trees/tree-1/media/video/archive-video-pending-1/archive-video.webm",
+            }),
+          },
+          { status: 200 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    renderArchiveClient({
+      initialMode: "video",
+      initialView: "albums",
+      allMedia: [],
+      allAlbums: [],
+      persistedAlbumMediaMap: {},
+      uploaderLabels: [{ userId: "user-1", label: "От Вячеслава" }],
+    });
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], "archive-video.webm", { type: "video/webm" });
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+    fireEvent.change(input);
+
+    const dialog = await screen.findByRole("dialog", { name: "Подготовка загрузки" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Сохранить 1" }));
+
+    await waitFor(() => {
+      const albumImage = document.querySelector(".archive-album-image");
+      expect(albumImage).not.toBeNull();
+      expect(albumImage).toHaveAttribute("src", "/api/media/archive-video-pending-1?variant=thumb");
+    }, { timeout: 5000 });
+  }, 10000);
+
   it("keeps only the top archive action group by default", () => {
     renderArchiveClient();
 

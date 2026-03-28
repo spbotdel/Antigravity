@@ -774,6 +774,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const reviewMediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingMediaUploadsRef = useRef<PendingMediaUploadItem[]>([]);
   const pendingVideoPreviewPollIdsRef = useRef(new Set<string>());
+  const [optimisticVideoPreviewUrls, setOptimisticVideoPreviewUrls] = useState<Record<string, string>>({});
   const selectedPersonIdRef = useRef<string | null>(selectedPersonId);
   const personInfoDraftRef = useRef({ gender: "", birthDate: "", deathDate: "", bio: "" });
   const lastSavedPersonInfoRef = useRef({ gender: "", birthDate: "", deathDate: "", bio: "" });
@@ -1308,8 +1309,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         revokePendingMediaUploadPreview(item);
       }
       pendingVideoPreviewPollIdsRef.current.clear();
+      for (const previewUrl of Object.values(optimisticVideoPreviewUrls)) {
+        URL.revokeObjectURL(previewUrl);
+      }
     };
-  }, []);
+  }, [optimisticVideoPreviewUrls]);
 
   useEffect(() => {
     if (!isClientReady) {
@@ -1709,6 +1713,33 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     return payload;
   }
 
+  function storeOptimisticVideoPreview(mediaId: string, previewUrl: string) {
+    setOptimisticVideoPreviewUrls((current) => {
+      if (current[mediaId] === previewUrl) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [mediaId]: previewUrl
+      };
+    });
+  }
+
+  function clearOptimisticVideoPreview(mediaId: string) {
+    setOptimisticVideoPreviewUrls((current) => {
+      const previewUrl = current[mediaId];
+      if (!previewUrl) {
+        return current;
+      }
+
+      URL.revokeObjectURL(previewUrl);
+      const next = { ...current };
+      delete next[mediaId];
+      return next;
+    });
+  }
+
   async function pollBuilderVideoPreviewUntilReady(mediaId: string) {
     if (pendingVideoPreviewPollIdsRef.current.has(mediaId)) {
       return;
@@ -1744,6 +1775,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         }));
 
         if (refreshedMedia.preview_status !== "pending" && refreshedMedia.preview_status !== "processing") {
+          clearOptimisticVideoPreview(mediaId);
           break;
         }
       }
@@ -1832,6 +1864,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     const deletedMediaIds = new Set(mediaIds);
     if (!deletedMediaIds.size) {
       return;
+    }
+
+    for (const mediaId of deletedMediaIds) {
+      clearOptimisticVideoPreview(mediaId);
     }
 
     updateSnapshot((prev) => ({
@@ -2266,9 +2302,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     return null;
   }
 
-  function clearPendingMediaUploads() {
+  function clearPendingMediaUploads(options?: { preservePreviewUrls?: boolean }) {
     for (const item of pendingMediaUploadsRef.current) {
-      revokePendingMediaUploadPreview(item);
+      if (!options?.preservePreviewUrls) {
+        revokePendingMediaUploadPreview(item);
+      }
     }
 
     pendingMediaUploadsRef.current = [];
@@ -2501,24 +2539,27 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     event.currentTarget.form?.requestSubmit();
   }
 
-  async function uploadSelectedMediaFiles(files: File[], formValues: { visibility: string; caption: string }) {
+  async function uploadSelectedMediaFiles(items: PendingMediaUploadItem[], formValues: { visibility: string; caption: string }) {
     if (!selectedPerson) {
       setError("Сначала выберите человека, чтобы привязать к нему медиа.");
       return;
     }
 
-    const uploadQueue = files.map((file) => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      kind: detectMediaUploadKind(file),
-      sizeBytes: file.size,
-      status: "queued" as const,
-      uploadedBytes: 0,
-      progressPercent: 0,
-      speedBytesPerSecond: null,
-      remainingMs: null,
-      message: null
-    }));
+    const uploadQueue = items.map((item) => {
+      const file = item.file;
+      return {
+        id: crypto.randomUUID(),
+        name: file.name,
+        kind: detectMediaUploadKind(file),
+        sizeBytes: file.size,
+        status: "queued" as const,
+        uploadedBytes: 0,
+        progressPercent: 0,
+        speedBytesPerSecond: null,
+        remainingMs: null,
+        message: null
+      };
+    });
 
     setError(null);
     setStatus(null);
@@ -2530,8 +2571,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     const failedFiles: string[] = [];
 
     try {
-      for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
+      for (let index = 0; index < items.length; index += 1) {
+        const pendingItem = items[index];
+        const file = pendingItem.file;
         const queueItem = uploadQueue[index];
 
         try {
@@ -2594,8 +2636,16 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               ? completePayload.media as TreeSnapshot["media"][number]
               : null;
 
-          if (createdMedia?.kind === "video" && createdMedia.provider === "cloudflare_r2" && createdMedia.preview_status === "pending") {
+          if (
+            createdMedia?.kind === "video" &&
+            createdMedia.provider === "cloudflare_r2" &&
+            (createdMedia.preview_status === "pending" || createdMedia.preview_status === "processing") &&
+            pendingItem.previewUrl
+          ) {
+            storeOptimisticVideoPreview(createdMedia.id, pendingItem.previewUrl);
             void pollBuilderVideoPreviewUntilReady(createdMedia.id);
+          } else if (pendingItem.previewUrl) {
+            revokePendingMediaUploadPreview(pendingItem);
           }
 
           uploadedCount += 1;
@@ -2621,7 +2671,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       if (uploadedCount > 0) {
         setStatus(
           failedFiles.length
-            ? `Загружено ${uploadedCount} из ${files.length} файлов.`
+            ? `Загружено ${uploadedCount} из ${items.length} файлов.`
             : `Загружено ${uploadedCount} ${uploadedCount === 1 ? "файл" : uploadedCount < 5 ? "файла" : "файлов"}.`
         );
       }
@@ -2640,11 +2690,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       return;
     }
 
-    const files = pendingMediaUploadsRef.current.map((item) => item.file);
+    const uploads = [...pendingMediaUploadsRef.current];
     const formValues = getMediaUploadFormValues();
 
-    clearPendingMediaUploads();
-    await uploadSelectedMediaFiles(files, formValues);
+    clearPendingMediaUploads({ preservePreviewUrls: true });
+    await uploadSelectedMediaFiles(uploads, formValues);
   }
 
   function openExpandedGallery(mode: "photo" | "video") {
@@ -2774,6 +2824,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               <div className="builder-stage-gallery-shell">
                 <PersonMediaGallery
                   media={expandedGalleryMode === "photo" ? selectedPhotoMedia : selectedVideoMedia}
+                  optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                   emptyTitle={expandedGalleryMode === "photo" ? "Фотографий пока нет" : "Видео пока нет"}
                   emptyMessage={expandedGalleryMode === "photo" ? "Для этого человека пока нет фотографий." : "Для этого человека пока нет видео."}
                   avatarMediaId={expandedGalleryMode === "photo" ? selectedPrimaryPhotoMediaId : null}
@@ -3295,6 +3346,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       ) : null}
                       <PersonMediaGallery
                         media={selectedPhotoMedia}
+                        optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                         emptyTitle="Фотографий пока нет"
                         emptyMessage="Для этого человека пока нет фотографий."
                         avatarMediaId={selectedPrimaryPhotoMediaId}
@@ -3338,6 +3390,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       />
                       <PersonMediaGallery
                         media={selectedVideoMedia}
+                        optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                         emptyTitle="Видео пока нет"
                         emptyMessage="Для этого человека пока нет видео."
                         showStickyFooter={false}

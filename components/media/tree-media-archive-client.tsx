@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SelectField } from "@/components/ui/select-field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildMediaThumbRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId } from "@/lib/tree/display";
+import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId, resolveMediaThumbSource } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
 import { LockIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
@@ -258,10 +258,6 @@ function buildPersistedArchiveAlbumSummaries(input: {
     .filter(Boolean) as AlbumSummary[];
 }
 
-function buildThumbUrl(asset: MediaAssetRecord, shareToken?: string | null) {
-  return buildMediaThumbRouteUrl(asset, shareToken);
-}
-
 function buildStageUrl(asset: MediaAssetRecord, shareToken?: string | null, expanded = false) {
   if (asset.kind === "photo") {
     return buildPhotoPreviewRouteUrl(asset, expanded ? "medium" : "small", shareToken);
@@ -327,19 +323,6 @@ function getArchiveOpenLabel(asset: MediaAssetRecord) {
 
 function getArchiveMediaSourceLabel(asset: MediaAssetRecord) {
   return asset.provider === "yandex_disk" ? "По ссылке" : "Файл";
-}
-
-function buildAlbumCoverUrl(coverMediaId: string | null, media: MediaAssetRecord[], shareToken?: string | null) {
-  if (!coverMediaId) {
-    return null;
-  }
-
-  const cover = media.find((asset) => asset.id === coverMediaId);
-  if (!cover) {
-    return null;
-  }
-
-  return buildThumbUrl(cover, shareToken);
 }
 
 function renderArchivePlaceholder(kind: MediaAssetRecord["kind"] | "file") {
@@ -442,6 +425,7 @@ export function TreeMediaArchiveClient({
   const pendingVideoPreviewPollIdsRef = useRef(new Set<string>());
   const uploaderLabelsById = useMemo(() => new Map(uploaderLabels.map((item) => [item.userId, item.label] as const)), [uploaderLabels]);
   const [albumMediaMap, setAlbumMediaMap] = useState<Record<string, MediaAssetRecord[]>>(persistedAlbumMediaMap);
+  const [optimisticVideoPreviewUrls, setOptimisticVideoPreviewUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setIsHydrated(true);
@@ -469,8 +453,11 @@ export function TreeMediaArchiveClient({
         }
       }
       pendingVideoPreviewPollIdsRef.current.clear();
+      for (const previewUrl of Object.values(optimisticVideoPreviewUrls)) {
+        URL.revokeObjectURL(previewUrl);
+      }
     };
-  }, []);
+  }, [optimisticVideoPreviewUrls]);
 
   useEffect(() => {
     if (!isMediaViewerOpen) {
@@ -831,6 +818,33 @@ export function TreeMediaArchiveClient({
           ? `Готово ${activeUploadCompletedCount} из ${activeUploads.length}.`
           : null;
 
+  function storeOptimisticVideoPreview(mediaId: string, previewUrl: string) {
+    setOptimisticVideoPreviewUrls((current) => {
+      if (current[mediaId] === previewUrl) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [mediaId]: previewUrl
+      };
+    });
+  }
+
+  function clearOptimisticVideoPreview(mediaId: string) {
+    setOptimisticVideoPreviewUrls((current) => {
+      const previewUrl = current[mediaId];
+      if (!previewUrl) {
+        return current;
+      }
+
+      URL.revokeObjectURL(previewUrl);
+      const next = { ...current };
+      delete next[mediaId];
+      return next;
+    });
+  }
+
   useEffect(() => {
     if (!viewerMedia.length) {
       if (isMediaViewerOpen) {
@@ -985,6 +999,9 @@ export function TreeMediaArchiveClient({
       )
     );
     setViewerMediaIds((current) => current.filter((mediaId) => !deletedMediaIds.has(mediaId)));
+    for (const mediaId of deletedMediaIds) {
+      clearOptimisticVideoPreview(mediaId);
+    }
   }
 
   async function requestArchiveMediaDelete(mediaId: string) {
@@ -1168,7 +1185,7 @@ export function TreeMediaArchiveClient({
   }
 
   function renderArchiveTile(asset: MediaAssetRecord, items: MediaAssetRecord[]) {
-    const imageUrl = isHydrated ? buildThumbUrl(asset, shareToken) : null;
+    const thumbSource = isHydrated ? resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls) : null;
     const downloadHref = buildDownloadUrl(asset, shareToken);
     const albumOptions = getArchiveAlbumOptionsForAsset(asset);
     const isSelected = selectedArchiveMediaIds.has(asset.id);
@@ -1305,8 +1322,10 @@ export function TreeMediaArchiveClient({
             openMediaViewer(asset.id, items);
           }}
         >
-          {imageUrl ? (
-            <img src={imageUrl} alt="" loading="lazy" className="archive-tile-image" />
+          {thumbSource?.kind === "image" ? (
+            <img src={thumbSource.src} alt="" loading="lazy" className="archive-tile-image" />
+          ) : thumbSource?.kind === "video" ? (
+            <video src={thumbSource.src} className="archive-tile-video" muted playsInline preload="metadata" />
           ) : (
             renderArchivePlaceholder(asset.kind)
           )}
@@ -1466,6 +1485,7 @@ export function TreeMediaArchiveClient({
         );
 
         if (refreshedMedia.preview_status !== "pending" && refreshedMedia.preview_status !== "processing") {
+          clearOptimisticVideoPreview(mediaId);
           break;
         }
       }
@@ -1710,8 +1730,16 @@ export function TreeMediaArchiveClient({
       );
       setError(null);
 
-      if (createdMedia.kind === "video" && createdMedia.provider === "cloudflare_r2" && createdMedia.preview_status === "pending") {
+      if (
+        createdMedia.kind === "video" &&
+        createdMedia.provider === "cloudflare_r2" &&
+        (createdMedia.preview_status === "pending" || createdMedia.preview_status === "processing") &&
+        uploadItem.previewUrl
+      ) {
+        storeOptimisticVideoPreview(createdMedia.id, uploadItem.previewUrl);
         void pollArchiveVideoPreviewUntilReady(createdMedia.id);
+      } else if (uploadItem.previewUrl) {
+        URL.revokeObjectURL(uploadItem.previewUrl);
       }
     }
 
@@ -1821,11 +1849,6 @@ export function TreeMediaArchiveClient({
           message: "Ждет очереди"
         }))
       );
-      for (const item of pendingUploads) {
-        if (item.previewUrl) {
-          URL.revokeObjectURL(item.previewUrl);
-        }
-      }
       setPendingUploads([]);
       setReviewAlbumId("");
       setReviewVisibility("members");
@@ -2078,7 +2101,8 @@ export function TreeMediaArchiveClient({
       ) : currentAlbums.length ? (
         <div className="archive-album-grid">
           {currentAlbums.map((album) => {
-            const coverUrl = buildAlbumCoverUrl(album.coverMediaId, archiveMedia, shareToken);
+            const cover = archiveMedia.find((asset) => asset.id === album.coverMediaId) || null;
+            const coverSource = cover ? resolveMediaThumbSource(cover, shareToken, optimisticVideoPreviewUrls) : null;
             const isAlbumActionsOpen = openArchiveAlbumActionsId === album.id;
 
             return (
@@ -2135,8 +2159,10 @@ export function TreeMediaArchiveClient({
                         </PopoverContent>
                       </Popover>
                     ) : null}
-                    {coverUrl ? (
-                      <img src={coverUrl} alt="" loading="lazy" className="archive-album-image" />
+                    {coverSource?.kind === "image" ? (
+                      <img src={coverSource.src} alt="" loading="lazy" className="archive-album-image" />
+                    ) : coverSource?.kind === "video" ? (
+                      <video src={coverSource.src} className="archive-album-image archive-tile-video" muted playsInline preload="metadata" />
                     ) : (
                       renderArchivePlaceholder(mode === "video" ? "video" : "photo")
                     )}
@@ -2262,7 +2288,7 @@ export function TreeMediaArchiveClient({
             {viewerMedia.length > 1 ? (
               <div className="archive-viewer-strip">
                 {viewerMedia.map((asset) => {
-                  const imageUrl = buildThumbUrl(asset, shareToken);
+                  const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
 
                   return (
                     <button
@@ -2271,8 +2297,10 @@ export function TreeMediaArchiveClient({
                       className={`archive-viewer-thumb${asset.id === activeViewerAsset.id ? " archive-viewer-thumb-active" : ""}`}
                       onClick={() => setViewerMediaId(asset.id)}
                     >
-                      {imageUrl ? (
-                        <img src={imageUrl} alt="" loading="lazy" className="archive-tile-image" />
+                      {thumbSource?.kind === "image" ? (
+                        <img src={thumbSource.src} alt="" loading="lazy" className="archive-tile-image" />
+                      ) : thumbSource?.kind === "video" ? (
+                        <video src={thumbSource.src} className="archive-tile-video" muted playsInline preload="metadata" />
                       ) : (
                         renderArchivePlaceholder(asset.kind)
                       )}
