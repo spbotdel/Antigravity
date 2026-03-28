@@ -1,11 +1,15 @@
 import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
+import fsSync from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import ffmpegPath from "ffmpeg-static";
+import sharp from "sharp";
 
 import type {
   AvatarCropValue,
@@ -36,7 +40,7 @@ import type {
 import { getAvatarCropFromRelation, normalizeAvatarCrop } from "@/lib/avatar-crop";
 import { buildAuditEntryViews } from "@/lib/audit-presenter";
 import { buildViewerActor, canSeeMedia, hasRequiredRole, normalizeMembershipRole, resolveTreeRole } from "@/lib/permissions";
-import { getBaseUrl, getFileBackedMediaProvider, getObjectStorageEnv, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, getResendEmailEnv, getShareLinkTokenEncryptionSecret, getStorageBucket, isObjectStorageLikeBackend, isObjectStorageMediaProvider, resolveMediaUploadPlan, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
+import { getBaseUrl, getCloudflareR2Env, getFileBackedMediaProvider, getObjectStorageEnv, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, getResendEmailEnv, getShareLinkTokenEncryptionSecret, getStorageBucket, isObjectStorageLikeBackend, isObjectStorageMediaProvider, resolveMediaUploadPlan, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson, fetchSupabaseAdminRestJsonWithHeaders, parsePowerShellJsonStdout } from "@/lib/supabase/admin-rest";
 import { getCurrentUser, requireAuthenticatedUserId } from "@/lib/server/auth";
@@ -47,10 +51,16 @@ import { shouldUsePhotoVariants } from "@/lib/tree/display";
 const admin = () => createAdminSupabaseClient();
 const objectStorageClients = new Map<string, S3Client>();
 const execFileAsync = promisify(execFile);
+const runtimeRequire = createRequire(import.meta.url);
 const OBJECT_STORAGE_HTTP_MAX_BUFFER = 1024 * 1024 * 4;
 const SIGNED_HTTP_TIMEOUT_MS = 15000;
 const SIGNED_HTTP_FALLBACK_ERROR_CODES = new Set(["UND_ERR_CONNECT_TIMEOUT", "ETIMEDOUT", "ECONNRESET", "EAI_AGAIN", "ENOTFOUND"]);
 const PHOTO_VARIANT_NAMES: MediaVariantName[] = ["thumb", "small", "medium"];
+const CLOUDFLARE_VIDEO_PREVIEW_VARIANT = "thumb" as const;
+const CLOUDFLARE_VIDEO_PREVIEW_FRAME_AT_SECONDS = 1;
+const CLOUDFLARE_VIDEO_PREVIEW_MAX_ATTEMPTS = 3;
+const CLOUDFLARE_VIDEO_PREVIEW_STALE_AFTER_SECONDS = 10 * 60;
+const CLOUDFLARE_VIDEO_PREVIEW_BATCH_LIMIT = 3;
 
 const REPOSITORY_NETWORK_ERROR_MARKERS = ["SUPABASE_UNAVAILABLE", "fetch failed", "connect timeout", "timed out", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"];
 const SHARE_LINKS_SCHEMA_CACHE_MARKERS = ["tree_share_links", "schema cache"];
@@ -327,6 +337,17 @@ async function fetchAdminRows<T>(pathWithQuery: string, fallbackMessage: string)
 async function fetchAdminFirst<T>(pathWithQuery: string, fallbackMessage: string) {
   const rows = await fetchAdminRows<T>(`${pathWithQuery}${pathWithQuery.includes("?") ? "&" : "?"}limit=1`, fallbackMessage);
   return rows[0] ?? null;
+}
+
+async function fetchAdminRpc<T>(functionName: string, body: Record<string, unknown>, fallbackMessage: string) {
+  try {
+    return await fetchSupabaseAdminRestJson<T>(`rpc/${functionName}`, {
+      method: "POST",
+      body
+    });
+  } catch (error) {
+    throw toRepositoryReadError(error, fallbackMessage);
+  }
 }
 
 async function mutateAdminRows<T>(pathWithQuery: string, method: "POST" | "PATCH" | "DELETE", body: unknown, fallbackMessage: string) {
@@ -611,6 +632,116 @@ function buildPhotoVariantStoragePath(storagePath: string, variant: MediaVariant
   const lastSlashIndex = storagePath.lastIndexOf("/");
   const baseDirectory = lastSlashIndex >= 0 ? storagePath.slice(0, lastSlashIndex) : storagePath;
   return `${baseDirectory}/variants/${variant}.webp`;
+}
+
+function buildCloudflareVideoPreviewStoragePath(storagePath: string) {
+  const lastSlashIndex = storagePath.lastIndexOf("/");
+  const baseDirectory = lastSlashIndex >= 0 ? storagePath.slice(0, lastSlashIndex) : storagePath;
+  return `${baseDirectory}/variants/${CLOUDFLARE_VIDEO_PREVIEW_VARIANT}.webp`;
+}
+
+function getExpectedFfmpegExecutableName() {
+  return process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+}
+
+function normalizeCandidatePath(candidatePath: string | null | undefined) {
+  if (!candidatePath) {
+    return null;
+  }
+
+  const trimmed = candidatePath.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return path.normalize(trimmed);
+}
+
+function resolveFfmpegExecutablePath() {
+  const executableName = getExpectedFfmpegExecutableName();
+  const candidates = new Set<string>();
+
+  const envPath = normalizeCandidatePath(process.env.FFMPEG_BIN);
+  if (envPath) {
+    candidates.add(envPath);
+  }
+
+  const staticImportPath = normalizeCandidatePath(ffmpegPath);
+  if (staticImportPath) {
+    candidates.add(staticImportPath);
+  }
+
+  try {
+    const packageJsonPath = runtimeRequire.resolve("ffmpeg-static/package.json");
+    candidates.add(path.join(path.dirname(packageJsonPath), executableName));
+  } catch {}
+
+  candidates.add(path.join(process.cwd(), "node_modules", "ffmpeg-static", executableName));
+  candidates.add(path.join(process.cwd(), ".next", "server", "node_modules", "ffmpeg-static", executableName));
+  candidates.add(path.join(process.cwd(), ".next", "standalone", "node_modules", "ffmpeg-static", executableName));
+
+  for (const candidate of candidates) {
+    if (fsSync.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new AppError(
+    500,
+    `FFmpeg не найден в runtime. Проверены пути: ${[...candidates].join(", ")}`
+  );
+}
+
+function isCloudflareVideoPreviewEligible(
+  media: Pick<MediaAssetRecord, "kind" | "provider" | "storage_path">
+) {
+  return media.kind === "video" && media.provider === "cloudflare_r2" && Boolean(media.storage_path);
+}
+
+async function generateCloudflareVideoPreviewBuffer(sourceUrl: string) {
+  const resolvedFfmpegPath = resolveFfmpegExecutablePath();
+
+  const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "ag-video-preview-"));
+  const tempFramePath = path.join(tempDirectory, "frame.jpg");
+
+  try {
+    await execFileAsync(
+      resolvedFfmpegPath,
+      [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-ss",
+        String(CLOUDFLARE_VIDEO_PREVIEW_FRAME_AT_SECONDS),
+        "-i",
+        sourceUrl,
+        "-frames:v",
+        "1",
+        tempFramePath
+      ],
+      {
+        windowsHide: true,
+        timeout: 90_000,
+        maxBuffer: 1024 * 1024 * 4
+      }
+    );
+
+    const previewBuffer = await sharp(tempFramePath)
+      .rotate()
+      .resize({
+        width: 240,
+        height: 240,
+        fit: "cover",
+        withoutEnlargement: true
+      })
+      .webp({ quality: 72 })
+      .toBuffer();
+
+    return previewBuffer;
+  } finally {
+    await fs.rm(tempDirectory, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 function buildMediaDownloadFilename(media: Pick<MediaAssetRecord, "id" | "title" | "storage_path" | "external_url">) {
@@ -2600,6 +2731,157 @@ export async function createArchiveMediaUploadTarget(input: {
   return buildMediaUploadTarget(input);
 }
 
+async function claimCloudflareVideoPreviewJobs(input?: {
+  limit?: number;
+  mediaIds?: string[];
+  forceRetry?: boolean;
+}) {
+  const rows = await fetchAdminRpc<MediaAssetRecord[]>(
+    "claim_cloudflare_video_preview_jobs",
+    {
+      limit_count: input?.limit ?? CLOUDFLARE_VIDEO_PREVIEW_BATCH_LIMIT,
+      media_ids: input?.mediaIds?.length ? input.mediaIds : null,
+      force_retry: Boolean(input?.forceRetry),
+      stale_after_seconds: CLOUDFLARE_VIDEO_PREVIEW_STALE_AFTER_SECONDS
+    },
+    "Не удалось получить задания для preview видео."
+  );
+
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function updateCloudflareVideoPreviewStatus(
+  mediaId: string,
+  patch: Partial<
+    Pick<
+      MediaAssetRecord,
+      "preview_status" | "preview_error" | "preview_claimed_at"
+    >
+  >
+) {
+  const updated = await mutateAdminFirst<MediaAssetRecord>(
+    `media_assets?id=eq.${encodeURIComponent(mediaId)}&select=*`,
+    "PATCH",
+    patch,
+    "Не удалось обновить статус preview видео."
+  );
+
+  if (!updated) {
+    throw new AppError(400, "Не удалось обновить статус preview видео.");
+  }
+
+  return updated;
+}
+
+async function upsertCloudflareVideoPreviewVariant(mediaId: string, storagePath: string) {
+  const { data } = await fetchSupabaseAdminRestJsonWithHeaders<MediaAssetVariantRecord[]>(
+    "media_asset_variants?on_conflict=media_id,variant",
+    {
+      method: "POST",
+      body: [
+        {
+          media_id: mediaId,
+          variant: CLOUDFLARE_VIDEO_PREVIEW_VARIANT,
+          storage_path: storagePath
+        }
+      ],
+      headers: {
+        prefer: "resolution=merge-duplicates,return=representation"
+      }
+    }
+  );
+
+  return Array.isArray(data) ? data[0] ?? null : null;
+}
+
+async function processSingleCloudflareVideoPreview(media: MediaAssetRecord) {
+  if (!isCloudflareVideoPreviewEligible(media) || !media.storage_path) {
+    return {
+      mediaId: media.id,
+      status: "skipped" as const
+    };
+  }
+
+  const sourceUrl = await createObjectStorageSignedReadUrl(media.storage_path, getCloudflareR2Env());
+  const previewBuffer = await generateCloudflareVideoPreviewBuffer(sourceUrl);
+  const previewStoragePath = buildCloudflareVideoPreviewStoragePath(media.storage_path);
+  const uploadTarget = await createObjectStorageSignedUploadUrl(previewStoragePath, "image/webp", getCloudflareR2Env());
+
+  await uploadFileToSignedUrl({
+    signedUrl: uploadTarget.signedUrl,
+    contentType: "image/webp",
+    fileBuffer: previewBuffer
+  });
+
+  await upsertCloudflareVideoPreviewVariant(media.id, previewStoragePath);
+  await updateCloudflareVideoPreviewStatus(media.id, {
+    preview_status: "ready",
+    preview_error: null,
+    preview_claimed_at: null
+  });
+
+  return {
+    mediaId: media.id,
+    status: "ready" as const,
+    storagePath: previewStoragePath
+  };
+}
+
+export async function processCloudflareVideoPreviewJobs(input?: {
+  limit?: number;
+  mediaIds?: string[];
+  forceRetry?: boolean;
+}) {
+  const claimedJobs = await claimCloudflareVideoPreviewJobs(input);
+  const results: Array<{
+    mediaId: string;
+    status: "ready" | "failed" | "skipped";
+    error?: string | null;
+  }> = [];
+
+  for (const media of claimedJobs) {
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= CLOUDFLARE_VIDEO_PREVIEW_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const result = await processSingleCloudflareVideoPreview(media);
+        results.push({
+          mediaId: result.mediaId,
+          status: result.status
+        });
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
+
+        if (attempt < CLOUDFLARE_VIDEO_PREVIEW_MAX_ATTEMPTS) {
+          const waitMs = attempt === 1 ? 2_000 : 10_000;
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+      }
+    }
+
+    if (lastError) {
+      const message = lastError instanceof Error ? lastError.message : "Не удалось подготовить preview видео.";
+      await updateCloudflareVideoPreviewStatus(media.id, {
+        preview_status: "failed",
+        preview_error: message.slice(0, 400),
+        preview_claimed_at: null
+      });
+      results.push({
+        mediaId: media.id,
+        status: "failed",
+        error: message
+      });
+    }
+  }
+
+  return {
+    claimedCount: claimedJobs.length,
+    results
+  };
+}
+
 export async function completePhotoUpload(input: {
   treeId: string;
   personId: string;
@@ -2719,6 +3001,7 @@ export async function completeMediaUpload(input: {
   const externalUrl = isExternalVideoCompletionInput(input) ? input.externalUrl : null;
   const mimeType = isExternalVideoCompletionInput(input) ? null : input.mimeType;
   const sizeBytes = isExternalVideoCompletionInput(input) ? null : input.sizeBytes || null;
+  const previewStatus = kind === "video" && provider === "cloudflare_r2" && storagePath ? "pending" : null;
 
   const data = await mutateAdminFirst<MediaAssetRecord>(
     "media_assets",
@@ -2735,6 +3018,10 @@ export async function completeMediaUpload(input: {
       caption: input.caption || null,
       mime_type: mimeType,
       size_bytes: sizeBytes,
+      preview_status: previewStatus,
+      preview_error: null,
+      preview_attempt_count: 0,
+      preview_claimed_at: null,
       created_by: userId
     },
     "Не удалось завершить загрузку файла."
@@ -2807,6 +3094,7 @@ export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMe
   const externalUrl = isExternalArchiveVideoCompletionInput(input) ? input.externalUrl : null;
   const mimeType = isExternalArchiveVideoCompletionInput(input) ? null : input.mimeType;
   const sizeBytes = isExternalArchiveVideoCompletionInput(input) ? null : input.sizeBytes || null;
+  const previewStatus = kind === "video" && provider === "cloudflare_r2" && storagePath ? "pending" : null;
 
   const data = await mutateAdminFirst<MediaAssetRecord>(
     "media_assets",
@@ -2823,6 +3111,10 @@ export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMe
       caption: input.caption || null,
       mime_type: mimeType,
       size_bytes: sizeBytes,
+      preview_status: previewStatus,
+      preview_error: null,
+      preview_attempt_count: 0,
+      preview_claimed_at: null,
       created_by: userId
     },
     "Не удалось сохранить файл в семейный архив."
@@ -3039,7 +3331,7 @@ export async function resolveMediaAccess(
   }
 
   let resolvedVariantPath: string | null = null;
-  if (variant && media.kind === "photo" && shouldUsePhotoVariants(media.created_at)) {
+  if (variant) {
     try {
       const mediaVariant = await fetchAdminFirst<MediaAssetVariantRecord>(
         `media_asset_variants?select=*&media_id=eq.${encodeURIComponent(mediaId)}&variant=eq.${encodeURIComponent(variant)}`,
@@ -3054,8 +3346,12 @@ export async function resolveMediaAccess(
       }
     }
 
-    if (!resolvedVariantPath) {
+    if (!resolvedVariantPath && media.kind === "photo" && shouldUsePhotoVariants(media.created_at)) {
       resolvedVariantPath = buildPhotoVariantStoragePath(media.storage_path, variant);
+    }
+
+    if (!resolvedVariantPath && media.kind === "video" && media.provider === "cloudflare_r2" && variant === CLOUDFLARE_VIDEO_PREVIEW_VARIANT) {
+      throw new AppError(404, "Preview видео пока недоступен.");
     }
   }
 

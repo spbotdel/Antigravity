@@ -75,6 +75,27 @@ export function buildPhotoPreviewRouteUrl(
   return buildMediaRouteUrl(asset.id, { shareToken });
 }
 
+export function hasCloudflareVideoPreview(
+  asset: Pick<MediaAssetRecord, "kind" | "provider" | "preview_status">
+) {
+  return asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready";
+}
+
+export function buildMediaThumbRouteUrl(
+  asset: Pick<MediaAssetRecord, "id" | "kind" | "created_at" | "provider" | "preview_status">,
+  shareToken?: string | null
+) {
+  if (asset.kind === "photo") {
+    return buildPhotoPreviewRouteUrl(asset, "thumb", shareToken);
+  }
+
+  if (hasCloudflareVideoPreview(asset)) {
+    return buildMediaRouteUrl(asset.id, { shareToken, variant: "thumb" });
+  }
+
+  return null;
+}
+
 export function buildUploaderAlbumSyntheticId(userId: string, kind: TreeMediaAlbumMediaKind) {
   return `uploader-${userId}-${kind}`;
 }

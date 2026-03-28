@@ -29,10 +29,14 @@ function createMediaAsset(overrides: Partial<MediaAssetRecord>): MediaAssetRecor
     caption: "Default caption",
     mime_type: "image/jpeg",
     size_bytes: 1024,
+    preview_status: null,
+    preview_error: null,
+    preview_attempt_count: 0,
+    preview_claimed_at: null,
     created_by: "user-1",
     created_at: "2026-03-09T00:00:00.000Z",
     ...overrides,
-  };
+  } as MediaAssetRecord;
 }
 
 function renderArchiveClient(options?: {
@@ -186,6 +190,47 @@ describe("tree media archive client", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное фото" });
     expect(within(dialog).getByRole("img", { name: "Архивное фото" })).toHaveAttribute("src", "/api/media/media-photo?variant=medium");
+  });
+
+  it("uses generated thumbs for ready cloudflare video tiles and video album covers", async () => {
+    const video = createMediaAsset({
+      id: "media-video",
+      kind: "video",
+      provider: "cloudflare_r2",
+      preview_status: "ready",
+      title: "Архивное видео",
+      mime_type: "video/mp4",
+      storage_path: "trees/tree-1/media/video/media-video/archive-video.mp4",
+    });
+
+    renderArchiveClient({
+      initialMode: "video",
+      allAlbums: [
+        {
+          id: "album-video",
+          title: "Видеоархив",
+          description: null,
+          kind: "video",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-video",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-video": [video],
+      },
+      allMedia: [video],
+    });
+
+    const tileImage = document.querySelector(".archive-tile-image");
+    expect(tileImage).not.toBeNull();
+    expect(tileImage).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    const albumImage = document.querySelector(".archive-album-image");
+    expect(albumImage).not.toBeNull();
+    expect(albumImage).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
   });
 
   it("keeps only the top archive action group by default", () => {

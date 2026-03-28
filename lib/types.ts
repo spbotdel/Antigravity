@@ -6,6 +6,7 @@ export type MediaProvider = "supabase_storage" | "object_storage" | "cloudflare_
 export type MediaStorageBackend = "supabase" | "object_storage" | "cloudflare_r2";
 export type MediaUploadRolloutState = "steady_state" | "cloudflare_rollout_gated" | "cloudflare_rollout_active";
 export type MediaVariantName = "thumb" | "small" | "medium";
+export type MediaPreviewStatus = "pending" | "processing" | "ready" | "failed";
 export type TreeMediaAlbumKind = "manual" | "uploader";
 export type TreeMediaAlbumMediaKind = Extract<MediaKind, "photo" | "video">;
 export type UploadMode = "direct" | "proxy";
@@ -90,6 +91,10 @@ export interface MediaAssetRecord {
   caption: string | null;
   mime_type: string | null;
   size_bytes: number | null;
+  preview_status: MediaPreviewStatus | null;
+  preview_error: string | null;
+  preview_attempt_count: number;
+  preview_claimed_at: string | null;
   created_by: string | null;
   created_at: string;
 }

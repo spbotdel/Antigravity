@@ -14,7 +14,7 @@ import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react";
 import { type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl } from "@/lib/tree/display";
+import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildMediaThumbRouteUrl, buildPhotoPreviewRouteUrl } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import type { TreeSnapshot } from "@/lib/types";
 
@@ -186,9 +186,8 @@ function MediaThumb({
     onDelete: () => void;
   };
 }) {
-  const mediaUrl = isPhotoAsset(asset)
-    ? buildPhotoPreviewRouteUrl(asset, "thumb", shareToken)
-    : buildMediaRouteUrl(asset.id, { shareToken });
+  const thumbUrl = buildMediaThumbRouteUrl(asset, shareToken);
+  const mediaUrl = thumbUrl || buildMediaRouteUrl(asset.id, { shareToken });
 
   const thumbButton = (
     <button
@@ -200,7 +199,7 @@ function MediaThumb({
       onClick={onSelect}
     >
       <span className="person-media-thumb-visual">
-        {isPhotoAsset(asset) ? (
+        {thumbUrl ? (
           <img src={mediaUrl} alt="" loading="lazy" />
         ) : asset.kind === "video" ? (
           <span

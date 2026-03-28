@@ -134,3 +134,9 @@ export const setPrimaryPersonMediaSchema = z.object({
   avatarCrop: avatarCropSchema.optional()
 });
 
+export const processVideoPreviewJobsSchema = z.object({
+  limit: z.number().int().min(1).max(10).optional(),
+  mediaIds: z.array(z.string().uuid()).max(25).optional(),
+  forceRetry: z.boolean().optional()
+});
+

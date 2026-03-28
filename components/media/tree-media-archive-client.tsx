@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SelectField } from "@/components/ui/select-field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId } from "@/lib/tree/display";
+import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildMediaThumbRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
 import { LockIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
@@ -258,8 +258,8 @@ function buildPersistedArchiveAlbumSummaries(input: {
     .filter(Boolean) as AlbumSummary[];
 }
 
-function buildPhotoUrl(asset: MediaAssetRecord, shareToken?: string | null) {
-  return buildPhotoPreviewRouteUrl(asset, "thumb", shareToken);
+function buildThumbUrl(asset: MediaAssetRecord, shareToken?: string | null) {
+  return buildMediaThumbRouteUrl(asset, shareToken);
 }
 
 function buildStageUrl(asset: MediaAssetRecord, shareToken?: string | null, expanded = false) {
@@ -335,11 +335,11 @@ function buildAlbumCoverUrl(coverMediaId: string | null, media: MediaAssetRecord
   }
 
   const cover = media.find((asset) => asset.id === coverMediaId);
-  if (!cover || cover.kind !== "photo") {
+  if (!cover) {
     return null;
   }
 
-  return buildPhotoUrl(cover, shareToken);
+  return buildThumbUrl(cover, shareToken);
 }
 
 function renderArchivePlaceholder(kind: MediaAssetRecord["kind"] | "file") {
@@ -1166,7 +1166,7 @@ export function TreeMediaArchiveClient({
   }
 
   function renderArchiveTile(asset: MediaAssetRecord, items: MediaAssetRecord[]) {
-    const imageUrl = asset.kind === "photo" && isHydrated ? buildPhotoUrl(asset, shareToken) : null;
+    const imageUrl = isHydrated ? buildThumbUrl(asset, shareToken) : null;
     const downloadHref = buildDownloadUrl(asset, shareToken);
     const albumOptions = getArchiveAlbumOptionsForAsset(asset);
     const isSelected = selectedArchiveMediaIds.has(asset.id);
@@ -2208,7 +2208,7 @@ export function TreeMediaArchiveClient({
             {viewerMedia.length > 1 ? (
               <div className="archive-viewer-strip">
                 {viewerMedia.map((asset) => {
-                  const imageUrl = asset.kind === "photo" ? buildPhotoUrl(asset, shareToken) : null;
+                  const imageUrl = buildThumbUrl(asset, shareToken);
 
                   return (
                     <button

@@ -19,10 +19,14 @@ function createMediaAsset(overrides: Partial<TreeSnapshot["media"][number]>): Tr
     caption: "Default caption",
     mime_type: "image/jpeg",
     size_bytes: 1024,
+    preview_status: null,
+    preview_error: null,
+    preview_attempt_count: 0,
+    preview_claimed_at: null,
     created_by: "user-1",
     created_at: "2026-03-07T00:00:00.000Z",
     ...overrides
-  };
+  } as TreeSnapshot["media"][number];
 }
 
 function mockRect(element: Element, { left, top = 0, width, height }: { left: number; top?: number; width: number; height: number }) {
@@ -273,6 +277,40 @@ describe("person media gallery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" }));
 
     expect(screen.getByRole("heading", { name: "Семейное видео" })).toBeInTheDocument();
+    expect(document.querySelector("video.person-media-stage-video-inline")).not.toBeNull();
+  });
+
+  it("uses a generated thumb image for ready cloudflare video previews", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo",
+            title: "Семейное фото",
+            storage_path: "trees/tree-1/media/photo/media-photo/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            provider: "cloudflare_r2",
+            preview_status: "ready",
+            title: "Семейное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          })
+        ]}
+      />
+    );
+
+    const thumbImage = screen
+      .getByRole("button", { name: "Показать медиа 2: Семейное видео" })
+      .querySelector("img");
+    expect(thumbImage).not.toBeNull();
+    expect(thumbImage).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" }));
+
+    expect(document.querySelector(".person-media-thumb-video-placeholder")).toBeNull();
     expect(document.querySelector("video.person-media-stage-video-inline")).not.toBeNull();
   });
 
