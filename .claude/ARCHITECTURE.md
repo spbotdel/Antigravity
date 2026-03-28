@@ -212,6 +212,7 @@ The display tree is derived and must not be treated as the canonical domain mode
   they are now scoped by `(uploader_user_id, kind)`.
 - Uploader albums are also virtual summary/detail views:
   card count, card cover and album detail contents must derive from visible media by `(tree_id, created_by, kind)`, not from persisted album-item rows.
+- In `Все медиа`, uploader albums are additionally merged by `uploader_user_id` for browsing, while `Фото` and `Видео` still keep uploader albums split by kind.
 - Archive albums now also carry their own `access` (`members | public`) in addition to file-level `media_assets.visibility`.
 - Effective file visibility is enforced by repository logic through:
   `resolveEffectiveMediaAccess(mediaId)`.
@@ -241,6 +242,7 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Archive albums must keep explicit server-side `kind`; album type must not be inferred from current contents.
 - Uploader albums must stay virtual archive views:
   persisted uploader album rows may carry metadata/access/identity, but uploader summary/detail semantics must derive from visible media by `(created_by, kind, tree)`.
+- `Все медиа` must collapse uploader albums to one card per uploader; kind-specific archive modes must keep uploader albums separated by `kind`.
 - Archive album linking must stay idempotent:
   `tree_media_album_items(album_id, media_id)` uniqueness remains strict, and repository code should insert only missing pairs.
 

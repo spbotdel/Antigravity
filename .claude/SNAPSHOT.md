@@ -48,6 +48,7 @@
 - [x] Archive albums now have explicit `kind` (`photo | video`), and uploader albums are scoped by `(uploader, kind)`.
 - [x] Uploader albums are now treated as virtual albums:
   count, cover and detail contents derive from all visible media matching `(tree, created_by, kind)`.
+- [x] In `Все медиа`, uploader albums now merge into one combined virtual album per uploader; in `Фото` and `Видео` they still stay split by kind.
 - [x] Album/file access model is now implemented in code:
   `effective_access = strictest(file.visibility, every album.access containing this file)`.
 - [x] Remote schema rollout for `tree_media_albums.access` was recovered manually and linked migration history is reconciled.
@@ -102,6 +103,8 @@
   albums persist `kind`, tabs render from explicit album kind, and legacy mixed test albums were reset.
 - Detected uploader virtual album semantics:
   uploader card count, uploader cover and uploader detail contents now derive from the same visible media set by `(tree, created_by, kind)`.
+- Detected combined-mode uploader merge rule:
+  `Все медиа` now shows one uploader album per uploader instead of duplicate photo/video uploader cards with the same label.
 - Detected album/file access enforcement in repository and archive UI:
   albums store `access`, cards show family-only indicator, and media reads use effective access resolution.
 - Detected manual remote recovery of pending migrations:
@@ -125,6 +128,7 @@
 - Archive albums must keep explicit `kind`; do not infer album type from current contents.
 - Uploader albums must stay virtual:
   do not narrow uploader album card/detail semantics to persisted `tree_media_album_items`.
+- In `Все медиа`, uploader albums must merge by uploader identity; in kind-specific modes they must remain split by `kind`.
 - Archive album linking must stay idempotent:
   repository code should insert only missing `(album_id, media_id)` pairs.
 

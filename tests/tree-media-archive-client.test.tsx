@@ -387,6 +387,81 @@ describe("tree media archive client", () => {
     expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть фото: Третье фото" })).toBeInTheDocument();
   });
 
+  it("merges uploader albums by uploader in all media mode", async () => {
+    const photoOne = createMediaAsset({
+      id: "media-photo-1",
+      title: "Фото 1",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/media-photo-1/archive-photo.jpg",
+      created_by: "user-1",
+    });
+    const photoTwo = createMediaAsset({
+      id: "media-photo-2",
+      title: "Фото 2",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/media-photo-2/archive-photo.jpg",
+      created_by: "user-1",
+    });
+    const videoOne = createMediaAsset({
+      id: "media-video-1",
+      kind: "video",
+      title: "Видео 1",
+      mime_type: "video/mp4",
+      storage_path: "trees/tree-1/media/video/media-video-1/archive-video.mp4",
+      created_by: "user-1",
+    });
+
+    renderArchiveClient({
+      initialMode: "all",
+      initialView: "albums",
+      allMedia: [photoOne, photoTwo, videoOne],
+      allAlbums: [
+        {
+          id: "album-uploader-photo",
+          title: "От Вячеслава",
+          description: null,
+          kind: "photo",
+          access: "members",
+          albumKind: "uploader",
+          uploaderUserId: "user-1",
+          count: 2,
+          coverMediaId: "media-photo-1",
+        },
+        {
+          id: "album-uploader-video",
+          title: "От Вячеслава",
+          description: null,
+          kind: "video",
+          access: "members",
+          albumKind: "uploader",
+          uploaderUserId: "user-1",
+          count: 1,
+          coverMediaId: "media-video-1",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-uploader-photo": [photoOne, photoTwo],
+        "album-uploader-video": [videoOne],
+      },
+      uploaderLabels: [{ userId: "user-1", label: "От Вячеслава" }],
+    });
+
+    const uploaderAlbumButtons = screen.getAllByRole("button", { name: /От Вячеслава.*Автоальбом загрузившего/ });
+    expect(uploaderAlbumButtons).toHaveLength(1);
+    expect(uploaderAlbumButtons[0]).toHaveTextContent("3 материалов");
+
+    fireEvent.click(uploaderAlbumButtons[0]);
+
+    expect(screen.getAllByText("От Вячеслава").length).toBeGreaterThan(0);
+    expect(screen.getByText("3 материалов")).toBeInTheDocument();
+
+    const grid = document.querySelector(".archive-grid.archive-grid-album");
+    expect(grid).not.toBeNull();
+    expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть фото: Фото 1" })).toBeInTheDocument();
+    expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть фото: Фото 2" })).toBeInTheDocument();
+    expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть видео: Видео 1" })).toBeInTheDocument();
+  });
+
   it("opens an edit dialog from the album card menu and updates the manual album", async () => {
     const photo = createMediaAsset({
       id: "media-photo",

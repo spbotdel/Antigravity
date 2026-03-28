@@ -29,7 +29,7 @@ interface AlbumSummary {
   id: string;
   title: string;
   description: string | null;
-  kind: TreeMediaAlbumRecord["kind"];
+  kind: TreeMediaAlbumRecord["kind"] | "all";
   access: TreeMediaAlbumRecord["access"];
   albumKind: TreeMediaAlbumRecord["album_kind"];
   uploaderUserId: string | null;
@@ -99,6 +99,48 @@ function resolveSingleAlbumKind(kinds: Array<TreeMediaAlbumMediaKind | null>): T
 
 function getUploaderAlbumSummaryKey(album: Pick<AlbumSummary, "uploaderUserId" | "kind">) {
   return album.uploaderUserId ? `${album.uploaderUserId}:${album.kind}` : null;
+}
+
+function mergeUploaderAlbumsForAllMedia(albums: AlbumSummary[], media: MediaAssetRecord[]) {
+  const merged = new Map<string, AlbumSummary>();
+  const ordered: AlbumSummary[] = [];
+
+  for (const album of albums) {
+    if (album.albumKind !== "uploader" || !album.uploaderUserId) {
+      ordered.push(album);
+      continue;
+    }
+
+    const existing = merged.get(album.uploaderUserId);
+    if (existing) {
+      const uploaderMedia = media.filter((asset) => asset.created_by === album.uploaderUserId && (asset.kind === "photo" || asset.kind === "video"));
+      const cover =
+        uploaderMedia.find((asset) => asset.kind === "photo") ||
+        uploaderMedia[0] ||
+        null;
+
+      existing.count = uploaderMedia.length;
+      existing.coverMediaId = cover?.id || null;
+      continue;
+    }
+
+    const uploaderMedia = media.filter((asset) => asset.created_by === album.uploaderUserId && (asset.kind === "photo" || asset.kind === "video"));
+    const cover =
+      uploaderMedia.find((asset) => asset.kind === "photo") ||
+      uploaderMedia[0] ||
+      null;
+
+    const nextAlbum: AlbumSummary = {
+      ...album,
+      kind: "all",
+      count: uploaderMedia.length,
+      coverMediaId: cover?.id || null,
+    };
+    merged.set(album.uploaderUserId, nextAlbum);
+    ordered.push(nextAlbum);
+  }
+
+  return ordered;
 }
 
 function getArchiveMaxMediaFileSizeBytes(file: File) {
@@ -531,7 +573,10 @@ export function TreeMediaArchiveClient({
     ];
   }
 
-  const allAlbumSummaries = useMemo(() => mergeAlbums(persistedAllAlbumSummaries, allDerivedAlbums), [persistedAllAlbumSummaries, allDerivedAlbums, dismissedUploaderAlbumKeys]);
+  const allAlbumSummaries = useMemo(
+    () => mergeUploaderAlbumsForAllMedia(mergeAlbums(persistedAllAlbumSummaries, allDerivedAlbums), archiveMedia),
+    [persistedAllAlbumSummaries, allDerivedAlbums, dismissedUploaderAlbumKeys, archiveMedia]
+  );
   const photoAlbumSummaries = useMemo(() => mergeAlbums(persistedPhotoAlbumSummaries, photoDerivedAlbums), [persistedPhotoAlbumSummaries, photoDerivedAlbums, dismissedUploaderAlbumKeys]);
   const videoAlbumSummaries = useMemo(() => mergeAlbums(persistedVideoAlbumSummaries, videoDerivedAlbums), [persistedVideoAlbumSummaries, videoDerivedAlbums, dismissedUploaderAlbumKeys]);
 
@@ -613,7 +658,10 @@ export function TreeMediaArchiveClient({
     }
 
     if (selectedAlbum.albumKind === "uploader" && selectedAlbum.uploaderUserId) {
-      return currentMedia.filter((asset) => asset.created_by === selectedAlbum.uploaderUserId && asset.kind === selectedAlbum.kind);
+      return currentMedia.filter((asset) =>
+        asset.created_by === selectedAlbum.uploaderUserId &&
+        (selectedAlbum.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === selectedAlbum.kind)
+      );
     }
 
     return (albumMediaMap[selectedAlbum.id] || []).filter((asset) => asset.kind === selectedAlbum.kind);
@@ -669,7 +717,7 @@ export function TreeMediaArchiveClient({
       return;
     }
 
-    if (selectedAlbum?.albumKind === "manual") {
+    if (selectedAlbum?.albumKind === "manual" && selectedAlbum.kind !== "all") {
       setCreateAlbumKind(selectedAlbum.kind);
       return;
     }

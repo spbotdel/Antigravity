@@ -17,13 +17,52 @@ type AlbumSummary = {
   id: string;
   title: string;
   description: string | null;
-  kind: "photo" | "video";
+  kind: "photo" | "video" | "all";
   access: "public" | "members";
   albumKind: "manual" | "uploader";
   uploaderUserId: string | null;
   count: number;
   coverMediaId: string | null;
 };
+
+function mergeUploaderAlbumsForAllMedia(
+  albums: AlbumSummary[],
+  media: Array<{ id: string; created_by: string | null; kind: "photo" | "video" | "document" }>
+) {
+  const merged = new Map<string, AlbumSummary>();
+  const ordered: AlbumSummary[] = [];
+
+  for (const album of albums) {
+    if (album.albumKind !== "uploader" || !album.uploaderUserId) {
+      ordered.push(album);
+      continue;
+    }
+
+    if (merged.has(album.uploaderUserId)) {
+      continue;
+    }
+
+    const uploaderMedia = media.filter(
+      (asset) => asset.created_by === album.uploaderUserId && (asset.kind === "photo" || asset.kind === "video")
+    );
+    const cover =
+      uploaderMedia.find((asset) => asset.kind === "photo") ||
+      uploaderMedia[0] ||
+      null;
+
+    const mergedAlbum: AlbumSummary = {
+      ...album,
+      kind: "all",
+      count: uploaderMedia.length,
+      coverMediaId: cover?.id || null
+    };
+
+    merged.set(album.uploaderUserId, mergedAlbum);
+    ordered.push(mergedAlbum);
+  }
+
+  return ordered;
+}
 
 function getSearchParam(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -117,7 +156,10 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
     ];
   }
 
-  const allAlbumSummaries = mergeAlbumSummaries(persistedAllAlbumSummaries, derivedAllAlbumSummaries);
+  const allAlbumSummaries = mergeUploaderAlbumsForAllMedia(
+    mergeAlbumSummaries(persistedAllAlbumSummaries, derivedAllAlbumSummaries),
+    allMedia
+  );
   const photoAlbumSummaries = mergeAlbumSummaries(persistedPhotoAlbumSummaries, derivedPhotoAlbumSummaries);
   const videoAlbumSummaries = mergeAlbumSummaries(persistedVideoAlbumSummaries, derivedVideoAlbumSummaries);
 

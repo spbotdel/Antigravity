@@ -356,6 +356,8 @@ Important:
 - persisted uploader album rows may still provide metadata and access behavior
 - uploader album card count must match uploader album detail count because both derive from the same virtual media set
 - this virtual-view rule is specific to uploader albums; manual albums still follow persisted album-item relations
+- in `Все медиа`, uploader album summaries must additionally merge by `created_by` so the UI shows one uploader album per uploader instead of one per kind
+- in `Фото` and `Видео`, uploader album summaries stay split by `kind`
 
 ## 6. Invite Flow
 

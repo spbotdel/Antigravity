@@ -229,6 +229,24 @@ Implications:
 
 ---
 
+### 12.4 In `All media`, uploader albums merge by uploader identity
+
+When archive UI is in combined mode:
+
+- uploader albums must merge by `uploader_user_id`
+
+When archive UI is in kind-specific mode:
+
+- uploader albums remain split by `kind`
+
+Implications:
+
+- `Все медиа` must not show duplicate uploader albums with the same title
+- merged uploader album count, cover, and detail contents must derive from the same combined visible uploader media set
+- this merge rule applies only to uploader albums, never to manual albums
+
+---
+
 # Data Integrity Invariants
 
 ### 13. Deletion must be explicit

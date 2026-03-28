@@ -813,6 +813,45 @@ Future work must preserve these rules:
 
 ---
 
+# 2026-03-28 — In `All media`, uploader albums merge by uploader while kind-specific modes stay split
+
+### Decision
+
+Uploader albums remain split by `kind` in:
+
+- `Фото`
+- `Видео`
+
+But in `Все медиа`, uploader albums must be merged into a single virtual album per `uploader_user_id`.
+
+The merged uploader album should:
+
+- include all visible uploader media across photo and video
+- expose combined count
+- derive cover from that same combined media set
+
+Manual albums must not be merged by this rule.
+
+### Why
+
+Once uploader albums became explicit per-kind virtual albums, `Все медиа` started showing duplicate uploader cards with the same title.
+
+That is correct from a storage/model perspective, but wrong from a browsing perspective:
+
+- users expect one uploader album in the combined archive mode
+- users still expect separate uploader albums in the kind-specific modes
+
+### Consequence
+
+Future work must preserve these rules:
+
+- `Все медиа` should show one uploader album per uploader
+- `Фото` and `Видео` should keep uploader albums split by kind
+- merged uploader album count, cover, and detail contents must all derive from the same combined visible media set
+- manual albums remain one-card-per-persisted-album and are not affected by this merge rule
+
+---
+
 # How to update this file
 
 Add a new entry when:
