@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId, resolveMediaThumbSource, type MediaThumbSource } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
-import { LockIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
+import { LockIcon, MoreHorizontalIcon, PlayIcon, PlusIcon } from "lucide-react";
 
 type MediaMode = "photo" | "video" | "all";
 type ArchiveView = "all" | "albums";
@@ -221,6 +221,25 @@ function buildPendingUploadSummary(items: PendingArchiveUploadItem[]) {
   return parts.join(" • ");
 }
 
+function formatCountWithRussianPlural(count: number, forms: { one: string; few: string; many: string }) {
+  const absolute = Math.abs(count) % 100;
+  const lastDigit = absolute % 10;
+
+  if (absolute >= 11 && absolute <= 14) {
+    return `${count} ${forms.many}`;
+  }
+
+  if (lastDigit === 1) {
+    return `${count} ${forms.one}`;
+  }
+
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return `${count} ${forms.few}`;
+  }
+
+  return `${count} ${forms.many}`;
+}
+
 interface ActiveArchiveUploadItem {
   id: string;
   name: string;
@@ -280,6 +299,12 @@ const ARCHIVE_ALBUM_PREVIEW_MEDIA_STYLE: CSSProperties = {
   borderRadius: 0,
 };
 
+const ARCHIVE_ALBUM_PREVIEW_MEDIA_SECONDARY_STYLE: CSSProperties = {
+  ...ARCHIVE_ALBUM_PREVIEW_MEDIA_STYLE,
+  opacity: 0.94,
+  filter: "saturate(0.88) brightness(0.97)",
+};
+
 const ARCHIVE_ALBUM_PREVIEW_OVERLAY_STYLE: CSSProperties = {
   position: "absolute",
   inset: 0,
@@ -331,6 +356,68 @@ function getArchiveAlbumSourceMedia(
   return (currentAlbumMediaMap[album.id] || []).filter((asset) =>
     album.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === album.kind
   );
+}
+
+function formatArchiveAlbumContentLabel(
+  album: Pick<AlbumSummary, "kind" | "count">,
+  albumMedia: MediaAssetRecord[]
+) {
+  let photoCount = 0;
+  let videoCount = 0;
+
+  for (const asset of albumMedia) {
+    if (asset.kind === "photo") {
+      photoCount += 1;
+    } else if (asset.kind === "video") {
+      videoCount += 1;
+    }
+  }
+
+  if (photoCount || videoCount) {
+    const parts: string[] = [];
+
+    if (photoCount) {
+      parts.push(`${photoCount} фото`);
+    }
+
+    if (videoCount) {
+      parts.push(`${videoCount} видео`);
+    }
+
+    return parts.join(" · ");
+  }
+
+  if (album.kind === "photo") {
+    return `${album.count} фото`;
+  }
+
+  if (album.kind === "video") {
+    return `${album.count} видео`;
+  }
+
+  return formatCountWithRussianPlural(album.count, {
+    one: "элемент",
+    few: "элемента",
+    many: "элементов",
+  });
+}
+
+function hasArchiveAlbumVideoIndicator(
+  album: Pick<AlbumSummary, "kind" | "count">,
+  albumMedia: MediaAssetRecord[]
+) {
+  let photoCount = 0;
+  let videoCount = 0;
+
+  for (const asset of albumMedia) {
+    if (asset.kind === "photo") {
+      photoCount += 1;
+    } else if (asset.kind === "video") {
+      videoCount += 1;
+    }
+  }
+
+  return videoCount > 0 || (album.kind === "video" && album.count === 0);
 }
 
 function buildStageUrl(asset: MediaAssetRecord, shareToken?: string | null, expanded = false) {
@@ -1439,7 +1526,7 @@ export function TreeMediaArchiveClient({
     return previewItems;
   }
 
-  function renderArchiveAlbumPreviewTile(item: AlbumPreviewItem, className: string) {
+  function renderArchiveAlbumPreviewTile(item: AlbumPreviewItem, className: string, mediaStyle: CSSProperties = ARCHIVE_ALBUM_PREVIEW_MEDIA_STYLE) {
     return (
       <MediaThumbVisual
         key={item.asset.id}
@@ -1452,16 +1539,20 @@ export function TreeMediaArchiveClient({
         showToneOverlay={false}
         showVideoChrome={false}
         containerStyle={ARCHIVE_ALBUM_PREVIEW_TILE_STYLE}
-        mediaStyle={ARCHIVE_ALBUM_PREVIEW_MEDIA_STYLE}
+        mediaStyle={mediaStyle}
       />
     );
   }
 
-  function renderArchiveAlbumCover(album: AlbumSummary) {
+  function renderArchiveAlbumCover(album: AlbumSummary, hasVideoIdentity: boolean) {
     const previewItems = getAlbumPreviewItems(album);
 
     if (!previewItems.length) {
-      return renderArchivePlaceholder(mode === "video" ? "video" : "photo");
+      return hasVideoIdentity ? (
+        <div className="archive-album-empty-placeholder archive-album-empty-placeholder-video" aria-hidden="true" />
+      ) : (
+        renderArchivePlaceholder("photo")
+      );
     }
 
     if (previewItems.length === 1) {
@@ -1474,6 +1565,7 @@ export function TreeMediaArchiveClient({
           containerClassName="archive-album-cover-visual"
           mediaClassName={cover.thumbSource.kind === "image" ? "archive-album-image" : "archive-album-image archive-tile-video"}
           placeholder={null}
+          showVideoChrome={false}
         />
       );
     }
@@ -1499,7 +1591,9 @@ export function TreeMediaArchiveClient({
       >
         {renderArchiveAlbumPreviewTile(previewItems[0], "archive-album-preview-tile archive-album-preview-tile-primary")}
         <div className="archive-album-preview-column" style={ARCHIVE_ALBUM_PREVIEW_COLUMN_STYLE}>
-          {previewItems.slice(1, 3).map((item) => renderArchiveAlbumPreviewTile(item, "archive-album-preview-tile"))}
+          {previewItems
+            .slice(1, 3)
+            .map((item) => renderArchiveAlbumPreviewTile(item, "archive-album-preview-tile", ARCHIVE_ALBUM_PREVIEW_MEDIA_SECONDARY_STYLE))}
         </div>
         <span className="archive-album-cover-tone" aria-hidden="true" style={ARCHIVE_ALBUM_PREVIEW_OVERLAY_STYLE} />
       </div>
@@ -2274,6 +2368,9 @@ export function TreeMediaArchiveClient({
         <div className="archive-album-grid">
           {currentAlbums.map((album) => {
             const isAlbumActionsOpen = openArchiveAlbumActionsId === album.id;
+            const albumMedia = getArchiveAlbumSourceMedia(album, currentMedia, albumMediaMap);
+            const albumContentLabel = formatArchiveAlbumContentLabel(album, albumMedia);
+            const hasVideoIndicator = hasArchiveAlbumVideoIndicator(album, albumMedia);
 
             return (
               <div key={album.id} className="archive-album-card-shell">
@@ -2289,7 +2386,7 @@ export function TreeMediaArchiveClient({
                     }
                   }}
                 >
-                  <div className="archive-album-cover">
+                  <div className={`archive-album-cover${hasVideoIndicator ? " archive-album-cover-video" : ""}`}>
                     {canEdit ? (
                       <Popover
                         open={isAlbumActionsOpen}
@@ -2327,9 +2424,14 @@ export function TreeMediaArchiveClient({
                             Удалить
                           </button>
                         </PopoverContent>
-                      </Popover>
+                  </Popover>
                     ) : null}
-                    {renderArchiveAlbumCover(album)}
+                    {renderArchiveAlbumCover(album, hasVideoIndicator)}
+                    {hasVideoIndicator ? (
+                      <span className="archive-album-video-indicator" aria-hidden="true">
+                        <PlayIcon className="archive-album-video-indicator-icon" />
+                      </span>
+                    ) : null}
                   </div>
                   <div className="archive-album-copy">
                     <div className="archive-album-title-row">
@@ -2340,7 +2442,7 @@ export function TreeMediaArchiveClient({
                         </span>
                       ) : null}
                     </div>
-                    <span>{album.count} {mode === "all" ? "материалов" : itemLabel}</span>
+                    <span>{albumContentLabel}</span>
                     <small>{album.description?.trim() || (album.albumKind === "uploader" ? "Автоальбом загрузившего" : "Пользовательский альбом")}</small>
                   </div>
                 </div>

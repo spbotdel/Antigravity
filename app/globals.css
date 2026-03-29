@@ -3204,7 +3204,7 @@ textarea {
   position: absolute;
   top: 12px;
   right: 12px;
-  z-index: 4;
+  z-index: 5;
   width: 36px;
   height: 36px;
   display: grid;
@@ -3931,6 +3931,7 @@ textarea {
   min-width: 0;
   height: 100%;
   padding: 12px;
+  gap: 8px;
   border-radius: 12px;
   border: 1px solid rgba(18, 27, 43, 0.08);
   background: rgba(255, 255, 255, 0.7);
@@ -3952,26 +3953,86 @@ textarea {
   position: relative;
   min-height: 0;
   display: block;
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    inset 0 -1px 0 rgba(18, 27, 43, 0.04);
+}
+
+.archive-album-cover-video {
+  isolation: isolate;
+}
+
+.archive-album-video-indicator {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.archive-album-video-indicator-icon {
+  width: 20px;
+  height: 20px;
+  color: rgba(255, 250, 244, 0.82);
+  stroke-width: 2.2;
+  filter: drop-shadow(0 3px 8px rgba(18, 27, 43, 0.24));
+}
+
+.archive-album-empty-placeholder {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.archive-album-empty-placeholder-video {
+  background:
+    radial-gradient(circle at 28% 22%, rgba(113, 88, 139, 0.34) 0%, rgba(113, 88, 139, 0.12) 26%, transparent 58%),
+    linear-gradient(150deg, rgba(26, 33, 46, 0.98), rgba(25, 39, 61, 0.95));
+}
+
+.archive-album-empty-placeholder-video::before {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    linear-gradient(90deg, transparent 0 14%, rgba(255, 255, 255, 0.04) 14% 17%, transparent 17% 83%, rgba(255, 255, 255, 0.04) 83% 86%, transparent 86% 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.archive-album-empty-placeholder-video::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 34%);
+  opacity: 0.72;
 }
 
 .archive-album-copy {
   min-width: 0;
-  grid-template-rows: minmax(2.6em, auto) auto minmax(2.9em, auto);
+  grid-template-rows: minmax(2.4em, auto) auto minmax(1.3em, auto);
   align-content: start;
-  gap: 6px;
+  gap: 4px;
 }
 
 .archive-album-title-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
 .archive-album-copy strong {
-  font-size: 1rem;
-  line-height: 1.3;
+  font-size: 1.04rem;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
   display: -webkit-box;
   overflow: hidden;
   -webkit-line-clamp: 2;
@@ -3980,24 +4041,28 @@ textarea {
 
 .archive-album-copy span,
 .archive-album-copy small {
-  color: var(--muted);
-  line-height: 1.45;
+  line-height: 1.35;
   min-width: 0;
   overflow-wrap: anywhere;
+  text-align: left;
 }
 
 .archive-album-copy span {
   white-space: nowrap;
+  color: rgba(28, 36, 51, 0.78);
+  font-size: 0.95rem;
+  font-weight: 600;
 }
 
 .archive-album-access-indicator {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  color: rgba(28, 36, 51, 0.62);
+  margin-top: 2px;
+  color: rgba(28, 36, 51, 0.72);
 }
 
 .archive-album-access-indicator svg {
@@ -4008,7 +4073,9 @@ textarea {
 .archive-album-copy small {
   display: -webkit-box;
   overflow: hidden;
-  -webkit-line-clamp: 2;
+  color: rgba(111, 120, 136, 0.88);
+  font-size: 0.84rem;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
 }
 

@@ -193,6 +193,40 @@ describe("tree media archive client", () => {
     expect(within(dialog).getByRole("img", { name: "Архивное фото" })).toHaveAttribute("src", "/api/media/media-photo?variant=medium");
   });
 
+  it("shows a photo-only count label on album cards without the generic materials wording", () => {
+    const photo = createMediaAsset({
+      id: "media-photo",
+      title: "Архивное фото",
+      storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+    });
+
+    renderArchiveClient({
+      allAlbums: [
+        {
+          id: "album-1",
+          title: "Свадьба",
+          description: null,
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-photo",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-1": [photo],
+      },
+      allMedia: [photo],
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    const albumButton = screen.getByRole("button", { name: /Свадьба.*1 фото.*Пользовательский альбом/ });
+    expect(albumButton).toBeInTheDocument();
+    expect(albumButton).not.toHaveTextContent(/материал/i);
+    const albumShell = albumButton.closest(".archive-album-card-shell");
+    expect(albumShell?.querySelector(".archive-album-video-indicator")).toBeNull();
+  });
+
   it("renders two previewable album items as a clean split cover", () => {
     const photoOne = createMediaAsset({
       id: "media-photo-1",
@@ -333,6 +367,80 @@ describe("tree media archive client", () => {
     const albumImage = document.querySelector(".archive-album-image");
     expect(albumImage).not.toBeNull();
     expect(albumImage).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
+    const albumCard = document.querySelector(".archive-album-card");
+    expect(albumCard).not.toBeNull();
+    const albumCardElement = albumCard as HTMLElement;
+    expect(albumCardElement.querySelector(".archive-album-video-indicator")).not.toBeNull();
+    expect(albumCardElement.querySelector(".archive-album-video-play-overlay")).toBeNull();
+    expect(albumCardElement.querySelector(".archive-album-video-badge")).toBeNull();
+    expect(albumCardElement.querySelector(".archive-album-cover .media-thumb-play")).toBeNull();
+  });
+
+  it("uses a video-specific empty cover for empty video albums", () => {
+    renderArchiveClient({
+      initialMode: "video",
+      allAlbums: [
+        {
+          id: "album-video-empty",
+          title: "Пустой видеоархив",
+          description: null,
+          kind: "video",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 0,
+          coverMediaId: null,
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-video-empty": [],
+      },
+      allMedia: [],
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    const albumCard = document.querySelector(".archive-album-card") as HTMLElement | null;
+    expect(albumCard).not.toBeNull();
+    expect(albumCard?.querySelector(".archive-album-empty-placeholder-video")).not.toBeNull();
+    expect(albumCard?.querySelector(".archive-album-video-indicator")).not.toBeNull();
+    expect(albumCard?.querySelector(".archive-album-video-play-overlay")).toBeNull();
+    expect(albumCard?.querySelector(".archive-album-video-badge")).toBeNull();
+  });
+
+  it("shows a video-only count label on album cards without the generic materials wording", () => {
+    const video = createMediaAsset({
+      id: "media-video",
+      kind: "video",
+      title: "Архивное видео",
+      mime_type: "video/mp4",
+      storage_path: "trees/tree-1/media/video/media-video/archive-video.mp4",
+    });
+
+    renderArchiveClient({
+      initialMode: "video",
+      allAlbums: [
+        {
+          id: "album-video",
+          title: "Видеоархив",
+          description: null,
+          kind: "video",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 1,
+          coverMediaId: "media-video",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-video": [video],
+      },
+      allMedia: [video],
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+
+    const albumButton = screen.getByRole("button", { name: /Видеоархив.*1 видео.*Пользовательский альбом/ });
+    expect(albumButton).toBeInTheDocument();
+    expect(albumButton).not.toHaveTextContent(/материал/i);
   });
 
   it("updates a newly uploaded cloudflare video album cover to its generated preview without a full page reload", async () => {
@@ -689,12 +797,15 @@ describe("tree media archive client", () => {
 
     const uploaderAlbumButtons = screen.getAllByRole("button", { name: /От Вячеслава.*Автоальбом загрузившего/ });
     expect(uploaderAlbumButtons).toHaveLength(1);
-    expect(uploaderAlbumButtons[0]).toHaveTextContent("3 материалов");
+    expect(uploaderAlbumButtons[0]).toHaveTextContent("2 фото · 1 видео");
+    const uploaderAlbumShell = uploaderAlbumButtons[0].closest(".archive-album-card-shell");
+    expect(uploaderAlbumShell?.querySelector(".archive-album-video-indicator")).not.toBeNull();
+    expect(uploaderAlbumShell?.querySelector(".archive-album-video-play-overlay")).toBeNull();
+    expect(uploaderAlbumShell?.querySelector(".archive-album-video-badge")).toBeNull();
 
     fireEvent.click(uploaderAlbumButtons[0]);
 
     expect(screen.getAllByText("От Вячеслава").length).toBeGreaterThan(0);
-    expect(screen.getByText("3 материалов")).toBeInTheDocument();
 
     const grid = document.querySelector(".archive-grid.archive-grid-album");
     expect(grid).not.toBeNull();
@@ -1345,7 +1456,7 @@ describe("tree media archive client", () => {
     expect(screen.getByText("Материал добавлен в альбом.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
-    expect(screen.getByRole("button", { name: /Свадьба.*2 материалов/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Свадьба.*2 фото/ })).toBeInTheDocument();
   }, 10000);
 
   it("shows contextual empty-state actions when the current archive mode is empty", () => {
