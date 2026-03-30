@@ -43,8 +43,17 @@ describe("media route", () => {
   });
 
   it("passes thumb variants to GET /api/media/[mediaId] when requested", async () => {
-    const { GET } = await import("@/app/api/media/[mediaId]/route");
-    resolveMediaAccess.mockResolvedValue({ url: "https://example.com/video-thumb.webp", kind: "video" });
+    const { GET, __clearMediaThumbResolutionCacheForTests } = await import("@/app/api/media/[mediaId]/route");
+    __clearMediaThumbResolutionCacheForTests();
+    resolveMediaAccess.mockResolvedValue({
+      url: "https://example.com/video-thumb.webp",
+      kind: "video",
+      cacheContext: {
+        treeId: "tree-1",
+        effectiveVisibility: "members",
+        accessSource: "membership"
+      }
+    });
 
     const response = await GET(
       new Request("http://localhost/api/media/media-1?variant=thumb"),
@@ -53,7 +62,7 @@ describe("media route", () => {
       }
     );
 
-    expect(resolveMediaAccess).toHaveBeenCalledWith("media-1", null, "thumb", { download: false });
+    expect(resolveMediaAccess).toHaveBeenCalledWith("media-1", null, "thumb", { download: false, resolvedUser: null });
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://example.com/video-thumb.webp");
   });
