@@ -1,10 +1,13 @@
 import { TreeMediaArchiveClient } from "@/components/media/tree-media-archive-client";
 import { TreeNav } from "@/components/layout/tree-nav";
 import { buildDerivedUploaderAlbumSummaries, buildPersistedTreeMediaAlbumMediaMap, buildTreeMediaAlbumSummaries, collectTreeMedia } from "@/lib/tree/display";
-import { getTreeMediaPageData } from "@/lib/server/repository";
+import type { MediaAssetRecord } from "@/lib/types";
+import { getTreeMediaPageData, resolveMediaThumbUrlsForVisibleMedia } from "@/lib/server/repository";
 import { formatTreeVisibility } from "@/lib/ui-text";
 
 export const dynamic = "force-dynamic";
+const INITIAL_ARCHIVE_TILE_LIMIT = 18;
+const ALBUM_PREVIEW_MEDIA_LIMIT = 3;
 
 interface MediaPageProps {
   params: Promise<{ slug: string }>;
@@ -88,6 +91,23 @@ function resolveArchiveView(value: string | null): ArchiveView {
   return value === "albums" ? "albums" : "all";
 }
 
+function getArchiveAlbumSourceMedia(
+  album: Pick<AlbumSummary, "id" | "kind" | "albumKind" | "uploaderUserId">,
+  currentMedia: MediaAssetRecord[],
+  persistedAlbumMediaMap: Record<string, MediaAssetRecord[]>
+) {
+  if (album.albumKind === "uploader" && album.uploaderUserId) {
+    return currentMedia.filter((asset) =>
+      asset.created_by === album.uploaderUserId &&
+      (album.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === album.kind)
+    );
+  }
+
+  return (persistedAlbumMediaMap[album.id] || []).filter((asset) =>
+    album.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === album.kind
+  );
+}
+
 export default async function MediaPage({ params, searchParams }: MediaPageProps) {
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
@@ -162,6 +182,27 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   );
   const photoAlbumSummaries = mergeAlbumSummaries(persistedPhotoAlbumSummaries, derivedPhotoAlbumSummaries);
   const videoAlbumSummaries = mergeAlbumSummaries(persistedVideoAlbumSummaries, derivedVideoAlbumSummaries);
+  const currentMedia = mode === "photo" ? photoMedia : mode === "video" ? videoMedia : allMedia;
+  const currentAlbums = mode === "photo" ? photoAlbumSummaries : mode === "video" ? videoAlbumSummaries : allAlbumSummaries;
+  const initialSelectedAlbum = view === "albums" && albumId ? currentAlbums.find((album) => album.id === albumId) || null : null;
+  const initialSelectedAlbumMedia = initialSelectedAlbum
+    ? getArchiveAlbumSourceMedia(initialSelectedAlbum, currentMedia, persistedAlbumMediaMap)
+    : [];
+  const initialThumbMediaIds = new Set(
+    view === "all"
+      ? currentMedia.slice(0, INITIAL_ARCHIVE_TILE_LIMIT).map((asset) => asset.id)
+      : initialSelectedAlbum
+        ? initialSelectedAlbumMedia.slice(0, INITIAL_ARCHIVE_TILE_LIMIT).map((asset) => asset.id)
+        : currentAlbums.flatMap((album) => {
+            const albumMedia = getArchiveAlbumSourceMedia(album, currentMedia, persistedAlbumMediaMap);
+            const cover = album.coverMediaId ? albumMedia.find((asset) => asset.id === album.coverMediaId) || null : null;
+            const orderedMedia = cover ? [cover, ...albumMedia.filter((asset) => asset.id !== cover.id)] : albumMedia;
+            return orderedMedia.slice(0, ALBUM_PREVIEW_MEDIA_LIMIT).map((asset) => asset.id);
+          })
+  );
+  const initialThumbUrlsByMediaId = await resolveMediaThumbUrlsForVisibleMedia(
+    currentMedia.filter((asset) => initialThumbMediaIds.has(asset.id))
+  );
 
   return (
     <main className="page-shell workspace-page">
@@ -197,6 +238,7 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
         allMedia={allMedia}
         allAlbums={persistedAllAlbumSummaries}
         persistedAlbumMediaMap={persistedAlbumMediaMap}
+        initialThumbUrlsByMediaId={initialThumbUrlsByMediaId}
         uploaderLabels={Array.from(uploaderLabelsById.entries()).map(([userId, label]) => ({ userId, label }))}
       />
     </main>

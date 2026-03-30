@@ -117,6 +117,24 @@ Important:
 - album summaries now include album-level `access`
 - media visible on this page should already be filtered by effective access, not only raw file visibility
 
+Archive grid flow:
+1. SSR pre-resolves direct thumb URLs for the initial visible archive surface:
+- first visible media tiles in `Все`
+- first visible media tiles in an initially opened album
+- first preview tiles for album cards
+2. client computes the current visible thumb-capable media set after hydration
+3. unresolved current-set thumbs are fetched through one batched request:
+- `POST /api/media/thumbs`
+4. client stores direct thumb URLs in local state and re-renders only the affected tiles
+5. client computes exactly one next visible set for the next `Показать еще` step
+6. after the current visible set is resolved, client prefetches direct thumb URLs for that next set during idle time
+7. browser image warming may then warm the next-set thumb URLs, but only after the current visible screen has settled
+
+Important:
+- archive thumb batching keeps access server-side through the same tree/share-link visibility model
+- client prefetch is limited to one next page only, not multiple pages ahead
+- initial-page delayed prefetch was evaluated only as a diagnostic mode and is not part of the default runtime behavior
+
 ### 1.6 Audit page
 
 Path:

@@ -1,8 +1,8 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -13,18 +13,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MediaThumbVisual } from "@/components/media/media-thumb-visual";
+import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SelectField } from "@/components/ui/select-field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { buildDerivedUploaderAlbumSummaries, buildMediaOpenRouteUrl, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId, resolveMediaThumbSource, type MediaThumbSource } from "@/lib/tree/display";
+import { buildDerivedUploaderAlbumSummaries, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId, resolveMediaThumbSource, type MediaThumbSource } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
 import { LockIcon, MoreHorizontalIcon, PlayIcon, PlusIcon } from "lucide-react";
 
 type MediaMode = "photo" | "video" | "all";
 type ArchiveView = "all" | "albums";
+
+declare global {
+  interface Window {
+    __archiveThumbPerf?: {
+      events: Array<Record<string, unknown>>;
+    };
+  }
+}
 
 interface AlbumSummary {
   id: string;
@@ -49,6 +58,7 @@ interface TreeMediaArchiveClientProps {
   allMedia: MediaAssetRecord[];
   allAlbums: AlbumSummary[];
   persistedAlbumMediaMap: Record<string, MediaAssetRecord[]>;
+  initialThumbUrlsByMediaId?: Record<string, string>;
   uploaderLabels: Array<{ userId: string; label: string }>;
 }
 
@@ -58,11 +68,80 @@ interface ArchiveAlbumOption {
   href: string;
 }
 
+type ArchiveTileScope = "grid" | "album";
+
+interface ArchiveViewerSession {
+  mediaIds: string[];
+  initialMediaId: string;
+}
+
 const INITIAL_TILE_LIMIT = 18;
 const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
 const MAX_DEFAULT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MEDIA_THUMB_BATCH_REQUEST_LIMIT = 100;
+const ARCHIVE_THUMB_PREFETCH_IDLE_DELAY_MS = 600;
 const CREATE_ALBUM_OPTION_VALUE = "__create_album__";
+const ARCHIVE_VIEWER_WINDOW_LIMIT = INITIAL_TILE_LIMIT;
+const ARCHIVE_THUMB_PERF_ENABLED = process.env.NODE_ENV === "development";
+
+function recordArchiveThumbPerfEvent(event: Record<string, unknown>) {
+  if (!ARCHIVE_THUMB_PERF_ENABLED || typeof window === "undefined" || typeof performance === "undefined") {
+    return;
+  }
+
+  if (!window.__archiveThumbPerf) {
+    window.__archiveThumbPerf = {
+      events: [],
+    };
+  }
+
+  window.__archiveThumbPerf.events.push({
+    at: performance.now(),
+    ...event,
+  });
+
+  if (window.__archiveThumbPerf.events.length > 1000) {
+    window.__archiveThumbPerf.events.splice(0, window.__archiveThumbPerf.events.length - 1000);
+  }
+}
+
+function parseServerTimingDuration(serverTimingHeader: string | null, metricName: string) {
+  if (!serverTimingHeader) {
+    return null;
+  }
+
+  const matchedMetric = serverTimingHeader
+    .split(",")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${metricName};dur=`));
+
+  if (!matchedMetric) {
+    return null;
+  }
+
+  const rawDuration = matchedMetric.split("dur=")[1];
+  const parsedDuration = Number(rawDuration);
+  return Number.isFinite(parsedDuration) ? parsedDuration : null;
+}
+
+function scheduleArchiveThumbIdleCallback(callback: () => void) {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  if (typeof window.requestIdleCallback === "function") {
+    const handle = window.requestIdleCallback(() => callback(), { timeout: 1200 });
+    return () => {
+      if (typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(handle);
+      }
+    };
+  }
+
+  const timeoutId = window.setTimeout(callback, ARCHIVE_THUMB_PREFETCH_IDLE_DELAY_MS);
+  return () => window.clearTimeout(timeoutId);
+}
 
 type ArchiveUploadTarget = Pick<
   MediaUploadTargetResponse,
@@ -420,18 +499,6 @@ function hasArchiveAlbumVideoIndicator(
   return videoCount > 0 || (album.kind === "video" && album.count === 0);
 }
 
-function buildStageUrl(asset: MediaAssetRecord, shareToken?: string | null, expanded = false) {
-  if (asset.kind === "photo") {
-    return buildPhotoPreviewRouteUrl(asset, expanded ? "medium" : "small", shareToken);
-  }
-
-  return buildMediaOpenRouteUrl(asset, shareToken);
-}
-
-function buildOpenUrl(asset: MediaAssetRecord, shareToken?: string | null) {
-  return buildMediaOpenRouteUrl(asset, shareToken);
-}
-
 function buildDownloadUrl(asset: MediaAssetRecord, shareToken?: string | null) {
   const params = new URLSearchParams();
   params.set("download", "1");
@@ -455,38 +522,6 @@ function areStringSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string
   return true;
 }
 
-function isPhotoAsset(asset: MediaAssetRecord) {
-  return asset.kind === "photo";
-}
-
-function isInlineVideoAsset(asset: MediaAssetRecord) {
-  return asset.kind === "video" && asset.provider !== "yandex_disk";
-}
-
-function isInlineRenderableAsset(asset: MediaAssetRecord) {
-  return isPhotoAsset(asset) || isInlineVideoAsset(asset);
-}
-
-function getArchiveOpenLabel(asset: MediaAssetRecord) {
-  if (asset.kind === "document") {
-    return "Открыть документ";
-  }
-
-  if (asset.provider === "yandex_disk") {
-    return "Открыть внешнее видео";
-  }
-
-  if (asset.kind === "video") {
-    return "Открыть видео";
-  }
-
-  return "Открыть оригинал";
-}
-
-function getArchiveMediaSourceLabel(asset: MediaAssetRecord) {
-  return asset.provider === "yandex_disk" ? "По ссылке" : "Файл";
-}
-
 function renderArchivePlaceholder(kind: MediaAssetRecord["kind"] | "file") {
   const isVideo = kind === "video";
 
@@ -496,6 +531,210 @@ function renderArchivePlaceholder(kind: MediaAssetRecord["kind"] | "file") {
     </div>
   );
 }
+
+interface ArchiveTileProps {
+  asset: MediaAssetRecord;
+  scope: ArchiveTileScope;
+  thumbSource: MediaThumbSource;
+  downloadHref: string;
+  albumOptions: ArchiveAlbumOption[];
+  isSelected: boolean;
+  isArchiveSelectionMode: boolean;
+  isActionsMenuOpen: boolean;
+  isAlbumChooserOpen: boolean;
+  canEdit: boolean;
+  onToggleSelection: (mediaId: string) => void;
+  onOpen: (mediaId: string, scope: ArchiveTileScope) => void;
+  onActionsMenuOpenChange: (mediaId: string, open: boolean) => void;
+  onAlbumChooserOpen: (mediaId: string) => void;
+  onStartSelection: (mediaId: string) => void;
+  onDelete: (mediaId: string) => void;
+  onRender: (mediaId: string) => void;
+}
+
+function areArchiveAlbumOptionsEqual(left: ArchiveAlbumOption[], right: ArchiveAlbumOption[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((option, index) => {
+    const other = right[index];
+    return option.id === other?.id && option.title === other.title && option.href === other.href;
+  });
+}
+
+const ArchiveTile = memo(function ArchiveTile({
+  asset,
+  scope,
+  thumbSource,
+  downloadHref,
+  albumOptions,
+  isSelected,
+  isArchiveSelectionMode,
+  isActionsMenuOpen,
+  isAlbumChooserOpen,
+  canEdit,
+  onToggleSelection,
+  onOpen,
+  onActionsMenuOpenChange,
+  onAlbumChooserOpen,
+  onStartSelection,
+  onDelete,
+  onRender,
+}: ArchiveTileProps) {
+  onRender(asset.id);
+
+  return (
+    <div className={`archive-tile-shell${isSelected ? " archive-tile-shell-selected" : ""}`}>
+      {!isArchiveSelectionMode ? (
+        <Popover
+          open={isActionsMenuOpen}
+          onOpenChange={(open) => {
+            onActionsMenuOpenChange(asset.id, open);
+          }}
+        >
+          <PopoverTrigger className="archive-tile-actions-trigger" aria-label={`Открыть действия для «${asset.title}»`}>
+            <MoreHorizontalIcon className="archive-tile-actions-trigger-icon" />
+          </PopoverTrigger>
+          <PopoverContent className="archive-card-actions-popover" align="end" side="bottom" sideOffset={8}>
+            {isAlbumChooserOpen ? (
+              <>
+                <button
+                  type="button"
+                  className="archive-card-menu-item"
+                  onClick={() => onAlbumChooserOpen("")}
+                >
+                  Назад
+                </button>
+                {albumOptions.map((album) => (
+                  <a
+                    key={album.id}
+                    href={album.href}
+                    className="archive-card-menu-item"
+                    onClick={() => {
+                      onActionsMenuOpenChange(asset.id, false);
+                      onAlbumChooserOpen("");
+                    }}
+                  >
+                    {album.title}
+                  </a>
+                ))}
+              </>
+            ) : (
+              <>
+                <a
+                  href={downloadHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="archive-card-menu-item"
+                  onClick={() => onActionsMenuOpenChange(asset.id, false)}
+                >
+                  Скачать
+                </a>
+                {albumOptions.length === 1 ? (
+                  <a
+                    href={albumOptions[0].href}
+                    className="archive-card-menu-item"
+                    onClick={() => onActionsMenuOpenChange(asset.id, false)}
+                  >
+                    Перейти к альбому
+                  </a>
+                ) : null}
+                {albumOptions.length > 1 ? (
+                  <button
+                    type="button"
+                    className="archive-card-menu-item"
+                    onClick={() => onAlbumChooserOpen(asset.id)}
+                  >
+                    Перейти в альбом…
+                  </button>
+                ) : null}
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="archive-card-menu-item"
+                    onClick={() => {
+                      onStartSelection(asset.id);
+                      onActionsMenuOpenChange(asset.id, false);
+                    }}
+                  >
+                    Выбрать несколько
+                  </button>
+                ) : null}
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="archive-card-menu-item archive-card-menu-item-danger"
+                    onClick={() => {
+                      onDelete(asset.id);
+                      onActionsMenuOpenChange(asset.id, false);
+                    }}
+                  >
+                    Удалить
+                  </button>
+                ) : null}
+              </>
+            )}
+          </PopoverContent>
+        </Popover>
+      ) : (
+        <label className="archive-tile-selector">
+          <input
+            type="checkbox"
+            className="archive-tile-checkbox"
+            checked={isSelected}
+            aria-label={`Выбрать медиа ${asset.title}`}
+            onChange={() => onToggleSelection(asset.id)}
+            onClick={(event) => event.stopPropagation()}
+          />
+          <span className="media-selection-indicator" aria-hidden="true">
+            <span className="media-selection-checkmark">✓</span>
+          </span>
+        </label>
+      )}
+      <button
+        type="button"
+        className="archive-tile"
+        data-archive-thumb-media-id={asset.id}
+        aria-label={`${asset.kind === "photo" ? "Открыть фото" : asset.kind === "video" ? "Открыть видео" : "Открыть файл"}: ${asset.title}`}
+        onClick={() => {
+          if (isArchiveSelectionMode) {
+            onToggleSelection(asset.id);
+            return;
+          }
+          onOpen(asset.id, scope);
+        }}
+      >
+        {thumbSource ? (
+          <MediaThumbVisual
+            asset={asset}
+            thumbSource={thumbSource}
+            containerClassName="archive-thumb-visual"
+            mediaClassName={thumbSource.kind === "image" ? "archive-tile-image" : "archive-tile-video"}
+            placeholder={null}
+            disableDurationProbe
+          />
+        ) : (
+          renderArchivePlaceholder(asset.kind)
+        )}
+      </button>
+    </div>
+  );
+}, (prevProps, nextProps) => (
+  prevProps.asset.id === nextProps.asset.id &&
+  prevProps.asset.title === nextProps.asset.title &&
+  prevProps.asset.kind === nextProps.asset.kind &&
+  prevProps.scope === nextProps.scope &&
+  prevProps.downloadHref === nextProps.downloadHref &&
+  prevProps.thumbSource?.kind === nextProps.thumbSource?.kind &&
+  prevProps.thumbSource?.src === nextProps.thumbSource?.src &&
+  prevProps.isSelected === nextProps.isSelected &&
+  prevProps.isArchiveSelectionMode === nextProps.isArchiveSelectionMode &&
+  prevProps.isActionsMenuOpen === nextProps.isActionsMenuOpen &&
+  prevProps.isAlbumChooserOpen === nextProps.isAlbumChooserOpen &&
+  prevProps.canEdit === nextProps.canEdit &&
+  areArchiveAlbumOptionsEqual(prevProps.albumOptions, nextProps.albumOptions)
+));
 
 function buildPendingArchiveUploadItem(file: File): PendingArchiveUploadItem {
   return {
@@ -532,6 +771,7 @@ export function TreeMediaArchiveClient({
   allMedia,
   allAlbums,
   persistedAlbumMediaMap,
+  initialThumbUrlsByMediaId = {},
   uploaderLabels
 }: TreeMediaArchiveClientProps) {
   const [mode, setMode] = useState<MediaMode>(initialMode);
@@ -564,9 +804,7 @@ export function TreeMediaArchiveClient({
   const [resumeUploadReviewAfterAlbumCreate, setResumeUploadReviewAfterAlbumCreate] = useState(false);
   const [isSavingUploads, setIsSavingUploads] = useState(false);
   const [activeUploads, setActiveUploads] = useState<ActiveArchiveUploadItem[]>([]);
-  const [viewerMediaIds, setViewerMediaIds] = useState<string[]>([]);
-  const [viewerMediaId, setViewerMediaId] = useState<string | null>(null);
-  const [isMediaViewerOpen, setIsMediaViewerOpen] = useState(false);
+  const [archiveViewerSession, setArchiveViewerSession] = useState<ArchiveViewerSession | null>(null);
   const [isArchiveSelectionMode, setIsArchiveSelectionMode] = useState(false);
   const [selectedArchiveMediaIds, setSelectedArchiveMediaIds] = useState<Set<string>>(() => new Set());
   const [isAddToAlbumPickerOpen, setIsAddToAlbumPickerOpen] = useState(false);
@@ -588,6 +826,59 @@ export function TreeMediaArchiveClient({
   const uploaderLabelsById = useMemo(() => new Map(uploaderLabels.map((item) => [item.userId, item.label] as const)), [uploaderLabels]);
   const [albumMediaMap, setAlbumMediaMap] = useState<Record<string, MediaAssetRecord[]>>(persistedAlbumMediaMap);
   const [optimisticVideoPreviewUrls, setOptimisticVideoPreviewUrls] = useState<Record<string, string>>({});
+  const [resolvedThumbUrlsByMediaId, setResolvedThumbUrlsByMediaId] = useState<Record<string, string>>(initialThumbUrlsByMediaId);
+  const pendingThumbUrlIdsRef = useRef(new Set<string>());
+  const requestedThumbSetKeysRef = useRef(new Set<string>());
+  const prefetchedThumbSetKeysRef = useRef(new Set<string>());
+  const warmedThumbUrlsRef = useRef(new Set<string>());
+  const isArchiveClientMountedRef = useRef(true);
+  const pendingThumbBatchApplyRef = useRef<{
+    batchKey: string;
+    mediaIds: string[];
+    stateApplyStartedAt: number;
+  } | null>(null);
+  const initialVisibleSettleStartedRef = useRef(false);
+  const pendingShowMoreRevealRef = useRef<{
+    visibleSetKey: string;
+    mediaIds: string[];
+    startedAt: number;
+    prefetchedResolvedCount: number;
+    warmedCount: number;
+  } | null>(null);
+  const previousRenderedTileIdsRef = useRef<Set<string>>(new Set());
+  const previousRenderedAlbumIdsRef = useRef<Set<string>>(new Set());
+  const visibleMediaRef = useRef<MediaAssetRecord[]>(allMedia.slice(0, INITIAL_TILE_LIMIT));
+  const visibleSelectedAlbumMediaRef = useRef<MediaAssetRecord[]>([]);
+
+  useEffect(() => {
+    setResolvedThumbUrlsByMediaId((current) => ({ ...initialThumbUrlsByMediaId, ...current }));
+  }, [initialThumbUrlsByMediaId]);
+
+  useEffect(() => {
+    return () => {
+      isArchiveClientMountedRef.current = false;
+    };
+  }, []);
+
+  function resolveArchiveThumbSource(asset: MediaAssetRecord) {
+    const resolvedThumbUrl = resolvedThumbUrlsByMediaId[asset.id];
+    if (resolvedThumbUrl) {
+      return {
+        kind: "image" as const,
+        src: resolvedThumbUrl,
+      };
+    }
+
+    if (canBatchResolveArchiveThumb(asset)) {
+      return null;
+    }
+
+    return isHydrated ? resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls) : null;
+  }
+
+  const renderStartedAt = typeof performance !== "undefined" ? performance.now() : 0;
+  const renderedTileIdsThisRender: string[] = [];
+  const renderedAlbumIdsThisRender: string[] = [];
 
   useEffect(() => {
     setIsHydrated(true);
@@ -620,19 +911,6 @@ export function TreeMediaArchiveClient({
       }
     };
   }, [optimisticVideoPreviewUrls]);
-
-  useEffect(() => {
-    if (!isMediaViewerOpen) {
-      return undefined;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isMediaViewerOpen]);
 
   useEffect(() => {
     if (!status) {
@@ -817,6 +1095,624 @@ export function TreeMediaArchiveClient({
 
     return (albumMediaMap[selectedAlbum.id] || []).filter((asset) => asset.kind === selectedAlbum.kind);
   }, [albumMediaMap, currentMedia, selectedAlbum]);
+  const visibleSelectedAlbumMedia = selectedAlbumMedia.slice(0, visibleItems);
+  visibleMediaRef.current = visibleMedia;
+  visibleSelectedAlbumMediaRef.current = visibleSelectedAlbumMedia;
+
+  function canBatchResolveArchiveThumb(asset: MediaAssetRecord) {
+    return asset.kind === "photo" || (asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready");
+  }
+
+  function getAlbumPreviewMediaIds(album: AlbumSummary) {
+    const albumMedia = getArchiveAlbumSourceMedia(album, currentMedia, albumMediaMap);
+    const cover = album.coverMediaId ? albumMedia.find((asset) => asset.id === album.coverMediaId) || null : null;
+    const orderedMedia = cover ? [cover, ...albumMedia.filter((asset) => asset.id !== cover.id)] : albumMedia;
+    return orderedMedia
+      .filter((asset) => canBatchResolveArchiveThumb(asset))
+      .slice(0, 3)
+      .map((asset) => asset.id);
+  }
+
+  const visibleThumbMediaIds = useMemo(() => {
+    const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
+    let nextVisibleThumbMediaIds: string[];
+    if (view === "all") {
+      nextVisibleThumbMediaIds = [...new Set(visibleMedia.filter((asset) => canBatchResolveArchiveThumb(asset)).map((asset) => asset.id))];
+    } else if (selectedAlbum) {
+      nextVisibleThumbMediaIds = [...new Set(visibleSelectedAlbumMedia.filter((asset) => canBatchResolveArchiveThumb(asset)).map((asset) => asset.id))];
+    } else {
+      nextVisibleThumbMediaIds = [...new Set(currentAlbums.flatMap((album) => getAlbumPreviewMediaIds(album)))];
+    }
+
+    recordArchiveThumbPerfEvent({
+      stage: "visible-set-compute",
+      mode,
+      view,
+      selectedAlbumId,
+      visibleItems,
+      mediaCount: nextVisibleThumbMediaIds.length,
+      durationMs: typeof performance !== "undefined" ? performance.now() - startedAt : null,
+    });
+    return nextVisibleThumbMediaIds;
+  }, [currentAlbums, selectedAlbum, view, visibleMedia, visibleSelectedAlbumMedia]);
+
+  const nextVisibleThumbMediaIds = useMemo(() => {
+    const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
+    let nextIds: string[] = [];
+
+    if (view === "all" && visibleItems < currentMedia.length) {
+      nextIds = [...new Set(
+        currentMedia
+          .slice(visibleItems, visibleItems + INITIAL_TILE_LIMIT)
+          .filter((asset) => canBatchResolveArchiveThumb(asset))
+          .map((asset) => asset.id)
+      )];
+    } else if (selectedAlbum && visibleItems < selectedAlbumMedia.length) {
+      nextIds = [...new Set(
+        selectedAlbumMedia
+          .slice(visibleItems, visibleItems + INITIAL_TILE_LIMIT)
+          .filter((asset) => canBatchResolveArchiveThumb(asset))
+          .map((asset) => asset.id)
+      )];
+    }
+
+    recordArchiveThumbPerfEvent({
+      stage: "next-visible-set-compute",
+      mode,
+      view,
+      selectedAlbumId,
+      visibleItems,
+      mediaCount: nextIds.length,
+      durationMs: typeof performance !== "undefined" ? performance.now() - startedAt : null,
+    });
+
+    return nextIds;
+  }, [currentMedia, mode, selectedAlbum, selectedAlbumId, selectedAlbumMedia, view, visibleItems]);
+
+  useEffect(() => {
+    if (!isHydrated || initialVisibleSettleStartedRef.current || visibleItems !== INITIAL_TILE_LIMIT) {
+      return;
+    }
+
+    initialVisibleSettleStartedRef.current = true;
+    const initialVisibleSetKey = [...new Set(visibleThumbMediaIds)].sort().join(",");
+    const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
+    recordArchiveThumbPerfEvent({
+      stage: "initial-visible-settle-start",
+      visibleSetKey: initialVisibleSetKey,
+      mediaCount: visibleThumbMediaIds.length,
+    });
+
+    trackArchiveImageCompletion({
+      stage: "initial-visible-settle",
+      visibleSetKey: initialVisibleSetKey,
+      mediaIds: visibleThumbMediaIds,
+      startedAt,
+    });
+  }, [isHydrated, visibleItems, visibleThumbMediaIds]);
+
+  function trackArchiveImageCompletion(input: {
+    stage: string;
+    visibleSetKey: string;
+    mediaIds: string[];
+    startedAt: number;
+    onComplete?: () => void;
+  }) {
+    if (typeof window === "undefined" || typeof performance === "undefined") {
+      return;
+    }
+
+    const imageElements = input.mediaIds
+      .map((mediaId) => ({
+        mediaId,
+        image: document.querySelector(`[data-archive-thumb-media-id="${mediaId}"] img`) as HTMLImageElement | null,
+      }))
+      .filter((item) => Boolean(item.image)) as Array<{ mediaId: string; image: HTMLImageElement }>;
+
+    if (!imageElements.length) {
+      recordArchiveThumbPerfEvent({
+        stage: input.stage,
+        visibleSetKey: input.visibleSetKey,
+        mediaCount: input.mediaIds.length,
+        foundImageCount: 0,
+        durationMs: 0,
+      });
+      input.onComplete?.();
+      return;
+    }
+
+    const pendingImages = imageElements.filter((item) => !item.image.complete);
+    if (!pendingImages.length) {
+      recordArchiveThumbPerfEvent({
+        stage: input.stage,
+        visibleSetKey: input.visibleSetKey,
+        mediaCount: input.mediaIds.length,
+        foundImageCount: imageElements.length,
+        durationMs: performance.now() - input.startedAt,
+      });
+      input.onComplete?.();
+      return;
+    }
+
+    let settledCount = 0;
+    const finish = () => {
+      settledCount += 1;
+        if (settledCount === pendingImages.length) {
+          recordArchiveThumbPerfEvent({
+            stage: input.stage,
+            visibleSetKey: input.visibleSetKey,
+            mediaCount: input.mediaIds.length,
+            foundImageCount: imageElements.length,
+            durationMs: performance.now() - input.startedAt,
+          });
+          input.onComplete?.();
+        }
+      };
+
+    pendingImages.forEach(({ image }) => {
+      const handleDone = () => {
+        image.removeEventListener("load", handleDone);
+        image.removeEventListener("error", handleDone);
+        finish();
+      };
+
+      image.addEventListener("load", handleDone);
+      image.addEventListener("error", handleDone);
+    });
+  }
+
+  const handleShowMore = useCallback(() => {
+    const nextMediaIds = [...new Set(nextVisibleThumbMediaIds)].sort();
+    if (ARCHIVE_THUMB_PERF_ENABLED) {
+      const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
+      const prefetchedResolvedCount = nextMediaIds.filter((mediaId) => Boolean(resolvedThumbUrlsByMediaId[mediaId])).length;
+      const warmedCount = nextMediaIds
+        .map((mediaId) => resolvedThumbUrlsByMediaId[mediaId])
+        .filter((thumbUrl): thumbUrl is string => Boolean(thumbUrl) && warmedThumbUrlsRef.current.has(thumbUrl))
+        .length;
+      const visibleSetKey = nextMediaIds.join(",");
+
+      recordArchiveThumbPerfEvent({
+        stage: "show-more-click",
+        visibleSetKey,
+        mediaCount: nextMediaIds.length,
+        prefetchedResolvedCount,
+        warmedCount,
+      });
+
+      pendingShowMoreRevealRef.current = {
+        visibleSetKey,
+        mediaIds: nextMediaIds,
+        startedAt,
+        prefetchedResolvedCount,
+        warmedCount,
+      };
+    }
+
+    setVisibleItems((current) => current + INITIAL_TILE_LIMIT);
+  }, [nextVisibleThumbMediaIds, resolvedThumbUrlsByMediaId]);
+
+  function getCurrentVisibleIncompleteImageCount(mediaIds: string[]) {
+    if (typeof document === "undefined") {
+      return 0;
+    }
+
+    return mediaIds.filter((mediaId) => {
+      const image = document.querySelector(`[data-archive-thumb-media-id="${mediaId}"] img`) as HTMLImageElement | null;
+      return image !== null && !image.complete;
+    }).length;
+  }
+
+  function warmArchiveThumbUrls(input: {
+    visibleSetKey: string;
+    thumbUrlsByMediaId: Record<string, string>;
+    deferredByIncompleteCount?: number;
+  }) {
+    if (typeof Image === "undefined") {
+      return;
+    }
+
+    const nextThumbUrls = (Object.values(input.thumbUrlsByMediaId) as string[]).filter((thumbUrl) => !warmedThumbUrlsRef.current.has(thumbUrl));
+    if (!nextThumbUrls.length) {
+      return;
+    }
+
+    nextThumbUrls.forEach((thumbUrl) => {
+      warmedThumbUrlsRef.current.add(thumbUrl);
+      const image = new Image();
+      image.decoding = "async";
+      image.src = thumbUrl;
+    });
+    recordArchiveThumbPerfEvent({
+      stage: "prefetch-image-warm",
+      visibleSetKey: input.visibleSetKey,
+      mediaCount: Object.keys(input.thumbUrlsByMediaId).length,
+      deferredByIncompleteCount: input.deferredByIncompleteCount ?? 0,
+    });
+  }
+
+  useEffect(() => {
+    if (!isHydrated || !visibleThumbMediaIds.length) {
+      return;
+    }
+
+    const mediaIds = [...new Set(visibleThumbMediaIds.filter(
+      (mediaId) => !resolvedThumbUrlsByMediaId[mediaId] && !pendingThumbUrlIdsRef.current.has(mediaId)
+    ))].sort();
+    if (!mediaIds.length) {
+      return;
+    }
+
+    const visibleSetKey = mediaIds.join(",");
+    if (requestedThumbSetKeysRef.current.has(visibleSetKey)) {
+      recordArchiveThumbPerfEvent({
+        stage: "batch-request-skip",
+        reason: "same-visible-set",
+        visibleSetKey,
+        mediaCount: mediaIds.length,
+      });
+      return;
+    }
+
+    mediaIds.forEach((mediaId) => pendingThumbUrlIdsRef.current.add(mediaId));
+    requestedThumbSetKeysRef.current.add(visibleSetKey);
+    const params = new URLSearchParams();
+    if (shareToken) {
+      params.set("share", shareToken);
+    }
+    const requestUrl = params.size ? `/api/media/thumbs?${params.toString()}` : "/api/media/thumbs";
+    let requestSucceeded = false;
+    const mediaIdBatches: string[][] = [];
+    for (let index = 0; index < mediaIds.length; index += MEDIA_THUMB_BATCH_REQUEST_LIMIT) {
+      mediaIdBatches.push(mediaIds.slice(index, index + MEDIA_THUMB_BATCH_REQUEST_LIMIT));
+    }
+
+    const requestStartedAt = typeof performance !== "undefined" ? performance.now() : 0;
+    recordArchiveThumbPerfEvent({
+      stage: "batch-request-start",
+      visibleSetKey,
+      mediaCount: mediaIds.length,
+      batchCount: mediaIdBatches.length,
+      batchSizes: mediaIdBatches.map((batch) => batch.length),
+    });
+
+    void Promise.all(
+      mediaIdBatches.map(async (batchMediaIds) => {
+        const batchStartedAt = typeof performance !== "undefined" ? performance.now() : 0;
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            treeId,
+            mediaIds: batchMediaIds,
+          })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || "Запрос не выполнен.");
+        }
+
+        recordArchiveThumbPerfEvent({
+          stage: "batch-request-response",
+          visibleSetKey,
+          mediaCount: batchMediaIds.length,
+          durationMs: typeof performance !== "undefined" ? performance.now() - batchStartedAt : null,
+          cacheState: response.headers.get("X-Archive-Thumb-Batch-Cache"),
+          serverTotalMs: parseServerTimingDuration(response.headers.get("Server-Timing"), "archive-thumb-batch-total"),
+          serverResolveMs: parseServerTimingDuration(response.headers.get("Server-Timing"), "archive-thumb-batch-resolve"),
+        });
+
+        return payload;
+      })
+    )
+      .then((payloads) => {
+        if (!isArchiveClientMountedRef.current) {
+          return;
+        }
+
+        const nextResolvedThumbUrlsByMediaId = Object.assign({}, ...payloads.map((payload) => payload?.urlsByMediaId || {}));
+        if (!Object.keys(nextResolvedThumbUrlsByMediaId).length) {
+          return;
+        }
+
+        pendingThumbBatchApplyRef.current = {
+          batchKey: visibleSetKey,
+          mediaIds,
+          stateApplyStartedAt: typeof performance !== "undefined" ? performance.now() : 0,
+        };
+        setResolvedThumbUrlsByMediaId((current) => ({
+          ...current,
+          ...nextResolvedThumbUrlsByMediaId,
+        }));
+        requestSucceeded = true;
+        recordArchiveThumbPerfEvent({
+          stage: "batch-request-finish",
+          visibleSetKey,
+          mediaCount: mediaIds.length,
+          durationMs: typeof performance !== "undefined" ? performance.now() - requestStartedAt : null,
+        });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        mediaIds.forEach((mediaId) => pendingThumbUrlIdsRef.current.delete(mediaId));
+        if (!requestSucceeded) {
+          requestedThumbSetKeysRef.current.delete(visibleSetKey);
+        }
+      });
+  }, [isHydrated, resolvedThumbUrlsByMediaId, shareToken, treeId, visibleThumbMediaIds]);
+
+  useEffect(() => {
+    if (!isHydrated || !nextVisibleThumbMediaIds.length) {
+      return;
+    }
+
+    const currentVisibleSetResolved = visibleThumbMediaIds.every((mediaId) => resolvedThumbUrlsByMediaId[mediaId]);
+    if (!currentVisibleSetResolved) {
+      return;
+    }
+
+    const nextMediaIds = [...new Set(nextVisibleThumbMediaIds.filter(
+      (mediaId) => !resolvedThumbUrlsByMediaId[mediaId] && !pendingThumbUrlIdsRef.current.has(mediaId)
+    ))].sort();
+    if (!nextMediaIds.length) {
+      return;
+    }
+
+    const currentVisibleSetKey = [...new Set(visibleThumbMediaIds)].sort().join(",");
+    const nextVisibleSetKey = nextMediaIds.join(",");
+    if (prefetchedThumbSetKeysRef.current.has(nextVisibleSetKey) || requestedThumbSetKeysRef.current.has(nextVisibleSetKey)) {
+      recordArchiveThumbPerfEvent({
+        stage: "prefetch-skip",
+        reason: prefetchedThumbSetKeysRef.current.has(nextVisibleSetKey) ? "already-prefetched" : "already-requested",
+        visibleSetKey: nextVisibleSetKey,
+        mediaCount: nextMediaIds.length,
+      });
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (shareToken) {
+      params.set("share", shareToken);
+    }
+    const requestUrl = params.size ? `/api/media/thumbs?${params.toString()}` : "/api/media/thumbs";
+    const mediaIdBatches: string[][] = [];
+    for (let index = 0; index < nextMediaIds.length; index += MEDIA_THUMB_BATCH_REQUEST_LIMIT) {
+      mediaIdBatches.push(nextMediaIds.slice(index, index + MEDIA_THUMB_BATCH_REQUEST_LIMIT));
+    }
+
+    let cancelled = false;
+    let requestSucceeded = false;
+    const cancelIdlePrefetch = scheduleArchiveThumbIdleCallback(() => {
+      if (cancelled) {
+        return;
+      }
+
+      prefetchedThumbSetKeysRef.current.add(nextVisibleSetKey);
+      nextMediaIds.forEach((mediaId) => pendingThumbUrlIdsRef.current.add(mediaId));
+      const requestStartedAt = typeof performance !== "undefined" ? performance.now() : 0;
+      const currentVisibleIncompleteImageCount = getCurrentVisibleIncompleteImageCount(visibleThumbMediaIds);
+      recordArchiveThumbPerfEvent({
+        stage: "prefetch-start",
+        visibleSetKey: nextVisibleSetKey,
+        mediaCount: nextMediaIds.length,
+        batchCount: mediaIdBatches.length,
+        batchSizes: mediaIdBatches.map((batch) => batch.length),
+        currentVisibleIncompleteImageCount,
+      });
+
+      void Promise.all(
+        mediaIdBatches.map(async (batchMediaIds) => {
+          const batchStartedAt = typeof performance !== "undefined" ? performance.now() : 0;
+          const response = await fetch(requestUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              treeId,
+              mediaIds: batchMediaIds,
+            })
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || "Запрос не выполнен.");
+          }
+
+          recordArchiveThumbPerfEvent({
+            stage: "prefetch-response",
+            visibleSetKey: nextVisibleSetKey,
+            mediaCount: batchMediaIds.length,
+            durationMs: typeof performance !== "undefined" ? performance.now() - batchStartedAt : null,
+            cacheState: response.headers.get("X-Archive-Thumb-Batch-Cache"),
+            serverTotalMs: parseServerTimingDuration(response.headers.get("Server-Timing"), "archive-thumb-batch-total"),
+            serverResolveMs: parseServerTimingDuration(response.headers.get("Server-Timing"), "archive-thumb-batch-resolve"),
+          });
+
+          return payload;
+        })
+      )
+        .then((payloads) => {
+          if (!isArchiveClientMountedRef.current || cancelled) {
+            return;
+          }
+
+          const nextResolvedThumbUrlsByMediaId = Object.assign({}, ...payloads.map((payload) => payload?.urlsByMediaId || {}));
+          if (!Object.keys(nextResolvedThumbUrlsByMediaId).length) {
+            return;
+          }
+
+          setResolvedThumbUrlsByMediaId((current) => ({
+            ...current,
+            ...nextResolvedThumbUrlsByMediaId,
+          }));
+          requestSucceeded = true;
+          recordArchiveThumbPerfEvent({
+            stage: "prefetch-finish",
+            visibleSetKey: nextVisibleSetKey,
+            mediaCount: nextMediaIds.length,
+            durationMs: typeof performance !== "undefined" ? performance.now() - requestStartedAt : null,
+          });
+
+          if (currentVisibleIncompleteImageCount === 0) {
+            warmArchiveThumbUrls({
+              visibleSetKey: nextVisibleSetKey,
+              thumbUrlsByMediaId: nextResolvedThumbUrlsByMediaId,
+            });
+          } else {
+            recordArchiveThumbPerfEvent({
+              stage: "prefetch-image-warm-deferred",
+              visibleSetKey: nextVisibleSetKey,
+              mediaCount: Object.keys(nextResolvedThumbUrlsByMediaId).length,
+              blockedByIncompleteCount: currentVisibleIncompleteImageCount,
+            });
+
+            trackArchiveImageCompletion({
+              stage: "prefetch-current-visible-settle",
+              visibleSetKey: currentVisibleSetKey,
+              mediaIds: visibleThumbMediaIds,
+              startedAt: requestStartedAt,
+              onComplete: () => {
+                warmArchiveThumbUrls({
+                  visibleSetKey: nextVisibleSetKey,
+                  thumbUrlsByMediaId: nextResolvedThumbUrlsByMediaId,
+                  deferredByIncompleteCount: currentVisibleIncompleteImageCount,
+                });
+              },
+            });
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          nextMediaIds.forEach((mediaId) => pendingThumbUrlIdsRef.current.delete(mediaId));
+          if (!requestSucceeded) {
+            prefetchedThumbSetKeysRef.current.delete(nextVisibleSetKey);
+          }
+        });
+    });
+
+    recordArchiveThumbPerfEvent({
+      stage: "prefetch-scheduled",
+      visibleSetKey: nextVisibleSetKey,
+      mediaCount: nextMediaIds.length,
+    });
+
+    return () => {
+      cancelled = true;
+      cancelIdlePrefetch();
+    };
+  }, [isHydrated, nextVisibleThumbMediaIds, resolvedThumbUrlsByMediaId, shareToken, treeId, visibleThumbMediaIds]);
+
+  useEffect(() => {
+    const pendingThumbBatchApply = pendingThumbBatchApplyRef.current;
+    if (!pendingThumbBatchApply) {
+      return;
+    }
+
+    if (!pendingThumbBatchApply.mediaIds.every((mediaId) => resolvedThumbUrlsByMediaId[mediaId])) {
+      return;
+    }
+
+    pendingThumbBatchApplyRef.current = null;
+    const stateApplyDurationMs =
+      typeof performance !== "undefined" ? performance.now() - pendingThumbBatchApply.stateApplyStartedAt : null;
+    recordArchiveThumbPerfEvent({
+      stage: "state-apply",
+      batchKey: pendingThumbBatchApply.batchKey,
+      mediaCount: pendingThumbBatchApply.mediaIds.length,
+      durationMs: stateApplyDurationMs,
+    });
+
+    if (typeof window === "undefined" || typeof performance === "undefined") {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      recordArchiveThumbPerfEvent({
+        stage: "render-update",
+        batchKey: pendingThumbBatchApply.batchKey,
+        mediaCount: pendingThumbBatchApply.mediaIds.length,
+        durationMs: performance.now() - pendingThumbBatchApply.stateApplyStartedAt,
+      });
+      trackArchiveImageCompletion({
+        stage: "image-load",
+        visibleSetKey: pendingThumbBatchApply.batchKey,
+        mediaIds: pendingThumbBatchApply.mediaIds,
+        startedAt: pendingThumbBatchApply.stateApplyStartedAt,
+      });
+    });
+  }, [resolvedThumbUrlsByMediaId]);
+
+  useEffect(() => {
+    const pendingShowMoreReveal = pendingShowMoreRevealRef.current;
+    if (!pendingShowMoreReveal) {
+      return;
+    }
+
+    if (!pendingShowMoreReveal.mediaIds.length) {
+      pendingShowMoreRevealRef.current = null;
+      recordArchiveThumbPerfEvent({
+        stage: "show-more-visible",
+        visibleSetKey: pendingShowMoreReveal.visibleSetKey,
+        mediaCount: 0,
+        prefetchedResolvedCount: pendingShowMoreReveal.prefetchedResolvedCount,
+        warmedCount: pendingShowMoreReveal.warmedCount,
+        durationMs: typeof performance !== "undefined" ? performance.now() - pendingShowMoreReveal.startedAt : null,
+      });
+      return;
+    }
+
+    const allThumbsResolved = pendingShowMoreReveal.mediaIds.every((mediaId) => Boolean(resolvedThumbUrlsByMediaId[mediaId]));
+    if (!allThumbsResolved) {
+      return;
+    }
+
+    pendingShowMoreRevealRef.current = null;
+    if (typeof window === "undefined" || typeof performance === "undefined") {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      recordArchiveThumbPerfEvent({
+        stage: "show-more-render",
+        visibleSetKey: pendingShowMoreReveal.visibleSetKey,
+        mediaCount: pendingShowMoreReveal.mediaIds.length,
+        prefetchedResolvedCount: pendingShowMoreReveal.prefetchedResolvedCount,
+        warmedCount: pendingShowMoreReveal.warmedCount,
+        durationMs: performance.now() - pendingShowMoreReveal.startedAt,
+      });
+      trackArchiveImageCompletion({
+        stage: "show-more-visible",
+        visibleSetKey: pendingShowMoreReveal.visibleSetKey,
+        mediaIds: pendingShowMoreReveal.mediaIds,
+        startedAt: pendingShowMoreReveal.startedAt,
+      });
+    });
+  }, [resolvedThumbUrlsByMediaId]);
+
+  useEffect(() => {
+    const renderedTileIdSet = new Set(renderedTileIdsThisRender);
+    const renderedAlbumIdSet = new Set(renderedAlbumIdsThisRender);
+
+    recordArchiveThumbPerfEvent({
+      stage: "render-commit",
+      mode,
+      view,
+      selectedAlbumId,
+      visibleItems,
+      renderDurationMs: typeof performance !== "undefined" ? performance.now() - renderStartedAt : null,
+      tileRenderCallCount: renderedTileIdsThisRender.length,
+      tileUniqueCount: renderedTileIdSet.size,
+      rerenderedExistingTileCount: [...renderedTileIdSet].filter((id) => previousRenderedTileIdsRef.current.has(id)).length,
+      albumRenderCallCount: renderedAlbumIdsThisRender.length,
+      albumUniqueCount: renderedAlbumIdSet.size,
+      rerenderedExistingAlbumCount: [...renderedAlbumIdSet].filter((id) => previousRenderedAlbumIdsRef.current.has(id)).length,
+    });
+
+    previousRenderedTileIdsRef.current = renderedTileIdSet;
+    previousRenderedAlbumIdsRef.current = renderedAlbumIdSet;
+  });
 
   useEffect(() => {
     setIsArchiveSelectionMode(false);
@@ -930,7 +1826,7 @@ export function TreeMediaArchiveClient({
         isAddToAlbumPickerOpen ||
         deleteTargetMediaId ||
         isBulkArchiveDeleteConfirmOpen ||
-        isMediaViewerOpen ||
+        archiveViewerSession ||
         isCreateAlbumOpen ||
         isUploadReviewOpen ||
         isDiscardConfirmOpen
@@ -950,7 +1846,7 @@ export function TreeMediaArchiveClient({
     isBulkArchiveDeleteConfirmOpen,
     isCreateAlbumOpen,
     isDiscardConfirmOpen,
-    isMediaViewerOpen,
+    archiveViewerSession,
     isUploadReviewOpen,
     openArchiveActionsMediaId,
     openArchiveAlbumChooserMediaId,
@@ -958,16 +1854,14 @@ export function TreeMediaArchiveClient({
   ]);
   const viewerMedia = useMemo(
     () =>
-      viewerMediaIds
-        .map((assetId) => archiveMedia.find((asset) => asset.id === assetId) || null)
-        .filter((asset): asset is MediaAssetRecord => Boolean(asset)),
-    [archiveMedia, viewerMediaIds]
+      archiveViewerSession
+        ? archiveViewerSession.mediaIds
+            .map((assetId) => archiveMedia.find((asset) => asset.id === assetId) || null)
+            .filter((asset): asset is MediaAssetRecord => Boolean(asset))
+        : [],
+    [archiveMedia, archiveViewerSession]
   );
-  const viewerIndex = viewerMediaId ? viewerMedia.findIndex((asset) => asset.id === viewerMediaId) : -1;
-  const resolvedViewerIndex = viewerIndex >= 0 ? viewerIndex : 0;
-  const activeViewerAsset = viewerMedia[resolvedViewerIndex] || null;
   const deleteTargetAsset = deleteTargetMediaId ? archiveMedia.find((asset) => asset.id === deleteTargetMediaId) || null : null;
-  const canNavigateViewer = viewerMedia.length > 1;
   const pendingUploadsSummary = useMemo(() => buildPendingUploadSummary(pendingUploads), [pendingUploads]);
   const activeUploadCompletedCount = activeUploads.filter((item) => item.status === "done").length;
   const activeUploadPosition = activeUpload ? activeUploads.findIndex((item) => item.id === activeUpload.id) + 1 : 0;
@@ -1008,62 +1902,60 @@ export function TreeMediaArchiveClient({
   }
 
   useEffect(() => {
+    if (!archiveViewerSession) {
+      return;
+    }
+
     if (!viewerMedia.length) {
-      if (isMediaViewerOpen) {
-        setIsMediaViewerOpen(false);
-      }
-      if (viewerMediaId) {
-        setViewerMediaId(null);
-      }
+      setArchiveViewerSession(null);
       return;
     }
 
-    if (viewerMediaId && viewerMedia.some((asset) => asset.id === viewerMediaId)) {
+    if (viewerMedia.some((asset) => asset.id === archiveViewerSession.initialMediaId)) {
       return;
     }
 
-    setViewerMediaId(viewerMedia[0]?.id || null);
-  }, [isMediaViewerOpen, viewerMedia, viewerMediaId]);
+    setArchiveViewerSession((currentSession) =>
+      currentSession
+        ? {
+            ...currentSession,
+            initialMediaId: viewerMedia[0]?.id || currentSession.initialMediaId,
+          }
+        : currentSession
+    );
+  }, [archiveViewerSession, viewerMedia]);
 
-  useEffect(() => {
-    if (!isMediaViewerOpen || !activeViewerAsset) {
-      return undefined;
-    }
+  const openMediaViewer = useCallback((assetId: string, items: MediaAssetRecord[]) => {
+    const scopedItems = (() => {
+      const isOversizedArchiveGridScope = view === "all";
+      const isMergedUploaderAlbumScope = view === "albums" && selectedAlbum?.albumKind === "uploader" && selectedAlbum.kind === "all";
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsMediaViewerOpen(false);
+      if ((!isOversizedArchiveGridScope && !isMergedUploaderAlbumScope) || items.length <= ARCHIVE_VIEWER_WINDOW_LIMIT) {
+        return items;
       }
 
-      if (event.key === "ArrowLeft" && canNavigateViewer) {
-        event.preventDefault();
-        setViewerMediaId(viewerMedia[(resolvedViewerIndex - 1 + viewerMedia.length) % viewerMedia.length]?.id || null);
+      const activeIndex = items.findIndex((asset) => asset.id === assetId);
+      if (activeIndex < 0) {
+        return items.slice(0, ARCHIVE_VIEWER_WINDOW_LIMIT);
       }
 
-      if (event.key === "ArrowRight" && canNavigateViewer) {
-        event.preventDefault();
-        setViewerMediaId(viewerMedia[(resolvedViewerIndex + 1) % viewerMedia.length]?.id || null);
+      const halfWindow = Math.floor(ARCHIVE_VIEWER_WINDOW_LIMIT / 2);
+      let startIndex = Math.max(0, activeIndex - halfWindow);
+      let endIndex = startIndex + ARCHIVE_VIEWER_WINDOW_LIMIT;
+
+      if (endIndex > items.length) {
+        endIndex = items.length;
+        startIndex = Math.max(0, endIndex - ARCHIVE_VIEWER_WINDOW_LIMIT);
       }
-    }
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeViewerAsset, canNavigateViewer, isMediaViewerOpen, resolvedViewerIndex, viewerMedia]);
+      return items.slice(startIndex, endIndex);
+    })();
 
-  function openMediaViewer(assetId: string, items: MediaAssetRecord[]) {
-    setViewerMediaIds(items.map((asset) => asset.id));
-    setViewerMediaId(assetId);
-    setIsMediaViewerOpen(true);
-  }
-
-  function moveViewerSelection(direction: -1 | 1) {
-    if (!viewerMedia.length) {
-      return;
-    }
-
-    const nextIndex = (resolvedViewerIndex + direction + viewerMedia.length) % viewerMedia.length;
-    setViewerMediaId(viewerMedia[nextIndex]?.id || null);
-  }
+    setArchiveViewerSession({
+      mediaIds: scopedItems.map((asset) => asset.id),
+      initialMediaId: assetId,
+    });
+  }, [selectedAlbum, view]);
 
   function clearArchiveSelection() {
     setIsArchiveSelectionMode(false);
@@ -1072,7 +1964,7 @@ export function TreeMediaArchiveClient({
     setIsAddToAlbumPickerOpen(false);
   }
 
-  function toggleArchiveSelection(mediaId: string) {
+  const toggleArchiveSelection = useCallback((mediaId: string) => {
     if (!canEdit) {
       return;
     }
@@ -1086,16 +1978,16 @@ export function TreeMediaArchiveClient({
       }
       return nextSelection;
     });
-  }
+  }, [canEdit]);
 
-  function startArchiveSelectionMode(mediaId: string) {
+  const startArchiveSelectionMode = useCallback((mediaId: string) => {
     if (!canEdit) {
       return;
     }
 
     setIsArchiveSelectionMode(true);
     setSelectedArchiveMediaIds((currentSelection) => new Set([...currentSelection, mediaId]));
-  }
+  }, [canEdit]);
 
   function buildArchiveAlbumHrefForAlbum(asset: MediaAssetRecord, albumId: string) {
     const baseMode = asset.kind === "photo" ? "photo" : asset.kind === "video" ? "video" : "all";
@@ -1148,6 +2040,29 @@ export function TreeMediaArchiveClient({
     return [...optionsById.values()].sort((left, right) => left.title.localeCompare(right.title, "ru"));
   }
 
+  const handleArchiveTileOpen = useCallback((mediaId: string, scope: ArchiveTileScope) => {
+    const scopedItems = scope === "album" ? visibleSelectedAlbumMediaRef.current : visibleMediaRef.current;
+    openMediaViewer(mediaId, scopedItems);
+  }, [openMediaViewer]);
+
+  const handleArchiveTileActionsMenuOpenChange = useCallback((mediaId: string, open: boolean) => {
+    if (open) {
+      setOpenArchiveActionsMediaId(mediaId);
+      return;
+    }
+
+    setOpenArchiveActionsMediaId((current) => (current === mediaId ? null : current));
+    setOpenArchiveAlbumChooserMediaId((current) => (current === mediaId ? null : current));
+  }, []);
+
+  const handleArchiveTileAlbumChooserOpen = useCallback((mediaId: string) => {
+    setOpenArchiveAlbumChooserMediaId(mediaId || null);
+  }, []);
+
+  const handleArchiveTileDelete = useCallback((mediaId: string) => {
+    setDeleteTargetMediaId(mediaId);
+  }, []);
+
   function patchDeletedArchiveMedia(mediaIds: Iterable<string>) {
     const deletedMediaIds = new Set(mediaIds);
     if (!deletedMediaIds.size) {
@@ -1160,7 +2075,21 @@ export function TreeMediaArchiveClient({
         Object.entries(current).map(([albumId, items]) => [albumId, items.filter((asset) => !deletedMediaIds.has(asset.id))])
       )
     );
-    setViewerMediaIds((current) => current.filter((mediaId) => !deletedMediaIds.has(mediaId)));
+    setArchiveViewerSession((currentSession) => {
+      if (!currentSession) {
+        return currentSession;
+      }
+
+      const nextMediaIds = currentSession.mediaIds.filter((mediaId) => !deletedMediaIds.has(mediaId));
+      if (!nextMediaIds.length) {
+        return null;
+      }
+
+      return {
+        mediaIds: nextMediaIds,
+        initialMediaId: deletedMediaIds.has(currentSession.initialMediaId) ? nextMediaIds[0] : currentSession.initialMediaId,
+      };
+    });
     for (const mediaId of deletedMediaIds) {
       clearOptimisticVideoPreview(mediaId);
     }
@@ -1347,157 +2276,37 @@ export function TreeMediaArchiveClient({
   }
 
   function renderArchiveTile(asset: MediaAssetRecord, items: MediaAssetRecord[]) {
-    const thumbSource = isHydrated ? resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls) : null;
+    const thumbSource = resolveArchiveThumbSource(asset);
     const downloadHref = buildDownloadUrl(asset, shareToken);
     const albumOptions = getArchiveAlbumOptionsForAsset(asset);
     const isSelected = selectedArchiveMediaIds.has(asset.id);
     const isActionsMenuOpen = openArchiveActionsMediaId === asset.id;
     const isAlbumChooserOpen = openArchiveAlbumChooserMediaId === asset.id;
+    const scope: ArchiveTileScope = items === visibleSelectedAlbumMedia ? "album" : "grid";
 
     return (
-      <div key={asset.id} className={`archive-tile-shell${isSelected ? " archive-tile-shell-selected" : ""}`}>
-        {!isArchiveSelectionMode ? (
-          <Popover
-            open={isActionsMenuOpen}
-            onOpenChange={(open) => {
-              if (open) {
-                setOpenArchiveActionsMediaId(asset.id);
-                return;
-              }
-
-              if (openArchiveActionsMediaId === asset.id) {
-                setOpenArchiveActionsMediaId(null);
-              }
-              if (openArchiveAlbumChooserMediaId === asset.id) {
-                setOpenArchiveAlbumChooserMediaId(null);
-              }
-            }}
-          >
-            <PopoverTrigger className="archive-tile-actions-trigger" aria-label={`Открыть действия для «${asset.title}»`}>
-              <MoreHorizontalIcon className="archive-tile-actions-trigger-icon" />
-            </PopoverTrigger>
-            <PopoverContent className="archive-card-actions-popover" align="end" side="bottom" sideOffset={8}>
-              {isAlbumChooserOpen ? (
-                <>
-                  <button
-                    type="button"
-                    className="archive-card-menu-item"
-                    onClick={() => setOpenArchiveAlbumChooserMediaId(null)}
-                  >
-                    Назад
-                  </button>
-                  {albumOptions.map((album) => (
-                    <a
-                      key={album.id}
-                      href={album.href}
-                      className="archive-card-menu-item"
-                      onClick={() => {
-                        setOpenArchiveActionsMediaId(null);
-                        setOpenArchiveAlbumChooserMediaId(null);
-                      }}
-                    >
-                      {album.title}
-                    </a>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <a
-                    href={downloadHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="archive-card-menu-item"
-                    onClick={() => setOpenArchiveActionsMediaId(null)}
-                  >
-                    Скачать
-                  </a>
-                  {albumOptions.length === 1 ? (
-                    <a
-                      href={albumOptions[0].href}
-                      className="archive-card-menu-item"
-                      onClick={() => setOpenArchiveActionsMediaId(null)}
-                    >
-                      Перейти к альбому
-                    </a>
-                  ) : null}
-                  {albumOptions.length > 1 ? (
-                    <button
-                      type="button"
-                      className="archive-card-menu-item"
-                      onClick={() => setOpenArchiveAlbumChooserMediaId(asset.id)}
-                    >
-                      Перейти в альбом…
-                    </button>
-                  ) : null}
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      className="archive-card-menu-item"
-                      onClick={() => {
-                        startArchiveSelectionMode(asset.id);
-                        setOpenArchiveActionsMediaId(null);
-                      }}
-                    >
-                      Выбрать несколько
-                    </button>
-                  ) : null}
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      className="archive-card-menu-item archive-card-menu-item-danger"
-                      onClick={() => {
-                        setDeleteTargetMediaId(asset.id);
-                        setOpenArchiveActionsMediaId(null);
-                      }}
-                    >
-                      Удалить
-                    </button>
-                  ) : null}
-                </>
-              )}
-            </PopoverContent>
-          </Popover>
-        ) : (
-          <label className="archive-tile-selector">
-            <input
-              type="checkbox"
-              className="archive-tile-checkbox"
-              checked={isSelected}
-              aria-label={`Выбрать медиа ${asset.title}`}
-              onChange={() => toggleArchiveSelection(asset.id)}
-              onClick={(event) => event.stopPropagation()}
-            />
-            <span className="media-selection-indicator" aria-hidden="true">
-              <span className="media-selection-checkmark">✓</span>
-            </span>
-          </label>
-        )}
-        <button
-          type="button"
-          className="archive-tile"
-          aria-label={`${asset.kind === "photo" ? "Открыть фото" : asset.kind === "video" ? "Открыть видео" : "Открыть файл"}: ${asset.title}`}
-          onClick={() => {
-            if (isArchiveSelectionMode) {
-              toggleArchiveSelection(asset.id);
-              return;
-            }
-            openMediaViewer(asset.id, items);
-          }}
-        >
-          {thumbSource ? (
-            <MediaThumbVisual
-              asset={asset}
-              thumbSource={thumbSource}
-              shareToken={shareToken}
-              containerClassName="archive-thumb-visual"
-              mediaClassName={thumbSource.kind === "image" ? "archive-tile-image" : "archive-tile-video"}
-              placeholder={null}
-            />
-          ) : (
-            renderArchivePlaceholder(asset.kind)
-          )}
-        </button>
-      </div>
+      <ArchiveTile
+        key={asset.id}
+        asset={asset}
+        scope={scope}
+        thumbSource={thumbSource}
+        downloadHref={downloadHref}
+        albumOptions={albumOptions}
+        isSelected={isSelected}
+        isArchiveSelectionMode={isArchiveSelectionMode}
+        isActionsMenuOpen={isActionsMenuOpen}
+        isAlbumChooserOpen={isAlbumChooserOpen}
+        canEdit={canEdit}
+        onToggleSelection={toggleArchiveSelection}
+        onOpen={handleArchiveTileOpen}
+        onActionsMenuOpenChange={handleArchiveTileActionsMenuOpenChange}
+        onAlbumChooserOpen={handleArchiveTileAlbumChooserOpen}
+        onStartSelection={startArchiveSelectionMode}
+        onDelete={handleArchiveTileDelete}
+        onRender={(mediaId) => {
+          renderedTileIdsThisRender.push(mediaId);
+        }}
+      />
     );
   }
 
@@ -1508,7 +2317,7 @@ export function TreeMediaArchiveClient({
     const previewItems: AlbumPreviewItem[] = [];
 
     for (const asset of orderedMedia) {
-      const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
+      const thumbSource = resolveArchiveThumbSource(asset);
       if (!thumbSource) {
         continue;
       }
@@ -1538,6 +2347,7 @@ export function TreeMediaArchiveClient({
         placeholder={null}
         showToneOverlay={false}
         showVideoChrome={false}
+        disableDurationProbe
         containerStyle={ARCHIVE_ALBUM_PREVIEW_TILE_STYLE}
         mediaStyle={mediaStyle}
       />
@@ -1566,6 +2376,7 @@ export function TreeMediaArchiveClient({
           mediaClassName={cover.thumbSource.kind === "image" ? "archive-album-image" : "archive-album-image archive-tile-video"}
           placeholder={null}
           showVideoChrome={false}
+          disableDurationProbe
         />
       );
     }
@@ -2308,12 +3119,12 @@ export function TreeMediaArchiveClient({
         currentMedia.length ? (
           <>
             <div className="archive-grid">
-              {visibleMedia.map((asset) => renderArchiveTile(asset, currentMedia))}
+              {visibleMedia.map((asset) => renderArchiveTile(asset, visibleMedia))}
             </div>
 
             {visibleItems < currentMedia.length ? (
               <div className="action-row archive-actions">
-                <Button type="button" variant="ghost" onClick={() => setVisibleItems((current) => current + INITIAL_TILE_LIMIT)}>
+                <Button type="button" variant="ghost" onClick={handleShowMore}>
                   Показать еще
                 </Button>
                 <span className="members-static-note">
@@ -2350,9 +3161,22 @@ export function TreeMediaArchiveClient({
             </div>
           </div>
           {selectedAlbumMedia.length ? (
-            <div className="archive-grid archive-grid-album">
-              {selectedAlbumMedia.map((asset) => renderArchiveTile(asset, selectedAlbumMedia))}
-            </div>
+            <>
+              <div className="archive-grid archive-grid-album">
+                {visibleSelectedAlbumMedia.map((asset) => renderArchiveTile(asset, visibleSelectedAlbumMedia))}
+              </div>
+
+              {visibleItems < selectedAlbumMedia.length ? (
+                <div className="action-row archive-actions">
+                  <Button type="button" variant="ghost" onClick={handleShowMore}>
+                    Показать еще
+                  </Button>
+                  <span className="members-static-note">
+                    Показано {Math.min(visibleItems, selectedAlbumMedia.length)} из {selectedAlbumMedia.length} {mode === "all" ? "материалов" : itemLabel}
+                  </span>
+                </div>
+              ) : null}
+            </>
           ) : (
             renderArchiveEmptyState({
               title: mode === "photo" ? "В этом альбоме пока нет фото" : mode === "video" ? "В этом альбоме пока нет видео" : "В этом альбоме пока нет медиа",
@@ -2367,6 +3191,7 @@ export function TreeMediaArchiveClient({
       ) : currentAlbums.length ? (
         <div className="archive-album-grid">
           {currentAlbums.map((album) => {
+            renderedAlbumIdsThisRender.push(album.id);
             const isAlbumActionsOpen = openArchiveAlbumActionsId === album.id;
             const albumMedia = getArchiveAlbumSourceMedia(album, currentMedia, albumMediaMap);
             const albumContentLabel = formatArchiveAlbumContentLabel(album, albumMedia);
@@ -2472,116 +3297,31 @@ export function TreeMediaArchiveClient({
             <span>{`${currentMedia.length} ${mode === "all" ? "материалов" : itemLabel} в текущем режиме`}</span>
           </div>
           <div className="archive-action-bar">
-            <Button type="button" variant="ghost" onClick={() => setVisibleItems((current) => current + INITIAL_TILE_LIMIT)}>
+            <Button type="button" variant="ghost" onClick={handleShowMore}>
               Показать еще
             </Button>
           </div>
         </div>
       ) : null}
 
-      {isMediaViewerOpen && activeViewerAsset ? (
-        <div
-          className="media-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Просмотр архива: ${activeViewerAsset.title}`}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setIsMediaViewerOpen(false);
+      {archiveViewerSession && viewerMedia.length ? (
+        <PersonMediaGallery
+          key={`${archiveViewerSession.initialMediaId}:${archiveViewerSession.mediaIds.join(",")}`}
+          media={viewerMedia}
+          shareToken={shareToken}
+          optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+          showStage={false}
+          showStickyFooter={false}
+          lightboxOnly
+          openLightboxOnMount
+          initialActiveMediaId={archiveViewerSession.initialMediaId}
+          lightboxAriaLabelPrefix="Просмотр архива"
+          onLightboxOpenChange={(open) => {
+            if (!open) {
+              setArchiveViewerSession(null);
             }
           }}
-        >
-          <div className="media-lightbox-dialog archive-media-dialog">
-            <div className="media-lightbox-header">
-              <div className="media-lightbox-copy">
-                <div className="media-meta">
-                  <span>{activeViewerAsset.kind === "photo" ? "Фото" : activeViewerAsset.kind === "video" ? "Видео" : "Документ"}</span>
-                  <span>{getArchiveMediaSourceLabel(activeViewerAsset)}</span>
-                  <span>{activeContextAlbum ? activeContextAlbum.title : modeLabel}</span>
-                </div>
-                <h3>{activeViewerAsset.title}</h3>
-                {activeViewerAsset.caption ? <p>{activeViewerAsset.caption}</p> : null}
-              </div>
-              <div className="media-lightbox-actions">
-                <a href={buildOpenUrl(activeViewerAsset, shareToken)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
-                  {getArchiveOpenLabel(activeViewerAsset)}
-                </a>
-                <Button type="button" variant="ghost" onClick={() => setIsMediaViewerOpen(false)}>
-                  Закрыть
-                </Button>
-              </div>
-            </div>
-
-            <div className="media-lightbox-body">
-              {canNavigateViewer ? (
-                <button type="button" className="media-lightbox-nav" aria-label="Предыдущее медиа" onClick={() => moveViewerSelection(-1)}>
-                  ‹
-                </button>
-              ) : null}
-
-              <div className="media-lightbox-stage archive-media-stage">
-                {isPhotoAsset(activeViewerAsset) ? (
-                  <img src={buildStageUrl(activeViewerAsset, shareToken, true)} alt={activeViewerAsset.title} className="person-media-stage-photo" />
-                ) : isInlineVideoAsset(activeViewerAsset) ? (
-                  <video
-                    key={activeViewerAsset.id}
-                    src={buildOpenUrl(activeViewerAsset, shareToken)}
-                    className="person-media-stage-video"
-                    controls
-                    playsInline
-                    preload="metadata"
-                  >
-                    Ваш браузер не поддерживает встроенное воспроизведение видео.
-                  </video>
-                ) : (
-                  <div className="person-media-placeholder archive-media-placeholder">
-                    <strong>{activeViewerAsset.provider === "yandex_disk" ? "Видео по ссылке" : "Файл открывается отдельно"}</strong>
-                    <p>{activeViewerAsset.caption || "Для этого материала доступно только открытие по отдельной ссылке."}</p>
-                    <a href={buildOpenUrl(activeViewerAsset, shareToken)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
-                      {getArchiveOpenLabel(activeViewerAsset)}
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              {canNavigateViewer ? (
-                <button type="button" className="media-lightbox-nav" aria-label="Следующее медиа" onClick={() => moveViewerSelection(1)}>
-                  ›
-                </button>
-              ) : null}
-            </div>
-
-            {viewerMedia.length > 1 ? (
-              <div className="archive-viewer-strip">
-                {viewerMedia.map((asset) => {
-                  const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
-
-                  return (
-                    <button
-                      key={asset.id}
-                      type="button"
-                      className={`archive-viewer-thumb${asset.id === activeViewerAsset.id ? " archive-viewer-thumb-active" : ""}`}
-                      onClick={() => setViewerMediaId(asset.id)}
-                    >
-                      {thumbSource ? (
-                        <MediaThumbVisual
-                          asset={asset}
-                          thumbSource={thumbSource}
-                          shareToken={shareToken}
-                          containerClassName="archive-viewer-thumb-visual"
-                          mediaClassName={thumbSource.kind === "image" ? "archive-tile-image" : "archive-tile-video"}
-                          placeholder={null}
-                        />
-                      ) : (
-                        renderArchivePlaceholder(asset.kind)
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        </div>
+        />
       ) : null}
 
       <Dialog

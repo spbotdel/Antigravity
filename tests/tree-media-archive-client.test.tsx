@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { uploadFileWithTransportContract } = vi.hoisted(() => ({
   uploadFileWithTransportContract: vi.fn(async () => undefined),
@@ -45,7 +45,7 @@ function renderArchiveClient(options?: {
     id: string;
     title: string;
     description: string | null;
-    kind?: "photo" | "video";
+    kind?: "photo" | "video" | "all";
     access?: "public" | "members";
     albumKind: "manual" | "uploader";
     uploaderUserId: string | null;
@@ -58,6 +58,7 @@ function renderArchiveClient(options?: {
   initialMode?: "photo" | "video" | "all";
   initialView?: "all" | "albums";
   initialAlbumId?: string | null;
+  initialThumbUrlsByMediaId?: Record<string, string>;
 }) {
   const allMedia = options?.allMedia || [
     createMediaAsset({
@@ -93,6 +94,7 @@ function renderArchiveClient(options?: {
       allMedia={allMedia}
       allAlbums={(options?.allAlbums || []).map((album) => ({ ...album, kind: album.kind ?? "photo", access: album.access ?? "members" }))}
       persistedAlbumMediaMap={options?.persistedAlbumMediaMap || {}}
+      initialThumbUrlsByMediaId={options?.initialThumbUrlsByMediaId || {}}
       uploaderLabels={options?.uploaderLabels || []}
     />
   );
@@ -110,6 +112,11 @@ describe("tree media archive client", () => {
     }
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
   it("opens archive media in a large viewer and navigates to an external video", () => {
     renderArchiveClient();
 
@@ -117,14 +124,21 @@ describe("tree media archive client", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное фото" });
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByRole("heading", { name: "Архивное фото" })).toBeInTheDocument();
+    expect(dialog).toHaveClass("media-lightbox");
+    expect(dialog.querySelector("img.person-media-stage-photo")).not.toBeNull();
+    expect(document.querySelector(".archive-media-dialog")).toBeNull();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Следующее медиа" }));
-    expect(within(dialog).getByRole("heading", { name: "Архивное видео" })).toBeInTheDocument();
+    const videoDialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+    const stageVideo = videoDialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
+    expect(stageVideo).not.toBeNull();
+    expect(stageVideo?.muted).toBe(false);
+    expect(stageVideo?.autoplay).toBe(false);
+    expect(stageVideo?.preload).toBe("metadata");
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Следующее медиа" }));
-    expect(within(dialog).getByRole("heading", { name: "Внешнее видео архива" })).toBeInTheDocument();
-    expect(within(dialog).getAllByRole("link", { name: "Открыть внешнее видео" })[0]).toHaveAttribute("href", "/api/media/media-external");
+    fireEvent.click(within(videoDialog).getByRole("button", { name: "Следующее медиа" }));
+    const externalDialog = screen.getByRole("dialog", { name: "Просмотр архива: Внешнее видео архива" });
+    expect(within(externalDialog).getAllByRole("link", { name: "Открыть внешнее видео" })[0]).toHaveAttribute("href", "/api/media/media-external");
   }, 15000);
 
   it("falls back to original photo routes for legacy archive items without variants", async () => {
@@ -148,6 +162,208 @@ describe("tree media archive client", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное фото" });
     expect(within(dialog).getByRole("img", { name: "Архивное фото" })).toHaveAttribute("src", "/api/media/media-legacy-photo");
+  });
+
+  it("uses pre-resolved initial thumb urls for the initial archive grid without hitting the thumb route", () => {
+    renderArchiveClient({
+      allMedia: [
+        createMediaAsset({
+          id: "media-photo",
+          title: "Архивное фото",
+          storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+        }),
+      ],
+      initialThumbUrlsByMediaId: {
+        "media-photo": "https://example.com/direct-thumb.webp",
+      },
+    });
+
+    const tileImage = document.querySelector(".archive-tile-image");
+    expect(tileImage).not.toBeNull();
+    expect(tileImage).toHaveAttribute("src", "https://example.com/direct-thumb.webp");
+  });
+
+  it("batch-resolves visible archive thumbs after hydration when initial direct urls are missing", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/api/media/thumbs") && init?.method === "POST") {
+        const payload = JSON.parse(String(init.body || "{}"));
+        expect(payload).toMatchObject({
+          treeId: "tree-1",
+          mediaIds: ["media-photo"],
+        });
+        return Response.json({
+          urlsByMediaId: {
+            "media-photo": "https://example.com/hydrated-thumb.webp",
+          },
+        });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    renderArchiveClient({
+      allMedia: [
+        createMediaAsset({
+          id: "media-photo",
+          title: "Архивное фото",
+          storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+        }),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/media/thumbs",
+        expect.objectContaining({
+          method: "POST",
+        })
+      );
+    });
+
+    await waitFor(() => {
+      const tileImage = document.querySelector(".archive-tile-image");
+      expect(tileImage).not.toBeNull();
+      expect(tileImage).toHaveAttribute("src", "https://example.com/hydrated-thumb.webp");
+    });
+  });
+
+  it("does not repeat the same visible-set thumb batch request while the first request is still pending", async () => {
+    let resolveBatchRequest: ((value: Response) => void) | undefined;
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation((input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/api/media/thumbs") && init?.method === "POST") {
+        return new Promise<Response>((resolve) => {
+          resolveBatchRequest = resolve;
+        });
+      }
+
+      return Promise.resolve(Response.json({}, { status: 200 }));
+    });
+
+    const media = [
+      createMediaAsset({
+        id: "media-photo",
+        title: "Архивное фото",
+        storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+      }),
+    ];
+
+    const view = render(
+      <TreeMediaArchiveClient
+        treeId="tree-1"
+        slug="demo-family"
+        canEdit
+        initialMode="photo"
+        initialView="all"
+        initialAlbumId={null}
+        allMedia={media}
+        allAlbums={[]}
+        persistedAlbumMediaMap={{}}
+        initialThumbUrlsByMediaId={{}}
+        uploaderLabels={[]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    view.rerender(
+      <TreeMediaArchiveClient
+        treeId="tree-1"
+        slug="demo-family"
+        canEdit
+        initialMode="photo"
+        initialView="all"
+        initialAlbumId={null}
+        allMedia={media}
+        allAlbums={[]}
+        persistedAlbumMediaMap={{}}
+        initialThumbUrlsByMediaId={{}}
+        uploaderLabels={[]}
+      />
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    expect(resolveBatchRequest).toBeDefined();
+    await act(async () => {
+      resolveBatchRequest!(
+        Response.json({
+          urlsByMediaId: {
+            "media-photo": "https://example.com/hydrated-thumb.webp",
+          },
+        })
+      );
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      const tileImage = document.querySelector(".archive-tile-image");
+      expect(tileImage).not.toBeNull();
+      expect(tileImage).toHaveAttribute("src", "https://example.com/hydrated-thumb.webp");
+    });
+  });
+
+  it("prefetches only the next visible-set thumbs during idle after the current screen resolves", async () => {
+    const media = Array.from({ length: 36 }, (_, index) =>
+      createMediaAsset({
+        id: `media-photo-${index + 1}`,
+        title: `Фото ${index + 1}`,
+        storage_path: `trees/tree-1/media/photo/media-photo-${index + 1}/photo.jpg`,
+      })
+    );
+    const requests: Array<{ mediaIds: string[] }> = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/api/media/thumbs") && init?.method === "POST") {
+        const payload = JSON.parse(String(init.body || "{}"));
+        requests.push({ mediaIds: payload.mediaIds });
+        const urlsByMediaId = Object.fromEntries(
+          payload.mediaIds.map((mediaId: string) => [mediaId, `https://example.com/${mediaId}.webp`])
+        );
+        return Response.json({ urlsByMediaId });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    const requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
+      return window.setTimeout(() => {
+        callback({
+          didTimeout: false,
+          timeRemaining: () => 50,
+        } as IdleDeadline);
+      }, 0);
+    });
+    const cancelIdleCallback = vi.fn((handle: number) => {
+      window.clearTimeout(handle);
+    });
+    vi.stubGlobal("requestIdleCallback", requestIdleCallback);
+    vi.stubGlobal("cancelIdleCallback", cancelIdleCallback);
+
+    renderArchiveClient({
+      initialMode: "photo",
+      initialView: "all",
+      allMedia: media,
+    });
+
+    await waitFor(() => {
+      expect(requests).toHaveLength(1);
+    });
+    expect(requests[0]?.mediaIds).toHaveLength(18);
+
+    await waitFor(() => {
+      expect(requests).toHaveLength(2);
+    });
+    expect(requests[1]?.mediaIds).toHaveLength(18);
+    expect(requests[1]?.mediaIds).toEqual(media.slice(18, 36).map((asset) => asset.id));
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(requests).toHaveLength(2);
   });
 
   it("uses preview variants for fresh archive tiles, album covers, and fullscreen photo view", async () => {
@@ -1466,6 +1682,127 @@ describe("tree media archive client", () => {
     expect(emptyState).not.toBeNull();
     expect(within(emptyState as HTMLElement).getByRole("button", { name: "Загрузить файлы" })).toBeInTheDocument();
     expect(within(emptyState as HTMLElement).getByRole("button", { name: "Создать альбом" })).toBeInTheDocument();
+  });
+
+  it("opens the archive viewer from the visible grid subset instead of the full mode collection", () => {
+    const videos = Array.from({ length: 20 }, (_, index) =>
+      createMediaAsset({
+        id: `media-video-${index + 1}`,
+        kind: "video",
+        title: `Видео ${index + 1}`,
+        mime_type: "video/mp4",
+        storage_path: `trees/tree-1/media/video/media-video-${index + 1}/video-${index + 1}.mp4`,
+      })
+    );
+
+    renderArchiveClient({
+      initialMode: "video",
+      initialView: "all",
+      allMedia: videos,
+      allAlbums: [],
+      persistedAlbumMediaMap: {},
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть видео: Видео 1" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Видео 1" });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.querySelectorAll(".media-lightbox-strip-fixed .person-media-thumb")).toHaveLength(18);
+    expect(within(dialog).queryByRole("button", { name: "Показать медиа 19: Видео 19" })).toBeNull();
+  });
+
+  it("keeps album detail viewer scoped to the current album media set", () => {
+    const firstPhoto = createMediaAsset({
+      id: "media-photo-1",
+      title: "Фото 1",
+      storage_path: "trees/tree-1/media/photo/media-photo-1/photo-1.jpg",
+    });
+    const secondPhoto = createMediaAsset({
+      id: "media-photo-2",
+      title: "Фото 2",
+      storage_path: "trees/tree-1/media/photo/media-photo-2/photo-2.jpg",
+    });
+    const outsidePhoto = createMediaAsset({
+      id: "media-photo-3",
+      title: "Фото вне альбома",
+      storage_path: "trees/tree-1/media/photo/media-photo-3/photo-3.jpg",
+    });
+
+    renderArchiveClient({
+      initialMode: "photo",
+      initialView: "albums",
+      allMedia: [firstPhoto, secondPhoto, outsidePhoto],
+      allAlbums: [
+        {
+          id: "album-1",
+          title: "Свадьба",
+          description: null,
+          kind: "photo",
+          albumKind: "manual",
+          uploaderUserId: null,
+          count: 2,
+          coverMediaId: "media-photo-1",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-1": [firstPhoto, secondPhoto],
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Свадьба.*2 фото.*Пользовательский альбом/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть фото: Фото 1" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Фото 1" });
+    expect(dialog.querySelectorAll(".media-lightbox-strip-fixed .person-media-thumb")).toHaveLength(2);
+    expect(within(dialog).queryByRole("button", { name: "Показать медиа 3: Фото вне альбома" })).toBeNull();
+  });
+
+  it("narrows merged uploader album viewer scope to a bounded window around the clicked media", () => {
+    const mixedMedia = Array.from({ length: 30 }, (_, index) =>
+      createMediaAsset({
+        id: `media-mixed-${index + 1}`,
+        kind: index % 2 === 0 ? "video" : "photo",
+        title: index % 2 === 0 ? `Видео ${index + 1}` : `Фото ${index + 1}`,
+        mime_type: index % 2 === 0 ? "video/mp4" : "image/jpeg",
+        storage_path:
+          index % 2 === 0
+            ? `trees/tree-1/media/video/media-mixed-${index + 1}/video-${index + 1}.mp4`
+            : `trees/tree-1/media/photo/media-mixed-${index + 1}/photo-${index + 1}.jpg`,
+        created_by: "user-1",
+      })
+    );
+
+    renderArchiveClient({
+      initialMode: "all",
+      initialView: "albums",
+      allMedia: mixedMedia,
+      allAlbums: [
+        {
+          id: "album-uploader-all",
+          title: "От Вячеслава",
+          description: null,
+          kind: "all",
+          albumKind: "uploader",
+          uploaderUserId: "user-1",
+          count: 30,
+          coverMediaId: "media-mixed-1",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-uploader-all": mixedMedia,
+      },
+      uploaderLabels: [{ userId: "user-1", label: "От Вячеслава" }],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /От Вячеслава.*15 фото · 15 видео.*Автоальбом загрузившего/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Показать еще" }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть видео: Видео 21" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Видео 21" });
+    expect(dialog.querySelectorAll(".media-lightbox-strip-fixed .person-media-thumb")).toHaveLength(18);
+    expect(within(dialog).getByRole("button", { name: "Показать медиа 10: Видео 21" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Показать медиа 1: Видео 1" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Показать медиа 30: Фото 30" })).toBeNull();
   });
 
   it("opens album detail as a single header with a media grid", () => {

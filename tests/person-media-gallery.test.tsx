@@ -216,6 +216,7 @@ function StatefulSelectableGallery({
 
 describe("person media gallery", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -384,7 +385,9 @@ describe("person media gallery", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Просмотр медиа: Семейное видео" });
     expect(dialog).toBeInTheDocument();
-    expect(dialog.querySelector("video.person-media-stage-video")).not.toBeNull();
+    const stageVideo = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
+    expect(stageVideo).not.toBeNull();
+    expect(stageVideo?.getAttribute("controlslist")).toBe("nofullscreen");
     expect(within(dialog).getByRole("button", { name: "Закрыть просмотр" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Закрыть просмотр" })).toHaveLength(1);
     expect(dialog.querySelector(".media-lightbox-strip-fixed .person-media-thumb-video-placeholder")).not.toBeNull();
@@ -402,6 +405,224 @@ describe("person media gallery", () => {
     });
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("can open the shared lightbox in lightbox-only mode for archive reuse", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            title: "Архивное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          }),
+          createMediaAsset({
+            id: "media-external-video",
+            kind: "video",
+            provider: "yandex_disk",
+            title: "Внешнее видео",
+            storage_path: null,
+            external_url: "https://example.com/external-video"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        lightboxOnly
+        openLightboxOnMount
+        initialActiveMediaId="media-video"
+        lightboxAriaLabelPrefix="Просмотр архива"
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.querySelector("video.person-media-stage-video")).not.toBeNull();
+    expect(screen.queryByText("Архивное видео")).not.toBeInTheDocument();
+    expect(screen.queryByText("2 материала в галерее")).not.toBeInTheDocument();
+  });
+
+  it("keeps archive-style lightbox video in manual-start mode with metadata preload", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            title: "Архивное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        lightboxOnly
+        openLightboxOnMount
+        initialActiveMediaId="media-video"
+        lightboxAriaLabelPrefix="Просмотр архива"
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+    const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    expect(video?.muted).toBe(false);
+    expect(video?.preload).toBe("metadata");
+    expect(video?.autoplay).toBe(false);
+  });
+
+  it("fullscreens the shared lightbox container and keeps controls available in fullscreen", async () => {
+    vi.useFakeTimers();
+
+    let fullscreenElement: Element | null = null;
+    const requestFullscreen = vi.fn(function (this: Element) {
+      fullscreenElement = this;
+      document.dispatchEvent(new Event("fullscreenchange"));
+      return Promise.resolve();
+    });
+    const exitFullscreen = vi.fn(() => {
+      fullscreenElement = null;
+      document.dispatchEvent(new Event("fullscreenchange"));
+      return Promise.resolve();
+    });
+
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: exitFullscreen,
+    });
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: requestFullscreen,
+    });
+
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            title: "Архивное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          }),
+          createMediaAsset({
+            id: "media-video-2",
+            kind: "video",
+            title: "Второе архивное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video-2/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        lightboxOnly
+        openLightboxOnMount
+        initialActiveMediaId="media-video"
+        lightboxAriaLabelPrefix="Просмотр архива"
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Открыть в полноэкранном режиме" }));
+    });
+
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    expect(fullscreenElement).toBe(dialog);
+    expect(dialog).toHaveClass("media-lightbox-fullscreen");
+    expect(within(dialog).getByRole("button", { name: "Закрыть просмотр" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Предыдущее медиа" })).toBeInTheDocument();
+    expect(dialog.querySelector(".media-lightbox-strip-fixed")).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(2400);
+    });
+
+    expect(dialog).toHaveClass("media-lightbox-fullscreen-idle");
+
+    fireEvent.mouseMove(dialog);
+    expect(dialog).not.toHaveClass("media-lightbox-fullscreen-idle");
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Выйти из полноэкранного режима" }));
+    });
+
+    expect(exitFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps fullscreen controls visible while the user interacts with the strip", async () => {
+    vi.useFakeTimers();
+
+    let fullscreenElement: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: vi.fn(() => {
+        fullscreenElement = null;
+        document.dispatchEvent(new Event("fullscreenchange"));
+        return Promise.resolve();
+      }),
+    });
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: vi.fn(function (this: Element) {
+        fullscreenElement = this;
+        document.dispatchEvent(new Event("fullscreenchange"));
+        return Promise.resolve();
+      }),
+    });
+
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        lightboxOnly
+        openLightboxOnMount
+        initialActiveMediaId="media-photo-1"
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" });
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Открыть в полноэкранном режиме" }));
+    });
+
+    const strip = dialog.querySelector(".media-lightbox-strip-fixed") as HTMLElement | null;
+    expect(strip).not.toBeNull();
+
+    fireEvent.mouseEnter(strip as HTMLElement);
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+    expect(dialog).not.toHaveClass("media-lightbox-fullscreen-idle");
+
+    fireEvent.mouseLeave(strip as HTMLElement);
+    act(() => {
+      vi.advanceTimersByTime(2400);
+    });
+    expect(dialog).toHaveClass("media-lightbox-fullscreen-idle");
   });
 
   it("keeps the fullscreen viewer mounted during exit transition and unmounts it after the delay", () => {

@@ -2,7 +2,7 @@
 
 *Operational memory only. Not the canonical architecture document.*
 
-*Last updated: 2026-03-28*
+*Last updated: 2026-03-30*
 
 ## Current State
 
@@ -46,11 +46,10 @@
 - [x] Tree-level `/tree/[slug]/media` archive foundation is in place with navigation, page shell, and archive client.
 - [x] Archive album persistence exists for manual albums and uploader albums.
 - [x] Archive upload review flow exists with batch confirmation and discard guard.
-- [x] Archive surface now includes a large in-app viewer/lightbox and sticky bottom actions for the current context.
 - [x] Variant-aware media delivery foundation exists for `thumb/small/medium` photo previews.
-- [x] `cloudflare_r2` video thumbs now generate asynchronously on the server and are stored through `media_asset_variants` with `variant='thumb'`.
-- [x] Builder and archive now use a temporary optimistic local video preview and switch to the final server thumb without page reload.
 - [x] Cloudflare R2 runtime/config foundation is present for the next media storage stage.
+- [x] Archive grid thumb pipeline now uses server-pre-resolved initial thumbs, hydrated visible-set batching, memoized tiles, and one-page-ahead thumb prefetch.
+- [x] Initial-page next-set thumb prefetch remains enabled by default; delayed-after-settle mode was kept diagnostic-only and not productized.
 - [ ] Finish the current `family-tree-canvas` interaction and visual pass.
 - [ ] Validate `Участники`, invites and share links as one coherent access-management flow.
 - [ ] QA the reworked builder layout so the tree keeps visual priority on desktop and mobile.
@@ -61,7 +60,7 @@
 - [ ] Current media upload UX is still not archive-ready: single flow, multi-file batches, device video, limits and progress need to be confirmed end-to-end.
 - [ ] Cloudflare target foundations exist in code/env, but the actual migration away from the transitional Yandex path is still incomplete.
 - [ ] Preview variant foundations exist, but rollout and QA are still incomplete; originals should not leak back into archive/viewer/builder previews.
-- [ ] The tree-level family archive now has sticky actions and a large viewer/lightbox, but broader album/mobile/end-to-end QA is still unfinished.
+- [ ] The tree-level family archive foundation exists, but sticky actions, large viewer/lightbox flow, and broader end-to-end QA are still unfinished.
 - [ ] Builder canvas resize and overlay inspector still need practical QA on desktop, tablet and mobile widths.
 - [ ] Members/invite/share-link flows need end-to-end validation against live API responses and clipboard behavior.
 - [ ] Manual memory notes must stay aligned with the actual workstream after each `/fi`.
@@ -70,8 +69,9 @@
 ## Next Steps
 
 - [ ] Convert the Cloudflare target into an explicit migration sequence: rollout gating, direct upload, Stream, and Queues.
-- [ ] Finish archive album/mobile QA now that sticky actions and the large viewer/lightbox are in place.
+- [ ] Finish the archive surface with sticky actions, large viewer/lightbox behavior, and broader album flow QA.
 - [ ] Switch tree cards, side rails, archive tiles, and media galleries to preview variants by default and confirm legacy fallbacks.
+- [ ] Treat archive grid/thumb performance as good enough for now and return the next local cycle to viewer/video/manual QA unless a new bottleneck is proven.
 - [ ] Run targeted QA for viewer, builder and members after the current media UI pass.
 - [ ] Review `Участники` end-to-end with invite, copy and revoke flows.
 - [ ] Revisit landing and dashboard only after tree/member workflows are stable.
@@ -83,8 +83,9 @@
 - Detected foundation: tree-level `Медиа` route, archive client, archive upload endpoints, and persisted album model are present in the worktree.
 - Detected archive upload review flow with pending batch state and discard confirmation.
 - Detected variant-aware media delivery foundation for photo previews (`thumb/small/medium`).
-- Detected `cloudflare_r2`-only server video preview generation with async `thumb` creation and media summary polling for live UI refresh.
 - Detected Cloudflare R2 foundation in env/runtime config and supporting project files.
+- Detected accepted archive thumb performance baseline: server-pre-resolved initial thumbs, batched visible-set direct thumb resolution, memoized archive tiles, and default-enabled next-page prefetch.
+- Detected that delayed initial-page next-set prefetch remains diagnostic-only and is not part of product behavior.
 - Latest `smoke:media` artifact `media-storage-report-1773931536758.json` is green.
 
 ## Runtime Rules

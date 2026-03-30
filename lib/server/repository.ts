@@ -1691,6 +1691,107 @@ export async function getTreeMediaPageData(slug: string, options?: { shareToken?
   };
 }
 
+export async function resolveMediaThumbUrlsForVisibleMedia(media: MediaAssetRecord[]) {
+  const uniqueMedia = [...new Map(media.map((asset) => [asset.id, asset] as const)).values()];
+  if (!uniqueMedia.length) {
+    return {} as Record<string, string>;
+  }
+
+  const thumbCapableVideoIds = uniqueMedia
+    .filter((asset) => asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready")
+    .map((asset) => asset.id);
+
+  let variantRows: Pick<MediaAssetVariantRecord, "media_id" | "storage_path">[] = [];
+  if (thumbCapableVideoIds.length) {
+    try {
+      variantRows = await fetchAdminRows<Pick<MediaAssetVariantRecord, "media_id" | "storage_path">>(
+        `media_asset_variants?select=media_id,storage_path&media_id=in.${buildUuidInFilter(thumbCapableVideoIds)}&variant=eq.${encodeURIComponent(CLOUDFLARE_VIDEO_PREVIEW_VARIANT)}`,
+        "Не удалось загрузить preview-варианты медиа."
+      );
+    } catch (error) {
+      if (!isMediaVariantsSchemaUnavailableError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  const variantPathByMediaId = new Map(
+    variantRows
+      .filter((item) => item.storage_path)
+      .map((item) => [item.media_id, item.storage_path] as const)
+  );
+
+  const signedEntries = await Promise.all(
+    uniqueMedia.map(async (asset) => {
+      if (asset.external_url || !asset.storage_path) {
+        return null;
+      }
+
+      let resolvedStoragePath: string | null = null;
+      if (asset.kind === "photo") {
+        resolvedStoragePath = shouldUsePhotoVariants(asset.created_at)
+          ? buildPhotoVariantStoragePath(asset.storage_path, "thumb")
+          : asset.storage_path;
+      } else if (asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready") {
+        resolvedStoragePath = variantPathByMediaId.get(asset.id) || null;
+      }
+
+      if (!resolvedStoragePath) {
+        return null;
+      }
+
+      if (isObjectStorageMediaProvider(asset.provider)) {
+        const signedUrl = await createObjectStorageSignedReadUrl(
+          resolvedStoragePath,
+          getObjectStorageEnvForMedia(asset.created_at)
+        );
+        return [asset.id, signedUrl] as const;
+      }
+
+      const { data, error } = await admin().storage.from(getStorageBucket()).createSignedUrl(
+        resolvedStoragePath,
+        60
+      );
+      if (error || !data?.signedUrl) {
+        throw new AppError(400, error?.message || "Не удалось создать подписанную ссылку для thumb-preview.");
+      }
+
+      return [asset.id, data.signedUrl] as const;
+    })
+  );
+
+  return Object.fromEntries(signedEntries.filter(Boolean) as Array<readonly [string, string]>);
+}
+
+export async function resolveTreeMediaThumbUrls(input: {
+  treeId: string;
+  mediaIds: string[];
+  shareToken?: string | null;
+  resolvedUser?: Awaited<ReturnType<typeof getCurrentUser>>;
+}) {
+  const uniqueMediaIds = [...new Set(input.mediaIds.filter(Boolean))];
+  if (!uniqueMediaIds.length) {
+    return {};
+  }
+
+  const tree = await getTreeById(input.treeId);
+  const readAccess = await getTreeReadAccess(tree, input.shareToken, input.resolvedUser);
+  const media = await fetchAdminRows<MediaAssetRecord>(
+    `media_assets?select=*&tree_id=eq.${encodeURIComponent(input.treeId)}&id=in.${buildUuidInFilter(uniqueMediaIds)}`,
+    "Не удалось загрузить thumb-preview медиа."
+  );
+  const effectiveMediaVisibilityById = await resolveEffectiveMediaVisibilityMap(tree.id, media);
+  const visibleMedia = media.filter((asset) =>
+    canSeeMedia(
+      readAccess.actor.role,
+      effectiveMediaVisibilityById.get(asset.id) || asset.visibility,
+      readAccess.hasShareLinkAccess
+    )
+  );
+
+  return resolveMediaThumbUrlsForVisibleMedia(visibleMedia);
+}
+
 function formatUploaderAlbumTitle(input: { email: string | null; displayName: string | null }) {
   const displayName = input.displayName?.trim();
   if (displayName) {
@@ -3306,7 +3407,10 @@ export async function resolveMediaAccess(
   mediaId: string,
   shareToken?: string | null,
   variant?: MediaVariantName | null,
-  options?: { download?: boolean }
+  options?: {
+    download?: boolean;
+    resolvedUser?: Awaited<ReturnType<typeof getCurrentUser>>;
+  }
 ) {
   const media = await fetchAdminFirst<MediaAssetRecord>(
     `media_assets?select=*&id=eq.${encodeURIComponent(mediaId)}`,
@@ -3315,7 +3419,7 @@ export async function resolveMediaAccess(
   if (!media) throw new AppError(404, "Медиа не найдено.");
 
   const tree = await getTreeById(media.tree_id);
-  const readAccess = await getTreeReadAccess(tree, shareToken);
+  const readAccess = await getTreeReadAccess(tree, shareToken, options?.resolvedUser);
   const effectiveVisibility = await resolveEffectiveMediaAccess(mediaId);
 
   if (!canSeeMedia(readAccess.actor.role, effectiveVisibility, readAccess.hasShareLinkAccess)) {
@@ -3323,7 +3427,15 @@ export async function resolveMediaAccess(
   }
 
   if (media.external_url) {
-    return { kind: "video" as const, url: media.external_url || "" };
+    return {
+      kind: "video" as const,
+      url: media.external_url || "",
+      cacheContext: {
+        treeId: tree.id,
+        effectiveVisibility,
+        accessSource: readAccess.actor.accessSource
+      }
+    };
   }
 
   if (!media.storage_path) {
@@ -3361,7 +3473,15 @@ export async function resolveMediaAccess(
     const signedUrl = await createObjectStorageSignedReadUrl(resolvedStoragePath, storageEnv, {
       downloadName: options?.download ? buildMediaDownloadFilename(media) : null
     });
-    return { kind: media.kind, url: signedUrl };
+    return {
+      kind: media.kind,
+      url: signedUrl,
+      cacheContext: {
+        treeId: tree.id,
+        effectiveVisibility,
+        accessSource: readAccess.actor.accessSource
+      }
+    };
   }
 
   if (resolvedVariantPath) {
@@ -3371,7 +3491,15 @@ export async function resolveMediaAccess(
       options?.download ? { download: buildMediaDownloadFilename(media) } : undefined
     );
     if (!variantSignedError && variantSigned) {
-      return { kind: media.kind, url: variantSigned.signedUrl };
+      return {
+        kind: media.kind,
+        url: variantSigned.signedUrl,
+        cacheContext: {
+          treeId: tree.id,
+          effectiveVisibility,
+          accessSource: readAccess.actor.accessSource
+        }
+      };
     }
   }
 
@@ -3382,7 +3510,15 @@ export async function resolveMediaAccess(
   );
   if (signedError || !signed) throw new AppError(400, signedError?.message || "Не удалось создать подписанную ссылку.");
 
-  return { kind: media.kind, url: signed.signedUrl };
+  return {
+    kind: media.kind,
+    url: signed.signedUrl,
+    cacheContext: {
+      treeId: tree.id,
+      effectiveVisibility,
+      accessSource: readAccess.actor.accessSource
+    }
+  };
 }
 
 export async function getMediaSummary(mediaId: string, shareToken?: string | null) {

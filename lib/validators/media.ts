@@ -128,6 +128,11 @@ export const downloadArchiveMediaSchema = z.object({
   mediaIds: z.array(z.string().uuid()).min(1).max(100)
 });
 
+export const resolveMediaThumbBatchSchema = z.object({
+  treeId: z.string().uuid(),
+  mediaIds: z.array(z.string().uuid()).min(1).max(100)
+});
+
 export const setPrimaryPersonMediaSchema = z.object({
   personId: z.string().uuid(),
   setPrimary: z.literal(true),

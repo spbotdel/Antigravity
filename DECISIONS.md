@@ -852,6 +852,42 @@ Future work must preserve these rules:
 
 ---
 
+# 2026-03-30 — Archive grid keeps initial next-page thumb prefetch enabled by default
+
+### Decision
+
+The archive grid keeps one-page-ahead thumb URL prefetch enabled by default.
+
+Current default behavior:
+
+- initial screen uses server-pre-resolved direct thumb URLs
+- hydrated client resolves the current visible thumb set through one batched request when needed
+- exactly one next visible set may be prefetched during idle time
+
+The evaluated `delay initial prefetch until visible images settle` mode remains diagnostic-only and is not part of the default product runtime.
+
+### Why
+
+The archive grid already had a real UX win after `Показать еще` once next-page thumb prefetch was enabled.
+
+Further investigation showed:
+
+- immediate initial-page next-set URL prefetch does mechanically overlap with the current visible screen
+- browser image warming overlap was worth refining and was adjusted
+- but after that refinement, no stable evidence showed that immediate initial-page URL prefetch alone causes a meaningful user-visible regression
+- the dev environment remained too noisy, and cache order influenced the measurements too strongly to justify changing the default behavior
+
+### Consequence
+
+Future work should preserve these rules:
+
+- keep one-page-ahead archive thumb prefetch enabled by default
+- keep browser image warming limited so it does not interfere with the current visible screen
+- do not enable `delay initial prefetch until settle` as product behavior without cleaner benchmark or real-user evidence
+- if archive grid performance work resumes, treat the next bottleneck as a new measured problem rather than reopening this decision by default
+
+---
+
 # How to update this file
 
 Add a new entry when:
