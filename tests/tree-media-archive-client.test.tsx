@@ -788,6 +788,184 @@ describe("tree media archive client", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("keeps the second optimistic video preview polling and blob url alive when the first video becomes ready", async () => {
+    vi.useFakeTimers();
+
+    const createObjectURLSpy = vi
+      .spyOn(URL, "createObjectURL")
+      .mockImplementationOnce(() => "blob:video-1")
+      .mockImplementationOnce(() => "blob:video-2");
+    const revokeObjectURLSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+
+    let uploadIntentCount = 0;
+    const summaryCalls = {
+      "archive-upload-video-1": 0,
+      "archive-upload-video-2": 0,
+    };
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+
+      if (url.includes("/api/media/archive/upload-intent")) {
+        uploadIntentCount += 1;
+        const mediaId = `archive-upload-video-${uploadIntentCount}`;
+        return Response.json(
+          {
+            mediaId,
+            kind: "video",
+            path: `trees/tree-1/media/video/${mediaId}/archive-video-${uploadIntentCount}.mp4`,
+            bucket: "bucket-1",
+            signedUrl: `https://example.com/${mediaId}`,
+            token: null,
+            uploadProvider: "cloudflare_r2",
+            configuredBackend: "cloudflare_r2",
+            resolvedUploadBackend: "cloudflare_r2",
+            rolloutState: "cloudflare_rollout_active",
+            forceProxyUpload: true,
+            uploadMode: "proxy",
+            variantUploadMode: "server_proxy",
+            variantTargets: [],
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/archive/complete")) {
+        const mediaId = typeof body?.mediaId === "string" ? body.mediaId : "archive-upload-video-unknown";
+        const fileName = typeof body?.title === "string" ? body.title : `${mediaId}.mp4`;
+        return Response.json(
+          {
+            message: "Материал сохранен в семейный архив.",
+            uploaderAlbumId: null,
+            media: createMediaAsset({
+              id: mediaId,
+              kind: "video",
+              provider: "cloudflare_r2",
+              preview_status: "pending",
+              title: fileName,
+              mime_type: "video/mp4",
+              storage_path: `trees/tree-1/media/video/${mediaId}/${fileName}`,
+            }),
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/archive-upload-video-1?summary=1")) {
+        summaryCalls["archive-upload-video-1"] += 1;
+        return Response.json(
+          {
+            media: createMediaAsset({
+              id: "archive-upload-video-1",
+              kind: "video",
+              provider: "cloudflare_r2",
+              preview_status: "ready",
+              title: "first-video.mp4",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/archive-upload-video-1/first-video.mp4",
+            }),
+          },
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/api/media/archive-upload-video-2?summary=1")) {
+        summaryCalls["archive-upload-video-2"] += 1;
+        return Response.json(
+          {
+            media: createMediaAsset({
+              id: "archive-upload-video-2",
+              kind: "video",
+              provider: "cloudflare_r2",
+              preview_status: "pending",
+              title: "second-video.mp4",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/archive-upload-video-2/second-video.mp4",
+            }),
+          },
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/api/media/thumbs") && init?.method === "POST") {
+        return Response.json(
+          {
+            urlsByMediaId: {
+              "archive-upload-video-1": "/api/media/archive-upload-video-1?variant=thumb",
+            },
+          },
+          { status: 200 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    const view = renderArchiveClient({
+      initialMode: "video",
+      initialView: "all",
+      allMedia: [],
+    });
+
+    const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+    const firstFile = new File([new Uint8Array([1, 2, 3])], "first-video.mp4", { type: "video/mp4" });
+    const secondFile = new File([new Uint8Array([4, 5, 6])], "second-video.mp4", { type: "video/mp4" });
+
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [firstFile, secondFile],
+    });
+
+    fireEvent.change(input);
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить 2" }));
+
+    await act(async () => {
+      for (let index = 0; index < 20; index += 1) {
+        await Promise.resolve();
+      }
+    });
+
+    expect(createObjectURLSpy).toHaveBeenCalledTimes(2);
+
+    const getSecondPreviewTile = () =>
+      view.container.querySelector('[data-archive-thumb-media-id="archive-upload-video-2"] video.archive-tile-video') as HTMLVideoElement | null;
+
+    expect(getSecondPreviewTile()).not.toBeNull();
+    expect(getSecondPreviewTile()).toHaveAttribute("src", "blob:video-2");
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      for (let index = 0; index < 20; index += 1) {
+        await Promise.resolve();
+      }
+    });
+
+    expect(revokeObjectURLSpy).toHaveBeenCalledWith("blob:video-1");
+    expect(revokeObjectURLSpy).not.toHaveBeenCalledWith("blob:video-2");
+    expect(summaryCalls["archive-upload-video-2"]).toBe(1);
+    expect(getSecondPreviewTile()).not.toBeNull();
+    expect(getSecondPreviewTile()).toHaveAttribute("src", "blob:video-2");
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+      for (let index = 0; index < 20; index += 1) {
+        await Promise.resolve();
+      }
+    });
+
+    expect(summaryCalls["archive-upload-video-2"]).toBe(2);
+    expect(getSecondPreviewTile()).not.toBeNull();
+    expect(getSecondPreviewTile()).toHaveAttribute("src", "blob:video-2");
+
+    view.unmount();
+
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+      await Promise.resolve();
+    });
+  });
+
   it("aborts in-flight archive thumb batch requests on unmount", async () => {
     let capturedSignal: AbortSignal | null = null;
     const fetchSpy = vi.spyOn(global, "fetch").mockImplementation((input, init) => {

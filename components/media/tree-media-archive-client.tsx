@@ -828,6 +828,7 @@ export function TreeMediaArchiveClient({
   const uploaderLabelsById = useMemo(() => new Map(uploaderLabels.map((item) => [item.userId, item.label] as const)), [uploaderLabels]);
   const [albumMediaMap, setAlbumMediaMap] = useState<Record<string, MediaAssetRecord[]>>(persistedAlbumMediaMap);
   const [optimisticVideoPreviewUrls, setOptimisticVideoPreviewUrls] = useState<Record<string, string>>({});
+  const optimisticVideoPreviewUrlsRef = useRef<Record<string, string>>({});
   const [resolvedThumbUrlsByMediaId, setResolvedThumbUrlsByMediaId] = useState<Record<string, string>>(initialThumbUrlsByMediaId);
   const pendingThumbUrlIdsRef = useRef(new Set<string>());
   const pendingThumbBatchFetchControllersRef = useRef(new Set<AbortController>());
@@ -860,6 +861,14 @@ export function TreeMediaArchiveClient({
 
   useEffect(() => {
     return () => {
+      for (const item of pendingUploadsRef.current) {
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      }
+      for (const previewUrl of Object.values(optimisticVideoPreviewUrlsRef.current)) {
+        URL.revokeObjectURL(previewUrl);
+      }
       isArchiveClientMountedRef.current = false;
       for (const [mediaId, wait] of pendingVideoPreviewPollWaitsRef.current.entries()) {
         window.clearTimeout(wait.timeoutId);
@@ -921,17 +930,7 @@ export function TreeMediaArchiveClient({
   }, [pendingUploads]);
 
   useEffect(() => {
-    return () => {
-      for (const item of pendingUploadsRef.current) {
-        if (item.previewUrl) {
-          URL.revokeObjectURL(item.previewUrl);
-        }
-      }
-      pendingVideoPreviewPollIdsRef.current.clear();
-      for (const previewUrl of Object.values(optimisticVideoPreviewUrls)) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
+    optimisticVideoPreviewUrlsRef.current = optimisticVideoPreviewUrls;
   }, [optimisticVideoPreviewUrls]);
 
   useEffect(() => {
