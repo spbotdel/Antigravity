@@ -16,7 +16,7 @@ interface MediaPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-type MediaMode = "photo" | "video" | "all";
+type MediaMode = "photo" | "video" | "audio" | "document" | "all";
 type ArchiveView = "all" | "albums";
 type AlbumSummary = {
   id: string;
@@ -32,7 +32,7 @@ type AlbumSummary = {
 
 function mergeUploaderAlbumsForAllMedia(
   albums: AlbumSummary[],
-  media: Array<{ id: string; created_by: string | null; kind: "photo" | "video" | "document" }>
+  media: Array<{ id: string; created_by: string | null; kind: "photo" | "video" | "document" | "audio" }>
 ) {
   const merged = new Map<string, AlbumSummary>();
   const ordered: AlbumSummary[] = [];
@@ -80,6 +80,14 @@ function getSearchParam(value: string | string[] | undefined) {
 function resolveMediaMode(value: string | null): MediaMode {
   if (value === "video") {
     return "video";
+  }
+
+  if (value === "audio") {
+    return "audio";
+  }
+
+  if (value === "document") {
+    return "document";
   }
 
   if (value === "all") {
@@ -130,6 +138,8 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
 
   const photoMedia = collectTreeMedia({ media: pageData.media }, "photo");
   const videoMedia = collectTreeMedia({ media: pageData.media }, "video");
+  const audioMedia = collectTreeMedia({ media: pageData.media }, "audio");
+  const documentMedia = collectTreeMedia({ media: pageData.media }, "document");
   const allMedia = collectTreeMedia({ media: pageData.media });
   const persistedAlbumMediaMap = buildPersistedTreeMediaAlbumMediaMap({
     media: pageData.media,
@@ -237,10 +247,12 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
             <p className="eyebrow">{formatTreeVisibility(pageData.tree.visibility)} дерево</p>
             <span className="workspace-meta-chip">{photoMedia.length} фото</span>
             <span className="workspace-meta-chip">{videoMedia.length} видео</span>
+            <span className="workspace-meta-chip">{audioMedia.length} аудио</span>
+            <span className="workspace-meta-chip">{documentMedia.length} док.</span>
             <span className="workspace-meta-chip">{allAlbumSummaries.length} альбомов</span>
           </div>
           <h1>{pageData.tree.title}</h1>
-          <p className="muted-copy">Семейный архив собирает общие фото и видео в одной галерее. Дальше он разовьется в режимы «Все» и «Альбомы» по образцу привычных фотоархивов.</p>
+          <p className="muted-copy">Семейный архив собирает общие фото, видео, аудиозаписи и документы в одной галерее.</p>
         </div>
         <TreeNav
           slug={slug}

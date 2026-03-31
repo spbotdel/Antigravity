@@ -22,9 +22,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { buildDerivedUploaderAlbumSummaries, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId, resolveMediaThumbSource, type MediaThumbSource } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
+import { AudioArchiveView } from "@/components/media/audio-archive-view";
+import { DocumentArchiveView } from "@/components/media/document-archive-view";
 import { LockIcon, MoreHorizontalIcon, PlayIcon, PlusIcon } from "lucide-react";
 
-type MediaMode = "photo" | "video" | "all";
+type MediaMode = "photo" | "video" | "audio" | "document" | "all";
 type ArchiveView = "all" | "albums";
 
 declare global {
@@ -3241,11 +3243,48 @@ export function TreeMediaArchiveClient({
           <TabsTrigger className={`pill-link${mode === "video" ? " pill-link-active" : ""}`} value="video">
             Видео
           </TabsTrigger>
+          <TabsTrigger className={`pill-link${mode === "audio" ? " pill-link-active" : ""}`} value="audio">
+            Аудио
+          </TabsTrigger>
+          <TabsTrigger className={`pill-link${mode === "document" ? " pill-link-active" : ""}`} value="document">
+            Документы
+          </TabsTrigger>
           <TabsTrigger className={`pill-link${mode === "all" ? " pill-link-active" : ""}`} value="all">
             Все медиа
           </TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {mode === "audio" ? (
+        <AudioArchiveView
+          treeId={treeId}
+          slug={slug}
+          shareToken={shareToken}
+          canEdit={canEdit}
+          media={archiveMedia.filter((a) => a.kind === "audio")}
+          onMediaChange={(next) => {
+            setArchiveMedia((current) => {
+              const nonAudio = current.filter((a) => a.kind !== "audio");
+              return [...next, ...nonAudio.filter((a) => !next.some((n) => n.id === a.id))];
+            });
+          }}
+        />
+      ) : mode === "document" ? (
+        <DocumentArchiveView
+          treeId={treeId}
+          slug={slug}
+          shareToken={shareToken}
+          canEdit={canEdit}
+          media={archiveMedia.filter((a) => a.kind === "document")}
+          onMediaChange={(next) => {
+            setArchiveMedia((current) => {
+              const nonDoc = current.filter((a) => a.kind !== "document");
+              return [...next, ...nonDoc.filter((a) => !next.some((n) => n.id === a.id))];
+            });
+          }}
+        />
+      ) : (
+      <>
 
       <Tabs value={view} onValueChange={(value) => switchView(value as ArchiveView)}>
         <TabsList variant="line" aria-label="Режим просмотра архива">
@@ -3518,6 +3557,9 @@ export function TreeMediaArchiveClient({
           </div>
         </div>
       ) : null}
+
+      </>
+      )}
 
       {archiveViewerSession && viewerMedia.length ? (
         <PersonMediaGallery

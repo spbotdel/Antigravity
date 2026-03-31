@@ -378,7 +378,7 @@ export function collectPersonMedia(snapshot: TreeSnapshot, personId: string) {
   return snapshot.media.filter((asset) => mediaIds.includes(asset.id));
 }
 
-export function collectTreeMedia(snapshot: Pick<TreeSnapshot, "media">, kind?: Extract<MediaKind, "photo" | "video">) {
+export function collectTreeMedia(snapshot: Pick<TreeSnapshot, "media">, kind?: Extract<MediaKind, "photo" | "video" | "audio" | "document">) {
   if (!kind) {
     return snapshot.media;
   }

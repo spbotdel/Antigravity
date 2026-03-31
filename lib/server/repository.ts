@@ -119,7 +119,7 @@ function isTreeMediaAlbumMediaKind(value: MediaAssetRecord["kind"]): value is Tr
 }
 
 function getTreeMediaAlbumKindMismatchMessage(albumKind: TreeMediaAlbumMediaKind, mediaKind: MediaAssetRecord["kind"]) {
-  if (mediaKind === "document") {
+  if (mediaKind === "document" || mediaKind === "audio") {
     return "В альбомы можно добавлять только фото и видео.";
   }
 
@@ -553,6 +553,10 @@ function resolveMediaKindFromMimeType(mimeType: string): MediaAssetRecord["kind"
 
   if (normalized.startsWith("video/")) {
     return "video";
+  }
+
+  if (normalized.startsWith("audio/")) {
+    return "audio";
   }
 
   if (

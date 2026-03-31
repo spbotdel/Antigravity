@@ -1,7 +1,7 @@
 export type UserRole = "owner" | "admin" | "viewer";
 export type TreeVisibility = "public" | "private";
 export type MediaVisibility = "public" | "members";
-export type MediaKind = "photo" | "video" | "document";
+export type MediaKind = "photo" | "video" | "document" | "audio";
 export type MediaProvider = "supabase_storage" | "object_storage" | "cloudflare_r2" | "yandex_disk";
 export type MediaStorageBackend = "supabase" | "object_storage" | "cloudflare_r2";
 export type MediaUploadRolloutState = "steady_state" | "cloudflare_rollout_gated" | "cloudflare_rollout_active";
