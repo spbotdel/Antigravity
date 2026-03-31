@@ -6,7 +6,20 @@ import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 import { buildMediaOpenRouteUrl, type MediaThumbSource } from "@/lib/tree/display";
 import type { MediaAssetRecord } from "@/lib/types";
 
+const MAX_DURATION_LABEL_CACHE_SIZE = 200;
 const durationLabelCache = new Map<string, string>();
+
+function setDurationLabelCache(assetId: string, durationLabel: string) {
+  durationLabelCache.set(assetId, durationLabel);
+  if (durationLabelCache.size <= MAX_DURATION_LABEL_CACHE_SIZE) {
+    return;
+  }
+
+  const oldestAssetId = durationLabelCache.keys().next().value;
+  if (oldestAssetId !== undefined) {
+    durationLabelCache.delete(oldestAssetId);
+  }
+}
 
 function formatDurationLabel(durationSeconds: number) {
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
@@ -79,7 +92,7 @@ export function MediaThumbVisual({
         return;
       }
 
-      durationLabelCache.set(asset.id, nextDurationLabel);
+      setDurationLabelCache(asset.id, nextDurationLabel);
       setDurationLabel(nextDurationLabel);
       cleanup();
     };
@@ -127,7 +140,7 @@ export function MediaThumbVisual({
               return;
             }
 
-            durationLabelCache.set(asset.id, nextDurationLabel);
+            setDurationLabelCache(asset.id, nextDurationLabel);
             setDurationLabel(nextDurationLabel);
           }}
         />

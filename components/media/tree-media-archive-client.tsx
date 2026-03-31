@@ -836,6 +836,7 @@ export function TreeMediaArchiveClient({
   const prefetchedThumbSetKeysRef = useRef(new Set<string>());
   const prefetchedThumbBatchFetchControllersRef = useRef(new Set<AbortController>());
   const warmedThumbUrlsRef = useRef(new Set<string>());
+  const pendingImageCompletionCleanupsRef = useRef(new Set<() => void>());
   const isArchiveClientMountedRef = useRef(true);
   const pendingThumbBatchApplyRef = useRef<{
     batchKey: string;
@@ -861,6 +862,10 @@ export function TreeMediaArchiveClient({
 
   useEffect(() => {
     return () => {
+      for (const cleanup of pendingImageCompletionCleanupsRef.current) {
+        cleanup();
+      }
+      pendingImageCompletionCleanupsRef.current.clear();
       for (const item of pendingUploadsRef.current) {
         if (item.previewUrl) {
           URL.revokeObjectURL(item.previewUrl);
@@ -1320,19 +1325,46 @@ export function TreeMediaArchiveClient({
     }
 
     let settledCount = 0;
+    let completed = false;
+    const listenerCleanups: Array<() => void> = [];
+    let timeoutId = 0;
+
+    const finalize = () => {
+      if (completed) {
+        return;
+      }
+
+      completed = true;
+      cleanupListeners();
+      recordArchiveThumbPerfEvent({
+        stage: input.stage,
+        visibleSetKey: input.visibleSetKey,
+        mediaCount: input.mediaIds.length,
+        foundImageCount: imageElements.length,
+        durationMs: performance.now() - input.startedAt,
+      });
+      input.onComplete?.();
+    };
+
+    const cleanupListeners = () => {
+      window.clearTimeout(timeoutId);
+      for (const cleanup of listenerCleanups) {
+        cleanup();
+      }
+      listenerCleanups.length = 0;
+      pendingImageCompletionCleanupsRef.current.delete(cleanupListeners);
+    };
+
     const finish = () => {
+      if (completed) {
+        return;
+      }
+
       settledCount += 1;
-        if (settledCount === pendingImages.length) {
-          recordArchiveThumbPerfEvent({
-            stage: input.stage,
-            visibleSetKey: input.visibleSetKey,
-            mediaCount: input.mediaIds.length,
-            foundImageCount: imageElements.length,
-            durationMs: performance.now() - input.startedAt,
-          });
-          input.onComplete?.();
-        }
-      };
+      if (settledCount === pendingImages.length) {
+        finalize();
+      }
+    };
 
     pendingImages.forEach(({ image }) => {
       const handleDone = () => {
@@ -1341,9 +1373,18 @@ export function TreeMediaArchiveClient({
         finish();
       };
 
+      listenerCleanups.push(() => {
+        image.removeEventListener("load", handleDone);
+        image.removeEventListener("error", handleDone);
+      });
       image.addEventListener("load", handleDone);
       image.addEventListener("error", handleDone);
     });
+
+    timeoutId = window.setTimeout(() => {
+      finalize();
+    }, 10000);
+    pendingImageCompletionCleanupsRef.current.add(cleanupListeners);
   }
 
   const handleShowMore = useCallback(() => {
@@ -1462,7 +1503,7 @@ export function TreeMediaArchiveClient({
       batchSizes: mediaIdBatches.map((batch) => batch.length),
     });
 
-    void Promise.all(
+    void Promise.allSettled(
       mediaIdBatches.map(async (batchMediaIds) => {
         const batchStartedAt = typeof performance !== "undefined" ? performance.now() : 0;
         const controller = new AbortController();
@@ -1497,30 +1538,34 @@ export function TreeMediaArchiveClient({
         return payload;
       })
     )
-      .then((payloads) => {
+      .then((results) => {
         if (!isArchiveClientMountedRef.current || cancelled) {
           return;
         }
 
-        const nextResolvedThumbUrlsByMediaId = Object.assign({}, ...payloads.map((payload) => payload?.urlsByMediaId || {}));
+        requestSucceeded = results.every((result) => result.status === "fulfilled");
+        const successfulPayloads = results
+          .filter((result): result is PromiseFulfilledResult<Record<string, unknown>> => result.status === "fulfilled")
+          .map((result) => result.value);
+        const nextResolvedThumbUrlsByMediaId = Object.assign({}, ...successfulPayloads.map((payload) => payload?.urlsByMediaId || {}));
         if (!Object.keys(nextResolvedThumbUrlsByMediaId).length) {
           return;
         }
 
+        const resolvedMediaIds = Object.keys(nextResolvedThumbUrlsByMediaId);
         pendingThumbBatchApplyRef.current = {
           batchKey: visibleSetKey,
-          mediaIds,
+          mediaIds: resolvedMediaIds,
           stateApplyStartedAt: typeof performance !== "undefined" ? performance.now() : 0,
         };
         setResolvedThumbUrlsByMediaId((current) => ({
           ...current,
           ...nextResolvedThumbUrlsByMediaId,
         }));
-        requestSucceeded = true;
         recordArchiveThumbPerfEvent({
           stage: "batch-request-finish",
           visibleSetKey,
-          mediaCount: mediaIds.length,
+          mediaCount: resolvedMediaIds.length,
           durationMs: typeof performance !== "undefined" ? performance.now() - requestStartedAt : null,
         });
       })
@@ -1531,6 +1576,10 @@ export function TreeMediaArchiveClient({
           requestedThumbSetKeysRef.current.delete(visibleSetKey);
         }
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isHydrated, resolvedThumbUrlsByMediaId, shareToken, treeId, visibleThumbMediaIds]);
 
   useEffect(() => {
@@ -2820,6 +2869,17 @@ export function TreeMediaArchiveClient({
     manualAlbumId?: string | null,
     uploadOptions?: { visibility: "public" | "members"; caption: string }
   ) {
+    const shouldStopUploadFlow = (previewUrl: string | null) => {
+      if (isArchiveClientMountedRef.current) {
+        return false;
+      }
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      return true;
+    };
+
     for (let index = 0; index < files.length; index += 1) {
       const uploadItem = files[index];
       const file = uploadItem.file;
@@ -2832,6 +2892,9 @@ export function TreeMediaArchiveClient({
         title,
         caption: uploadOptions?.caption || ""
       })) as ArchiveUploadTarget;
+      if (shouldStopUploadFlow(uploadItem.previewUrl)) {
+        return;
+      }
 
       setActiveUploads((current) =>
         current.map((item) =>
@@ -2846,6 +2909,10 @@ export function TreeMediaArchiveClient({
       );
 
       await uploadArchiveFileToTarget(intent, file, (progress) => {
+        if (!isArchiveClientMountedRef.current) {
+          return;
+        }
+
         setActiveUploads((current) =>
           current.map((item) =>
             item.id === uploadItem.id
@@ -2861,6 +2928,9 @@ export function TreeMediaArchiveClient({
           )
         );
       });
+      if (shouldStopUploadFlow(uploadItem.previewUrl)) {
+        return;
+      }
 
       setActiveUploads((current) =>
         current.map((item) =>
@@ -2892,6 +2962,9 @@ export function TreeMediaArchiveClient({
         mimeType: file.type,
         sizeBytes: file.size
       });
+      if (shouldStopUploadFlow(uploadItem.previewUrl)) {
+        return;
+      }
 
       const createdMedia = completePayload.media as MediaAssetRecord;
       const uploaderAlbumId =
@@ -2927,6 +3000,9 @@ export function TreeMediaArchiveClient({
             : item
         )
       );
+      if (shouldStopUploadFlow(uploadItem.previewUrl)) {
+        return;
+      }
       setError(null);
 
       if (
@@ -2940,6 +3016,10 @@ export function TreeMediaArchiveClient({
       } else if (uploadItem.previewUrl) {
         URL.revokeObjectURL(uploadItem.previewUrl);
       }
+    }
+
+    if (!isArchiveClientMountedRef.current) {
+      return;
     }
 
     setStatus(files.length === 1 ? "Материал сохранен в семейный архив." : `Материалы сохранены: ${files.length}.`);
@@ -3057,14 +3137,23 @@ export function TreeMediaArchiveClient({
       setStatus(null);
       setError(null);
       void uploadArchiveFiles(uploads, reviewTargetAlbumId, uploadOptions).catch((uploadError) => {
+        if (!isArchiveClientMountedRef.current) {
+          return;
+        }
+
         setStatus(null);
         setError(uploadError instanceof Error ? uploadError.message : "Не удалось загрузить материалы в архив.");
       }).finally(() => {
+        if (!isArchiveClientMountedRef.current) {
+          return;
+        }
+
         setIsSavingUploads(false);
         setActiveUploads([]);
       });
     } catch (uploadError) {
       setStatus(null);
+      setIsSavingUploads(false);
       setActiveUploads([]);
       setError(uploadError instanceof Error ? uploadError.message : "Не удалось загрузить материалы в архив.");
     }

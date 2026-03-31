@@ -316,6 +316,105 @@ describe("tree media archive client", () => {
     });
   });
 
+  it("recovers the current photo grid after a partial thumb batch failure when the mode is retriggered", async () => {
+    const media = Array.from({ length: 101 }, (_, index) =>
+      createMediaAsset({
+        id: `media-photo-${String(index + 1).padStart(3, "0")}`,
+        title: `Фото ${index + 1}`,
+        storage_path: `trees/tree-1/media/photo/media-photo-${String(index + 1).padStart(3, "0")}/photo.jpg`,
+      })
+    );
+    const thumbRequests: Array<string[]> = [];
+    let retrySucceeded = false;
+
+    const requestIdleCallback = vi.fn(() => 1);
+    const cancelIdleCallback = vi.fn();
+    vi.stubGlobal("requestIdleCallback", requestIdleCallback);
+    vi.stubGlobal("cancelIdleCallback", cancelIdleCallback);
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/api/media/thumbs") && init?.method === "POST") {
+        const payload = JSON.parse(String(init.body || "{}"));
+        const mediaIds = payload.mediaIds as string[];
+        thumbRequests.push(mediaIds);
+
+        const urlsByMediaId = Object.fromEntries(
+          mediaIds.map((mediaId) => [mediaId, `https://example.com/thumbs/${mediaId}.webp`])
+        );
+
+        if (!retrySucceeded) {
+          if (mediaIds.length === 100) {
+            return Response.json({ urlsByMediaId });
+          }
+
+          return Response.json({ error: "thumb batch failed" }, { status: 500 });
+        }
+
+        return Response.json({ urlsByMediaId });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    const view = renderArchiveClient({
+      initialMode: "photo",
+      initialView: "all",
+      allMedia: media,
+    });
+
+    await waitFor(() => {
+      expect(thumbRequests).toHaveLength(1);
+    });
+    expect(thumbRequests[0]).toHaveLength(18);
+
+    const expectedRequestCounts = [2, 3, 4, 5, 7];
+    for (const expectedCount of expectedRequestCounts) {
+      const showMoreButton = view.container.querySelector(".archive-sticky-footer button") as HTMLButtonElement | null;
+      expect(showMoreButton).not.toBeNull();
+      fireEvent.click(showMoreButton as HTMLButtonElement);
+      await waitFor(() => {
+        expect(thumbRequests).toHaveLength(expectedCount);
+      });
+    }
+
+    expect(thumbRequests.map((request) => request.length)).toEqual([18, 36, 54, 72, 90, 100, 1]);
+    await waitFor(() => {
+      const firstTileImage = view.container.querySelector('[data-archive-thumb-media-id="media-photo-001"] .archive-tile-image');
+      expect(firstTileImage).not.toBeNull();
+      expect(firstTileImage).toHaveAttribute("src", "https://example.com/thumbs/media-photo-001.webp");
+    });
+    const failedTile = view.container.querySelector('[data-archive-thumb-media-id="media-photo-101"]') as HTMLElement | null;
+    expect(failedTile).not.toBeNull();
+    expect(failedTile?.querySelector(".archive-tile-image")).toBeNull();
+    expect(failedTile?.querySelector(".archive-tile-placeholder")).not.toBeNull();
+
+    retrySucceeded = true;
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Открыть фото: Фото 1" })).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+
+    for (let step = 0; step < 5; step += 1) {
+      const showMoreButton = view.container.querySelector(".archive-sticky-footer button") as HTMLButtonElement | null;
+      expect(showMoreButton).not.toBeNull();
+      fireEvent.click(showMoreButton as HTMLButtonElement);
+    }
+
+    await waitFor(() => {
+      expect(thumbRequests.some((request) => request.length === 1 && request[0] === "media-photo-101")).toBe(true);
+    });
+
+    await waitFor(() => {
+      const recoveredTileImage = view.container.querySelector('[data-archive-thumb-media-id="media-photo-101"] .archive-tile-image');
+      expect(recoveredTileImage).not.toBeNull();
+      expect(recoveredTileImage).toHaveAttribute("src", "https://example.com/thumbs/media-photo-101.webp");
+    });
+  }, 15000);
+
   it("prefetches only the next visible-set thumbs during idle after the current screen resolves", async () => {
     const media = Array.from({ length: 36 }, (_, index) =>
       createMediaAsset({
