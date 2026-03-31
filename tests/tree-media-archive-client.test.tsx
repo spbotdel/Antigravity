@@ -474,6 +474,102 @@ describe("tree media archive client", () => {
     expect(requests).toHaveLength(2);
   });
 
+  it("loads newly visible archive items after show more without extra interaction when next-page prefetch fails", async () => {
+    const media = Array.from({ length: 36 }, (_, index) =>
+      createMediaAsset({
+        id: `media-photo-${index + 1}`,
+        title: `Фото ${index + 1}`,
+        storage_path: `trees/tree-1/media/photo/media-photo-${index + 1}/photo.jpg`,
+      })
+    );
+    const requests: Array<string[]> = [];
+    let scheduledIdleCallback: IdleRequestCallback | null = null;
+    let resolvePrefetchRequest: ((response: Response) => void) | undefined;
+
+    vi.stubGlobal("requestIdleCallback", vi.fn((callback: IdleRequestCallback) => {
+      scheduledIdleCallback = callback;
+      return 1;
+    }));
+    vi.stubGlobal("cancelIdleCallback", vi.fn());
+
+    vi.spyOn(global, "fetch").mockImplementation((input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/api/media/thumbs") && init?.method === "POST") {
+        const payload = JSON.parse(String(init.body || "{}"));
+        const mediaIds = payload.mediaIds as string[];
+        requests.push(mediaIds);
+
+        const urlsByMediaId = Object.fromEntries(
+          mediaIds.map((mediaId) => [mediaId, `https://example.com/thumbs/${mediaId}.webp`])
+        );
+
+        if (requests.length === 1) {
+          return Promise.resolve(Response.json({ urlsByMediaId }));
+        }
+
+        if (requests.length === 2) {
+          return new Promise<Response>((resolve) => {
+            resolvePrefetchRequest = resolve;
+          });
+        }
+
+        return Promise.resolve(Response.json({ urlsByMediaId }));
+      }
+
+      return Promise.resolve(Response.json({}, { status: 200 }));
+    });
+
+    const view = renderArchiveClient({
+      initialMode: "photo",
+      initialView: "all",
+      allMedia: media,
+    });
+
+    await waitFor(() => {
+      const firstVisibleImage = view.container.querySelector('[data-archive-thumb-media-id="media-photo-1"] .archive-tile-image');
+      expect(firstVisibleImage).not.toBeNull();
+      expect(firstVisibleImage).toHaveAttribute("src", "https://example.com/thumbs/media-photo-1.webp");
+    });
+
+    await waitFor(() => {
+      expect(scheduledIdleCallback).not.toBeNull();
+    });
+    await act(async () => {
+      scheduledIdleCallback?.({
+        didTimeout: false,
+        timeRemaining: () => 50,
+      } as IdleDeadline);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(requests).toHaveLength(2);
+    });
+    expect(requests[1]).toEqual(media.slice(18, 36).map((asset) => asset.id));
+    expect(resolvePrefetchRequest).toBeDefined();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Показать еще" })[0]);
+
+    const newlyVisiblePlaceholder = view.container.querySelector('[data-archive-thumb-media-id="media-photo-19"] .archive-tile-placeholder');
+    expect(newlyVisiblePlaceholder).not.toBeNull();
+
+    await act(async () => {
+      resolvePrefetchRequest!(Response.json({ error: "prefetch failed" }, { status: 500 }));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(requests).toHaveLength(3);
+    });
+    expect(requests[2]).toEqual(media.slice(18, 36).map((asset) => asset.id));
+
+    await waitFor(() => {
+      const newlyVisibleImage = view.container.querySelector('[data-archive-thumb-media-id="media-photo-19"] .archive-tile-image');
+      expect(newlyVisibleImage).not.toBeNull();
+      expect(newlyVisibleImage).toHaveAttribute("src", "https://example.com/thumbs/media-photo-19.webp");
+    });
+  }, 15000);
+
   it("uses preview variants for fresh archive tiles, album covers, and fullscreen photo view", async () => {
     const photo = createMediaAsset({
       id: "media-photo",

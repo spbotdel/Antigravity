@@ -830,6 +830,7 @@ export function TreeMediaArchiveClient({
   const [optimisticVideoPreviewUrls, setOptimisticVideoPreviewUrls] = useState<Record<string, string>>({});
   const optimisticVideoPreviewUrlsRef = useRef<Record<string, string>>({});
   const [resolvedThumbUrlsByMediaId, setResolvedThumbUrlsByMediaId] = useState<Record<string, string>>(initialThumbUrlsByMediaId);
+  const [thumbRequestRetryTick, setThumbRequestRetryTick] = useState(0);
   const pendingThumbUrlIdsRef = useRef(new Set<string>());
   const pendingThumbBatchFetchControllersRef = useRef(new Set<AbortController>());
   const requestedThumbSetKeysRef = useRef(new Set<string>());
@@ -1580,7 +1581,7 @@ export function TreeMediaArchiveClient({
     return () => {
       cancelled = true;
     };
-  }, [isHydrated, resolvedThumbUrlsByMediaId, shareToken, treeId, visibleThumbMediaIds]);
+  }, [isHydrated, resolvedThumbUrlsByMediaId, shareToken, thumbRequestRetryTick, treeId, visibleThumbMediaIds]);
 
   useEffect(() => {
     if (!isHydrated || !nextVisibleThumbMediaIds.length) {
@@ -1731,6 +1732,9 @@ export function TreeMediaArchiveClient({
           nextMediaIds.forEach((mediaId) => pendingThumbUrlIdsRef.current.delete(mediaId));
           if (!requestSucceeded) {
             prefetchedThumbSetKeysRef.current.delete(nextVisibleSetKey);
+            if (isArchiveClientMountedRef.current) {
+              setThumbRequestRetryTick((current) => current + 1);
+            }
           }
         });
     });
