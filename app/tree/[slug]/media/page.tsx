@@ -1,8 +1,10 @@
+import { after } from "next/server";
+
 import { TreeMediaArchiveClient } from "@/components/media/tree-media-archive-client";
 import { TreeNav } from "@/components/layout/tree-nav";
 import { buildDerivedUploaderAlbumSummaries, buildPersistedTreeMediaAlbumMediaMap, buildTreeMediaAlbumSummaries, collectTreeMedia } from "@/lib/tree/display";
 import type { MediaAssetRecord } from "@/lib/types";
-import { getTreeMediaPageData, resolveMediaThumbUrlsForVisibleMedia } from "@/lib/server/repository";
+import { getTreeMediaPageData, processCloudflareVideoPreviewJobs, resolveMediaThumbUrlsForVisibleMedia } from "@/lib/server/repository";
 import { formatTreeVisibility } from "@/lib/ui-text";
 
 export const dynamic = "force-dynamic";
@@ -108,6 +110,14 @@ function getArchiveAlbumSourceMedia(
   );
 }
 
+function isRecoverableCloudflareVideoPreview(asset: MediaAssetRecord) {
+  return (
+    asset.kind === "video" &&
+    asset.provider === "cloudflare_r2" &&
+    (asset.preview_status === "pending" || asset.preview_status === "processing")
+  );
+}
+
 export default async function MediaPage({ params, searchParams }: MediaPageProps) {
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
@@ -203,6 +213,21 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   const initialThumbUrlsByMediaId = await resolveMediaThumbUrlsForVisibleMedia(
     currentMedia.filter((asset) => initialThumbMediaIds.has(asset.id))
   );
+  const previewRecoveryMediaIds = currentMedia
+    .filter((asset) => initialThumbMediaIds.has(asset.id) && isRecoverableCloudflareVideoPreview(asset))
+    .map((asset) => asset.id);
+
+  if (pageData.actor.canEdit && previewRecoveryMediaIds.length) {
+    after(async () => {
+      try {
+        await processCloudflareVideoPreviewJobs({
+          mediaIds: previewRecoveryMediaIds
+        });
+      } catch (error) {
+        console.error("[video-preview] media page recovery processing failed", error);
+      }
+    });
+  }
 
   return (
     <main className="page-shell workspace-page">

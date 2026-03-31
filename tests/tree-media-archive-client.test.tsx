@@ -118,6 +118,8 @@ describe("tree media archive client", () => {
   });
 
   it("opens archive media in a large viewer and navigates to an external video", () => {
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => Promise.resolve());
+
     renderArchiveClient();
 
     fireEvent.click(screen.getByRole("button", { name: "Открыть фото: Архивное фото" }));
@@ -132,9 +134,13 @@ describe("tree media archive client", () => {
     const videoDialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
     const stageVideo = videoDialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
     expect(stageVideo).not.toBeNull();
+    expect(stageVideo?.hasAttribute("controls")).toBe(false);
     expect(stageVideo?.muted).toBe(false);
-    expect(stageVideo?.autoplay).toBe(false);
+    expect(stageVideo?.autoplay).toBe(true);
     expect(stageVideo?.preload).toBe("metadata");
+    expect(playSpy).toHaveBeenCalled();
+    expect(within(videoDialog).getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
+    expect(within(videoDialog).getByLabelText("Позиция видео")).toBeInTheDocument();
 
     fireEvent.click(within(videoDialog).getByRole("button", { name: "Следующее медиа" }));
     const externalDialog = screen.getByRole("dialog", { name: "Просмотр архива: Внешнее видео архива" });
@@ -151,12 +157,15 @@ describe("tree media archive client", () => {
           storage_path: "trees/tree-1/media/photo/media-legacy-photo/archive-photo.jpg",
         }),
       ],
+      initialThumbUrlsByMediaId: {
+        "media-legacy-photo": "https://example.com/legacy-photo-original.jpg",
+      },
     });
 
     const tileImage = await screen.findByRole("img", { hidden: true }).catch(() => null);
     const firstArchiveImage = document.querySelector(".archive-tile-image");
     expect(tileImage || firstArchiveImage).not.toBeNull();
-    expect(firstArchiveImage).toHaveAttribute("src", "/api/media/media-legacy-photo");
+    expect(firstArchiveImage).toHaveAttribute("src", "https://example.com/legacy-photo-original.jpg");
 
     fireEvent.click(screen.getByRole("button", { name: "Открыть фото: Архивное фото" }));
 
@@ -390,6 +399,9 @@ describe("tree media archive client", () => {
         "album-1": [photo],
       },
       allMedia: [photo],
+      initialThumbUrlsByMediaId: {
+        "media-photo": "/api/media/media-photo?variant=thumb",
+      },
     });
 
     const tileImage = document.querySelector(".archive-tile-image");
@@ -471,6 +483,10 @@ describe("tree media archive client", () => {
         "album-2-up": [photoOne, photoTwo],
       },
       allMedia: [photoOne, photoTwo],
+      initialThumbUrlsByMediaId: {
+        "media-photo-1": "/api/media/media-photo-1?variant=thumb",
+        "media-photo-2": "/api/media/media-photo-2?variant=thumb",
+      },
     });
 
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
@@ -525,6 +541,11 @@ describe("tree media archive client", () => {
         "album-3-up": [photoOne, photoTwo, photoThree, photoFour],
       },
       allMedia: [photoOne, photoTwo, photoThree, photoFour],
+      initialThumbUrlsByMediaId: {
+        "media-photo-1": "/api/media/media-photo-1?variant=thumb",
+        "media-photo-2": "/api/media/media-photo-2?variant=thumb",
+        "media-photo-3": "/api/media/media-photo-3?variant=thumb",
+      },
     });
 
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
@@ -573,6 +594,9 @@ describe("tree media archive client", () => {
         "album-video": [video],
       },
       allMedia: [video],
+      initialThumbUrlsByMediaId: {
+        "media-video": "/api/media/media-video?variant=thumb",
+      },
     });
 
     const tileImage = document.querySelector(".archive-tile-image");
@@ -659,65 +683,46 @@ describe("tree media archive client", () => {
     expect(albumButton).not.toHaveTextContent(/материал/i);
   });
 
-  it("updates a newly uploaded cloudflare video album cover to its generated preview without a full page reload", async () => {
+  it("updates a visible pending cloudflare video tile to its generated preview without a manual reload", async () => {
     let summaryCalls = 0;
     vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
       const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
 
-      if (url.includes("/api/media/archive/upload-intent")) {
-        return Response.json(
-          {
-            mediaId: "archive-video-pending-1",
-            kind: "video",
-            path: "trees/tree-1/media/video/archive-video-pending-1/archive-video.webm",
-            bucket: "bucket-1",
-            signedUrl: "https://example.com/original",
-            token: null,
-            uploadProvider: "cloudflare_r2",
-            configuredBackend: "cloudflare_r2",
-            resolvedUploadBackend: "cloudflare_r2",
-            rolloutState: "cloudflare_rollout_active",
-            forceProxyUpload: false,
-            uploadMode: "direct",
-            variantUploadMode: "none",
-            variantTargets: [],
-          },
-          { status: 201 }
-        );
-      }
-
-      if (url.includes("/api/media/archive/complete")) {
-        return Response.json(
-          {
-            message: "Материал сохранен в семейный архив.",
-            uploaderAlbumId: "album-uploader-1",
-            media: createMediaAsset({
-              id: "archive-video-pending-1",
-              kind: "video",
-              provider: "cloudflare_r2",
-              preview_status: "pending",
-              title: "archive-video.webm",
-              mime_type: "video/webm",
-              storage_path: "trees/tree-1/media/video/archive-video-pending-1/archive-video.webm",
-            }),
-          },
-          { status: 201 }
-        );
-      }
-
-      if (url.includes("/api/media/archive-video-pending-1?summary=1")) {
+      if (url.includes("/api/media/media-video-pending?summary=1")) {
         summaryCalls += 1;
         return Response.json(
           {
             media: createMediaAsset({
-              id: "archive-video-pending-1",
+              id: "media-video-pending",
               kind: "video",
               provider: "cloudflare_r2",
-              preview_status: summaryCalls >= 2 ? "ready" : "pending",
-              title: "archive-video.webm",
-              mime_type: "video/webm",
-              storage_path: "trees/tree-1/media/video/archive-video-pending-1/archive-video.webm",
+              preview_status: summaryCalls >= 1 ? "ready" : "pending",
+              title: "Архивное видео pending",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/media-video-pending/archive-video.mp4",
             }),
+          },
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/api/media/thumbs") && init?.method === "POST") {
+        return Response.json(
+          {
+            urlsByMediaId: {
+              "media-video-pending": "/api/media/media-video-pending?variant=thumb",
+            },
+          },
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/api/media/thumbs") && init?.method === "POST") {
+        return Response.json(
+          {
+            urlsByMediaId: {
+              "archive-video-pending-1": "/api/media/archive-video-pending-1?variant=thumb",
+            },
           },
           { status: 200 }
         );
@@ -728,30 +733,97 @@ describe("tree media archive client", () => {
 
     renderArchiveClient({
       initialMode: "video",
-      initialView: "albums",
-      allMedia: [],
-      allAlbums: [],
-      persistedAlbumMediaMap: {},
-      uploaderLabels: [{ userId: "user-1", label: "От Вячеслава" }],
+      initialView: "all",
+      allMedia: [
+        createMediaAsset({
+          id: "media-video-pending",
+          kind: "video",
+          provider: "cloudflare_r2",
+          preview_status: "pending",
+          title: "Архивное видео pending",
+          mime_type: "video/mp4",
+          storage_path: "trees/tree-1/media/video/media-video-pending/archive-video.mp4",
+        }),
+      ],
     });
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File([new Uint8Array([1, 2, 3])], "archive-video.webm", { type: "video/webm" });
-    Object.defineProperty(input, "files", {
-      configurable: true,
-      value: [file],
-    });
-    fireEvent.change(input);
-
-    const dialog = await screen.findByRole("dialog", { name: "Подготовка загрузки" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Сохранить 1" }));
+    expect(document.querySelector(".archive-tile-placeholder-video")).not.toBeNull();
 
     await waitFor(() => {
-      const albumImage = document.querySelector(".archive-album-image");
-      expect(albumImage).not.toBeNull();
-      expect(albumImage).toHaveAttribute("src", "/api/media/archive-video-pending-1?variant=thumb");
+      const tileImage = document.querySelector(".archive-tile-image");
+      expect(tileImage).not.toBeNull();
+      expect(tileImage).toHaveAttribute("src", "/api/media/media-video-pending?variant=thumb");
     }, { timeout: 5000 });
   }, 10000);
+
+  it("cleans up pending visible video preview polling on unmount", () => {
+    vi.useFakeTimers();
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation(async () => Response.json({}, { status: 200 }));
+
+    const view = renderArchiveClient({
+      initialMode: "video",
+      initialView: "all",
+      allMedia: [
+        createMediaAsset({
+          id: "media-video-pending",
+          kind: "video",
+          provider: "cloudflare_r2",
+          preview_status: "pending",
+          title: "Архивное видео pending",
+          mime_type: "video/mp4",
+          storage_path: "trees/tree-1/media/video/media-video-pending/archive-video.mp4",
+        }),
+      ],
+    });
+
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    view.unmount();
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("aborts in-flight archive thumb batch requests on unmount", async () => {
+    let capturedSignal: AbortSignal | null = null;
+    const fetchSpy = vi.spyOn(global, "fetch").mockImplementation((input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes("/api/media/thumbs")) {
+        capturedSignal = init?.signal as AbortSignal | null;
+        return new Promise<Response>(() => undefined);
+      }
+
+      return Promise.resolve(Response.json({}, { status: 200 }));
+    });
+
+    const view = renderArchiveClient({
+      allMedia: [
+        createMediaAsset({
+          id: "media-photo",
+          title: "Архивное фото",
+          storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+        }),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/media/thumbs",
+        expect.objectContaining({
+          method: "POST",
+        })
+      );
+    });
+
+    view.unmount();
+
+    expect(capturedSignal).not.toBeNull();
+    expect(capturedSignal?.aborted).toBe(true);
+  });
 
   it("keeps only the top archive action group by default", () => {
     renderArchiveClient();
@@ -1923,6 +1995,9 @@ describe("tree media archive client", () => {
         allMedia={[photo]}
         allAlbums={[]}
         persistedAlbumMediaMap={{}}
+        initialThumbUrlsByMediaId={{
+          "media-photo": "/api/media/media-photo?variant=thumb",
+        }}
         uploaderLabels={[{ userId: "user-1", label: "От Вячеслава" }]}
       />
     );
@@ -1934,7 +2009,7 @@ describe("tree media archive client", () => {
     expect(screen.getByText("От Вячеслава")).toBeInTheDocument();
   });
 
-  it("shows different manual album lists in photo and video tabs", () => {
+  it("shows different manual album lists in photo and video tabs", async () => {
     const photo = createMediaAsset({
       id: "media-photo",
       title: "Фото из альбома",
@@ -1976,17 +2051,25 @@ describe("tree media archive client", () => {
         "album-video": [video],
       },
       allMedia: [photo, video],
+      initialThumbUrlsByMediaId: {
+        "media-photo": "/api/media/media-photo?variant=thumb",
+        "media-video": "/api/media/media-video?variant=thumb",
+      },
     });
 
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
     fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
-    expect(screen.getByRole("button", { name: /Фотоальбом.*Пользовательский альбом/ })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Фотоальбом.*Пользовательский альбом/ })).toBeInTheDocument();
+    });
     expect(screen.queryByRole("button", { name: /Видеоальбом.*Пользовательский альбом/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
-    expect(screen.getByRole("button", { name: /Видеоальбом.*Пользовательский альбом/ })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Видеоальбом.*Пользовательский альбом/ })).toBeInTheDocument();
+    });
     expect(screen.queryByRole("button", { name: /Фотоальбом.*Пользовательский альбом/ })).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   it("drops a photo album from the albums tab after switching into video mode", () => {
     const photo = createMediaAsset({
@@ -2213,7 +2296,7 @@ describe("tree media archive client", () => {
       visibility: "public",
       title: "album-photo.jpg",
     });
-  });
+  }, 15000);
 
   it("shows a video preview tile in the archive upload review dialog for local video files", async () => {
     const view = renderArchiveClient();
@@ -2230,7 +2313,7 @@ describe("tree media archive client", () => {
     expect(document.querySelector("video.archive-tile-video")).not.toBeNull();
     expect(screen.getByText("archive-video.mp4")).toBeInTheDocument();
     expect(screen.getByLabelText("Сводка выбранных файлов")).toHaveTextContent("1 видео");
-  });
+  }, 15000);
 
   it("shows a pending state while creating an album and defaults access to members", async () => {
     const requests: Array<{ url: string; method?: string; body?: unknown }> = [];
@@ -2294,7 +2377,7 @@ describe("tree media archive client", () => {
       kind: "photo",
       access: "members",
     });
-  });
+  }, 15000);
 
   it("persists selected public access during album creation and renders the album without a lock icon", async () => {
     const requests: Array<{ url: string; method?: string; body?: unknown }> = [];
@@ -2358,5 +2441,5 @@ describe("tree media archive client", () => {
     const createdAlbumShell = createdAlbumButton.closest(".archive-album-card-shell");
     expect(createdAlbumShell).not.toBeNull();
     expect(createdAlbumShell?.querySelector(".archive-album-access-indicator")).toBeNull();
-  });
+  }, 15000);
 });

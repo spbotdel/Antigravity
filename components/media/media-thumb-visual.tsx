@@ -35,6 +35,7 @@ interface MediaThumbVisualProps {
   overlayContent?: ReactNode;
   showToneOverlay?: boolean;
   showVideoChrome?: boolean;
+  disableDurationProbe?: boolean;
   containerStyle?: CSSProperties;
   mediaStyle?: CSSProperties;
 }
@@ -49,13 +50,14 @@ export function MediaThumbVisual({
   overlayContent,
   showToneOverlay = true,
   showVideoChrome = true,
+  disableDurationProbe = false,
   containerStyle,
   mediaStyle
 }: MediaThumbVisualProps) {
   const [durationLabel, setDurationLabel] = useState<string | null>(() => durationLabelCache.get(asset.id) || null);
 
   useEffect(() => {
-    if (asset.kind !== "video" || asset.provider === "yandex_disk" || durationLabel || thumbSource?.kind === "video") {
+    if (disableDurationProbe || asset.kind !== "video" || asset.provider === "yandex_disk" || durationLabel || thumbSource?.kind === "video") {
       return;
     }
 
@@ -99,7 +101,7 @@ export function MediaThumbVisual({
       video.removeEventListener("error", handleError);
       cleanup();
     };
-  }, [asset, durationLabel, shareToken, thumbSource?.kind]);
+  }, [asset, disableDurationProbe, durationLabel, shareToken, thumbSource?.kind]);
 
   if (!thumbSource) {
     return <>{placeholder}</>;

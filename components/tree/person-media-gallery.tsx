@@ -11,8 +11,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MediaThumbVisual } from "@/components/media/media-thumb-visual";
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Trash2, X } from "lucide-react";
-import { type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { type CSSProperties, type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl, resolveMediaThumbSource } from "@/lib/tree/display";
@@ -316,18 +316,247 @@ function MediaThumb({
   );
 }
 
+function formatVideoTime(totalSeconds: number) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    return "0:00";
+  }
+
+  const roundedSeconds = Math.floor(totalSeconds);
+  const hours = Math.floor(roundedSeconds / 3600);
+  const minutes = Math.floor((roundedSeconds % 3600) / 60);
+  const seconds = roundedSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function clampPositiveSize(value: number) {
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function LightboxVideoPlayer({
+  asset,
+  src,
+  poster,
+  autoPlay = false,
+  onVideoElementChange,
+  onIntrinsicSizeChange,
+  shellStyle,
+  surfaceStyle,
+}: {
+  asset: MediaAsset;
+  src: string;
+  poster?: string;
+  autoPlay?: boolean;
+  onVideoElementChange?: (node: HTMLVideoElement | null) => void;
+  onIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
+  shellStyle?: CSSProperties;
+  surfaceStyle?: CSSProperties;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const emitVideoElementChange = useEffectEvent((node: HTMLVideoElement | null) => {
+    onVideoElementChange?.(node);
+  });
+  const emitIntrinsicSizeChange = useEffectEvent((size: { width: number; height: number } | null) => {
+    onIntrinsicSizeChange?.(size);
+  });
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    emitVideoElementChange(video);
+
+    const syncFromVideo = () => {
+      setIsPlaying(!video.paused && !video.ended);
+      setCurrentTime(Number.isFinite(video.currentTime) ? video.currentTime : 0);
+      setDuration(Number.isFinite(video.duration) ? video.duration : 0);
+      setVolume(Number.isFinite(video.volume) ? video.volume : 1);
+      setIsMuted(video.muted);
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        emitIntrinsicSizeChange({
+          width: video.videoWidth,
+          height: video.videoHeight,
+        });
+      }
+    };
+
+    syncFromVideo();
+
+    const events = ["play", "pause", "ended", "timeupdate", "loadedmetadata", "durationchange", "volumechange"] as const;
+    for (const eventName of events) {
+      video.addEventListener(eventName, syncFromVideo);
+    }
+
+    if (autoPlay) {
+      void video.play().catch(() => undefined);
+    }
+
+    return () => {
+      video.pause();
+      emitVideoElementChange(null);
+      emitIntrinsicSizeChange(null);
+      for (const eventName of events) {
+        video.removeEventListener(eventName, syncFromVideo);
+      }
+    };
+  }, [asset.id, autoPlay, src]);
+
+  async function togglePlayback() {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    if (video.paused || video.ended) {
+      await video.play().catch(() => undefined);
+      return;
+    }
+
+    video.pause();
+  }
+
+  function handleSeek(nextValue: number) {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    video.currentTime = nextValue;
+    setCurrentTime(nextValue);
+  }
+
+  function handleVolume(nextValue: number) {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    const normalizedValue = Math.max(0, Math.min(1, nextValue));
+    video.volume = normalizedValue;
+    video.muted = normalizedValue === 0;
+    setVolume(normalizedValue);
+    setIsMuted(video.muted);
+  }
+
+  function toggleMute() {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    if (video.muted || video.volume === 0) {
+      const restoredVolume = volume > 0 ? volume : 1;
+      video.muted = false;
+      video.volume = restoredVolume;
+      setVolume(restoredVolume);
+      setIsMuted(false);
+      return;
+    }
+
+    video.muted = true;
+    setIsMuted(true);
+  }
+
+  const effectiveDuration = duration > 0 ? duration : 0;
+  const effectiveCurrentTime = Math.min(currentTime, effectiveDuration || 0);
+
+  return (
+    <div className="person-media-stage-video-frame">
+      <div className="person-media-stage-video-shell" style={shellStyle}>
+      <video
+        ref={videoRef}
+        key={`${asset.id}-lightbox`}
+        src={src}
+        poster={poster}
+        className="person-media-stage-video person-media-stage-video-surface"
+        style={surfaceStyle}
+        playsInline
+        autoPlay={autoPlay}
+        preload="metadata"
+        onClick={() => void togglePlayback()}
+      >
+        Ваш браузер не поддерживает встроенное воспроизведение видео.
+      </video>
+      </div>
+      <div className="person-media-stage-video-controls-anchor">
+        <div className="person-media-stage-video-controls" role="group" aria-label={`Управление видео: ${asset.title}`}>
+          <button
+            type="button"
+            className="person-media-stage-video-control person-media-stage-video-control-primary"
+            aria-label={isPlaying ? "Пауза" : "Воспроизвести видео"}
+            onClick={() => void togglePlayback()}
+          >
+            {isPlaying ? <Pause className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Play className="person-media-stage-video-control-icon" aria-hidden="true" />}
+          </button>
+          <span className="person-media-stage-video-time" aria-live="off">
+            {formatVideoTime(effectiveCurrentTime)} / {formatVideoTime(effectiveDuration)}
+          </span>
+          <input
+            type="range"
+            className="person-media-stage-video-slider"
+            aria-label="Позиция видео"
+            min={0}
+            max={effectiveDuration || 0}
+            step={0.1}
+            disabled={effectiveDuration <= 0}
+            value={effectiveCurrentTime}
+            onChange={(event) => handleSeek(Number(event.currentTarget.value))}
+          />
+          <button
+            type="button"
+            className="person-media-stage-video-control"
+            aria-label={isMuted || volume === 0 ? "Включить звук" : "Выключить звук"}
+            onClick={toggleMute}
+          >
+            {isMuted || volume === 0 ? <VolumeX className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Volume2 className="person-media-stage-video-control-icon" aria-hidden="true" />}
+          </button>
+          <input
+            type="range"
+            className="person-media-stage-video-slider person-media-stage-video-volume"
+            aria-label="Громкость"
+            min={0}
+            max={1}
+            step={0.05}
+            value={isMuted ? 0 : volume}
+            onChange={(event) => handleVolume(Number(event.currentTarget.value))}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MediaPreview({
   asset,
   shareToken,
   optimisticVideoPreviewUrls,
   expanded = false,
   autoPlayVideo = false,
+  onLightboxVideoElementChange,
+  onLightboxMediaIntrinsicSizeChange,
+  expandedMediaShellStyle,
+  expandedMediaStyle,
 }: {
   asset: MediaAsset;
   shareToken?: string | null;
   optimisticVideoPreviewUrls?: Readonly<Record<string, string>>;
   expanded?: boolean;
   autoPlayVideo?: boolean;
+  onLightboxVideoElementChange?: (node: HTMLVideoElement | null) => void;
+  onLightboxMediaIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
+  expandedMediaShellStyle?: CSSProperties;
+  expandedMediaStyle?: CSSProperties;
 }) {
   const mediaUrl = isPhotoAsset(asset)
     ? buildPhotoPreviewRouteUrl(asset, expanded ? "medium" : "small", shareToken)
@@ -341,11 +570,37 @@ function MediaPreview({
         src={mediaUrl}
         alt={asset.title}
         className={`person-media-stage-photo${expanded ? "" : " person-media-stage-photo-inline"}`}
+        style={expanded ? expandedMediaStyle : undefined}
+        onLoad={
+          expanded
+            ? (event) => {
+                onLightboxMediaIntrinsicSizeChange?.({
+                  width: event.currentTarget.naturalWidth,
+                  height: event.currentTarget.naturalHeight,
+                });
+              }
+            : undefined
+        }
       />
     );
   }
 
   if (isInlineVideoAsset(asset)) {
+    if (expanded) {
+      return (
+        <LightboxVideoPlayer
+          asset={asset}
+          src={mediaUrl}
+          poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
+          autoPlay={autoPlayVideo}
+          onVideoElementChange={onLightboxVideoElementChange}
+          onIntrinsicSizeChange={onLightboxMediaIntrinsicSizeChange}
+          shellStyle={expandedMediaShellStyle}
+          surfaceStyle={expandedMediaStyle}
+        />
+      );
+    }
+
     return (
       <video
         key={`${asset.id}-${expanded ? "expanded" : "inline"}`}
@@ -353,7 +608,6 @@ function MediaPreview({
         poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
         className={`person-media-stage-video${expanded ? "" : " person-media-stage-video-inline"}`}
         controls
-        controlsList={expanded ? "nofullscreen" : undefined}
         playsInline
         muted={autoPlayVideo}
         preload={shouldPreferMetadataPreload ? "metadata" : "auto"}
@@ -402,7 +656,7 @@ export function PersonMediaGallery({
   openLightboxOnMount = false,
   onLightboxOpenChange,
   lightboxAriaLabelPrefix = "Просмотр медиа",
-  autoPlayLightboxVideo = false,
+  autoPlayLightboxVideo = true,
 }: PersonMediaGalleryProps) {
   const [activeMediaId, setActiveMediaId] = useState<string | null>(() => {
     if (initialActiveMediaId && media.some((asset) => asset.id === initialActiveMediaId)) {
@@ -422,6 +676,8 @@ export function PersonMediaGallery({
   const pendingDeletedSuccessorIdRef = useRef<string | null>(null);
   const hasAutoOpenedLightboxRef = useRef(false);
   const lightboxContainerRef = useRef<HTMLDivElement | null>(null);
+  const lightboxContentRef = useRef<HTMLDivElement | null>(null);
+  const activeLightboxVideoElementRef = useRef<HTMLVideoElement | null>(null);
   const fullscreenIdleTimeoutRef = useRef<number | null>(null);
   const fullscreenControlsPinnedRef = useRef(false);
   const isLightboxOpen = lightboxState === "open";
@@ -429,13 +685,20 @@ export function PersonMediaGallery({
   const isLightboxRendered = lightboxState !== "closed";
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [areFullscreenControlsVisible, setAreFullscreenControlsVisible] = useState(true);
+  const [lightboxContentSize, setLightboxContentSize] = useState({ width: 0, height: 0 });
+  const [activeMediaIntrinsicSize, setActiveMediaIntrinsicSize] = useState<{ width: number; height: number } | null>(null);
 
   function openLightbox() {
     setLightboxState("open");
     onLightboxOpenChange?.(true);
   }
 
+  function pauseActiveLightboxVideo() {
+    activeLightboxVideoElementRef.current?.pause();
+  }
+
   function closeLightbox() {
+    pauseActiveLightboxVideo();
     if (document.fullscreenElement && lightboxContainerRef.current && document.fullscreenElement === lightboxContainerRef.current) {
       void document.exitFullscreen().catch(() => undefined);
     }
@@ -492,9 +755,12 @@ export function PersonMediaGallery({
       if (document.fullscreenElement === target) {
         await document.exitFullscreen();
       } else {
+        setIsFullscreen(true);
+        setAreFullscreenControlsVisible(true);
         await target.requestFullscreen();
       }
     } catch {
+      setIsFullscreen(false);
       // Ignore browser fullscreen rejections and keep the viewer usable.
     }
   }
@@ -547,6 +813,38 @@ export function PersonMediaGallery({
       document.body.style.overflow = previousOverflow;
     };
   }, [isLightboxRendered]);
+
+  useEffect(() => {
+    const content = lightboxContentRef.current;
+    if (!content || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const updateContentSize = () => {
+      const rect = content.getBoundingClientRect();
+      setLightboxContentSize((currentSize) => {
+        if (currentSize.width === rect.width && currentSize.height === rect.height) {
+          return currentSize;
+        }
+
+        return {
+          width: rect.width,
+          height: rect.height,
+        };
+      });
+    };
+
+    updateContentSize();
+
+    const observer = new ResizeObserver(() => {
+      updateContentSize();
+    });
+    observer.observe(content);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isFullscreen, isLightboxRendered, areFullscreenControlsVisible]);
 
   useEffect(() => {
     function handleFullscreenChange() {
@@ -632,11 +930,16 @@ export function PersonMediaGallery({
     }
   }, [media, openInlineActionsMediaId]);
 
+  useEffect(() => {
+    setActiveMediaIntrinsicSize(null);
+  }, [activeAsset?.id]);
+
   function moveSelection(direction: -1 | 1) {
     if (!media.length) {
       return;
     }
 
+    pauseActiveLightboxVideo();
     const nextIndex = (resolvedActiveIndex + direction + media.length) % media.length;
     setActiveMediaId(media[nextIndex].id);
   }
@@ -849,6 +1152,52 @@ export function PersonMediaGallery({
     syncLightboxStrip(lightboxStripRef.current, lightboxThumbRefs.current.get(activeAsset.id) ?? null);
   }, [activeAsset, isLightboxOpen, media.length]);
 
+  const isThumbnailStripVisible = media.length > 1 && (!isFullscreen || areFullscreenControlsVisible);
+  const lightboxBottomChromeSpacePx = isFullscreen ? (isThumbnailStripVisible ? 148 : 24) : media.length > 1 ? 148 : 24;
+  const showLightboxActions =
+    Boolean(activeAsset) &&
+    (!isInlineRenderableAsset(activeAsset) || (showViewerAvatarAction && canSetAvatar) || canDeleteCurrentMedia);
+  const topSafeInsetPx = isFullscreen && areFullscreenControlsVisible ? 72 : 20;
+  const actionChromeInsetPx = showLightboxActions ? 72 : 0;
+  const expandedMediaViewport = useMemo(() => {
+    const availableWidth = clampPositiveSize(lightboxContentSize.width);
+    const availableHeight = clampPositiveSize(lightboxContentSize.height - topSafeInsetPx - actionChromeInsetPx);
+    return {
+      width: availableWidth,
+      height: availableHeight,
+    };
+  }, [actionChromeInsetPx, lightboxContentSize.height, lightboxContentSize.width, topSafeInsetPx]);
+
+  const expandedMediaStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!expandedMediaViewport.width || !expandedMediaViewport.height) {
+      return undefined;
+    }
+
+    const maxWidth = activeMediaIntrinsicSize ? Math.min(expandedMediaViewport.width, activeMediaIntrinsicSize.width) : expandedMediaViewport.width;
+    const maxHeight = activeMediaIntrinsicSize ? Math.min(expandedMediaViewport.height, activeMediaIntrinsicSize.height) : expandedMediaViewport.height;
+
+    return {
+      width: "auto",
+      height: "auto",
+      maxWidth: `${maxWidth}px`,
+      maxHeight: `${maxHeight}px`,
+      objectFit: "contain",
+      transition: "max-width 180ms ease, max-height 180ms ease",
+    };
+  }, [activeMediaIntrinsicSize, expandedMediaViewport.height, expandedMediaViewport.width]);
+
+  const expandedMediaShellStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!expandedMediaViewport.width || !expandedMediaViewport.height) {
+      return undefined;
+    }
+
+    return {
+      maxWidth: `${expandedMediaViewport.width}px`,
+      maxHeight: `${expandedMediaViewport.height}px`,
+      transition: "max-width 180ms ease, max-height 180ms ease",
+    };
+  }, [expandedMediaViewport.height, expandedMediaViewport.width]);
+
   if (!media.length || !activeAsset) {
     if (lightboxOnly) {
       return null;
@@ -896,12 +1245,16 @@ export function PersonMediaGallery({
       </DialogContent>
     </Dialog>
   ) : null;
-  const showLightboxActions = !isInlineRenderableAsset(activeAsset) || (showViewerAvatarAction && canSetAvatar) || canDeleteCurrentMedia;
   const lightboxContent = isLightboxRendered ? (
     <>
       <div
         ref={lightboxContainerRef}
         className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}${isFullscreen ? " media-lightbox-fullscreen" : ""}${isFullscreen && !areFullscreenControlsVisible ? " media-lightbox-fullscreen-idle" : ""}`}
+        style={
+          {
+            "--media-lightbox-bottom-space": `${lightboxBottomChromeSpacePx}px`,
+          } as CSSProperties
+        }
         role="dialog"
         aria-modal="true"
         aria-label={`${lightboxAriaLabelPrefix}: ${activeAsset.title}`}
@@ -961,14 +1314,20 @@ export function PersonMediaGallery({
             </button>
           ) : null}
 
-          <div className="media-lightbox-content">
-            <div className="media-lightbox-stage media-lightbox-stage-minimal">
+          <div ref={lightboxContentRef} className="media-lightbox-content">
+            <div className={`media-lightbox-stage media-lightbox-stage-minimal${isInlineVideoAsset(activeAsset) ? " media-lightbox-stage-video" : ""}${isFullscreen ? " media-lightbox-stage-fullscreen" : ""}`}>
               <MediaPreview
                 asset={activeAsset}
                 shareToken={shareToken}
                 optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                 expanded
                 autoPlayVideo={autoPlayLightboxVideo}
+                onLightboxVideoElementChange={(node) => {
+                  activeLightboxVideoElementRef.current = node;
+                }}
+                onLightboxMediaIntrinsicSizeChange={setActiveMediaIntrinsicSize}
+                expandedMediaShellStyle={expandedMediaShellStyle}
+                expandedMediaStyle={expandedMediaStyle}
               />
             </div>
 
@@ -1027,7 +1386,10 @@ export function PersonMediaGallery({
                 active={asset.id === activeAsset.id}
                 shareToken={shareToken}
                 optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
-                onSelect={() => setActiveMediaId(asset.id)}
+                onSelect={() => {
+                  pauseActiveLightboxVideo();
+                  setActiveMediaId(asset.id);
+                }}
                 index={index}
                 isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
                 compact

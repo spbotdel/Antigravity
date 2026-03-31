@@ -387,7 +387,10 @@ describe("person media gallery", () => {
     expect(dialog).toBeInTheDocument();
     const stageVideo = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
     expect(stageVideo).not.toBeNull();
-    expect(stageVideo?.getAttribute("controlslist")).toBe("nofullscreen");
+    expect(stageVideo?.hasAttribute("controls")).toBe(false);
+    expect(stageVideo?.getAttribute("playsinline")).not.toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Позиция видео")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Закрыть просмотр" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Закрыть просмотр" })).toHaveLength(1);
     expect(dialog.querySelector(".media-lightbox-strip-fixed .person-media-thumb-video-placeholder")).not.toBeNull();
@@ -443,7 +446,9 @@ describe("person media gallery", () => {
     expect(screen.queryByText("2 материала в галерее")).not.toBeInTheDocument();
   });
 
-  it("keeps archive-style lightbox video in manual-start mode with metadata preload", () => {
+  it("autoplays archive-style lightbox video by default with metadata preload", () => {
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => Promise.resolve());
+
     render(
       <PersonMediaGallery
         media={[
@@ -469,7 +474,172 @@ describe("person media gallery", () => {
     expect(video).not.toBeNull();
     expect(video?.muted).toBe(false);
     expect(video?.preload).toBe("metadata");
+    expect(video?.autoplay).toBe(true);
+    expect(video?.hasAttribute("controls")).toBe(false);
+    expect(playSpy).toHaveBeenCalled();
+    expect(within(dialog).getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Громкость")).toBeInTheDocument();
+  });
+
+  it("can keep archive-style lightbox video in manual-start mode when autoplay is disabled explicitly", () => {
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => Promise.resolve());
+
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            title: "Архивное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        lightboxOnly
+        openLightboxOnMount
+        initialActiveMediaId="media-video"
+        lightboxAriaLabelPrefix="Просмотр архива"
+        autoPlayLightboxVideo={false}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+    const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
     expect(video?.autoplay).toBe(false);
+    expect(playSpy).not.toHaveBeenCalled();
+  });
+
+  it("pauses the current lightbox video before moving to the next media", () => {
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video-1",
+            kind: "video",
+            title: "Архивное видео 1",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video-1/video.mp4"
+          }),
+          createMediaAsset({
+            id: "media-video-2",
+            kind: "video",
+            title: "Архивное видео 2",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video-2/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        lightboxOnly
+        openLightboxOnMount
+        initialActiveMediaId="media-video-1"
+        lightboxAriaLabelPrefix="Просмотр архива"
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео 1" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Следующее медиа" }));
+
+    expect(pauseSpy).toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео 2" })).toBeInTheDocument();
+  });
+
+  it("seeks lightbox video through the custom progress slider", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            title: "Архивное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        lightboxOnly
+        openLightboxOnMount
+        initialActiveMediaId="media-video"
+        lightboxAriaLabelPrefix="Просмотр архива"
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+    const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement;
+    Object.defineProperty(video, "duration", {
+      configurable: true,
+      value: 15,
+    });
+    let currentTimeValue = 0;
+    Object.defineProperty(video, "currentTime", {
+      configurable: true,
+      get: () => currentTimeValue,
+      set: (value: number) => {
+        currentTimeValue = value;
+      },
+    });
+    fireEvent.loadedMetadata(video);
+
+    const seekSlider = within(dialog).getByLabelText("Позиция видео") as HTMLInputElement;
+    fireEvent.change(seekSlider, { target: { value: "5" } });
+
+    expect(video.currentTime).toBe(5);
+  });
+
+  it("does not pause the lightbox video when fullscreen mode re-renders the viewer shell", async () => {
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+
+    let fullscreenElement: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreenElement,
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: vi.fn(() => Promise.resolve()),
+    });
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: vi.fn(function (this: Element) {
+        fullscreenElement = this;
+        document.dispatchEvent(new Event("fullscreenchange"));
+        return Promise.resolve();
+      }),
+    });
+
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            title: "Архивное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        lightboxOnly
+        openLightboxOnMount
+        initialActiveMediaId="media-video"
+        lightboxAriaLabelPrefix="Просмотр архива"
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole("button", { name: "Открыть в полноэкранном режиме" }));
+    });
+
+    expect(pauseSpy).not.toHaveBeenCalled();
   });
 
   it("fullscreens the shared lightbox container and keeps controls available in fullscreen", async () => {

@@ -823,13 +823,17 @@ export function TreeMediaArchiveClient({
   const reviewFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingUploadsRef = useRef<PendingArchiveUploadItem[]>([]);
   const pendingVideoPreviewPollIdsRef = useRef(new Set<string>());
+  const pendingVideoPreviewPollWaitsRef = useRef(new Map<string, { timeoutId: number; resolve: (continued: boolean) => void }>());
+  const pendingVideoPreviewPollFetchControllersRef = useRef(new Map<string, AbortController>());
   const uploaderLabelsById = useMemo(() => new Map(uploaderLabels.map((item) => [item.userId, item.label] as const)), [uploaderLabels]);
   const [albumMediaMap, setAlbumMediaMap] = useState<Record<string, MediaAssetRecord[]>>(persistedAlbumMediaMap);
   const [optimisticVideoPreviewUrls, setOptimisticVideoPreviewUrls] = useState<Record<string, string>>({});
   const [resolvedThumbUrlsByMediaId, setResolvedThumbUrlsByMediaId] = useState<Record<string, string>>(initialThumbUrlsByMediaId);
   const pendingThumbUrlIdsRef = useRef(new Set<string>());
+  const pendingThumbBatchFetchControllersRef = useRef(new Set<AbortController>());
   const requestedThumbSetKeysRef = useRef(new Set<string>());
   const prefetchedThumbSetKeysRef = useRef(new Set<string>());
+  const prefetchedThumbBatchFetchControllersRef = useRef(new Set<AbortController>());
   const warmedThumbUrlsRef = useRef(new Set<string>());
   const isArchiveClientMountedRef = useRef(true);
   const pendingThumbBatchApplyRef = useRef<{
@@ -857,6 +861,24 @@ export function TreeMediaArchiveClient({
   useEffect(() => {
     return () => {
       isArchiveClientMountedRef.current = false;
+      for (const [mediaId, wait] of pendingVideoPreviewPollWaitsRef.current.entries()) {
+        window.clearTimeout(wait.timeoutId);
+        wait.resolve(false);
+        pendingVideoPreviewPollWaitsRef.current.delete(mediaId);
+      }
+      for (const controller of pendingVideoPreviewPollFetchControllersRef.current.values()) {
+        controller.abort();
+      }
+      pendingVideoPreviewPollFetchControllersRef.current.clear();
+      pendingVideoPreviewPollIdsRef.current.clear();
+      for (const controller of pendingThumbBatchFetchControllersRef.current.values()) {
+        controller.abort();
+      }
+      pendingThumbBatchFetchControllersRef.current.clear();
+      for (const controller of prefetchedThumbBatchFetchControllersRef.current.values()) {
+        controller.abort();
+      }
+      prefetchedThumbBatchFetchControllersRef.current.clear();
     };
   }, []);
 
@@ -1103,12 +1125,26 @@ export function TreeMediaArchiveClient({
     return asset.kind === "photo" || (asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready");
   }
 
+  function isRecoverableArchiveVideoPreview(asset: MediaAssetRecord) {
+    return asset.kind === "video" && asset.provider === "cloudflare_r2" && (asset.preview_status === "pending" || asset.preview_status === "processing");
+  }
+
   function getAlbumPreviewMediaIds(album: AlbumSummary) {
     const albumMedia = getArchiveAlbumSourceMedia(album, currentMedia, albumMediaMap);
     const cover = album.coverMediaId ? albumMedia.find((asset) => asset.id === album.coverMediaId) || null : null;
     const orderedMedia = cover ? [cover, ...albumMedia.filter((asset) => asset.id !== cover.id)] : albumMedia;
     return orderedMedia
       .filter((asset) => canBatchResolveArchiveThumb(asset))
+      .slice(0, 3)
+      .map((asset) => asset.id);
+  }
+
+  function getAlbumPreviewRecoveryMediaIds(album: AlbumSummary) {
+    const albumMedia = getArchiveAlbumSourceMedia(album, currentMedia, albumMediaMap);
+    const cover = album.coverMediaId ? albumMedia.find((asset) => asset.id === album.coverMediaId) || null : null;
+    const orderedMedia = cover ? [cover, ...albumMedia.filter((asset) => asset.id !== cover.id)] : albumMedia;
+    return orderedMedia
+      .filter((asset) => isRecoverableArchiveVideoPreview(asset))
       .slice(0, 3)
       .map((asset) => asset.id);
   }
@@ -1168,6 +1204,56 @@ export function TreeMediaArchiveClient({
 
     return nextIds;
   }, [currentMedia, mode, selectedAlbum, selectedAlbumId, selectedAlbumMedia, view, visibleItems]);
+
+  const visibleRecoverableVideoPreviewMediaIds = useMemo(() => {
+    if (view === "all") {
+      return [...new Set(visibleMedia.filter((asset) => isRecoverableArchiveVideoPreview(asset)).map((asset) => asset.id))];
+    }
+
+    if (selectedAlbum) {
+      return [...new Set(visibleSelectedAlbumMedia.filter((asset) => isRecoverableArchiveVideoPreview(asset)).map((asset) => asset.id))];
+    }
+
+    return [...new Set(currentAlbums.flatMap((album) => getAlbumPreviewRecoveryMediaIds(album)))];
+  }, [currentAlbums, selectedAlbum, view, visibleMedia, visibleSelectedAlbumMedia]);
+
+  useEffect(() => {
+    if (!isHydrated || !visibleRecoverableVideoPreviewMediaIds.length) {
+      for (const mediaId of [...pendingVideoPreviewPollIdsRef.current]) {
+        const pendingWait = pendingVideoPreviewPollWaitsRef.current.get(mediaId);
+        if (pendingWait) {
+          window.clearTimeout(pendingWait.timeoutId);
+          pendingWait.resolve(false);
+          pendingVideoPreviewPollWaitsRef.current.delete(mediaId);
+        }
+        pendingVideoPreviewPollFetchControllersRef.current.get(mediaId)?.abort();
+        pendingVideoPreviewPollFetchControllersRef.current.delete(mediaId);
+        pendingVideoPreviewPollIdsRef.current.delete(mediaId);
+      }
+      return;
+    }
+
+    const visibleRecoveryIds = new Set(visibleRecoverableVideoPreviewMediaIds);
+    for (const mediaId of [...pendingVideoPreviewPollIdsRef.current]) {
+      if (visibleRecoveryIds.has(mediaId)) {
+        continue;
+      }
+
+      const pendingWait = pendingVideoPreviewPollWaitsRef.current.get(mediaId);
+      if (pendingWait) {
+        window.clearTimeout(pendingWait.timeoutId);
+        pendingWait.resolve(false);
+        pendingVideoPreviewPollWaitsRef.current.delete(mediaId);
+      }
+      pendingVideoPreviewPollFetchControllersRef.current.get(mediaId)?.abort();
+      pendingVideoPreviewPollFetchControllersRef.current.delete(mediaId);
+      pendingVideoPreviewPollIdsRef.current.delete(mediaId);
+    }
+
+    for (const mediaId of visibleRecoverableVideoPreviewMediaIds) {
+      void pollArchiveVideoPreviewUntilReady(mediaId);
+    }
+  }, [isHydrated, visibleRecoverableVideoPreviewMediaIds]);
 
   useEffect(() => {
     if (!isHydrated || initialVisibleSettleStartedRef.current || visibleItems !== INITIAL_TILE_LIMIT) {
@@ -1362,6 +1448,7 @@ export function TreeMediaArchiveClient({
     }
     const requestUrl = params.size ? `/api/media/thumbs?${params.toString()}` : "/api/media/thumbs";
     let requestSucceeded = false;
+    let cancelled = false;
     const mediaIdBatches: string[][] = [];
     for (let index = 0; index < mediaIds.length; index += MEDIA_THUMB_BATCH_REQUEST_LIMIT) {
       mediaIdBatches.push(mediaIds.slice(index, index + MEDIA_THUMB_BATCH_REQUEST_LIMIT));
@@ -1379,6 +1466,8 @@ export function TreeMediaArchiveClient({
     void Promise.all(
       mediaIdBatches.map(async (batchMediaIds) => {
         const batchStartedAt = typeof performance !== "undefined" ? performance.now() : 0;
+        const controller = new AbortController();
+        pendingThumbBatchFetchControllersRef.current.add(controller);
         const response = await fetch(requestUrl, {
           method: "POST",
           headers: {
@@ -1387,8 +1476,10 @@ export function TreeMediaArchiveClient({
           body: JSON.stringify({
             treeId,
             mediaIds: batchMediaIds,
-          })
+          }),
+          signal: controller.signal,
         });
+        pendingThumbBatchFetchControllersRef.current.delete(controller);
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
           throw new Error(payload.error || "Запрос не выполнен.");
@@ -1408,7 +1499,7 @@ export function TreeMediaArchiveClient({
       })
     )
       .then((payloads) => {
-        if (!isArchiveClientMountedRef.current) {
+        if (!isArchiveClientMountedRef.current || cancelled) {
           return;
         }
 
@@ -1505,6 +1596,8 @@ export function TreeMediaArchiveClient({
       void Promise.all(
         mediaIdBatches.map(async (batchMediaIds) => {
           const batchStartedAt = typeof performance !== "undefined" ? performance.now() : 0;
+          const controller = new AbortController();
+          prefetchedThumbBatchFetchControllersRef.current.add(controller);
           const response = await fetch(requestUrl, {
             method: "POST",
             headers: {
@@ -1513,8 +1606,10 @@ export function TreeMediaArchiveClient({
             body: JSON.stringify({
               treeId,
               mediaIds: batchMediaIds,
-            })
+            }),
+            signal: controller.signal,
           });
+          prefetchedThumbBatchFetchControllersRef.current.delete(controller);
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) {
             throw new Error(payload.error || "Запрос не выполнен.");
@@ -2531,16 +2626,36 @@ export function TreeMediaArchiveClient({
 
     try {
       for (let attempt = 0; attempt < 18; attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, attempt < 6 ? 2000 : 5000));
+        const shouldContinue = await new Promise<boolean>((resolve) => {
+          const timeoutId = window.setTimeout(() => {
+            pendingVideoPreviewPollWaitsRef.current.delete(mediaId);
+            resolve(true);
+          }, attempt < 6 ? 2000 : 5000);
+
+          pendingVideoPreviewPollWaitsRef.current.set(mediaId, {
+            timeoutId,
+            resolve
+          });
+        });
+        if (!shouldContinue || !isArchiveClientMountedRef.current || !pendingVideoPreviewPollIdsRef.current.has(mediaId)) {
+          break;
+        }
         const params = new URLSearchParams();
         params.set("summary", "1");
         if (shareToken) {
           params.set("share", shareToken);
         }
 
+        const controller = new AbortController();
+        pendingVideoPreviewPollFetchControllersRef.current.set(mediaId, controller);
         const response = await fetch(`/api/media/${mediaId}?${params.toString()}`, {
-          cache: "no-store"
+          cache: "no-store",
+          signal: controller.signal,
         }).catch(() => null);
+        pendingVideoPreviewPollFetchControllersRef.current.delete(mediaId);
+        if (!isArchiveClientMountedRef.current || !pendingVideoPreviewPollIdsRef.current.has(mediaId)) {
+          break;
+        }
         if (!response || !response.ok) {
           continue;
         }
@@ -2567,6 +2682,14 @@ export function TreeMediaArchiveClient({
         }
       }
     } finally {
+      const pendingWait = pendingVideoPreviewPollWaitsRef.current.get(mediaId);
+      if (pendingWait) {
+        window.clearTimeout(pendingWait.timeoutId);
+        pendingWait.resolve(false);
+        pendingVideoPreviewPollWaitsRef.current.delete(mediaId);
+      }
+      pendingVideoPreviewPollFetchControllersRef.current.get(mediaId)?.abort();
+      pendingVideoPreviewPollFetchControllersRef.current.delete(mediaId);
       pendingVideoPreviewPollIdsRef.current.delete(mediaId);
     }
   }
