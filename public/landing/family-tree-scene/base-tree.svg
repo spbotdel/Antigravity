@@ -1,0 +1,30 @@
+<svg width="760" height="620" viewBox="0 0 760 620" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="trunk" x1="380" y1="132" x2="380" y2="556" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B77446"/>
+      <stop offset="1" stop-color="#76492E"/>
+    </linearGradient>
+    <radialGradient id="ground" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(380 568) rotate(90) scale(50 222)">
+      <stop stop-color="#D9B592" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#D9B592" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="380" cy="566" rx="222" ry="50" fill="url(#ground)"/>
+  <path d="M348 548C345 509 350 450 364 406C337 377 319 345 319 302C319 260 334 228 361 201C359 175 362 153 372 134H388C396 152 399 174 398 199C424 226 440 259 440 302C440 345 421 378 396 406C409 448 415 508 412 548H348Z" fill="url(#trunk)"/>
+  <path d="M380 222C346 188 314 169 273 165" stroke="#8D5838" stroke-width="20" stroke-linecap="round"/>
+  <path d="M377 252C323 223 274 216 218 229" stroke="#96603E" stroke-width="18" stroke-linecap="round"/>
+  <path d="M381 290C334 270 300 279 250 314" stroke="#9E6844" stroke-width="16" stroke-linecap="round"/>
+  <path d="M379 246C433 214 482 206 540 219" stroke="#95603E" stroke-width="18" stroke-linecap="round"/>
+  <path d="M383 284C431 264 464 272 512 306" stroke="#9D6743" stroke-width="16" stroke-linecap="round"/>
+  <path d="M370 184C339 141 316 122 282 108" stroke="#8A5637" stroke-width="15" stroke-linecap="round"/>
+  <path d="M391 182C421 141 445 123 479 110" stroke="#8A5637" stroke-width="15" stroke-linecap="round"/>
+  <path d="M286 108C253 98 226 100 194 118" stroke="#A8724D" stroke-width="10" stroke-linecap="round"/>
+  <path d="M478 110C512 99 539 102 570 121" stroke="#A8724D" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="194" cy="118" r="10" fill="#C58B62"/>
+  <circle cx="218" cy="229" r="11" fill="#C58B62"/>
+  <circle cx="250" cy="314" r="11" fill="#C58B62"/>
+  <circle cx="273" cy="165" r="11" fill="#C58B62"/>
+  <circle cx="540" cy="219" r="11" fill="#C58B62"/>
+  <circle cx="512" cy="306" r="11" fill="#C58B62"/>
+  <circle cx="570" cy="121" r="10" fill="#C58B62"/>
+</svg>

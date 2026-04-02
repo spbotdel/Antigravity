@@ -1,0 +1,41 @@
+<svg width="760" height="620" viewBox="0 0 760 620" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="leafWarm" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0) scale(1)">
+      <stop stop-color="#F5B45D"/>
+      <stop offset="1" stop-color="#D7733A"/>
+    </radialGradient>
+    <radialGradient id="leafCool" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0 0) scale(1)">
+      <stop stop-color="#7BAE7E"/>
+      <stop offset="1" stop-color="#4F8A58"/>
+    </radialGradient>
+  </defs>
+  <g opacity="0.96">
+    <circle cx="200" cy="124" r="46" fill="url(#leafWarm)"/>
+    <circle cx="250" cy="144" r="50" fill="url(#leafCool)"/>
+    <circle cx="314" cy="116" r="58" fill="url(#leafWarm)"/>
+    <circle cx="385" cy="98" r="54" fill="url(#leafCool)"/>
+    <circle cx="452" cy="120" r="58" fill="url(#leafWarm)"/>
+    <circle cx="520" cy="152" r="50" fill="url(#leafCool)"/>
+    <circle cx="572" cy="194" r="46" fill="url(#leafWarm)"/>
+    <circle cx="164" cy="214" r="44" fill="url(#leafCool)"/>
+    <circle cx="232" cy="222" r="54" fill="url(#leafWarm)"/>
+    <circle cx="306" cy="232" r="66" fill="url(#leafCool)"/>
+    <circle cx="380" cy="202" r="64" fill="url(#leafWarm)"/>
+    <circle cx="452" cy="232" r="62" fill="url(#leafCool)"/>
+    <circle cx="530" cy="246" r="58" fill="url(#leafWarm)"/>
+    <circle cx="592" cy="270" r="42" fill="url(#leafCool)"/>
+    <circle cx="220" cy="306" r="46" fill="url(#leafWarm)"/>
+    <circle cx="292" cy="322" r="54" fill="url(#leafCool)"/>
+    <circle cx="370" cy="340" r="58" fill="url(#leafWarm)"/>
+    <circle cx="452" cy="318" r="52" fill="url(#leafCool)"/>
+    <circle cx="520" cy="320" r="46" fill="url(#leafWarm)"/>
+  </g>
+  <g opacity="0.24" stroke="#FFF6EB" stroke-width="4" stroke-linecap="round">
+    <path d="M182 156C198 162 210 173 219 189"/>
+    <path d="M331 145C346 156 357 171 362 188"/>
+    <path d="M430 152C448 161 462 176 470 196"/>
+    <path d="M520 220C538 229 551 244 558 261"/>
+    <path d="M295 282C315 291 331 305 342 324"/>
+    <path d="M414 285C433 296 448 311 455 329"/>
+  </g>
+</svg>

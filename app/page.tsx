@@ -1,62 +1,9 @@
-import Link from "next/link";
+import { FamilyTreeLandingScene } from "@/components/landing/family-tree-landing-scene";
 
 export default function HomePage() {
   return (
     <main className="page-shell landing-page">
-      <section className="landing-hero">
-        <div className="landing-hero-copy">
-          <p className="eyebrow">Семейное дерево</p>
-          <h1 className="landing-title">Соберите семейную историю в одном рабочем дереве.</h1>
-          <p className="landing-lead">
-            Родственники, связи и материалы остаются рядом со схемой. Владелец управляет доступом, участники открывают только нужный уровень данных.
-          </p>
-          <div className="hero-actions landing-actions">
-            <Link href="/auth/register" className="primary-button">
-              Начать с дерева
-            </Link>
-            <Link href="/auth/login" className="ghost-button">
-              Войти
-            </Link>
-          </div>
-          <ul className="landing-hero-list">
-            <li className="landing-hero-list-item">Схема семьи остается главным объектом экрана.</li>
-            <li className="landing-hero-list-item">Права доступа не мешают работе с деревом.</li>
-            <li className="landing-hero-list-item">Фото и истории привязаны к людям и веткам.</li>
-          </ul>
-        </div>
-
-        <section className="surface-card landing-workspace-card">
-          <div className="landing-workspace-header">
-            <p className="card-kicker">Рабочее пространство</p>
-            <div className="landing-workspace-pills">
-              <span className="meta-pill">Viewer + Builder</span>
-              <span className="meta-pill meta-pill-muted">Роли и доступ</span>
-            </div>
-          </div>
-          <div className="landing-workspace-copy">
-            <h2>Короткий контур: открыть дерево, перейти в конструктор, проверить доступ.</h2>
-            <p>Интерфейс собран вокруг семьи и веток, а не вокруг длинных маркетинговых блоков.</p>
-          </div>
-          <div className="landing-workspace-list">
-            <article className="landing-workspace-row">
-              <span>Просмотр</span>
-              <strong>Сразу видно структуру семьи и базовые материалы.</strong>
-            </article>
-            <article className="landing-workspace-row">
-              <span>Редактирование</span>
-              <strong>Конструктор ведет к действиям без лишних переходов.</strong>
-            </article>
-            <article className="landing-workspace-row">
-              <span>Контроль</span>
-              <strong>Роли и видимость включаются только в нужных местах.</strong>
-            </article>
-          </div>
-          <div className="landing-workspace-footer">
-            <span>Один адрес для семьи</span>
-            <strong>Открываете дерево и продолжаете работу с того же экрана.</strong>
-          </div>
-        </section>
-      </section>
+      <FamilyTreeLandingScene />
 
       <section className="landing-detail-grid">
         <article className="surface-card">

@@ -1,0 +1,56 @@
+<svg width="760" height="620" viewBox="0 0 760 620" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="connector" x1="380" y1="130" x2="380" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F3D9C3"/>
+      <stop offset="1" stop-color="#D9B695"/>
+    </linearGradient>
+    <linearGradient id="cardFill" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#FFF9F1"/>
+      <stop offset="1" stop-color="#F7EFE3"/>
+    </linearGradient>
+  </defs>
+  <g stroke="url(#connector)" stroke-width="8" stroke-linecap="round">
+    <path d="M380 162V454"/>
+    <path d="M380 178C338 188 311 202 282 230"/>
+    <path d="M380 188C429 199 458 214 494 246"/>
+    <path d="M380 262C337 273 311 290 280 321"/>
+    <path d="M380 278C429 286 459 301 504 338"/>
+    <path d="M380 366C344 378 320 398 294 426"/>
+    <path d="M380 380C421 390 449 408 475 430"/>
+  </g>
+  <g>
+    <rect x="320" y="112" width="120" height="76" rx="28" fill="url(#cardFill)" stroke="#E6C7A6" stroke-width="4"/>
+    <circle cx="380" cy="139" r="14" fill="#D9904F"/>
+    <path d="M352 172C361 155 399 155 408 172" stroke="#D9904F" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g>
+    <rect x="214" y="204" width="120" height="76" rx="28" fill="url(#cardFill)" stroke="#E6C7A6" stroke-width="4"/>
+    <circle cx="274" cy="231" r="14" fill="#5F8E68"/>
+    <path d="M246 264C255 247 293 247 302 264" stroke="#5F8E68" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g>
+    <rect x="434" y="220" width="120" height="76" rx="28" fill="url(#cardFill)" stroke="#E6C7A6" stroke-width="4"/>
+    <circle cx="494" cy="247" r="14" fill="#D97548"/>
+    <path d="M466 280C475 263 513 263 522 280" stroke="#D97548" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g>
+    <rect x="212" y="296" width="120" height="76" rx="28" fill="url(#cardFill)" stroke="#E6C7A6" stroke-width="4"/>
+    <circle cx="272" cy="323" r="14" fill="#D9904F"/>
+    <path d="M244 356C253 339 291 339 300 356" stroke="#D9904F" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g>
+    <rect x="444" y="314" width="120" height="76" rx="28" fill="url(#cardFill)" stroke="#E6C7A6" stroke-width="4"/>
+    <circle cx="504" cy="341" r="14" fill="#5F8E68"/>
+    <path d="M476 374C485 357 523 357 532 374" stroke="#5F8E68" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g>
+    <rect x="228" y="398" width="120" height="76" rx="28" fill="url(#cardFill)" stroke="#E6C7A6" stroke-width="4"/>
+    <circle cx="288" cy="425" r="14" fill="#3F698E"/>
+    <path d="M260 458C269 441 307 441 316 458" stroke="#3F698E" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g>
+    <rect x="420" y="418" width="120" height="76" rx="28" fill="url(#cardFill)" stroke="#E6C7A6" stroke-width="4"/>
+    <circle cx="480" cy="445" r="14" fill="#D97548"/>
+    <path d="M452 478C461 461 499 461 508 478" stroke="#D97548" stroke-width="8" stroke-linecap="round"/>
+  </g>
+</svg>
