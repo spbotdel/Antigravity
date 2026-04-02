@@ -123,6 +123,17 @@ export const addMediaToTreeMediaAlbumSchema = z.object({
   mediaIds: z.array(z.string().uuid()).min(1).max(100)
 });
 
+export const createTreeAudioPlaylistSchema = z.object({
+  treeId: z.string().uuid(),
+  name: z.string().trim().min(1).max(120)
+});
+
+export const addAudioMediaToPlaylistSchema = z.object({
+  treeId: z.string().uuid(),
+  playlistId: z.string().uuid(),
+  mediaId: z.string().uuid()
+});
+
 export const downloadArchiveMediaSchema = z.object({
   treeId: z.string().uuid(),
   mediaIds: z.array(z.string().uuid()).min(1).max(100)

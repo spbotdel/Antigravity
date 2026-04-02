@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addMediaToTreeMediaAlbumSchema, archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeMediaAlbumSchema, downloadArchiveMediaSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema, updateTreeMediaAlbumSchema } from "@/lib/validators/media";
+import { addAudioMediaToPlaylistSchema, addMediaToTreeMediaAlbumSchema, archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeAudioPlaylistSchema, createTreeMediaAlbumSchema, downloadArchiveMediaSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema, updateTreeMediaAlbumSchema } from "@/lib/validators/media";
 import { createTreeSchema } from "@/lib/validators/tree";
 import { inviteSchema } from "@/lib/validators/invite";
 
@@ -151,6 +151,25 @@ describe("validators", () => {
       treeId: crypto.randomUUID(),
       albumId: crypto.randomUUID(),
       mediaIds: [crypto.randomUUID(), crypto.randomUUID()]
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts audio playlist creation payloads", () => {
+    const result = createTreeAudioPlaylistSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      name: "Колыбельные",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts add-audio-to-playlist payloads", () => {
+    const result = addAudioMediaToPlaylistSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      playlistId: crypto.randomUUID(),
+      mediaId: crypto.randomUUID(),
     });
 
     expect(result.success).toBe(true);

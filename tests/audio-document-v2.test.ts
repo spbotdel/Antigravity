@@ -199,4 +199,31 @@ describe("Audio archive player state", () => {
         expect(within(screen.getByRole("region", { name: "Аудиоплеер" })).getByText("Аудио 1")).toBeInTheDocument();
         expect(firstRow).toHaveClass("audio-archive-row-active");
     });
+
+    it("shows unavailable playlist state and disables add-to-playlist actions when playlists are unavailable", () => {
+        const media = [
+            createAudioAsset("audio-1", "Аудио 1"),
+            createAudioAsset("audio-2", "Аудио 2"),
+        ];
+
+        render(
+            createElement(AudioArchiveView, {
+                treeId: "tree-1",
+                slug: "test-tree",
+                canEdit: true,
+                media: media as any,
+                playlists: [],
+                playlistItems: [],
+                playlistsAvailable: false,
+                onMediaChange: () => undefined,
+            })
+        );
+
+        expect(screen.getByText("Плейлисты пока недоступны: миграция базы данных еще не применена.")).toBeInTheDocument();
+        expect(screen.getByRole("tab", { name: "Плейлисты" })).toHaveAttribute("aria-disabled", "true");
+
+        const addButtons = screen.getAllByRole("button", { name: "В плейлист" });
+        expect(addButtons.length).toBeGreaterThan(0);
+        expect(addButtons.every((button) => button.hasAttribute("disabled"))).toBe(true);
+    });
 });

@@ -2,7 +2,7 @@
 
 *Operational task backlog only.*
 
-*Updated: 2026-03-30*
+*Updated: 2026-04-02*
 
 ## Wave 1 — Current Execution
 
@@ -64,8 +64,6 @@ Operational note:
 - [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
 - [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
 - [ ] Довести variant architecture до green regression: `thumb/small/medium` должны стабильно использоваться в archive/viewer/builder, а оригинал открываться только явно.
-- [x] Довести локальную baseline-производительность archive grid/thumb pipeline: initial pre-resolve, visible-set batching, route cache, memoized tiles и next-page prefetch уже стоят в default path.
-  Диагностический delayed initial-page prefetch не включается в продуктовый runtime по умолчанию; дальнейший grid perf pass откладывается до нового доказанного bottleneck.
 - [ ] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
 - [ ] Завершить текущий pass по `family-tree-canvas`: age-aware avatars, fallback badge states, читаемость карточек и стабильное выделение выбранного узла в viewer и builder.
 - [ ] Стабилизировать layout конструктора: resizable canvas shell, overlay inspector на desktop и предсказуемое поведение на tablet/mobile без потери приоритета дерева.

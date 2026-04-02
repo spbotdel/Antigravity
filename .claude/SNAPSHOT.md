@@ -2,23 +2,22 @@
 
 *Operational memory only. Not the canonical architecture document.*
 
-*Last updated: 2026-03-30*
+*Last updated: 2026-04-02*
 
 ## Current State
 
 - Framework mode: active
-- Active branch: `fix/builder-inspector-desktop-align-final`
+- Active branch: `feat/audio-docs-experiment`
 - Runtime application: `Next.js 16 + React 19 + TypeScript`
 - Backend/data layer: `Supabase` auth, database, RLS + S3-compatible object storage
 - Dev environment: linked to Supabase project `untwxmiqqwepopeepzqe`
 - Legacy static viewer: preserved in `legacy/` and old `index.html`, but no longer the main runtime
-- Current workstream: family archive foundation, uploader/manual albums, variant-aware media delivery, and Cloudflare R2 groundwork are already in the worktree; current effort should now shift to archive/viewer polishing, broader QA, and migration sequencing
+- Current workstream: family archive foundation, uploader/manual albums, variant-aware media delivery, and Cloudflare R2 groundwork are already in the worktree; current effort should focus on stabilizing `smoke:media` and finishing archive/viewer QA
 - Target media platform: `Cloudflare` for the next binary/media delivery stage, while the current Yandex path remains transitional compatibility.
 
 ## Current Active Task
 
 - `tasks/active/media-upload-flow-v2` — `Media Upload Flow V2` (`in_progress`, priority `high`)
-- Latest `smoke:media`: `media-storage-report-1773931536758.json` (`green`)
 
 ## Working Assumptions
 
@@ -48,8 +47,6 @@
 - [x] Archive upload review flow exists with batch confirmation and discard guard.
 - [x] Variant-aware media delivery foundation exists for `thumb/small/medium` photo previews.
 - [x] Cloudflare R2 runtime/config foundation is present for the next media storage stage.
-- [x] Archive grid thumb pipeline now uses server-pre-resolved initial thumbs, hydrated visible-set batching, memoized tiles, and one-page-ahead thumb prefetch.
-- [x] Initial-page next-set thumb prefetch remains enabled by default; delayed-after-settle mode was kept diagnostic-only and not productized.
 - [ ] Finish the current `family-tree-canvas` interaction and visual pass.
 - [ ] Validate `Участники`, invites and share links as one coherent access-management flow.
 - [ ] QA the reworked builder layout so the tree keeps visual priority on desktop and mobile.
@@ -71,7 +68,6 @@
 - [ ] Convert the Cloudflare target into an explicit migration sequence: rollout gating, direct upload, Stream, and Queues.
 - [ ] Finish the archive surface with sticky actions, large viewer/lightbox behavior, and broader album flow QA.
 - [ ] Switch tree cards, side rails, archive tiles, and media galleries to preview variants by default and confirm legacy fallbacks.
-- [ ] Treat archive grid/thumb performance as good enough for now and return the next local cycle to viewer/video/manual QA unless a new bottleneck is proven.
 - [ ] Run targeted QA for viewer, builder and members after the current media UI pass.
 - [ ] Review `Участники` end-to-end with invite, copy and revoke flows.
 - [ ] Revisit landing and dashboard only after tree/member workflows are stable.
@@ -84,9 +80,7 @@
 - Detected archive upload review flow with pending batch state and discard confirmation.
 - Detected variant-aware media delivery foundation for photo previews (`thumb/small/medium`).
 - Detected Cloudflare R2 foundation in env/runtime config and supporting project files.
-- Detected accepted archive thumb performance baseline: server-pre-resolved initial thumbs, batched visible-set direct thumb resolution, memoized archive tiles, and default-enabled next-page prefetch.
-- Detected that delayed initial-page next-set prefetch remains diagnostic-only and is not part of product behavior.
-- Latest `smoke:media` artifact `media-storage-report-1773931536758.json` is green.
+- No `smoke:media` artifact was found during completion capture.
 
 ## Runtime Rules
 
@@ -95,4 +89,8 @@
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
+- "
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
+- Custom marker-driven runtime rule should surface in startup memory.\n")
 

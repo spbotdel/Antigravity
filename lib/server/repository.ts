@@ -30,6 +30,8 @@ import type {
   Profile,
   ShareLinkRecord,
   TreeRecord,
+  TreeAudioPlaylistItemRecord,
+  TreeAudioPlaylistRecord,
   TreeMediaAlbumItemRecord,
   TreeMediaAlbumMediaKind,
   TreeMediaAlbumRecord,
@@ -68,6 +70,8 @@ const SHARE_LINK_REVEAL_COLUMN_MARKERS = ["token_ciphertext"];
 const MEDIA_VARIANTS_SCHEMA_CACHE_MARKERS = ["media_asset_variants", "schema cache"];
 const MEDIA_ALBUMS_SCHEMA_CACHE_MARKERS = ["tree_media_albums", "schema cache"];
 const MEDIA_ALBUM_ITEMS_SCHEMA_CACHE_MARKERS = ["tree_media_album_items", "schema cache"];
+const AUDIO_PLAYLISTS_SCHEMA_CACHE_MARKERS = ["tree_audio_playlists", "schema cache"];
+const AUDIO_PLAYLIST_ITEMS_SCHEMA_CACHE_MARKERS = ["tree_audio_playlist_items", "schema cache"];
 const SHARE_LINK_PUBLIC_SELECT = "id,tree_id,label,token_hash,expires_at,revoked_at,last_accessed_at,created_by,created_at";
 const SHARE_LINK_REVEAL_SELECT = `${SHARE_LINK_PUBLIC_SELECT},token_ciphertext,tree:trees!inner(id,slug)`;
 const RESEND_SEND_EMAIL_URL = "https://api.resend.com/emails";
@@ -128,6 +132,11 @@ function getTreeMediaAlbumKindMismatchMessage(albumKind: TreeMediaAlbumMediaKind
   }
 
   return "В видеоальбом нельзя добавить фото.";
+}
+
+function isAudioPlaylistDuplicateItemError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("tree_audio_playlist_items_unique_media") || message.includes("duplicate key value");
 }
 
 type MediaAlbumAccessRow = {
@@ -305,6 +314,16 @@ async function sendInviteEmailIfConfigured(input: {
 function isMediaAlbumItemsSchemaUnavailableError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return MEDIA_ALBUM_ITEMS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
+}
+
+function isAudioPlaylistsSchemaUnavailableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return AUDIO_PLAYLISTS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
+}
+
+function isAudioPlaylistItemsSchemaUnavailableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return AUDIO_PLAYLIST_ITEMS_SCHEMA_CACHE_MARKERS.every((marker) => message.includes(marker));
 }
 
 function buildUuidInFilter(values: string[]) {
@@ -678,7 +697,7 @@ function resolveFfmpegExecutablePath() {
   try {
     const packageJsonPath = runtimeRequire.resolve("ffmpeg-static/package.json");
     candidates.add(path.join(path.dirname(packageJsonPath), executableName));
-  } catch {}
+  } catch { }
 
   candidates.add(path.join(process.cwd(), "node_modules", "ffmpeg-static", executableName));
   candidates.add(path.join(process.cwd(), ".next", "server", "node_modules", "ffmpeg-static", executableName));
@@ -744,7 +763,7 @@ async function generateCloudflareVideoPreviewBuffer(sourceUrl: string) {
 
     return previewBuffer;
   } finally {
-    await fs.rm(tempDirectory, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(tempDirectory, { recursive: true, force: true }).catch(() => { });
   }
 }
 
@@ -823,8 +842,8 @@ async function runNativeSignedHttpRequest(input: {
       method: input.method,
       headers: input.contentType
         ? {
-            "content-type": input.contentType
-          }
+          "content-type": input.contentType
+        }
         : undefined,
       body: input.bodyBuffer ? new Uint8Array(input.bodyBuffer) : undefined,
       signal: controller.signal
@@ -859,8 +878,8 @@ async function runPowerShellSignedHttpRequest(input: {
     method: input.method,
     headers: input.contentType
       ? {
-          "content-type": input.contentType
-        }
+        "content-type": input.contentType
+      }
       : {},
     bodyBase64: input.bodyBuffer ? input.bodyBuffer.toString("base64") : "",
     timeoutMs: SIGNED_HTTP_TIMEOUT_MS
@@ -889,7 +908,7 @@ async function runPowerShellSignedHttpRequest(input: {
     return parsePowerShellJsonStdout<{ status: number }>(stdout);
   } finally {
     if (payloadFilePath) {
-      await fs.unlink(payloadFilePath).catch(() => {});
+      await fs.unlink(payloadFilePath).catch(() => { });
     }
   }
 }
@@ -1203,11 +1222,11 @@ async function loadTreeSnapshot(slug: string, options?: { includeMedia?: boolean
   const allPersonMedia =
     includeMedia
       ? (((batchedRowsByKey.get("personMedia") as Array<PersonMediaRecord & { persons?: unknown }> | undefined) || []).map((item) => ({
-          id: item.id,
-          person_id: item.person_id,
-          media_id: item.media_id,
-          is_primary: item.is_primary
-        })) as PersonMediaRecord[])
+        id: item.id,
+        person_id: item.person_id,
+        media_id: item.media_id,
+        is_primary: item.is_primary
+      })) as PersonMediaRecord[])
       : [];
 
   const effectiveMediaVisibilityById = includeMedia ? await resolveEffectiveMediaVisibilityMap(tree.id, allMedia) : new Map<string, MediaVisibility>();
@@ -1627,6 +1646,47 @@ async function listTreeMediaAlbumsForTree(treeId: string, kind?: TreeMediaAlbumM
   };
 }
 
+async function listTreeAudioPlaylistsForTree(treeId: string) {
+  let playlists: TreeAudioPlaylistRecord[] = [];
+  try {
+    playlists = await fetchAdminRows<TreeAudioPlaylistRecord>(
+      `tree_audio_playlists?select=*&tree_id=eq.${encodeURIComponent(treeId)}&order=created_at.desc`,
+      "Не удалось загрузить аудиоплейлисты."
+    );
+  } catch (error) {
+    if (isAudioPlaylistsSchemaUnavailableError(error)) {
+      return {
+        playlists: [] as TreeAudioPlaylistRecord[],
+        items: [] as TreeAudioPlaylistItemRecord[],
+        isAvailable: false,
+      };
+    }
+
+    throw error;
+  }
+
+  const playlistIds = playlists.map((playlist) => playlist.id);
+  let items: TreeAudioPlaylistItemRecord[] = [];
+  if (playlistIds.length > 0) {
+    try {
+      items = await fetchAdminRows<TreeAudioPlaylistItemRecord>(
+        `tree_audio_playlist_items?select=*&playlist_id=in.${buildUuidInFilter(playlistIds)}&order=playlist_id.asc,position.asc`,
+        "Не удалось загрузить треки аудиоплейлистов."
+      );
+    } catch (error) {
+      if (!isAudioPlaylistItemsSchemaUnavailableError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  return {
+    playlists,
+    items,
+    isAvailable: true,
+  };
+}
+
 export async function listTreeMediaAlbums(treeId: string, shareToken?: string | null, kind?: TreeMediaAlbumMediaKind) {
   const tree = await getTreeById(treeId);
   await getTreeReadAccess(tree, shareToken);
@@ -1667,12 +1727,13 @@ export async function listTreeMediaUploaderLabels(treeId: string, userIds: strin
 
 export async function getTreeMediaPageData(slug: string, options?: { shareToken?: string | null }) {
   const { tree, actor, hasShareLinkAccess } = await getTreeAccessContext(slug, options?.shareToken);
-  const [allMedia, albumData] = await Promise.all([
+  const [allMedia, albumData, audioPlaylistData] = await Promise.all([
     fetchAdminRows<MediaAssetRecord>(
       `media_assets?select=*&tree_id=eq.${encodeURIComponent(tree.id)}&order=created_at.desc`,
       "Не удалось загрузить медиаархив дерева."
     ),
-    listTreeMediaAlbumsForTree(tree.id)
+    listTreeMediaAlbumsForTree(tree.id),
+    listTreeAudioPlaylistsForTree(tree.id),
   ]);
   const effectiveMediaVisibilityById = await resolveEffectiveMediaVisibilityMap(tree.id, allMedia);
   const media = allMedia.filter((item) =>
@@ -1691,7 +1752,10 @@ export async function getTreeMediaPageData(slug: string, options?: { shareToken?
     media,
     albums,
     items,
-    uploaderLabelsById
+    uploaderLabelsById,
+    audioPlaylists: audioPlaylistData.playlists,
+    audioPlaylistItems: audioPlaylistData.items,
+    audioPlaylistsAvailable: audioPlaylistData.isAvailable,
   };
 }
 
@@ -2094,6 +2158,222 @@ export async function addExistingMediaToTreeMediaAlbum(input: {
     items: createdItems,
     createdCount: createdItems.length,
     message: createdItems.length === 1 ? "Материал добавлен в альбом." : `Материалы добавлены в альбом: ${createdItems.length}.`
+  };
+}
+
+export async function createTreeAudioPlaylist(input: {
+  treeId: string;
+  name: string;
+}) {
+  const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
+  let data: TreeAudioPlaylistRecord | null = null;
+
+  try {
+    data = await mutateAdminFirst<TreeAudioPlaylistRecord>(
+      "tree_audio_playlists",
+      "POST",
+      {
+        tree_id: input.treeId,
+        name: input.name,
+      },
+      "Не удалось создать плейлист."
+    );
+  } catch (error) {
+    if (isAudioPlaylistsSchemaUnavailableError(error)) {
+      throw new AppError(503, "Плейлисты пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    throw error;
+  }
+
+  if (!data) {
+    throw new AppError(400, "Не удалось создать плейлист.");
+  }
+
+  queueAuditLog({
+    treeId: input.treeId,
+    actorUserId: userId,
+    entityType: "audio_playlist",
+    entityId: data.id,
+    action: "audio_playlist.created",
+    beforeJson: null,
+    afterJson: data,
+  });
+
+  return data;
+}
+
+export async function deleteTreeAudioPlaylist(playlistId: string) {
+  const before = await fetchAdminFirst<TreeAudioPlaylistRecord>(
+    `tree_audio_playlists?select=*&id=eq.${encodeURIComponent(playlistId)}`,
+    "Не удалось загрузить плейлист."
+  );
+
+  if (!before) {
+    throw new AppError(404, "Плейлист не найден.");
+  }
+
+  const { userId } = await requireTreeRole(before.tree_id, ["owner", "admin"]);
+
+  try {
+    await mutateAdminRows<never>(
+      `tree_audio_playlists?id=eq.${encodeURIComponent(playlistId)}`,
+      "DELETE",
+      undefined,
+      "Не удалось удалить плейлист."
+    );
+  } catch (error) {
+    if (isAudioPlaylistsSchemaUnavailableError(error)) {
+      throw new AppError(503, "Плейлисты пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    throw error;
+  }
+
+  queueAuditLog({
+    treeId: before.tree_id,
+    actorUserId: userId,
+    entityType: "audio_playlist",
+    entityId: playlistId,
+    action: "audio_playlist.deleted",
+    beforeJson: before,
+    afterJson: null,
+  });
+}
+
+export async function addAudioMediaToTreeAudioPlaylist(input: {
+  treeId: string;
+  playlistId: string;
+  mediaId: string;
+}) {
+  const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
+  const [playlist, media] = await Promise.all([
+    fetchAdminFirst<TreeAudioPlaylistRecord>(
+      `tree_audio_playlists?select=*&id=eq.${encodeURIComponent(input.playlistId)}&tree_id=eq.${encodeURIComponent(input.treeId)}`,
+      "Не удалось загрузить плейлист."
+    ),
+    fetchAdminFirst<MediaAssetRecord>(
+      `media_assets?select=*&id=eq.${encodeURIComponent(input.mediaId)}&tree_id=eq.${encodeURIComponent(input.treeId)}`,
+      "Не удалось загрузить аудиозапись."
+    ),
+  ]);
+
+  if (!playlist) {
+    throw new AppError(404, "Плейлист не найден.");
+  }
+
+  if (!media) {
+    throw new AppError(404, "Аудиозапись не найдена.");
+  }
+
+  if (media.kind !== "audio") {
+    throw new AppError(400, "В плейлист можно добавлять только аудио.");
+  }
+
+  const existingItem = await fetchAdminFirst<TreeAudioPlaylistItemRecord>(
+    `tree_audio_playlist_items?select=*&playlist_id=eq.${encodeURIComponent(input.playlistId)}&media_id=eq.${encodeURIComponent(input.mediaId)}`,
+    "Не удалось проверить текущий состав плейлиста."
+  );
+
+  if (existingItem) {
+    throw new AppError(409, "Этот трек уже есть в плейлисте.");
+  }
+
+  const lastItem = await fetchAdminFirst<Pick<TreeAudioPlaylistItemRecord, "position">>(
+    `tree_audio_playlist_items?select=position&playlist_id=eq.${encodeURIComponent(input.playlistId)}&order=position.desc`,
+    "Не удалось определить позицию нового трека."
+  );
+
+  const position = (lastItem?.position ?? 0) + 1;
+  let item: TreeAudioPlaylistItemRecord | null = null;
+
+  try {
+    item = await mutateAdminFirst<TreeAudioPlaylistItemRecord>(
+      "tree_audio_playlist_items",
+      "POST",
+      {
+        playlist_id: input.playlistId,
+        media_id: input.mediaId,
+        position,
+      },
+      "Не удалось добавить трек в плейлист."
+    );
+  } catch (error) {
+    if (isAudioPlaylistsSchemaUnavailableError(error) || isAudioPlaylistItemsSchemaUnavailableError(error)) {
+      throw new AppError(503, "Плейлисты пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    if (isAudioPlaylistDuplicateItemError(error)) {
+      throw new AppError(409, "Этот трек уже есть в плейлисте.");
+    }
+
+    throw error;
+  }
+
+  if (!item) {
+    throw new AppError(400, "Не удалось добавить трек в плейлист.");
+  }
+
+  queueAuditLog({
+    treeId: input.treeId,
+    actorUserId: userId,
+    entityType: "audio_playlist_item",
+    entityId: item.id,
+    action: "audio_playlist_item.created",
+    beforeJson: null,
+    afterJson: item,
+  });
+
+  return {
+    item,
+    message: "Трек добавлен в плейлист.",
+  };
+}
+
+type TreeAudioPlaylistItemWithPlaylist = TreeAudioPlaylistItemRecord & {
+  playlist?: Pick<TreeAudioPlaylistRecord, "id" | "tree_id"> | null;
+};
+
+export async function removeAudioMediaFromTreeAudioPlaylistItem(itemId: string) {
+  const before = await fetchAdminFirst<TreeAudioPlaylistItemWithPlaylist>(
+    `tree_audio_playlist_items?select=*,playlist:tree_audio_playlists!inner(id,tree_id)&id=eq.${encodeURIComponent(itemId)}`,
+    "Не удалось загрузить трек плейлиста."
+  );
+
+  if (!before?.playlist) {
+    throw new AppError(404, "Трек плейлиста не найден.");
+  }
+
+  const { userId } = await requireTreeRole(before.playlist.tree_id, ["owner", "admin"]);
+
+  try {
+    await mutateAdminRows<never>(
+      `tree_audio_playlist_items?id=eq.${encodeURIComponent(itemId)}`,
+      "DELETE",
+      undefined,
+      "Не удалось удалить трек из плейлиста."
+    );
+  } catch (error) {
+    if (isAudioPlaylistsSchemaUnavailableError(error) || isAudioPlaylistItemsSchemaUnavailableError(error)) {
+      throw new AppError(503, "Плейлисты пока недоступны: миграция базы данных еще не применена.");
+    }
+
+    throw error;
+  }
+
+  queueAuditLog({
+    treeId: before.playlist.tree_id,
+    actorUserId: userId,
+    entityType: "audio_playlist_item",
+    entityId: itemId,
+    action: "audio_playlist_item.deleted",
+    beforeJson: before,
+    afterJson: null,
+  });
+
+  return {
+    itemId,
+    message: "Трек удален из плейлиста.",
   };
 }
 
@@ -2775,18 +3055,18 @@ async function buildMediaUploadTarget(input: {
   const variantTargets =
     kind === "photo"
       ? await Promise.all(
-          PHOTO_VARIANT_NAMES.map(async (variant) => {
-            const variantPath = buildPhotoVariantStoragePath(storagePath, variant);
-            const variantUploadTarget = await createSignedUploadTargetForPath(variantPath, "image/webp");
-            return {
-              variant,
-              path: variantPath,
-              signedUrl: variantUploadTarget.signedUrl,
-              token: variantUploadTarget.token,
-              uploadProvider: variantUploadTarget.uploadProvider
-            };
-          })
-        )
+        PHOTO_VARIANT_NAMES.map(async (variant) => {
+          const variantPath = buildPhotoVariantStoragePath(storagePath, variant);
+          const variantUploadTarget = await createSignedUploadTargetForPath(variantPath, "image/webp");
+          return {
+            variant,
+            path: variantPath,
+            signedUrl: variantUploadTarget.signedUrl,
+            token: variantUploadTarget.token,
+            uploadProvider: variantUploadTarget.uploadProvider
+          };
+        })
+      )
       : [];
   const transport = resolveMediaUploadPlan({
     useCloudflareForNewMedia: shouldUseCloudflareR2ForNewMedia(),
@@ -3155,7 +3435,7 @@ export async function completeMediaUpload(input: {
           "DELETE",
           undefined,
           "Не удалось откатить незавершенное медиа."
-        ).catch(() => {});
+        ).catch(() => { });
         throw toRepositoryReadError(error, "Не удалось сохранить варианты медиа.");
       }
     }
@@ -3248,7 +3528,7 @@ export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMe
           "DELETE",
           undefined,
           "Не удалось откатить незавершенное медиа."
-        ).catch(() => {});
+        ).catch(() => { });
         throw toRepositoryReadError(error, "Не удалось сохранить варианты медиа.");
       }
     }
@@ -3386,13 +3666,13 @@ export async function setPrimaryPersonMedia(mediaId: string, personId: string, a
     action: "person.avatar_selected",
     beforeJson: previousPrimary
       ? {
-          person_id: previousPrimary.person_id,
-          media_id: previousPrimary.media_id,
-          is_primary: previousPrimary.is_primary,
-          avatar_crop_x: previousPrimary.avatar_crop_x ?? null,
-          avatar_crop_y: previousPrimary.avatar_crop_y ?? null,
-          avatar_crop_zoom: previousPrimary.avatar_crop_zoom ?? null
-        }
+        person_id: previousPrimary.person_id,
+        media_id: previousPrimary.media_id,
+        is_primary: previousPrimary.is_primary,
+        avatar_crop_x: previousPrimary.avatar_crop_x ?? null,
+        avatar_crop_y: previousPrimary.avatar_crop_y ?? null,
+        avatar_crop_zoom: previousPrimary.avatar_crop_zoom ?? null
+      }
       : null,
     afterJson: {
       person_id: updatedRelation.person_id,
@@ -3576,7 +3856,7 @@ export async function deleteMedia(mediaId: string) {
       try {
         await deleteObjectStorageObject(before.storage_path, storageEnv);
         for (const variantStoragePath of variantStoragePaths) {
-          await deleteObjectStorageObject(variantStoragePath, storageEnv).catch(() => {});
+          await deleteObjectStorageObject(variantStoragePath, storageEnv).catch(() => { });
         }
       } catch (error) {
         throw toObjectStorageError(error, "Не удалось удалить файл из object storage.");

@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-03-29 15:03:29Z`
+- Generated at (UTC): `2026-04-02 13:51:57Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -135,10 +135,10 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-03-29 15:03:29Z`
-- Active branch: `fix/builder-inspector-desktop-align-final`
-- Git status: `STATUS:14 files`
-- Git diff: `DIFF:2065 lines`
+- Updated at (UTC): `2026-04-02 13:51:57Z`
+- Active branch: `feat/audio-docs-experiment`
+- Git status: `STATUS:27 files`
+- Git diff: `DIFF:4566 lines`
 
 ### Detected Stack
 
@@ -152,48 +152,49 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `.github/`
 - `.gitignore`
 - `.next/`
-- `.next-auth-smoke/`
 - `.next-dev.err.log`
 - `.next-dev.log`
-- `.next-media-smoke/`
-- `.next-smoke-e2e/`
-- `.next-start.err.log`
-- `.next-start.log`
-- `.pytest_cache/`
 - `.tmp/`
 - `3.ged`
 - `AGENTS.md`
 - `app/`
 - `ARCHITECTURE_RULES.md`
 - `CHANGELOG.md`
+- `check-ids.html`
+- `CLAUDE.md`
+- `cloudflare/`
+- `COMMON_BUGS.md`
+- `components/`
+- `components.json`
 
 ### Recently Changed Paths
 
 - `.claude/ARCHITECTURE.md`
+- `.claude/BACKLOG.md`
 - `.claude/SNAPSHOT.md`
 - `app/globals.css`
-- `components/media/media-thumb-visual.tsx`
+- `app/tree/[slug]/media/page.tsx`
+- `components/media/audio-archive-view.tsx`
+- `components/media/audio-player.tsx`
+- `components/media/document-archive-view.tsx`
+- `components/media/document-preview-dialog.tsx`
 - `components/media/tree-media-archive-client.tsx`
-- `components/tree/person-media-gallery.tsx`
 - `docs/research/family-tree-v1-slava-edition-backup-restore-runbook-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-implementation-plan-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-launch-checklist-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-owner-playbook-2026-03-06.md`
-- `docs/research/family-tree-v1-slava-edition-plan-2026-03-06.md`
-- `tests/person-media-gallery.test.tsx`
-- `tests/tree-media-archive-client.test.tsx`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-03-29 15:03:29Z`
-- Branch: `fix/builder-inspector-desktop-align-final`
-- Git status summary: `STATUS:14 files`
-- Git diff summary: `DIFF:2065 lines`
+- Completed at (UTC): `2026-04-02 13:51:57Z`
+- Branch: `feat/audio-docs-experiment`
+- Git status summary: `STATUS:27 files`
+- Git diff summary: `DIFF:4566 lines`
 
-- Session summary: `14` changed files, `2065` diff lines, `14` tracked changed paths.
+- Session summary: `27` changed files, `4566` diff lines, `15` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -201,8 +202,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:14 files`)
-- `git_diff`: `success` (`DIFF:2065 lines`)
+- `git_status`: `success` (`STATUS:27 files`)
+- `git_diff`: `success` (`DIFF:4566 lines`)
 <!-- FRAMEWORK:SESSION:END -->
 
 ## Current Media Architecture
@@ -210,17 +211,17 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Person-linked media and tree-level archive now coexist: the worktree contains `/tree/[slug]/media`, archive client UI, archive upload endpoints, and persisted album wiring.
 - Archive organization is modeled through `tree_media_albums` and album items, with both manual albums and uploader albums supported.
 - Photo delivery already has a variant-aware foundation: preview reads may use `thumb/small/medium`, while originals should remain an explicit full-view path.
-- Archive thumb delivery now has an accepted local performance baseline:
-  initial screen uses server-pre-resolved thumbs, hydrated client paths batch direct thumb resolution for the visible set, archive tiles are memoized, and one next page of thumbs is prefetched by default.
-- The evaluated delayed initial-page prefetch mode stays diagnostic-only and is not part of the default product runtime.
 - The binary plane is in transitional mode: current file-backed reads still preserve object-storage compatibility, while Cloudflare R2 foundation is already present in env/runtime config for the next migration stage.
 - Architectural boundary remains unchanged: `app/api/media*` stays thin, repository owns media/archive mutations, and rendering consumes repository snapshots rather than issuing direct DB traversal.
 - Active architecture-driving task: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
-- Current regression signal: latest `smoke:media` artifact `media-storage-report-1773931536758.json` is green.
 - Server-side Supabase transport is now a first-class runtime rule: native Node fetch is preferred, while the PowerShell bridge remains fallback/debug transport only.
 - Tree runtime now distinguishes between full snapshot consumers and narrow page-data consumers; `audit`, `members`, `media`, and `settings` should stay on specialized loaders instead of drifting back to full snapshots.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
+- "
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
+- Custom marker-driven runtime rule should surface in startup memory.\n")
 
 ## Current Runtime Rules
 
@@ -229,4 +230,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
+- "
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
+- Custom marker-driven runtime rule should surface in startup memory.\n")
 

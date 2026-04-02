@@ -9,6 +9,9 @@ export type MediaVariantName = "thumb" | "small" | "medium";
 export type MediaPreviewStatus = "pending" | "processing" | "ready" | "failed";
 export type TreeMediaAlbumKind = "manual" | "uploader";
 export type TreeMediaAlbumMediaKind = Extract<MediaKind, "photo" | "video">;
+export type AudioPlaybackSource =
+  | { type: "archive" }
+  | { type: "playlist"; playlistId: string };
 export type UploadMode = "direct" | "proxy";
 export type VariantUploadMode = "server_proxy" | "none";
 export type InviteMethod = "link" | "email";
@@ -166,6 +169,22 @@ export interface TreeMediaAlbumItemRecord {
   id: string;
   album_id: string;
   media_id: string;
+  created_at: string;
+}
+
+export interface TreeAudioPlaylistRecord {
+  id: string;
+  tree_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TreeAudioPlaylistItemRecord {
+  id: string;
+  playlist_id: string;
+  media_id: string;
+  position: number;
   created_at: string;
 }
 

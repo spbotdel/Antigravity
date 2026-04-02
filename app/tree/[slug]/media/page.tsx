@@ -135,6 +135,9 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   const albumId = getSearchParam(resolvedSearchParams.album);
   const pageData = await getTreeMediaPageData(slug, { shareToken });
   const { albums, items, uploaderLabelsById } = pageData;
+  const audioPlaylists = pageData.audioPlaylists || [];
+  const audioPlaylistItems = pageData.audioPlaylistItems || [];
+  const audioPlaylistsAvailable = pageData.audioPlaylistsAvailable !== false;
 
   const photoMedia = collectTreeMedia({ media: pageData.media }, "photo");
   const videoMedia = collectTreeMedia({ media: pageData.media }, "video");
@@ -214,11 +217,11 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
       : initialSelectedAlbum
         ? initialSelectedAlbumMedia.slice(0, INITIAL_ARCHIVE_TILE_LIMIT).map((asset) => asset.id)
         : currentAlbums.flatMap((album) => {
-            const albumMedia = getArchiveAlbumSourceMedia(album, currentMedia, persistedAlbumMediaMap);
-            const cover = album.coverMediaId ? albumMedia.find((asset) => asset.id === album.coverMediaId) || null : null;
-            const orderedMedia = cover ? [cover, ...albumMedia.filter((asset) => asset.id !== cover.id)] : albumMedia;
-            return orderedMedia.slice(0, ALBUM_PREVIEW_MEDIA_LIMIT).map((asset) => asset.id);
-          })
+          const albumMedia = getArchiveAlbumSourceMedia(album, currentMedia, persistedAlbumMediaMap);
+          const cover = album.coverMediaId ? albumMedia.find((asset) => asset.id === album.coverMediaId) || null : null;
+          const orderedMedia = cover ? [cover, ...albumMedia.filter((asset) => asset.id !== cover.id)] : albumMedia;
+          return orderedMedia.slice(0, ALBUM_PREVIEW_MEDIA_LIMIT).map((asset) => asset.id);
+        })
   );
   const initialThumbUrlsByMediaId = await resolveMediaThumbUrlsForVisibleMedia(
     currentMedia.filter((asset) => initialThumbMediaIds.has(asset.id))
@@ -273,11 +276,14 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
         initialView={view}
         initialAlbumId={albumId}
         allMedia={allMedia}
-        allAlbums={persistedAllAlbumSummaries}
+      allAlbums={persistedAllAlbumSummaries}
         persistedAlbumMediaMap={persistedAlbumMediaMap}
         initialThumbUrlsByMediaId={initialThumbUrlsByMediaId}
         uploaderLabels={Array.from(uploaderLabelsById.entries()).map(([userId, label]) => ({ userId, label }))}
+        audioPlaylists={audioPlaylists}
+        audioPlaylistItems={audioPlaylistItems}
+        audioPlaylistsAvailable={audioPlaylistsAvailable}
       />
-    </main>
+  </main>
   );
 }

@@ -1,15 +1,38 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MediaAssetRecord } from "@/lib/types";
+import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { AudioPlaybackSource, MediaAssetRecord } from "@/lib/types";
 
 interface AudioPlayerProps {
     tracks: MediaAssetRecord[];
     activeTrackId: string | null;
     isPlaying: boolean;
+    activePlaybackSource: AudioPlaybackSource;
+    playbackSourceLabel: string;
+    playbackSourceOptions: Array<{
+        label: string;
+        source: AudioPlaybackSource;
+    }>;
     shareToken?: string | null;
     onTrackChange: (id: string) => void;
     onPlayingChange: (isPlaying: boolean) => void;
+    onPlaybackSourceSelect: (source: AudioPlaybackSource) => void;
+    onOpenPlaylists?: (() => void) | null;
+}
+
+function isSamePlaybackSource(left: AudioPlaybackSource, right: AudioPlaybackSource) {
+    if (left.type !== right.type) {
+        return false;
+    }
+
+    if (left.type === "playlist" && right.type === "playlist") {
+        return left.playlistId === right.playlistId;
+    }
+
+    return true;
 }
 
 function formatTime(seconds: number) {
@@ -39,15 +62,29 @@ function pauseAudio(audio: HTMLAudioElement) {
     }
 }
 
-export function AudioPlayer({ tracks, activeTrackId, isPlaying, shareToken, onTrackChange, onPlayingChange }: AudioPlayerProps) {
+export function AudioPlayer({
+    tracks,
+    activeTrackId,
+    isPlaying,
+    activePlaybackSource,
+    playbackSourceLabel,
+    playbackSourceOptions,
+    shareToken,
+    onTrackChange,
+    onPlayingChange,
+    onPlaybackSourceSelect,
+    onOpenPlaylists,
+}: AudioPlayerProps) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const loadedTrackUrlRef = useRef<string | null>(null);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
     const [error, setError] = useState<string | null>(null);
+    const [isPlaybackSourceMenuOpen, setIsPlaybackSourceMenuOpen] = useState(false);
 
     const activeTrack = tracks.find((t) => t.id === activeTrackId) ?? null;
     const activeIndex = activeTrack ? tracks.indexOf(activeTrack) : -1;
+    const canSwitchPlaybackSource = playbackSourceOptions.length > 1 || Boolean(onOpenPlaylists);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -109,7 +146,10 @@ export function AudioPlayer({ tracks, activeTrackId, isPlaying, shareToken, onTr
             if (activeIndex >= 0 && activeIndex < tracks.length - 1) {
                 onTrackChange(tracks[activeIndex + 1].id);
             } else {
-                audio.currentTime = 0;
+                const currentAudio = audioRef.current;
+                if (currentAudio) {
+                    currentAudio.currentTime = 0;
+                }
                 setCurrentTime(0);
                 onPlayingChange(false);
             }
@@ -183,41 +223,102 @@ export function AudioPlayer({ tracks, activeTrackId, isPlaying, shareToken, onTr
         <div className="audio-player" role="region" aria-label="Аудиоплеер">
             <audio ref={audioRef} preload="metadata" />
 
-            <div className="audio-player-controls">
-                <button
-                    type="button"
-                    className="audio-player-btn"
-                    onClick={playPrev}
-                    disabled={activeIndex <= 0}
-                    aria-label="Предыдущий трек"
-                >
-                    ⏮
-                </button>
+            <div className="audio-player-main">
+                <div className="audio-player-controls">
+                    <button
+                        type="button"
+                        className="audio-player-btn"
+                        onClick={playPrev}
+                        disabled={activeIndex <= 0}
+                        aria-label="Предыдущий трек"
+                    >
+                        <SkipBack className="audio-control-svg audio-control-svg-skip" aria-hidden="true" />
+                    </button>
 
-                <button
-                    type="button"
-                    className="audio-player-btn audio-player-btn-play"
-                    onClick={togglePlayPause}
-                    aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
-                >
-                    {isPlaying ? "⏸" : "▶"}
-                </button>
+                    <button
+                        type="button"
+                        className="audio-player-btn audio-player-btn-play"
+                        onClick={togglePlayPause}
+                        aria-label={isPlaying ? "Пауза" : "Воспроизвести"}
+                    >
+                        {isPlaying ? (
+                            <Pause className="audio-control-svg audio-control-svg-pause" aria-hidden="true" />
+                        ) : (
+                            <Play className="audio-control-svg audio-control-svg-play" aria-hidden="true" />
+                        )}
+                    </button>
 
-                <button
-                    type="button"
-                    className="audio-player-btn"
-                    onClick={playNext}
-                    disabled={activeIndex >= tracks.length - 1}
-                    aria-label="Следующий трек"
-                >
-                    ⏭
-                </button>
+                    <button
+                        type="button"
+                        className="audio-player-btn"
+                        onClick={playNext}
+                        disabled={activeIndex >= tracks.length - 1}
+                        aria-label="Следующий трек"
+                    >
+                        <SkipForward className="audio-control-svg audio-control-svg-skip" aria-hidden="true" />
+                    </button>
+                </div>
+
+                <div className="audio-player-context">
+                    {canSwitchPlaybackSource ? (
+                        <Popover open={isPlaybackSourceMenuOpen} onOpenChange={setIsPlaybackSourceMenuOpen}>
+                            <PopoverTrigger
+                                className="audio-player-source audio-player-source-button"
+                                aria-label={`Источник воспроизведения: ${playbackSourceLabel}`}
+                            >
+                                <span className="audio-player-source-label">{playbackSourceLabel}</span>
+                                <span className="audio-player-source-caret" aria-hidden="true">
+                                    ▾
+                                </span>
+                            </PopoverTrigger>
+                            <PopoverContent className="audio-player-source-popover" align="start" side="top" sideOffset={10}>
+                                {playbackSourceOptions.map((option) => {
+                                    const isActiveSource = isSamePlaybackSource(activePlaybackSource, option.source);
+
+                                    return (
+                                        <button
+                                            key={option.source.type === "playlist" ? option.source.playlistId : "archive"}
+                                            type="button"
+                                            className={`audio-player-source-option${isActiveSource ? " audio-player-source-option-active" : ""}`}
+                                            aria-label={`Источник воспроизведения: ${option.label}`}
+                                            onClick={() => {
+                                                onPlaybackSourceSelect(option.source);
+                                                setIsPlaybackSourceMenuOpen(false);
+                                            }}
+                                        >
+                                            <span className={`audio-player-source-option-check${isActiveSource ? " audio-player-source-option-check-active" : ""}`} aria-hidden="true">
+                                                ✓
+                                            </span>
+                                            <span className="audio-player-source-option-label">{option.label}</span>
+                                        </button>
+                                    );
+                                })}
+                                {onOpenPlaylists ? (
+                                    <>
+                                        <div className="audio-player-source-divider" aria-hidden="true" />
+                                        <button
+                                            type="button"
+                                            className="audio-player-source-action"
+                                            onClick={() => {
+                                                onOpenPlaylists();
+                                                setIsPlaybackSourceMenuOpen(false);
+                                            }}
+                                        >
+                                            Открыть плейлисты
+                                        </button>
+                                    </>
+                                ) : null}
+                            </PopoverContent>
+                        </Popover>
+                    ) : (
+                        <span className="audio-player-source">{playbackSourceLabel}</span>
+                    )}
+
+                    <span className="audio-player-title">{activeTrack.title || "Без названия"}</span>
+                </div>
             </div>
 
-            <div className="audio-player-info">
-                <span className="audio-player-title">{activeTrack.title || "Без названия"}</span>
-                {error ? <span className="audio-player-error">{error}</span> : null}
-            </div>
+            {error ? <span className="audio-player-error">{error}</span> : null}
 
             <div className="audio-player-seek">
                 <span className="audio-player-time">{formatTime(currentTime)}</span>

@@ -416,9 +416,9 @@ export function buildTreeMediaAlbumSummaries(input: {
         album.album_kind === "uploader" && album.uploader_user_id
           ? input.media.filter((asset) => asset.created_by === album.uploader_user_id && asset.kind === album.kind)
           : input.albumMediaMap?.[album.id] ||
-            (albumMediaIdsByAlbumId.get(album.id) || [])
-              .map((mediaId) => mediaById.get(mediaId))
-              .filter(Boolean) as TreeSnapshot["media"];
+          (albumMediaIdsByAlbumId.get(album.id) || [])
+            .map((mediaId) => mediaById.get(mediaId))
+            .filter(Boolean) as TreeSnapshot["media"];
       const albumMedia = albumAllMedia.filter((asset) => asset.kind === album.kind);
       const cover =
         albumMedia.find((asset) => asset.kind === "photo") ||
@@ -437,16 +437,16 @@ export function buildTreeMediaAlbumSummaries(input: {
       };
     })
     .filter(Boolean) as Array<{
-    id: string;
-    title: string;
-    description: string | null;
-    kind: TreeMediaAlbumRecord["kind"];
-    access: TreeMediaAlbumRecord["access"];
-    albumKind: TreeMediaAlbumRecord["album_kind"];
-    uploaderUserId: string | null;
-    count: number;
-    coverMediaId: string | null;
-  }>;
+      id: string;
+      title: string;
+      description: string | null;
+      kind: TreeMediaAlbumRecord["kind"];
+      access: TreeMediaAlbumRecord["access"];
+      albumKind: TreeMediaAlbumRecord["album_kind"];
+      uploaderUserId: string | null;
+      count: number;
+      coverMediaId: string | null;
+    }>;
 }
 
 export function buildDerivedUploaderAlbumSummaries(input: {

@@ -3,7 +3,7 @@
 <!-- FRAMEWORK:ENGINEERING:START -->
 ## Current Engineering Sync
 
-- Updated at (UTC): `2026-03-28 15:36:50Z`
+- Updated at (UTC): `2026-04-02 13:51:57Z`
 - Treat the historical phases below as reference coverage. The launch order in this sync block is the current engineering queue.
 - Active engineering stream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 
@@ -27,7 +27,7 @@
 
 - `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
 - `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
-- Latest `smoke:media` artifact `media-storage-report-1773931536758.json` is green.
+- No `smoke:media` artifact was detected during the latest completion sync.
 - Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
 <!-- FRAMEWORK:ENGINEERING:END -->
 
