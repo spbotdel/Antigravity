@@ -3,10 +3,12 @@
 import { useEffect, useRef } from "react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { buildCloudflareOfficeDocumentPublicUrl, OfficeDocumentPreview } from "@/components/media/office-document-preview";
 
 interface DocumentPreviewDialogProps {
     asset: MediaAssetRecord | null;
     shareToken?: string | null;
+    cloudflareR2PublicBaseUrl?: string | null;
     open: boolean;
     onClose: () => void;
 }
@@ -34,7 +36,7 @@ function canPreview(asset: MediaAssetRecord) {
     return isPdfAsset(asset) || isTextAsset(asset);
 }
 
-export function DocumentPreviewDialog({ asset, shareToken, open, onClose }: DocumentPreviewDialogProps) {
+export function DocumentPreviewDialog({ asset, shareToken, cloudflareR2PublicBaseUrl, open, onClose }: DocumentPreviewDialogProps) {
     const overlayRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -61,6 +63,7 @@ export function DocumentPreviewDialog({ asset, shareToken, open, onClose }: Docu
 
     const mediaUrl = buildMediaUrl(asset.id, shareToken);
     const previewable = canPreview(asset);
+    const officePreviewUrl = buildCloudflareOfficeDocumentPublicUrl(asset, cloudflareR2PublicBaseUrl);
 
     return (
         <div
@@ -104,6 +107,12 @@ export function DocumentPreviewDialog({ asset, shareToken, open, onClose }: Docu
                             src={mediaUrl}
                             className="document-preview-iframe"
                             title={asset.title || "Документ"}
+                        />
+                    ) : officePreviewUrl ? (
+                        <OfficeDocumentPreview
+                            publicFileUrl={officePreviewUrl}
+                            title={asset.title}
+                            downloadUrl={mediaUrl}
                         />
                     ) : (
                         <div className="document-preview-fallback">

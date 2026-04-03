@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,7 +7,10 @@ import { describe, expect, it, vi } from "vitest";
 // that depends on it: the type system and display helpers.
 
 import { AudioArchiveView } from "@/components/media/audio-archive-view";
-import type { MediaKind } from "@/lib/types";
+import { DocumentArchiveView } from "@/components/media/document-archive-view";
+import { DocumentPreviewDialog } from "@/components/media/document-preview-dialog";
+import { OfficeDocumentPreview, buildCloudflareOfficeDocumentPublicUrl, buildMicrosoftOfficeViewerUrl } from "@/components/media/office-document-preview";
+import type { MediaAssetRecord, MediaKind } from "@/lib/types";
 import { collectTreeMedia } from "@/lib/tree/display";
 import { formatMediaKind } from "@/lib/ui-text";
 
@@ -104,6 +107,29 @@ function createAudioAsset(id: string, title: string) {
         preview_attempt_count: 0,
         preview_claimed_at: null,
     } as const;
+}
+
+function createDocumentAsset(overrides?: Partial<MediaAssetRecord>): MediaAssetRecord {
+    return {
+        id: "document-1",
+        tree_id: "tree-1",
+        kind: "document",
+        provider: "cloudflare_r2",
+        visibility: "members",
+        storage_path: "trees/tree-1/media/document/document-1/family-history.docx",
+        external_url: null,
+        title: "family-history.docx",
+        caption: null,
+        mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        size_bytes: 2048,
+        created_by: "user-1",
+        created_at: "2026-04-02T00:00:00.000Z",
+        preview_status: null,
+        preview_error: null,
+        preview_attempt_count: 0,
+        preview_claimed_at: null,
+        ...overrides,
+    } as MediaAssetRecord;
 }
 
 function mockAudioPlayback() {
@@ -225,5 +251,106 @@ describe("Audio archive player state", () => {
         const addButtons = screen.getAllByRole("button", { name: "В плейлист" });
         expect(addButtons.length).toBeGreaterThan(0);
         expect(addButtons.every((button) => button.hasAttribute("disabled"))).toBe(true);
+    });
+});
+
+describe("document preview integration", () => {
+    it("builds a public Cloudflare Office document url from the configured base url", () => {
+        const asset = createDocumentAsset({
+            storage_path: "trees/tree 1/media/document/document-1/family history.docx",
+        });
+
+        expect(buildCloudflareOfficeDocumentPublicUrl(asset, "https://media.example.com/archive/")).toBe(
+            "https://media.example.com/archive/trees/tree%201/media/document/document-1/family%20history.docx"
+        );
+    });
+
+    it("keeps the existing direct preview path for pdf files", () => {
+        render(
+            createElement(DocumentPreviewDialog, {
+                asset: createDocumentAsset({
+                    id: "document-pdf",
+                    title: "family-book.pdf",
+                    mime_type: "application/pdf",
+                    storage_path: "trees/tree-1/media/document/document-pdf/family-book.pdf",
+                }),
+                shareToken: "share-token",
+                cloudflareR2PublicBaseUrl: "https://media.example.com/archive",
+                open: true,
+                onClose: () => undefined,
+            })
+        );
+
+        const iframe = document.querySelector(".document-preview-iframe");
+        expect(iframe).not.toBeNull();
+        expect(iframe).toHaveAttribute("src", "/api/media/document-pdf?share=share-token");
+    });
+
+    it("shows an Office preview entrypoint for docx only when a public Cloudflare url can be built", () => {
+        render(
+            createElement(DocumentArchiveView, {
+                treeId: "tree-1",
+                slug: "demo-family",
+                canEdit: false,
+                media: [createDocumentAsset()],
+                cloudflareR2PublicBaseUrl: "https://media.example.com/archive",
+                onMediaChange: () => undefined,
+            })
+        );
+
+        expect(screen.getByRole("button", { name: "Открыть" })).toBeInTheDocument();
+    });
+
+    it("keeps docx download-only when the public Cloudflare base url is missing", () => {
+        render(
+            createElement(DocumentArchiveView, {
+                treeId: "tree-1",
+                slug: "demo-family",
+                canEdit: false,
+                media: [createDocumentAsset()],
+                onMediaChange: () => undefined,
+            })
+        );
+
+        expect(screen.queryByRole("button", { name: "Открыть" })).toBeNull();
+    });
+
+    it("renders the Microsoft Office viewer url for docx preview", () => {
+        render(
+            createElement(DocumentPreviewDialog, {
+                asset: createDocumentAsset(),
+                cloudflareR2PublicBaseUrl: "https://media.example.com/archive",
+                open: true,
+                onClose: () => undefined,
+            })
+        );
+
+        const iframe = document.querySelector(".document-preview-iframe");
+        expect(iframe).not.toBeNull();
+        expect(iframe).toHaveAttribute(
+            "src",
+            buildMicrosoftOfficeViewerUrl("https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.docx")
+        );
+    });
+
+    it("falls back when the Office viewer does not finish loading in time", async () => {
+        vi.useFakeTimers();
+
+        render(
+            createElement(OfficeDocumentPreview, {
+                publicFileUrl: "https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.docx",
+                title: "family-history.docx",
+                downloadUrl: "/api/media/document-1",
+            })
+        );
+
+        expect(screen.getByText("Открываем документ через Microsoft viewer...")).toBeInTheDocument();
+
+        await act(async () => {
+            vi.advanceTimersByTime(7000);
+        });
+
+        expect(screen.getByText("Предпросмотр не загрузился")).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: "Скачать файл" })).toHaveAttribute("href", "/api/media/document-1");
     });
 });

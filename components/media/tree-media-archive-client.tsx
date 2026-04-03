@@ -53,6 +53,7 @@ interface TreeMediaArchiveClientProps {
   treeId: string;
   slug: string;
   shareToken?: string | null;
+  cloudflareR2PublicBaseUrl?: string | null;
   canEdit: boolean;
   initialMode: MediaMode;
   initialView: ArchiveView;
@@ -769,6 +770,7 @@ export function TreeMediaArchiveClient({
   treeId,
   slug,
   shareToken,
+  cloudflareR2PublicBaseUrl,
   canEdit,
   initialMode,
   initialView,
@@ -3283,6 +3285,7 @@ export function TreeMediaArchiveClient({
           treeId={treeId}
           slug={slug}
           shareToken={shareToken}
+          cloudflareR2PublicBaseUrl={cloudflareR2PublicBaseUrl}
           canEdit={canEdit}
           media={archiveMedia.filter((a) => a.kind === "document")}
           onMediaChange={(next) => {

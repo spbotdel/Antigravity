@@ -4,6 +4,7 @@ import { TreeMediaArchiveClient } from "@/components/media/tree-media-archive-cl
 import { TreeNav } from "@/components/layout/tree-nav";
 import { buildDerivedUploaderAlbumSummaries, buildPersistedTreeMediaAlbumMediaMap, buildTreeMediaAlbumSummaries, collectTreeMedia } from "@/lib/tree/display";
 import type { MediaAssetRecord } from "@/lib/types";
+import { getCloudflareR2PublicBaseUrl } from "@/lib/env";
 import { getTreeMediaPageData, processCloudflareVideoPreviewJobs, resolveMediaThumbUrlsForVisibleMedia } from "@/lib/server/repository";
 import { formatTreeVisibility } from "@/lib/ui-text";
 
@@ -271,6 +272,7 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
         treeId={pageData.tree.id}
         slug={slug}
         shareToken={shareToken}
+        cloudflareR2PublicBaseUrl={getCloudflareR2PublicBaseUrl()}
         canEdit={pageData.actor.canEdit}
         initialMode={mode}
         initialView={view}

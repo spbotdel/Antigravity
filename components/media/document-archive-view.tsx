@@ -4,12 +4,14 @@ import { useCallback, useRef, useState } from "react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import { DocumentPreviewDialog } from "@/components/media/document-preview-dialog";
+import { buildCloudflareOfficeDocumentPublicUrl } from "@/components/media/office-document-preview";
 import { Button } from "@/components/ui/button";
 
 interface DocumentArchiveViewProps {
     treeId: string;
     slug: string;
     shareToken?: string | null;
+    cloudflareR2PublicBaseUrl?: string | null;
     canEdit: boolean;
     media: MediaAssetRecord[];
     onMediaChange: (next: MediaAssetRecord[]) => void;
@@ -109,7 +111,7 @@ interface ArchiveUploadTarget {
     [key: string]: unknown;
 }
 
-export function DocumentArchiveView({ treeId, slug, shareToken, canEdit, media, onMediaChange }: DocumentArchiveViewProps) {
+export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2PublicBaseUrl, canEdit, media, onMediaChange }: DocumentArchiveViewProps) {
     const [previewAsset, setPreviewAsset] = useState<MediaAssetRecord | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<string | null>(null);
@@ -289,7 +291,7 @@ export function DocumentArchiveView({ treeId, slug, shareToken, canEdit, media, 
                     {media.map((asset) => {
                         const typeLabel = getDocumentTypeLabel(asset.mime_type);
                         const icon = getDocumentIcon(asset.mime_type);
-                        const canPreviewThis = isPdfOrText(asset);
+                        const canPreviewThis = isPdfOrText(asset) || Boolean(buildCloudflareOfficeDocumentPublicUrl(asset, cloudflareR2PublicBaseUrl));
                         return (
                             <div key={asset.id} className="document-archive-row" role="listitem">
                                 <span className="document-archive-icon">{icon}</span>
@@ -342,6 +344,7 @@ export function DocumentArchiveView({ treeId, slug, shareToken, canEdit, media, 
             <DocumentPreviewDialog
                 asset={previewAsset}
                 shareToken={shareToken}
+                cloudflareR2PublicBaseUrl={cloudflareR2PublicBaseUrl}
                 open={previewAsset !== null}
                 onClose={handleClosePreview}
             />

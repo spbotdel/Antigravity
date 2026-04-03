@@ -167,6 +167,24 @@ export function getCloudflareR2Env() {
   };
 }
 
+export function getCloudflareR2PublicBaseUrl() {
+  const rawValue = process.env.CF_R2_PUBLIC_BASE_URL?.trim();
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(rawValue);
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      return null;
+    }
+
+    return rawValue.replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
 export function shouldUseCloudflareR2ForMedia(createdAt?: string | null) {
   if (getMediaStorageBackend() !== "cloudflare_r2") {
     return false;

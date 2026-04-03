@@ -89,6 +89,7 @@ Required env vars:
 - `CF_R2_SECRET_ACCESS_KEY` required when `MEDIA_STORAGE_BACKEND=cloudflare_r2`
 - `CF_R2_ENDPOINT` optional for Cloudflare R2, defaults to `https://<CF_ACCOUNT_ID>.r2.cloudflarestorage.com`
 - `CF_R2_REGION` optional, defaults to `auto`
+- `CF_R2_PUBLIC_BASE_URL` optional public R2/custom-domain base used for Office `.doc/.docx` iframe preview
 - `CF_R2_ROLLOUT_AT` optional UTC timestamp for migration gating; before this moment new uploads remain on the legacy object-storage path even if `MEDIA_STORAGE_BACKEND=cloudflare_r2`
 
 Current transitional compatibility path:
