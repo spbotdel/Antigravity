@@ -386,6 +386,10 @@ export function collectTreeMedia(snapshot: Pick<TreeSnapshot, "media">, kind?: E
   return snapshot.media.filter((asset) => asset.kind === kind);
 }
 
+export function collectArchiveGalleryMedia(snapshot: Pick<TreeSnapshot, "media">) {
+  return snapshot.media.filter((asset) => asset.kind === "photo" || asset.kind === "video");
+}
+
 export function collectUnlinkedTreeMedia(snapshot: Pick<TreeSnapshot, "media" | "personMedia">) {
   const linkedMediaIds = new Set(snapshot.personMedia.map((relation) => relation.media_id));
   return snapshot.media.filter((asset) => !linkedMediaIds.has(asset.id));

@@ -2,7 +2,7 @@ import { after } from "next/server";
 
 import { TreeMediaArchiveClient } from "@/components/media/tree-media-archive-client";
 import { TreeNav } from "@/components/layout/tree-nav";
-import { buildDerivedUploaderAlbumSummaries, buildPersistedTreeMediaAlbumMediaMap, buildTreeMediaAlbumSummaries, collectTreeMedia } from "@/lib/tree/display";
+import { buildDerivedUploaderAlbumSummaries, buildPersistedTreeMediaAlbumMediaMap, buildTreeMediaAlbumSummaries, collectArchiveGalleryMedia, collectTreeMedia } from "@/lib/tree/display";
 import type { MediaAssetRecord } from "@/lib/types";
 import { getCloudflareR2PublicBaseUrl } from "@/lib/env";
 import { getTreeMediaPageData, processCloudflareVideoPreviewJobs, resolveMediaThumbUrlsForVisibleMedia } from "@/lib/server/repository";
@@ -144,13 +144,13 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   const videoMedia = collectTreeMedia({ media: pageData.media }, "video");
   const audioMedia = collectTreeMedia({ media: pageData.media }, "audio");
   const documentMedia = collectTreeMedia({ media: pageData.media }, "document");
-  const allMedia = collectTreeMedia({ media: pageData.media });
+  const allMedia = collectArchiveGalleryMedia({ media: pageData.media });
   const persistedAlbumMediaMap = buildPersistedTreeMediaAlbumMediaMap({
     media: pageData.media,
     items
   });
   const persistedAllAlbumSummaries = buildTreeMediaAlbumSummaries({
-    media: pageData.media,
+    media: allMedia,
     albums,
     items,
     albumMediaMap: persistedAlbumMediaMap
@@ -206,8 +206,24 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   );
   const photoAlbumSummaries = mergeAlbumSummaries(persistedPhotoAlbumSummaries, derivedPhotoAlbumSummaries);
   const videoAlbumSummaries = mergeAlbumSummaries(persistedVideoAlbumSummaries, derivedVideoAlbumSummaries);
-  const currentMedia = mode === "photo" ? photoMedia : mode === "video" ? videoMedia : allMedia;
-  const currentAlbums = mode === "photo" ? photoAlbumSummaries : mode === "video" ? videoAlbumSummaries : allAlbumSummaries;
+  const currentMedia =
+    mode === "photo"
+      ? photoMedia
+      : mode === "video"
+        ? videoMedia
+        : mode === "audio"
+          ? audioMedia
+          : mode === "document"
+            ? documentMedia
+            : allMedia;
+  const currentAlbums =
+    mode === "photo"
+      ? photoAlbumSummaries
+      : mode === "video"
+        ? videoAlbumSummaries
+        : mode === "all"
+          ? allAlbumSummaries
+          : [];
   const initialSelectedAlbum = view === "albums" && albumId ? currentAlbums.find((album) => album.id === albumId) || null : null;
   const initialSelectedAlbumMedia = initialSelectedAlbum
     ? getArchiveAlbumSourceMedia(initialSelectedAlbum, currentMedia, persistedAlbumMediaMap)

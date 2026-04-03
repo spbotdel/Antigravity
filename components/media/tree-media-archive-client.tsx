@@ -965,13 +965,19 @@ export function TreeMediaArchiveClient({
 
   const photoMedia = useMemo(() => archiveMedia.filter((asset) => asset.kind === "photo"), [archiveMedia]);
   const videoMedia = useMemo(() => archiveMedia.filter((asset) => asset.kind === "video"), [archiveMedia]);
+  const photoVideoMedia = useMemo(
+    () => archiveMedia.filter((asset) => asset.kind === "photo" || asset.kind === "video"),
+    [archiveMedia]
+  );
+  const audioMedia = useMemo(() => archiveMedia.filter((asset) => asset.kind === "audio"), [archiveMedia]);
+  const documentMedia = useMemo(() => archiveMedia.filter((asset) => asset.kind === "document"), [archiveMedia]);
   const allDerivedAlbums = useMemo(
     () =>
       buildDerivedUploaderAlbumSummaries({
-        media: archiveMedia,
+        media: photoVideoMedia,
         uploaderLabelsById
       }),
-    [archiveMedia, uploaderLabelsById]
+    [photoVideoMedia, uploaderLabelsById]
   );
   const photoDerivedAlbums = useMemo(
     () =>
@@ -995,10 +1001,10 @@ export function TreeMediaArchiveClient({
     () =>
       buildPersistedArchiveAlbumSummaries({
         albums: persistedAllAlbums,
-        media: archiveMedia,
+        media: photoVideoMedia,
         albumMediaMap,
       }),
-    [albumMediaMap, archiveMedia, persistedAllAlbums]
+    [albumMediaMap, photoVideoMedia, persistedAllAlbums]
   );
   const persistedPhotoAlbumSummaries = useMemo(
     () =>
@@ -1040,8 +1046,8 @@ export function TreeMediaArchiveClient({
   }
 
   const allAlbumSummaries = useMemo(
-    () => mergeUploaderAlbumsForAllMedia(mergeAlbums(persistedAllAlbumSummaries, allDerivedAlbums), archiveMedia),
-    [persistedAllAlbumSummaries, allDerivedAlbums, dismissedUploaderAlbumKeys, archiveMedia]
+    () => mergeUploaderAlbumsForAllMedia(mergeAlbums(persistedAllAlbumSummaries, allDerivedAlbums), photoVideoMedia),
+    [persistedAllAlbumSummaries, allDerivedAlbums, dismissedUploaderAlbumKeys, photoVideoMedia]
   );
   const photoAlbumSummaries = useMemo(() => mergeAlbums(persistedPhotoAlbumSummaries, photoDerivedAlbums), [persistedPhotoAlbumSummaries, photoDerivedAlbums, dismissedUploaderAlbumKeys]);
   const videoAlbumSummaries = useMemo(() => mergeAlbums(persistedVideoAlbumSummaries, videoDerivedAlbums), [persistedVideoAlbumSummaries, videoDerivedAlbums, dismissedUploaderAlbumKeys]);
@@ -1053,8 +1059,14 @@ export function TreeMediaArchiveClient({
     if (mode === "video") {
       return videoMedia;
     }
-    return archiveMedia;
-  }, [archiveMedia, mode, photoMedia, videoMedia]);
+    if (mode === "audio") {
+      return audioMedia;
+    }
+    if (mode === "document") {
+      return documentMedia;
+    }
+    return photoVideoMedia;
+  }, [audioMedia, documentMedia, mode, photoMedia, photoVideoMedia, videoMedia]);
 
   const currentAlbums = useMemo(() => {
     if (mode === "photo") {
@@ -1062,6 +1074,9 @@ export function TreeMediaArchiveClient({
     }
     if (mode === "video") {
       return videoAlbumSummaries;
+    }
+    if (mode === "audio" || mode === "document") {
+      return [];
     }
     return allAlbumSummaries;
   }, [allAlbumSummaries, mode, photoAlbumSummaries, videoAlbumSummaries]);

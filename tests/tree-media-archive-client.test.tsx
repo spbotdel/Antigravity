@@ -1475,6 +1475,51 @@ describe("tree media archive client", () => {
     expect(within(grid as HTMLElement).getByRole("button", { name: "Открыть видео: Видео 1" })).toBeInTheDocument();
   });
 
+  it("excludes audio and document items from the all-media grid dataset", () => {
+    const photo = createMediaAsset({
+      id: "media-photo-1",
+      title: "Фото 1",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg",
+    });
+    const video = createMediaAsset({
+      id: "media-video-1",
+      title: "Видео 1",
+      kind: "video",
+      mime_type: "video/mp4",
+      storage_path: "trees/tree-1/media/video/media-video-1/video.mp4",
+    });
+    const audio = createMediaAsset({
+      id: "media-audio-1",
+      title: "Аудио 1",
+      kind: "audio",
+      mime_type: "audio/mpeg",
+      storage_path: "trees/tree-1/media/audio/media-audio-1/audio.mp3",
+      provider: "cloudflare_r2",
+    });
+    const documentAsset = createMediaAsset({
+      id: "media-document-1",
+      title: "Документ 1",
+      kind: "document",
+      mime_type: "application/pdf",
+      storage_path: "trees/tree-1/media/document/media-document-1/document.pdf",
+      provider: "cloudflare_r2",
+    });
+
+    renderArchiveClient({
+      initialMode: "all",
+      initialView: "all",
+      allMedia: [photo, video, audio, documentAsset],
+    });
+
+    expect(screen.getByRole("button", { name: "Открыть фото: Фото 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть видео: Видео 1" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть файл: Аудио 1" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть файл: Документ 1" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Аудио 1")).not.toBeInTheDocument();
+    expect(screen.queryByText("Документ 1")).not.toBeInTheDocument();
+  });
+
   it("opens an edit dialog from the album card menu and updates the manual album", async () => {
     const photo = createMediaAsset({
       id: "media-photo",

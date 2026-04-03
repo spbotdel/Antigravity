@@ -250,6 +250,110 @@ describe("media page", () => {
     expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("album:uploader-user-1-photo");
   });
 
+  it("passes only photo and video media into the all-media archive dataset", async () => {
+    mocks.getTreeMediaPageData.mockResolvedValue({
+      tree: {
+        id: "tree-1",
+        owner_user_id: "user-1",
+        slug: "demo-family",
+        title: "Demo Family",
+        description: null,
+        visibility: "private",
+        root_person_id: null,
+        created_at: "2026-03-09T00:00:00.000Z",
+        updated_at: "2026-03-09T00:00:00.000Z",
+      },
+      actor: {
+        userId: "user-1",
+        role: "owner",
+        isAuthenticated: true,
+        accessSource: "membership",
+        shareLinkId: null,
+        canEdit: true,
+        canManageMembers: true,
+        canManageSettings: true,
+        canReadAudit: true,
+      },
+      media: [
+        {
+          id: "photo-1",
+          tree_id: "tree-1",
+          kind: "photo",
+          provider: "object_storage",
+          visibility: "members",
+          storage_path: "trees/tree-1/media/photo/photo-1/file.jpg",
+          external_url: null,
+          title: "Photo",
+          caption: null,
+          mime_type: "image/jpeg",
+          size_bytes: 1024,
+          created_by: "user-1",
+          created_at: "2026-03-09T00:00:00.000Z",
+        },
+        {
+          id: "video-1",
+          tree_id: "tree-1",
+          kind: "video",
+          provider: "object_storage",
+          visibility: "members",
+          storage_path: "trees/tree-1/media/video/video-1/file.mp4",
+          external_url: null,
+          title: "Video",
+          caption: null,
+          mime_type: "video/mp4",
+          size_bytes: 2048,
+          created_by: "user-1",
+          created_at: "2026-03-09T00:00:00.000Z",
+        },
+        {
+          id: "audio-1",
+          tree_id: "tree-1",
+          kind: "audio",
+          provider: "cloudflare_r2",
+          visibility: "members",
+          storage_path: "trees/tree-1/media/audio/audio-1/file.mp3",
+          external_url: null,
+          title: "Audio",
+          caption: null,
+          mime_type: "audio/mpeg",
+          size_bytes: 4096,
+          created_by: "user-1",
+          created_at: "2026-03-09T00:00:00.000Z",
+        },
+        {
+          id: "document-1",
+          tree_id: "tree-1",
+          kind: "document",
+          provider: "cloudflare_r2",
+          visibility: "members",
+          storage_path: "trees/tree-1/media/document/document-1/file.pdf",
+          external_url: null,
+          title: "Document",
+          caption: null,
+          mime_type: "application/pdf",
+          size_bytes: 512,
+          created_by: "user-1",
+          created_at: "2026-03-09T00:00:00.000Z",
+        },
+      ],
+      albums: [],
+      items: [],
+      uploaderLabelsById: new Map(),
+      audioPlaylists: [],
+      audioPlaylistItems: [],
+      audioPlaylistsAvailable: true,
+    });
+
+    render(
+      await MediaPage({
+        params: Promise.resolve({ slug: "demo-family" }),
+        searchParams: Promise.resolve({ mode: "all", view: "all" }),
+      })
+    );
+
+    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("mode:all;view:all;album:none;media:2;albums:0");
+  });
+
   it("re-triggers visible cloudflare video previews that are still pending or processing", async () => {
     mocks.getTreeMediaPageData.mockResolvedValue({
       tree: {
