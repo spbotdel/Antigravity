@@ -201,6 +201,26 @@ function MediaThumb({
 }) {
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const mediaUrl = thumbSource?.src || buildMediaRouteUrl(asset.id, { shareToken });
+  const thumbFallback = (
+    <span className="person-media-thumb-visual">
+      {asset.kind === "video" ? (
+        <span
+          className={`person-media-thumb-video-placeholder${compact ? " person-media-thumb-video-placeholder-compact" : ""}`}
+          aria-hidden="true"
+        >
+          <span className="person-media-thumb-video-badge">
+            <span className="person-media-thumb-video-play">▶</span>
+          </span>
+          <span className="person-media-thumb-video-label">Видео</span>
+        </span>
+      ) : (
+        <span className="person-media-thumb-icon" aria-hidden="true">
+          DOC
+        </span>
+      )}
+      {isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
+    </span>
+  );
 
   const thumbButton = (
     <button
@@ -218,29 +238,12 @@ function MediaThumb({
           shareToken={shareToken}
           containerClassName="person-media-thumb-visual"
           mediaClassName={thumbSource.kind === "image" ? "" : "person-media-thumb-video"}
-          placeholder={null}
+          placeholder={thumbFallback}
           overlayContent={isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
           disableDurationProbe={disableDurationProbe}
         />
       ) : (
-        <span className="person-media-thumb-visual">
-          {asset.kind === "video" ? (
-          <span
-            className={`person-media-thumb-video-placeholder${compact ? " person-media-thumb-video-placeholder-compact" : ""}`}
-            aria-hidden="true"
-          >
-            <span className="person-media-thumb-video-badge">
-              <span className="person-media-thumb-video-play">▶</span>
-            </span>
-            <span className="person-media-thumb-video-label">Видео</span>
-          </span>
-          ) : (
-            <span className="person-media-thumb-icon" aria-hidden="true">
-              DOC
-            </span>
-          )}
-          {isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
-        </span>
+        thumbFallback
       )}
     </button>
   );
@@ -333,6 +336,15 @@ function formatVideoTime(totalSeconds: number) {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+function playVideoSafely(video: HTMLVideoElement) {
+  const playResult = video.play();
+  if (playResult && typeof playResult.catch === "function") {
+    return playResult.catch(() => undefined);
+  }
+
+  return Promise.resolve();
+}
+
 function clampPositiveSize(value: number) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
@@ -344,6 +356,7 @@ function LightboxVideoPlayer({
   autoPlay = false,
   onVideoElementChange,
   onIntrinsicSizeChange,
+  onError,
   shellStyle,
   surfaceStyle,
 }: {
@@ -353,6 +366,7 @@ function LightboxVideoPlayer({
   autoPlay?: boolean;
   onVideoElementChange?: (node: HTMLVideoElement | null) => void;
   onIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
+  onError?: () => void;
   shellStyle?: CSSProperties;
   surfaceStyle?: CSSProperties;
 }) {
@@ -399,7 +413,7 @@ function LightboxVideoPlayer({
     }
 
     if (autoPlay) {
-      void video.play().catch(() => undefined);
+      void playVideoSafely(video);
     }
 
     return () => {
@@ -419,7 +433,7 @@ function LightboxVideoPlayer({
     }
 
     if (video.paused || video.ended) {
-      await video.play().catch(() => undefined);
+      await playVideoSafely(video);
       return;
     }
 
@@ -484,6 +498,7 @@ function LightboxVideoPlayer({
         playsInline
         autoPlay={autoPlay}
         preload="metadata"
+        onError={onError}
         onClick={() => void togglePlayback()}
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.
@@ -563,6 +578,23 @@ function MediaPreview({
     : buildMediaOpenRouteUrl(asset, shareToken);
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const shouldPreferMetadataPreload = expanded && isInlineVideoAsset(asset);
+  const [hasLoadError, setHasLoadError] = useState(false);
+
+  useEffect(() => {
+    setHasLoadError(false);
+  }, [asset.id, expanded, mediaUrl]);
+
+  if (hasLoadError) {
+    return (
+      <div className="person-media-placeholder">
+        <strong>Файл временно недоступен</strong>
+        <p>{asset.caption || "Оригинал этого медиа сейчас недоступен, но запись в галерее сохранена."}</p>
+        <a href={buildMediaOpenRouteUrl(asset, shareToken)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
+          {getMediaOpenLabel(asset)}
+        </a>
+      </div>
+    );
+  }
 
   if (isPhotoAsset(asset)) {
     return (
@@ -581,6 +613,7 @@ function MediaPreview({
               }
             : undefined
         }
+        onError={() => setHasLoadError(true)}
       />
     );
   }
@@ -595,6 +628,7 @@ function MediaPreview({
           autoPlay={autoPlayVideo}
           onVideoElementChange={onLightboxVideoElementChange}
           onIntrinsicSizeChange={onLightboxMediaIntrinsicSizeChange}
+          onError={() => setHasLoadError(true)}
           shellStyle={expandedMediaShellStyle}
           surfaceStyle={expandedMediaStyle}
         />
@@ -611,6 +645,7 @@ function MediaPreview({
         playsInline
         muted={autoPlayVideo}
         preload={shouldPreferMetadataPreload ? "metadata" : "auto"}
+        onError={() => setHasLoadError(true)}
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.
       </video>

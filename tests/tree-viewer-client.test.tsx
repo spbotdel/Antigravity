@@ -214,6 +214,16 @@ describe("tree viewer client", () => {
     expect(screen.queryByText("1990 — ?")).not.toBeInTheDocument();
   });
 
+  it("hides the summary avatar tile when the preview image fails to load", () => {
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const avatarImage = screen.getByAltText("Портрет: Demo Person");
+    fireEvent.error(avatarImage);
+
+    expect(screen.queryByAltText("Портрет: Demo Person")).not.toBeInTheDocument();
+    expect(screen.getByText("Bio")).toBeInTheDocument();
+  });
+
   it("renders documents as a separate list and keeps them out of the visual media gallery", () => {
     const snapshot = createSnapshot();
     snapshot.media = [

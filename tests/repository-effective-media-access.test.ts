@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   parsePowerShellJsonStdout: vi.fn(),
   getCurrentUser: vi.fn(),
   requireAuthenticatedUserId: vi.fn(),
+  createAdminSupabaseClient: vi.fn(),
+  createAdminSupabaseStorageClient: vi.fn(),
+  storageFrom: vi.fn(),
+  storageCreateSignedUrl: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/admin-rest", () => ({
@@ -21,7 +25,12 @@ vi.mock("@/lib/server/auth", () => ({
   requireAuthenticatedUserId: mocks.requireAuthenticatedUserId,
 }));
 
-import { addExistingMediaToTreeMediaAlbum, getTreeMediaPageData, resolveEffectiveMediaAccess, resolveMediaAccess } from "@/lib/server/repository";
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminSupabaseClient: mocks.createAdminSupabaseClient,
+  createAdminSupabaseStorageClient: mocks.createAdminSupabaseStorageClient,
+}));
+
+import { addExistingMediaToTreeMediaAlbum, getTreeMediaPageData, resolveEffectiveMediaAccess, resolveMediaAccess, resolveMediaThumbUrlsForVisibleMedia } from "@/lib/server/repository";
 
 function mediaRow(overrides?: Partial<Record<string, unknown>>) {
   return {
@@ -65,6 +74,19 @@ describe("repository effective media access", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getCurrentUser.mockResolvedValue(null);
+    mocks.storageFrom.mockReturnValue({
+      createSignedUrl: mocks.storageCreateSignedUrl,
+    });
+    mocks.createAdminSupabaseClient.mockReturnValue({
+      storage: {
+        from: mocks.storageFrom,
+      },
+    });
+    mocks.createAdminSupabaseStorageClient.mockReturnValue({
+      storage: {
+        from: mocks.storageFrom,
+      },
+    });
   });
 
   it("returns members for a public file inside a members album", async () => {
@@ -158,6 +180,58 @@ describe("repository effective media access", () => {
     expect(result.kind).toBe("video");
   });
 
+  it("falls back to the original photo path when a supabase thumb variant cannot be signed", async () => {
+    mocks.storageCreateSignedUrl.mockImplementation(async (storagePath: string) => {
+      if (storagePath === "trees/tree-1/media/photo/media-1/variants/thumb.webp") {
+        return { data: null, error: null };
+      }
+
+      if (storagePath === "trees/tree-1/media/photo/media-1/original.jpg") {
+        return {
+          data: { signedUrl: "https://example.com/original.jpg" },
+          error: null,
+        };
+      }
+
+      throw new Error(`Unexpected storage path: ${storagePath}`);
+    });
+
+    const result = await resolveMediaThumbUrlsForVisibleMedia([
+      mediaRow({
+        provider: "supabase_storage",
+        storage_path: "trees/tree-1/media/photo/media-1/original.jpg",
+        created_at: "2026-03-09T00:00:00.000Z",
+      }) as never,
+    ]);
+
+    expect(result).toEqual({
+      "media-1": "https://example.com/original.jpg",
+    });
+    expect(mocks.storageFrom).toHaveBeenCalledWith("tree-photos");
+    expect(mocks.storageCreateSignedUrl).toHaveBeenNthCalledWith(1, "trees/tree-1/media/photo/media-1/variants/thumb.webp", 60);
+    expect(mocks.storageCreateSignedUrl).toHaveBeenNthCalledWith(2, "trees/tree-1/media/photo/media-1/original.jpg", 60);
+  });
+
+  it("skips a thumb that still cannot be signed after fallback attempts", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.storageCreateSignedUrl.mockResolvedValue({
+      data: null,
+      error: { message: "fetch failed" },
+    });
+
+    const result = await resolveMediaThumbUrlsForVisibleMedia([
+      mediaRow({
+        provider: "supabase_storage",
+        storage_path: "trees/tree-1/media/photo/media-1/original.jpg",
+        created_at: "2026-03-09T00:00:00.000Z",
+      }) as never,
+    ]);
+
+    expect(result).toEqual({});
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it("filters archive page media and albums by effective access for anonymous readers", async () => {
     mocks.fetchSupabaseAdminRestJson.mockImplementation(async (pathWithQuery) => {
       if (pathWithQuery === "trees?select=*&slug=eq.demo-family&limit=1") {
@@ -166,6 +240,10 @@ describe("repository effective media access", () => {
 
       if (pathWithQuery === "media_assets?select=*&tree_id=eq.tree-1&order=created_at.desc") {
         return [mediaRow()];
+      }
+
+      if (pathWithQuery === "tree_audio_playlists?select=*&tree_id=eq.tree-1&order=created_at.desc") {
+        return [];
       }
 
       if (pathWithQuery === "tree_media_albums?select=*&tree_id=eq.tree-1&order=created_at.desc") {

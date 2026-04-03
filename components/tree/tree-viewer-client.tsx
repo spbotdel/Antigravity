@@ -38,6 +38,30 @@ function getYearLabel(value?: string | null) {
   return match ? match[1] : null;
 }
 
+function SummaryAvatar({
+  src,
+  alt,
+}: {
+  src: string;
+  alt: string;
+}) {
+  const [hasLoadError, setHasLoadError] = useState(false);
+
+  useEffect(() => {
+    setHasLoadError(false);
+  }, [src]);
+
+  if (hasLoadError) {
+    return null;
+  }
+
+  return (
+    <div className="person-summary-avatar info-rail-avatar">
+      <img src={src} alt={alt} onError={() => setHasLoadError(true)} />
+    </div>
+  );
+}
+
 function formatLifeRange(birthDate?: string | null, deathDate?: string | null) {
   const birthYear = getYearLabel(birthDate);
   const deathYear = getYearLabel(deathDate);
@@ -290,11 +314,7 @@ export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewe
                     <h2 className="card-heading">{selectedPerson.full_name}</h2>
                     {selectedPersonLifeRange ? <p className="viewer-person-summary-dates">{selectedPersonLifeRange}</p> : null}
                   </div>
-                  {selectedAvatarUrl ? (
-                    <div className="person-summary-avatar info-rail-avatar">
-                      <img src={selectedAvatarUrl} alt={`Портрет: ${selectedPerson.full_name}`} />
-                    </div>
-                  ) : null}
+                  {selectedAvatarUrl ? <SummaryAvatar src={selectedAvatarUrl} alt={`Портрет: ${selectedPerson.full_name}`} /> : null}
                 </div>
               </div>
             {selectedPerson.bio ? (

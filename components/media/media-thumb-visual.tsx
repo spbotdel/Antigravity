@@ -68,6 +68,11 @@ export function MediaThumbVisual({
   mediaStyle
 }: MediaThumbVisualProps) {
   const [durationLabel, setDurationLabel] = useState<string | null>(() => durationLabelCache.get(asset.id) || null);
+  const [hasLoadError, setHasLoadError] = useState(false);
+
+  useEffect(() => {
+    setHasLoadError(false);
+  }, [asset.id, thumbSource?.kind, thumbSource?.src]);
 
   useEffect(() => {
     if (disableDurationProbe || asset.kind !== "video" || asset.provider === "yandex_disk" || durationLabel || thumbSource?.kind === "video") {
@@ -116,7 +121,7 @@ export function MediaThumbVisual({
     };
   }, [asset, disableDurationProbe, durationLabel, shareToken, thumbSource?.kind]);
 
-  if (!thumbSource) {
+  if (!thumbSource || hasLoadError) {
     return <>{placeholder}</>;
   }
 
@@ -125,7 +130,14 @@ export function MediaThumbVisual({
   return (
     <div className={`${containerClassName} media-thumb-visual`} style={containerStyle}>
       {thumbSource.kind === "image" ? (
-        <img src={thumbSource.src} alt="" loading="lazy" className={mediaClassName} style={mediaStyle} />
+        <img
+          src={thumbSource.src}
+          alt=""
+          loading="lazy"
+          className={mediaClassName}
+          style={mediaStyle}
+          onError={() => setHasLoadError(true)}
+        />
       ) : (
         <video
           src={thumbSource.src}
@@ -134,6 +146,7 @@ export function MediaThumbVisual({
           muted
           playsInline
           preload="metadata"
+          onError={() => setHasLoadError(true)}
           onLoadedMetadata={(event) => {
             const nextDurationLabel = formatDurationLabel(event.currentTarget.duration);
             if (!nextDurationLabel) {

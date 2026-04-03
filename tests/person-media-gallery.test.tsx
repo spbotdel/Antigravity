@@ -249,6 +249,44 @@ describe("person media gallery", () => {
     expect(thumbImage).toHaveAttribute("src", "/api/media/media-legacy-photo");
   });
 
+  it("shows resilient placeholders when a thumb or stage image fails to load", async () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo",
+            title: "Семейное фото",
+            created_at: "2026-03-09T00:00:00.000Z",
+            storage_path: "trees/tree-1/media/photo/media-photo/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Второе фото",
+            created_at: "2026-03-09T00:00:00.000Z",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+      />
+    );
+
+    const stageImage = document.querySelector("img.person-media-stage-photo-inline") as HTMLImageElement | null;
+    expect(stageImage).not.toBeNull();
+    fireEvent.error(stageImage as HTMLImageElement);
+
+    expect(screen.getByText("Файл временно недоступен")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Открыть файл" })).toHaveAttribute("href", "/api/media/media-photo");
+
+    const firstThumbButton = screen.getByRole("button", { name: "Показать медиа 1: Семейное фото" });
+    const thumbImage = firstThumbButton.querySelector("img") as HTMLImageElement | null;
+    expect(thumbImage).not.toBeNull();
+    fireEvent.error(thumbImage as HTMLImageElement);
+
+    await waitFor(() => {
+      expect(firstThumbButton.querySelector("img")).toBeNull();
+    });
+    expect(firstThumbButton.querySelector(".person-media-thumb-icon")).not.toBeNull();
+  });
+
   it("switches from photo preview to stored video playback", () => {
     render(
       <PersonMediaGallery

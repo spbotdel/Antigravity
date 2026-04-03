@@ -43,7 +43,7 @@ import { getAvatarCropFromRelation, normalizeAvatarCrop } from "@/lib/avatar-cro
 import { buildAuditEntryViews } from "@/lib/audit-presenter";
 import { buildViewerActor, canSeeMedia, hasRequiredRole, normalizeMembershipRole, resolveTreeRole } from "@/lib/permissions";
 import { getBaseUrl, getCloudflareR2Env, getFileBackedMediaProvider, getObjectStorageEnv, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, getResendEmailEnv, getShareLinkTokenEncryptionSecret, getStorageBucket, isObjectStorageLikeBackend, isObjectStorageMediaProvider, resolveMediaUploadPlan, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
-import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { createAdminSupabaseClient, createAdminSupabaseStorageClient } from "@/lib/supabase/admin";
 import { fetchSupabaseAdminRestBatchJson, fetchSupabaseAdminRestJson, fetchSupabaseAdminRestJsonWithHeaders, parsePowerShellJsonStdout } from "@/lib/supabase/admin-rest";
 import { getCurrentUser, requireAuthenticatedUserId } from "@/lib/server/auth";
 import { AppError } from "@/lib/server/errors";
@@ -51,6 +51,7 @@ import { createInviteToken, createOpaqueToken, decryptOpaqueToken, encryptOpaque
 import { shouldUsePhotoVariants } from "@/lib/tree/display";
 
 const admin = () => createAdminSupabaseClient();
+const adminStorage = () => createAdminSupabaseStorageClient();
 const objectStorageClients = new Map<string, S3Client>();
 const execFileAsync = promisify(execFile);
 const runtimeRequire = createRequire(import.meta.url);
@@ -638,7 +639,7 @@ async function createSignedUploadTargetForPath(storagePath: string, mimeType: st
     return createObjectStorageSignedUploadUrl(storagePath, mimeType, getObjectStorageEnvForNewMedia());
   }
 
-  const { data, error } = await admin().storage.from(getStorageBucket()).createSignedUploadUrl(storagePath, { upsert: false });
+  const { data, error } = await adminStorage().storage.from(getStorageBucket()).createSignedUploadUrl(storagePath, { upsert: false });
   if (error || !data) {
     throw new AppError(400, error?.message || "Не удалось создать ссылку для загрузки.");
   }
@@ -1821,40 +1822,59 @@ export async function resolveMediaThumbUrlsForVisibleMedia(media: MediaAssetReco
 
   const signedEntries = await Promise.all(
     uniqueMedia.map(async (asset) => {
-      if (asset.external_url || !asset.storage_path) {
+      try {
+        if (asset.external_url || !asset.storage_path) {
+          return null;
+        }
+
+        let resolvedStoragePath: string | null = null;
+        if (asset.kind === "photo") {
+          resolvedStoragePath = shouldUsePhotoVariants(asset.created_at)
+            ? buildPhotoVariantStoragePath(asset.storage_path, "thumb")
+            : asset.storage_path;
+        } else if (asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready") {
+          resolvedStoragePath = variantPathByMediaId.get(asset.id) || null;
+        }
+
+        if (!resolvedStoragePath) {
+          return null;
+        }
+
+        if (isObjectStorageMediaProvider(asset.provider)) {
+          const signedUrl = await createObjectStorageSignedReadUrl(
+            resolvedStoragePath,
+            getObjectStorageEnvForMedia(asset.created_at)
+          );
+          return [asset.id, signedUrl] as const;
+        }
+
+        const candidateStoragePaths =
+          asset.kind === "photo" && resolvedStoragePath !== asset.storage_path
+            ? [resolvedStoragePath, asset.storage_path]
+            : [resolvedStoragePath];
+        let lastSignError: string | null = null;
+
+        for (const candidateStoragePath of candidateStoragePaths) {
+          const { data, error } = await adminStorage().storage.from(getStorageBucket()).createSignedUrl(
+            candidateStoragePath,
+            60
+          );
+          if (!error && data?.signedUrl) {
+            return [asset.id, data.signedUrl] as const;
+          }
+
+          lastSignError = error?.message || lastSignError;
+        }
+
+        throw new AppError(400, lastSignError || "Не удалось создать подписанную ссылку для thumb-preview.");
+      } catch (error) {
+        console.warn("[media-thumb] failed to pre-resolve visible media thumb", {
+          mediaId: asset.id,
+          storagePath: asset.storage_path,
+          error: error instanceof Error ? error.message : String(error),
+        });
         return null;
       }
-
-      let resolvedStoragePath: string | null = null;
-      if (asset.kind === "photo") {
-        resolvedStoragePath = shouldUsePhotoVariants(asset.created_at)
-          ? buildPhotoVariantStoragePath(asset.storage_path, "thumb")
-          : asset.storage_path;
-      } else if (asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready") {
-        resolvedStoragePath = variantPathByMediaId.get(asset.id) || null;
-      }
-
-      if (!resolvedStoragePath) {
-        return null;
-      }
-
-      if (isObjectStorageMediaProvider(asset.provider)) {
-        const signedUrl = await createObjectStorageSignedReadUrl(
-          resolvedStoragePath,
-          getObjectStorageEnvForMedia(asset.created_at)
-        );
-        return [asset.id, signedUrl] as const;
-      }
-
-      const { data, error } = await admin().storage.from(getStorageBucket()).createSignedUrl(
-        resolvedStoragePath,
-        60
-      );
-      if (error || !data?.signedUrl) {
-        throw new AppError(400, error?.message || "Не удалось создать подписанную ссылку для thumb-preview.");
-      }
-
-      return [asset.id, data.signedUrl] as const;
     })
   );
 
@@ -3799,7 +3819,7 @@ export async function resolveMediaAccess(
   }
 
   if (resolvedVariantPath) {
-    const { data: variantSigned, error: variantSignedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(
+    const { data: variantSigned, error: variantSignedError } = await adminStorage().storage.from(getStorageBucket()).createSignedUrl(
       resolvedVariantPath,
       60,
       options?.download ? { download: buildMediaDownloadFilename(media) } : undefined
@@ -3817,7 +3837,7 @@ export async function resolveMediaAccess(
     }
   }
 
-  const { data: signed, error: signedError } = await admin().storage.from(getStorageBucket()).createSignedUrl(
+  const { data: signed, error: signedError } = await adminStorage().storage.from(getStorageBucket()).createSignedUrl(
     media.storage_path,
     60,
     options?.download ? { download: buildMediaDownloadFilename(media) } : undefined
@@ -3892,9 +3912,9 @@ export async function deleteMedia(mediaId: string) {
         throw toObjectStorageError(error, "Не удалось удалить файл из object storage.");
       }
     } else {
-      await admin().storage.from(getStorageBucket()).remove([before.storage_path]);
+      await adminStorage().storage.from(getStorageBucket()).remove([before.storage_path]);
       if (variantStoragePaths.length) {
-        await admin().storage.from(getStorageBucket()).remove(variantStoragePaths);
+        await adminStorage().storage.from(getStorageBucket()).remove(variantStoragePaths);
       }
     }
   }
