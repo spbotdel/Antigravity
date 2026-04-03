@@ -78,8 +78,11 @@ function getAudioFormatLabel(mimeType: string | null | undefined) {
     return "";
 }
 
-function buildMediaUrl(mediaId: string, shareToken?: string | null) {
+function buildMediaUrl(mediaId: string, shareToken?: string | null, options?: { download?: boolean }) {
     const params = new URLSearchParams();
+    if (options?.download) {
+        params.set("download", "1");
+    }
     if (shareToken) {
         params.set("share", shareToken);
     }
@@ -735,9 +738,7 @@ export function AudioArchiveView({
 
                 <div className="audio-archive-actions">
                     <a
-                        href={buildMediaUrl(asset.id, shareToken)}
-                        target="_blank"
-                        rel="noreferrer"
+                        href={buildMediaUrl(asset.id, shareToken, { download: true })}
                         className="audio-archive-action-btn"
                         aria-label="Скачать"
                         title="Скачать"

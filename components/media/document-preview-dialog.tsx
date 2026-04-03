@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { buildCloudflareOfficeDocumentPublicUrl, OfficeDocumentPreview } from "@/components/media/office-document-preview";
+import { buildCloudflareOfficeDocumentPublicUrl, isOfficeWordDocumentAsset, OfficeDocumentPreview } from "@/components/media/office-document-preview";
 
 interface DocumentPreviewDialogProps {
     asset: MediaAssetRecord | null;
@@ -13,8 +13,11 @@ interface DocumentPreviewDialogProps {
     onClose: () => void;
 }
 
-function buildMediaUrl(mediaId: string, shareToken?: string | null) {
+function buildMediaUrl(mediaId: string, shareToken?: string | null, options?: { download?: boolean }) {
     const params = new URLSearchParams();
+    if (options?.download) {
+        params.set("download", "1");
+    }
     if (shareToken) {
         params.set("share", shareToken);
     }
@@ -62,6 +65,9 @@ export function DocumentPreviewDialog({ asset, shareToken, cloudflareR2PublicBas
     }
 
     const mediaUrl = buildMediaUrl(asset.id, shareToken);
+    const downloadUrl = isOfficeWordDocumentAsset(asset) || isPdfAsset(asset)
+        ? buildMediaUrl(asset.id, shareToken, { download: true })
+        : mediaUrl;
     const previewable = canPreview(asset);
     const officePreviewUrl = buildCloudflareOfficeDocumentPublicUrl(asset, cloudflareR2PublicBaseUrl);
 
@@ -83,9 +89,7 @@ export function DocumentPreviewDialog({ asset, shareToken, cloudflareR2PublicBas
                     <h3 className="document-preview-title">{asset.title || "Документ"}</h3>
                     <div className="document-preview-header-actions">
                         <a
-                            href={mediaUrl}
-                            target="_blank"
-                            rel="noreferrer"
+                            href={downloadUrl}
                             className="document-preview-download-btn"
                         >
                             Скачать
@@ -120,9 +124,7 @@ export function DocumentPreviewDialog({ asset, shareToken, cloudflareR2PublicBas
                             <strong>Предпросмотр недоступен</strong>
                             <p>Для этого формата предпросмотр пока не поддерживается.</p>
                             <a
-                                href={mediaUrl}
-                                target="_blank"
-                                rel="noreferrer"
+                                href={downloadUrl}
                             >
                                 <Button type="button" variant="secondary">
                                     Скачать файл

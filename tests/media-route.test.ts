@@ -6,8 +6,15 @@ const deleteMedia = vi.fn();
 const setPrimaryPersonMedia = vi.fn();
 const updateTreeMediaAlbum = vi.fn();
 const deleteTreeMediaAlbum = vi.fn();
+const buildAttachmentContentDisposition = vi.fn((filename: string) => `attachment; filename="${filename}"`);
+const buildMediaDownloadFilename = vi.fn((media: { title?: string | null; id: string }) => media.title || `media-${media.id}`);
+const fetchMock = vi.fn();
+
+vi.stubGlobal("fetch", fetchMock);
 
 vi.mock("@/lib/server/repository", () => ({
+  buildAttachmentContentDisposition,
+  buildMediaDownloadFilename,
   resolveMediaAccess,
   getMediaSummary,
   deleteMedia,
@@ -18,16 +25,25 @@ vi.mock("@/lib/server/repository", () => ({
 
 describe("media route", () => {
   beforeEach(() => {
+    buildAttachmentContentDisposition.mockClear();
+    buildMediaDownloadFilename.mockClear();
     resolveMediaAccess.mockReset();
     getMediaSummary.mockReset();
     deleteMedia.mockReset();
     setPrimaryPersonMedia.mockReset();
     updateTreeMediaAlbum.mockReset();
     deleteTreeMediaAlbum.mockReset();
+    fetchMock.mockReset();
   });
 
   it("passes download mode to GET /api/media/[mediaId] when requested", async () => {
     const { GET } = await import("@/app/api/media/[mediaId]/route");
+    getMediaSummary.mockResolvedValue({
+      id: "media-1",
+      kind: "photo",
+      mime_type: "image/jpeg",
+      title: "media-1.jpg",
+    });
     resolveMediaAccess.mockResolvedValue({ url: "https://example.com/download-file", kind: "photo" });
 
     const response = await GET(
@@ -40,6 +56,49 @@ describe("media route", () => {
     expect(resolveMediaAccess).toHaveBeenCalledWith("media-1", null, null, { download: true });
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://example.com/download-file");
+  });
+
+  it("proxies pdf downloads as same-origin attachments", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
+    getMediaSummary.mockResolvedValue({
+      id: "media-pdf",
+      tree_id: "tree-1",
+      kind: "document",
+      provider: "cloudflare_r2",
+      visibility: "members",
+      storage_path: "trees/tree-1/media/document/media-pdf/file.pdf",
+      external_url: null,
+      title: "resume.pdf",
+      caption: null,
+      mime_type: "application/pdf",
+      size_bytes: 597,
+    });
+    resolveMediaAccess.mockResolvedValue({ url: "https://example.com/download-file.pdf", kind: "document" });
+    fetchMock.mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: {
+          "content-length": "3",
+          "content-type": "application/pdf",
+        },
+      })
+    );
+
+    const response = await GET(
+      new Request("http://localhost/api/media/media-pdf?download=1"),
+      {
+        params: Promise.resolve({ mediaId: "media-pdf" })
+      }
+    );
+
+    expect(getMediaSummary).toHaveBeenCalledWith("media-pdf", null);
+    expect(resolveMediaAccess).toHaveBeenCalledWith("media-pdf", null, null, { download: true });
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com/download-file.pdf");
+    expect(buildMediaDownloadFilename).toHaveBeenCalled();
+    expect(buildAttachmentContentDisposition).toHaveBeenCalledWith("resume.pdf");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/octet-stream");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="resume.pdf"');
   });
 
   it("passes thumb variants to GET /api/media/[mediaId] when requested", async () => {

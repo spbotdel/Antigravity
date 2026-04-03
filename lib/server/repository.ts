@@ -767,7 +767,7 @@ async function generateCloudflareVideoPreviewBuffer(sourceUrl: string) {
   }
 }
 
-function buildMediaDownloadFilename(media: Pick<MediaAssetRecord, "id" | "title" | "storage_path" | "external_url">) {
+export function buildMediaDownloadFilename(media: Pick<MediaAssetRecord, "id" | "title" | "storage_path" | "external_url">) {
   const trimmedTitle = media.title.trim();
   if (trimmedTitle) {
     return trimmedTitle;
@@ -776,6 +776,36 @@ function buildMediaDownloadFilename(media: Pick<MediaAssetRecord, "id" | "title"
   const rawPath = media.storage_path || media.external_url || "";
   const baseName = rawPath ? path.basename(rawPath) : "";
   return baseName || `media-${media.id}`;
+}
+
+function buildAsciiDownloadFilename(filename: string) {
+  const extension = path.extname(filename);
+  const baseName = extension ? filename.slice(0, -extension.length) : filename;
+  const normalizedBaseName = baseName
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]+/g, "-")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/-+/g, "-")
+    .trim()
+    .replace(/[. ]+$/g, "");
+
+  const hasMeaningfulAsciiCharacters = /[A-Za-z0-9]/.test(normalizedBaseName);
+  const fallbackBaseName = normalizedBaseName && hasMeaningfulAsciiCharacters ? normalizedBaseName : "download";
+  return `${fallbackBaseName}${extension}`;
+}
+
+function encodeContentDispositionFilename(filename: string) {
+  return encodeURIComponent(filename).replace(/['()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+}
+
+export function buildAttachmentContentDisposition(filename: string) {
+  const asciiFallback = buildAsciiDownloadFilename(filename).replace(/["\\]/g, "_");
+  const encodedFilename = encodeContentDispositionFilename(filename);
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedFilename}`;
 }
 
 async function createObjectStorageSignedReadUrl(
@@ -789,7 +819,7 @@ async function createObjectStorageSignedReadUrl(
       Bucket: config.bucket,
       Key: storagePath,
       ...(options?.downloadName
-        ? { ResponseContentDisposition: `attachment; filename="${options.downloadName}"` }
+        ? { ResponseContentDisposition: buildAttachmentContentDisposition(options.downloadName) }
         : {})
     }),
     { expiresIn: 60 }

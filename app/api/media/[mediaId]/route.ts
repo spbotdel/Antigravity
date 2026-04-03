@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import { toErrorResponse } from "@/lib/server/errors";
 import type { MediaVisibility, ViewerAccessSource } from "@/lib/types";
-import { deleteMedia, getMediaSummary, resolveMediaAccess, setPrimaryPersonMedia } from "@/lib/server/repository";
+import { buildAttachmentContentDisposition, buildMediaDownloadFilename, deleteMedia, getMediaSummary, resolveMediaAccess, setPrimaryPersonMedia } from "@/lib/server/repository";
 import { setPrimaryPersonMediaSchema } from "@/lib/validators/media";
 
 interface Params {
@@ -152,6 +152,11 @@ export function __clearMediaThumbResolutionCacheForTests() {
   thumbMediaScopeCache.clear();
 }
 
+function isPdfDocumentMimeType(mimeType: string | null | undefined) {
+  const normalizedMimeType = mimeType?.trim().toLowerCase() || "";
+  return normalizedMimeType === "application/pdf" || normalizedMimeType.endsWith("/pdf");
+}
+
 export async function GET(request: Request, { params }: Params) {
   try {
     const { mediaId } = await params;
@@ -168,6 +173,32 @@ export async function GET(request: Request, { params }: Params) {
     if (variant === "thumb") {
       const cachedThumbRedirect = await getCachedThumbRedirectTarget({ mediaId, shareToken });
       return NextResponse.redirect(cachedThumbRedirect.url);
+    }
+    if (download) {
+      const media = await getMediaSummary(mediaId, shareToken);
+      if (media.kind === "document" && isPdfDocumentMimeType(media.mime_type)) {
+        const result = await resolveMediaAccess(mediaId, shareToken, null, { download: true });
+        const upstreamResponse = await fetch(result.url);
+        if (!upstreamResponse.ok || !upstreamResponse.body) {
+          throw new Error("Не удалось подготовить PDF для скачивания.");
+        }
+
+        const responseHeaders = new Headers();
+        responseHeaders.set("Content-Type", "application/octet-stream");
+        responseHeaders.set("Content-Disposition", buildAttachmentContentDisposition(buildMediaDownloadFilename(media)));
+        responseHeaders.set("Cache-Control", "no-store");
+        responseHeaders.set("X-Content-Type-Options", "nosniff");
+
+        const contentLength = upstreamResponse.headers.get("content-length");
+        if (contentLength) {
+          responseHeaders.set("Content-Length", contentLength);
+        }
+
+        return new Response(upstreamResponse.body, {
+          status: 200,
+          headers: responseHeaders,
+        });
+      }
     }
     const result = await resolveMediaAccess(mediaId, shareToken, variant, { download });
     return NextResponse.redirect(result.url);

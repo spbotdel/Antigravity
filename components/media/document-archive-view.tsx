@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import { DocumentPreviewDialog } from "@/components/media/document-preview-dialog";
-import { buildCloudflareOfficeDocumentPublicUrl } from "@/components/media/office-document-preview";
+import { buildCloudflareOfficeDocumentPublicUrl, isOfficeWordDocumentAsset } from "@/components/media/office-document-preview";
 import { Button } from "@/components/ui/button";
 
 interface DocumentArchiveViewProps {
@@ -79,8 +79,16 @@ function isPdfOrText(asset: MediaAssetRecord) {
     return mime === "application/pdf" || mime.endsWith("/pdf") || mime.startsWith("text/");
 }
 
-function buildMediaUrl(mediaId: string, shareToken?: string | null) {
+function isPdfAsset(asset: MediaAssetRecord) {
+    const mime = (asset.mime_type || "").toLowerCase();
+    return mime === "application/pdf" || mime.endsWith("/pdf");
+}
+
+function buildMediaUrl(mediaId: string, shareToken?: string | null, options?: { download?: boolean }) {
     const params = new URLSearchParams();
+    if (options?.download) {
+        params.set("download", "1");
+    }
     if (shareToken) {
         params.set("share", shareToken);
     }
@@ -292,6 +300,9 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                         const typeLabel = getDocumentTypeLabel(asset.mime_type);
                         const icon = getDocumentIcon(asset.mime_type);
                         const canPreviewThis = isPdfOrText(asset) || Boolean(buildCloudflareOfficeDocumentPublicUrl(asset, cloudflareR2PublicBaseUrl));
+                        const downloadUrl = isOfficeWordDocumentAsset(asset) || isPdfAsset(asset)
+                            ? buildMediaUrl(asset.id, shareToken, { download: true })
+                            : buildMediaUrl(asset.id, shareToken);
                         return (
                             <div key={asset.id} className="document-archive-row" role="listitem">
                                 <span className="document-archive-icon">{icon}</span>
@@ -316,9 +327,7 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                                         </button>
                                     ) : null}
                                     <a
-                                        href={buildMediaUrl(asset.id, shareToken)}
-                                        target="_blank"
-                                        rel="noreferrer"
+                                        href={downloadUrl}
                                         className="document-archive-action-btn"
                                         title="Скачать"
                                     >

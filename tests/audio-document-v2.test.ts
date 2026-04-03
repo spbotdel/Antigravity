@@ -10,6 +10,7 @@ import { AudioArchiveView } from "@/components/media/audio-archive-view";
 import { DocumentArchiveView } from "@/components/media/document-archive-view";
 import { DocumentPreviewDialog } from "@/components/media/document-preview-dialog";
 import { OfficeDocumentPreview, buildCloudflareOfficeDocumentPublicUrl, buildMicrosoftOfficeViewerUrl } from "@/components/media/office-document-preview";
+import { buildAttachmentContentDisposition } from "@/lib/server/repository";
 import type { MediaAssetRecord, MediaKind } from "@/lib/types";
 import { collectTreeMedia } from "@/lib/tree/display";
 import { formatMediaKind } from "@/lib/ui-text";
@@ -145,6 +146,22 @@ function mockAudioPlayback() {
 }
 
 describe("Audio archive player state", () => {
+    it("routes audio row download through explicit attachment mode", () => {
+        const media = [createAudioAsset("audio-1", "Аудио 1")];
+
+        render(
+            createElement(AudioArchiveView, {
+                treeId: "tree-1",
+                slug: "test-tree",
+                canEdit: false,
+                media: media as any,
+                onMediaChange: () => undefined,
+            })
+        );
+
+        expect(screen.getByRole("link", { name: "Скачать" })).toHaveAttribute("href", "/api/media/audio-1?download=1");
+    });
+
     it("keeps the player visible when pausing from the list", () => {
         const { playSpy, pauseSpy } = mockAudioPlayback();
         const media = [
@@ -284,6 +301,7 @@ describe("document preview integration", () => {
         const iframe = document.querySelector(".document-preview-iframe");
         expect(iframe).not.toBeNull();
         expect(iframe).toHaveAttribute("src", "/api/media/document-pdf?share=share-token");
+        expect(screen.getByRole("link", { name: "Скачать" })).toHaveAttribute("href", "/api/media/document-pdf?download=1&share=share-token");
     });
 
     it("shows an Office preview entrypoint for docx only when a public Cloudflare url can be built", () => {
@@ -299,6 +317,7 @@ describe("document preview integration", () => {
         );
 
         expect(screen.getByRole("button", { name: "Открыть" })).toBeInTheDocument();
+        expect(document.querySelector('.document-archive-actions a[href="/api/media/document-1?download=1"]')).not.toBeNull();
     });
 
     it("keeps docx download-only when the public Cloudflare base url is missing", () => {
@@ -313,6 +332,26 @@ describe("document preview integration", () => {
         );
 
         expect(screen.queryByRole("button", { name: "Открыть" })).toBeNull();
+    });
+
+    it("routes pdf row download through explicit attachment mode", () => {
+        render(
+            createElement(DocumentArchiveView, {
+                treeId: "tree-1",
+                slug: "demo-family",
+                canEdit: false,
+                media: [createDocumentAsset({
+                    id: "document-pdf",
+                    title: "family-book.pdf",
+                    mime_type: "application/pdf",
+                    storage_path: "trees/tree-1/media/document/document-pdf/family-book.pdf",
+                })],
+                onMediaChange: () => undefined,
+            })
+        );
+
+        const pdfDownloadLink = document.querySelector('.document-archive-actions a[href="/api/media/document-pdf?download=1"]');
+        expect(pdfDownloadLink).not.toBeNull();
     });
 
     it("renders the Microsoft Office viewer url for docx preview", () => {
@@ -331,6 +370,7 @@ describe("document preview integration", () => {
             "src",
             buildMicrosoftOfficeViewerUrl("https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.docx")
         );
+        expect(screen.getByRole("link", { name: "Скачать" })).toHaveAttribute("href", "/api/media/document-1?download=1");
     });
 
     it("falls back when the Office viewer does not finish loading in time", async () => {
@@ -352,5 +392,11 @@ describe("document preview integration", () => {
 
         expect(screen.getByText("Предпросмотр не загрузился")).toBeInTheDocument();
         expect(screen.getByRole("link", { name: "Скачать файл" })).toHaveAttribute("href", "/api/media/document-1");
+    });
+
+    it("builds attachment content-disposition with ascii fallback and utf-8 filename*", () => {
+        expect(buildAttachmentContentDisposition("КАЛЕНДАРЬ важных ДАТ семьи Русяйкиных.doc")).toBe(
+            "attachment; filename=\"download.doc\"; filename*=UTF-8''%D0%9A%D0%90%D0%9B%D0%95%D0%9D%D0%94%D0%90%D0%A0%D0%AC%20%D0%B2%D0%B0%D0%B6%D0%BD%D1%8B%D1%85%20%D0%94%D0%90%D0%A2%20%D1%81%D0%B5%D0%BC%D1%8C%D0%B8%20%D0%A0%D1%83%D1%81%D1%8F%D0%B9%D0%BA%D0%B8%D0%BD%D1%8B%D1%85.doc"
+        );
     });
 });
