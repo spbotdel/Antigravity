@@ -18,6 +18,7 @@ import { createPortal } from "react-dom";
 import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl, resolveMediaThumbSource } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import type { TreeSnapshot } from "@/lib/types";
+import { logMediaError } from "@/lib/utils";
 
 type MediaAsset = TreeSnapshot["media"][number];
 type LightboxState = "closed" | "open" | "closing";
@@ -579,6 +580,15 @@ function MediaPreview({
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const shouldPreferMetadataPreload = expanded && isInlineVideoAsset(asset);
   const [hasLoadError, setHasLoadError] = useState(false);
+  const handleOriginalLoadError = () => {
+    logMediaError({
+      mediaId: asset.id,
+      type: "original",
+      context: expanded ? "PersonMediaGallery:lightbox" : "PersonMediaGallery:stage",
+      src: mediaUrl,
+    });
+    setHasLoadError(true);
+  };
 
   useEffect(() => {
     setHasLoadError(false);
@@ -613,7 +623,7 @@ function MediaPreview({
               }
             : undefined
         }
-        onError={() => setHasLoadError(true)}
+        onError={handleOriginalLoadError}
       />
     );
   }
@@ -628,7 +638,7 @@ function MediaPreview({
           autoPlay={autoPlayVideo}
           onVideoElementChange={onLightboxVideoElementChange}
           onIntrinsicSizeChange={onLightboxMediaIntrinsicSizeChange}
-          onError={() => setHasLoadError(true)}
+          onError={handleOriginalLoadError}
           shellStyle={expandedMediaShellStyle}
           surfaceStyle={expandedMediaStyle}
         />
@@ -645,7 +655,7 @@ function MediaPreview({
         playsInline
         muted={autoPlayVideo}
         preload={shouldPreferMetadataPreload ? "metadata" : "auto"}
-        onError={() => setHasLoadError(true)}
+        onError={handleOriginalLoadError}
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.
       </video>

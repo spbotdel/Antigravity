@@ -7,6 +7,37 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+type MediaErrorLogType = "thumb" | "original";
+
+const loggedMediaErrors = new Set<string>();
+
+function shouldLogMediaErrors() {
+  return process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG_MEDIA_ERRORS === "1";
+}
+
+export function logMediaError(input: {
+  mediaId: string;
+  type: MediaErrorLogType;
+  context: string;
+  src?: string | null;
+}) {
+  if (typeof window === "undefined" || !shouldLogMediaErrors()) {
+    return;
+  }
+
+  const dedupeKey = `${input.mediaId}:${input.type}`;
+  if (loggedMediaErrors.has(dedupeKey)) {
+    return;
+  }
+
+  loggedMediaErrors.add(dedupeKey);
+  console.warn("[media-client]", input);
+}
+
+export function __resetLoggedMediaErrorsForTests() {
+  loggedMediaErrors.clear();
+}
+
 export function formatDate(date: string | null) {
   if (!date) return "";
   return new Intl.DateTimeFormat("ru-RU", {

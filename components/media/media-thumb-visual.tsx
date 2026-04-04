@@ -5,6 +5,7 @@ import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 
 import { buildMediaOpenRouteUrl, type MediaThumbSource } from "@/lib/tree/display";
 import type { MediaAssetRecord } from "@/lib/types";
+import { logMediaError } from "@/lib/utils";
 
 const MAX_DURATION_LABEL_CACHE_SIZE = 200;
 const durationLabelCache = new Map<string, string>();
@@ -126,6 +127,15 @@ export function MediaThumbVisual({
   }
 
   const overlayToneClassName = asset.kind === "video" ? "media-thumb-overlay-video" : "media-thumb-overlay-photo";
+  const handleThumbLoadError = () => {
+    logMediaError({
+      mediaId: asset.id,
+      type: "thumb",
+      context: thumbSource.kind === "image" ? "MediaThumbVisual:image" : "MediaThumbVisual:video",
+      src: thumbSource.src,
+    });
+    setHasLoadError(true);
+  };
 
   return (
     <div className={`${containerClassName} media-thumb-visual`} style={containerStyle}>
@@ -136,7 +146,7 @@ export function MediaThumbVisual({
           loading="lazy"
           className={mediaClassName}
           style={mediaStyle}
-          onError={() => setHasLoadError(true)}
+          onError={handleThumbLoadError}
         />
       ) : (
         <video
@@ -146,7 +156,7 @@ export function MediaThumbVisual({
           muted
           playsInline
           preload="metadata"
-          onError={() => setHasLoadError(true)}
+          onError={handleThumbLoadError}
           onLoadedMetadata={(event) => {
             const nextDurationLabel = formatDurationLabel(event.currentTarget.duration);
             if (!nextDurationLabel) {

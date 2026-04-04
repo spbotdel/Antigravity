@@ -8,6 +8,7 @@ import { FamilyTreeCanvas } from "@/components/tree/family-tree-canvas";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
 import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
 import type { TreeSnapshot } from "@/lib/types";
+import { logMediaError } from "@/lib/utils";
 
 interface TreeViewerClientProps {
   snapshot: TreeSnapshot;
@@ -39,9 +40,11 @@ function getYearLabel(value?: string | null) {
 }
 
 function SummaryAvatar({
+  mediaId,
   src,
   alt,
 }: {
+  mediaId: string;
   src: string;
   alt: string;
 }) {
@@ -57,7 +60,19 @@ function SummaryAvatar({
 
   return (
     <div className="person-summary-avatar info-rail-avatar">
-      <img src={src} alt={alt} onError={() => setHasLoadError(true)} />
+      <img
+        src={src}
+        alt={alt}
+        onError={() => {
+          logMediaError({
+            mediaId,
+            type: "thumb",
+            context: "TreeViewerClient:summary-avatar",
+            src,
+          });
+          setHasLoadError(true);
+        }}
+      />
     </div>
   );
 }
@@ -314,7 +329,13 @@ export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewe
                     <h2 className="card-heading">{selectedPerson.full_name}</h2>
                     {selectedPersonLifeRange ? <p className="viewer-person-summary-dates">{selectedPersonLifeRange}</p> : null}
                   </div>
-                  {selectedAvatarUrl ? <SummaryAvatar src={selectedAvatarUrl} alt={`Портрет: ${selectedPerson.full_name}`} /> : null}
+                  {selectedAvatarUrl && selectedAvatarMediaId ? (
+                    <SummaryAvatar
+                      mediaId={selectedAvatarMediaId}
+                      src={selectedAvatarUrl}
+                      alt={`Портрет: ${selectedPerson.full_name}`}
+                    />
+                  ) : null}
                 </div>
               </div>
             {selectedPerson.bio ? (
