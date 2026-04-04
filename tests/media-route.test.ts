@@ -102,6 +102,45 @@ describe("media route", () => {
     expect(response.headers.get("content-disposition")).toBe('attachment; filename="resume.pdf"');
   });
 
+  it("returns 413 when a proxied pdf exceeds the hard size limit", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
+    getMediaSummary.mockResolvedValue({
+      id: "media-pdf-large",
+      tree_id: "tree-1",
+      kind: "document",
+      provider: "cloudflare_r2",
+      visibility: "members",
+      storage_path: "trees/tree-1/media/document/media-pdf-large/file.pdf",
+      external_url: null,
+      title: "huge.pdf",
+      caption: null,
+      mime_type: "application/pdf",
+      size_bytes: 100,
+    });
+    resolveMediaAccess.mockResolvedValue({ url: "https://example.com/huge.pdf", kind: "document" });
+    fetchMock.mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: {
+          "content-length": String(100 * 1024 * 1024 + 1),
+          "content-type": "application/pdf",
+        },
+      })
+    );
+
+    const response = await GET(
+      new Request("http://localhost/api/media/media-pdf-large?download=1"),
+      {
+        params: Promise.resolve({ mediaId: "media-pdf-large" })
+      }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(413);
+    expect(payload.error).toBe("PDF слишком большой для скачивания через сервер.");
+    expect(buildAttachmentContentDisposition).not.toHaveBeenCalled();
+  });
+
   it("passes thumb variants to GET /api/media/[mediaId] when requested", async () => {
     const { GET } = await import("@/app/api/media/[mediaId]/route");
     resolveMediaAccess.mockResolvedValue({

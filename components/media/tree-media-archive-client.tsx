@@ -262,6 +262,10 @@ function getArchiveUploadItemKindLabel(file: File) {
     return "Видео";
   }
 
+   if (file.type.startsWith("audio/")) {
+    return "Аудио";
+  }
+
   return "Файл";
 }
 
@@ -274,6 +278,8 @@ function buildPendingUploadSummary(items: PendingArchiveUploadItem[]) {
         accumulator.photoCount += 1;
       } else if (item.file.type.startsWith("video/")) {
         accumulator.videoCount += 1;
+      } else if (item.file.type.startsWith("audio/")) {
+        accumulator.audioCount += 1;
       } else {
         accumulator.otherCount += 1;
       }
@@ -284,6 +290,7 @@ function buildPendingUploadSummary(items: PendingArchiveUploadItem[]) {
       totalBytes: 0,
       photoCount: 0,
       videoCount: 0,
+      audioCount: 0,
       otherCount: 0,
     }
   );
@@ -295,6 +302,10 @@ function buildPendingUploadSummary(items: PendingArchiveUploadItem[]) {
 
   if (stats.videoCount) {
     parts.push(`${stats.videoCount} видео`);
+  }
+
+  if (stats.audioCount) {
+    parts.push(`${stats.audioCount} аудио`);
   }
 
   if (stats.otherCount) {
@@ -3208,6 +3219,15 @@ export function TreeMediaArchiveClient({
     );
   }
 
+  const archiveHeaderUploadAccept =
+    mode === "photo"
+      ? "image/*"
+      : mode === "video"
+        ? "video/*"
+        : "image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx";
+  const archiveHeaderUploadLabel =
+    mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы";
+
   return (
     <Card className="archive-card p-6">
       <div className="archive-header">
@@ -3215,18 +3235,18 @@ export function TreeMediaArchiveClient({
           <p className="eyebrow">Семейный архив</p>
           <h2 className="card-heading">{modeLabel}</h2>
         </div>
-        {canEdit ? (
+        {canEdit && mode !== "audio" ? (
           <div className="archive-action-bar archive-header-actions">
             <input
               ref={fileInputRef}
               className="builder-native-file-input"
               type="file"
               multiple
-              accept={mode === "photo" ? "image/*" : mode === "video" ? "video/*" : "image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx"}
+              accept={archiveHeaderUploadAccept}
               onChange={handleArchiveFileSelection}
             />
             <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
-              {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
+              {archiveHeaderUploadLabel}
             </Button>
             {!activeContextAlbum ? (
               <Button type="button" variant="secondary" onClick={openCreateAlbumDialog}>

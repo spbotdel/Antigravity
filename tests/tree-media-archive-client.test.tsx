@@ -55,7 +55,7 @@ function renderArchiveClient(options?: {
   persistedAlbumMediaMap?: Record<string, MediaAssetRecord[]>;
   canEdit?: boolean;
   uploaderLabels?: Array<{ userId: string; label: string }>;
-  initialMode?: "photo" | "video" | "all";
+  initialMode?: "photo" | "video" | "audio" | "document" | "all";
   initialView?: "all" | "albums";
   initialAlbumId?: string | null;
   initialThumbUrlsByMediaId?: Record<string, string>;
@@ -2614,6 +2614,18 @@ describe("tree media archive client", () => {
     });
 
     expect(screen.getByText("Материал сохранен в семейный архив.")).toBeInTheDocument();
+  });
+
+  it("hides the top archive uploader in audio mode and leaves audio upload to the dedicated audio section", () => {
+    const view = renderArchiveClient({
+      initialMode: "audio",
+      allMedia: [],
+    });
+
+    expect(screen.queryByRole("button", { name: "Создать альбом" })).not.toBeInTheDocument();
+    expect(view.container.querySelector('.archive-header-actions input[type="file"]')).toBeNull();
+    expect(screen.getByText("Загрузить аудио")).toBeInTheDocument();
+    expect(view.container.querySelector('.audio-archive-empty input[type="file"][accept="audio/*"]')).not.toBeNull();
   });
 
   it("inherits album access by default and hides visibility selection when uploading into a specific album", async () => {

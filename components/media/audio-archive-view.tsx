@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 
 import { AudioPlayer } from "@/components/media/audio-player";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
     AudioPlaybackSource,
@@ -173,6 +173,7 @@ export function AudioArchiveView({
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const newPlaylistInputRef = useRef<HTMLInputElement | null>(null);
     const mountedRef = useRef(true);
+    const audioFileInputId = useId();
 
     const mediaById = useMemo(() => new Map(media.map((asset) => [asset.id, asset] as const)), [media]);
     const playlistTrackRowsByPlaylistId = useMemo(() => {
@@ -237,6 +238,7 @@ export function AudioArchiveView({
     }, [playbackSource, playlistsState]);
 
     useEffect(() => {
+        mountedRef.current = true;
         return () => {
             mountedRef.current = false;
         };
@@ -875,6 +877,7 @@ export function AudioArchiveView({
                     {canEdit ? (
                         <>
                             <input
+                                id={audioFileInputId}
                                 ref={fileInputRef}
                                 className="builder-native-file-input"
                                 type="file"
@@ -882,9 +885,9 @@ export function AudioArchiveView({
                                 accept="audio/*"
                                 onChange={handleFileSelection}
                             />
-                            <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                            <label htmlFor={audioFileInputId} className={buttonVariants({ variant: "secondary" })}>
                                 Загрузить аудио
-                            </Button>
+                            </label>
                         </>
                     ) : null}
                 </div>
@@ -927,6 +930,7 @@ export function AudioArchiveView({
                                         onDrop={handleDrop}
                                     >
                                         <input
+                                            id={audioFileInputId}
                                             ref={fileInputRef}
                                             className="builder-native-file-input"
                                             type="file"
@@ -936,9 +940,9 @@ export function AudioArchiveView({
                                         />
                                         <p>
                                             Перетащите аудиофайлы сюда или{" "}
-                                            <button type="button" className="audio-archive-dropzone-btn" onClick={() => fileInputRef.current?.click()}>
+                                            <label htmlFor={audioFileInputId} className="audio-archive-dropzone-btn">
                                                 выберите файлы
-                                            </button>
+                                            </label>
                                         </p>
                                     </div>
                                 ) : null}
@@ -951,6 +955,7 @@ export function AudioArchiveView({
                                 {canEdit ? (
                                     <>
                                         <input
+                                            id={audioFileInputId}
                                             ref={fileInputRef}
                                             className="builder-native-file-input"
                                             type="file"
@@ -958,9 +963,9 @@ export function AudioArchiveView({
                                             accept="audio/*"
                                             onChange={handleFileSelection}
                                         />
-                                        <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                                        <label htmlFor={audioFileInputId} className={buttonVariants({ variant: "secondary" })}>
                                             Загрузить аудио
-                                        </Button>
+                                        </label>
                                     </>
                                 ) : null}
                             </div>
