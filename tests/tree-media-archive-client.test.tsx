@@ -1195,7 +1195,11 @@ describe("tree media archive client", () => {
     view.unmount();
 
     expect(capturedSignal).not.toBeNull();
-    expect(capturedSignal?.aborted).toBe(true);
+    if (!capturedSignal) {
+      throw new Error("Expected fetch abort signal to be captured.");
+    }
+    const abortedSignal = capturedSignal as unknown as AbortSignal;
+    expect(abortedSignal.aborted).toBe(true);
   });
 
   it("keeps only the top archive action group by default", () => {

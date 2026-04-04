@@ -21,11 +21,9 @@ vi.mock("@/lib/server/errors", () => ({
     ),
 }));
 
-import { POST, __clearMediaThumbBatchRouteCacheForTests } from "@/app/api/media/thumbs/route";
-
 describe("media thumb batch route", () => {
   beforeEach(() => {
-    __clearMediaThumbBatchRouteCacheForTests();
+    vi.resetModules();
     vi.clearAllMocks();
     mocks.getCurrentUser.mockResolvedValue({ id: "user-1", email: "user-1@example.com" });
     mocks.resolveTreeMediaThumbUrls.mockResolvedValue({
@@ -35,6 +33,7 @@ describe("media thumb batch route", () => {
   });
 
   it("dedupes and sorts media ids before resolving thumb urls", async () => {
+    const { POST } = await import("@/app/api/media/thumbs/route");
     const request = new Request("http://localhost/api/media/thumbs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -63,6 +62,7 @@ describe("media thumb batch route", () => {
   });
 
   it("serves repeated identical batches from the short in-memory cache", async () => {
+    const { POST } = await import("@/app/api/media/thumbs/route");
     const makeRequest = () =>
       new Request("http://localhost/api/media/thumbs", {
         method: "POST",

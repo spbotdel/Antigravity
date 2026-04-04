@@ -33,11 +33,9 @@ vi.mock("@/lib/validators/media", () => ({
   },
 }));
 
-import { GET, __clearMediaThumbResolutionCacheForTests } from "@/app/api/media/[mediaId]/route";
-
 describe("media thumb route cache", () => {
   beforeEach(() => {
-    __clearMediaThumbResolutionCacheForTests();
+    vi.resetModules();
     vi.clearAllMocks();
     mocks.resolveMediaAccess.mockResolvedValue({
       kind: "photo",
@@ -51,6 +49,7 @@ describe("media thumb route cache", () => {
   });
 
   it("caches thumb redirects for the same authenticated actor scope", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
     mocks.getCurrentUser.mockResolvedValue({ id: "user-1", email: "user-1@example.com" });
 
     const request = new Request("http://localhost/api/media/media-1?variant=thumb");
@@ -70,6 +69,7 @@ describe("media thumb route cache", () => {
   });
 
   it("separates thumb cache entries by authenticated user scope", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
     mocks.getCurrentUser
       .mockResolvedValueOnce({ id: "user-1", email: "user-1@example.com" })
       .mockResolvedValueOnce({ id: "user-2", email: "user-2@example.com" });
@@ -83,6 +83,7 @@ describe("media thumb route cache", () => {
   });
 
   it("separates thumb cache entries by share token for anonymous share-link access", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
     mocks.getCurrentUser.mockResolvedValue(null);
 
     const firstRequest = new Request("http://localhost/api/media/media-1?variant=thumb&share=share-token-a");
@@ -95,6 +96,7 @@ describe("media thumb route cache", () => {
   });
 
   it("does not use thumb cache for non-thumb variants", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
     mocks.getCurrentUser.mockResolvedValue({ id: "user-1", email: "user-1@example.com" });
 
     const request = new Request("http://localhost/api/media/media-1?variant=small");

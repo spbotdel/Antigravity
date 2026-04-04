@@ -25,6 +25,7 @@ vi.mock("@/lib/server/repository", () => ({
 
 describe("media route", () => {
   beforeEach(() => {
+    vi.resetModules();
     buildAttachmentContentDisposition.mockClear();
     buildMediaDownloadFilename.mockClear();
     resolveMediaAccess.mockReset();
@@ -102,8 +103,7 @@ describe("media route", () => {
   });
 
   it("passes thumb variants to GET /api/media/[mediaId] when requested", async () => {
-    const { GET, __clearMediaThumbResolutionCacheForTests } = await import("@/app/api/media/[mediaId]/route");
-    __clearMediaThumbResolutionCacheForTests();
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
     resolveMediaAccess.mockResolvedValue({
       url: "https://example.com/video-thumb.webp",
       kind: "video",

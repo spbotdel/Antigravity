@@ -71,11 +71,6 @@ function buildMediaThumbBatchCacheKey(input: {
   ].join("|");
 }
 
-export function __clearMediaThumbBatchRouteCacheForTests() {
-  mediaThumbBatchCache.clear();
-  mediaThumbBatchInFlight.clear();
-}
-
 export async function POST(request: Request) {
   try {
     const startedAt = performance.now();

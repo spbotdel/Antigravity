@@ -146,12 +146,6 @@ async function getCachedThumbRedirectTarget(input: {
   }
 }
 
-export function __clearMediaThumbResolutionCacheForTests() {
-  thumbRedirectCache.clear();
-  thumbRedirectInFlight.clear();
-  thumbMediaScopeCache.clear();
-}
-
 function isPdfDocumentMimeType(mimeType: string | null | undefined) {
   const normalizedMimeType = mimeType?.trim().toLowerCase() || "";
   return normalizedMimeType === "application/pdf" || normalizedMimeType.endsWith("/pdf");
