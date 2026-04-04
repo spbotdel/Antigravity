@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, resolveMediaUploadPlan, resolveMediaUploadTransport, shouldForceProxyMediaUpload, shouldUseCloudflareR2ForMedia, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
+import { getCloudflareR2PublicBaseUrl, getFileBackedMediaProvider, getObjectStorageEnvForMedia, getObjectStorageEnvForNewMedia, resolveMediaUploadPlan, resolveMediaUploadTransport, shouldForceProxyMediaUpload, shouldUseCloudflareR2ForMedia, shouldUseCloudflareR2ForNewMedia } from "@/lib/env";
 import { formatMediaUploadTransportHint } from "@/lib/utils";
 
 const ENV_KEYS = [
@@ -16,6 +16,7 @@ const ENV_KEYS = [
   "CF_R2_SECRET_ACCESS_KEY",
   "CF_R2_ENDPOINT",
   "CF_R2_REGION",
+  "CF_R2_PUBLIC_BASE_URL",
   "CF_R2_ROLLOUT_AT",
   "MEDIA_UPLOAD_FORCE_PROXY",
 ] as const;
@@ -49,6 +50,18 @@ afterEach(() => {
 });
 
 describe("media env rollout gating", () => {
+  it("normalizes a valid public Cloudflare R2 base url", () => {
+    process.env.CF_R2_PUBLIC_BASE_URL = "https://media.example.com/archive/";
+
+    expect(getCloudflareR2PublicBaseUrl()).toBe("https://media.example.com/archive");
+  });
+
+  it("returns null for an invalid public Cloudflare R2 base url", () => {
+    process.env.CF_R2_PUBLIC_BASE_URL = "not-a-url";
+
+    expect(getCloudflareR2PublicBaseUrl()).toBeNull();
+  });
+
   it("keeps new uploads on the legacy object-storage path before rollout time", () => {
     seedStorageEnv();
     process.env.MEDIA_STORAGE_BACKEND = "cloudflare_r2";
@@ -77,6 +90,7 @@ describe("media env rollout gating", () => {
     process.env.CF_R2_ROLLOUT_AT = "2026-03-01T00:00:00Z";
 
     expect(shouldUseCloudflareR2ForNewMedia(Date.parse("2026-03-09T00:00:00Z"))).toBe(true);
+    expect(getFileBackedMediaProvider(Date.parse("2026-03-09T00:00:00Z"))).toBe("cloudflare_r2");
     expect(getObjectStorageEnvForNewMedia(Date.parse("2026-03-09T00:00:00Z")).bucket).toBe("r2-bucket");
     expect(shouldUseCloudflareR2ForMedia("2026-03-09T00:00:00Z")).toBe(true);
     expect(getObjectStorageEnvForMedia("2026-03-09T00:00:00Z").bucket).toBe("r2-bucket");
@@ -102,6 +116,7 @@ describe("media env rollout gating", () => {
     process.env.CF_R2_ROLLOUT_AT = "not-a-date";
 
     expect(shouldUseCloudflareR2ForNewMedia(Date.parse("2026-03-09T00:00:00Z"))).toBe(false);
+    expect(getFileBackedMediaProvider(Date.parse("2026-03-09T00:00:00Z"))).toBe("object_storage");
     expect(shouldUseCloudflareR2ForMedia("2026-03-09T00:00:00Z")).toBe(false);
     expect(getObjectStorageEnvForNewMedia(Date.parse("2026-03-09T00:00:00Z")).bucket).toBe("legacy-bucket");
   });

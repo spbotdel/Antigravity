@@ -1,8 +1,8 @@
 import { TreeNav } from "@/components/layout/tree-nav";
+import { Card } from "@/components/ui/card";
 import { TreeViewerClient } from "@/components/tree/tree-viewer-client";
 import { AppError } from "@/lib/server/errors";
 import { getTreeSnapshot } from "@/lib/server/repository";
-import { formatTreeVisibility } from "@/lib/ui-text";
 
 export const dynamic = "force-dynamic";
 
@@ -29,36 +29,33 @@ export default async function TreePage({ params, searchParams }: TreePageProps) 
 
     return (
       <main className="page-shell workspace-page workspace-page-canvas">
-        <section className="section-header workspace-header workspace-header-canvas">
-          <div className="workspace-header-main">
-            <div className="workspace-meta-row">
-              <p className="eyebrow">{formatTreeVisibility(snapshot.tree.visibility)} дерево</p>
-              <span className="workspace-meta-chip">{snapshot.people.length} чел.</span>
-            </div>
-            <h1>{snapshot.tree.title}</h1>
-            <p className="muted-copy">{snapshot.tree.description || "Описание пока не добавлено."}</p>
-          </div>
-        <TreeNav
-          slug={slug}
+        <TreeViewerClient
+          snapshot={snapshot}
           shareToken={shareToken}
-          canEdit={snapshot.actor.canEdit}
-          canManageMembers={snapshot.actor.canManageMembers}
-          canReadAudit={snapshot.actor.canReadAudit}
-          canManageSettings={snapshot.actor.canManageSettings}
+          nav={
+            <TreeNav
+              slug={slug}
+              shareToken={shareToken}
+              canEdit={snapshot.actor.canEdit}
+              canManageMembers={snapshot.actor.canManageMembers}
+              canReadAudit={snapshot.actor.canReadAudit}
+              canManageSettings={snapshot.actor.canManageSettings}
+            />
+          }
         />
-      </section>
-        <TreeViewerClient snapshot={snapshot} shareToken={shareToken} />
       </main>
     );
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Не удалось загрузить семейное дерево.";
     return (
       <main className="page-shell narrow-shell">
-        <section className="auth-card">
-          <p className="eyebrow">Проблема с доступом</p>
-          <h1>Дерево недоступно</h1>
+        <Card className="auth-card">
+          <div className="auth-card-copy">
+            <p className="eyebrow">Проблема с доступом</p>
+            <h1>Дерево недоступно</h1>
+          </div>
           <p className="form-error">{message}</p>
-        </section>
+        </Card>
       </main>
     );
   }

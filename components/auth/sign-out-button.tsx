@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { translateAuthError } from "@/lib/auth-error";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
@@ -13,8 +14,9 @@ export function SignOutButton() {
 
   return (
     <>
-      <button
-        className="ghost-button"
+      <Button
+        variant="ghost"
+        size="sm"
         disabled={loading}
         onClick={async () => {
           setLoading(true);
@@ -33,7 +35,7 @@ export function SignOutButton() {
         }}
       >
         {loading ? "Выходим..." : "Выйти"}
-      </button>
+      </Button>
       {error ? <p className="form-error">{error}</p> : null}
     </>
   );

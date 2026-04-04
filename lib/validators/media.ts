@@ -1,7 +1,13 @@
 import { z } from "zod";
 
 const mediaVisibilitySchema = z.enum(["public", "members"]);
+const treeMediaAlbumKindSchema = z.enum(["photo", "video"]);
 const mediaVariantSchema = z.enum(["thumb", "small", "medium"]);
+const avatarCropSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  zoom: z.number().min(1).max(3)
+});
 const mediaVariantPathSchema = z.object({
   variant: mediaVariantSchema,
   storagePath: z.string().trim().min(1)
@@ -94,11 +100,59 @@ export const completeArchiveMediaSchema = z.object({
 export const createTreeMediaAlbumSchema = z.object({
   treeId: z.string().uuid(),
   title: z.string().trim().min(1).max(120),
-  description: z.string().trim().max(512).optional().or(z.literal(""))
+  description: z.string().trim().max(512).optional().or(z.literal("")),
+  kind: treeMediaAlbumKindSchema,
+  access: mediaVisibilitySchema.optional(),
+  albumKind: z.enum(["manual", "uploader"]).optional(),
+  uploaderUserId: z.string().uuid().optional().nullable()
+}).refine((value) => value.albumKind !== "uploader" || Boolean(value.uploaderUserId), {
+  message: "Для автоальбома нужен uploaderUserId."
+});
+
+export const updateTreeMediaAlbumSchema = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().max(512).optional().or(z.literal("")),
+  access: mediaVisibilitySchema.optional()
+}).refine((value) => value.title !== undefined || value.description !== undefined || value.access !== undefined, {
+  message: "Нужно передать хотя бы одно поле для обновления."
+});
+
+export const addMediaToTreeMediaAlbumSchema = z.object({
+  treeId: z.string().uuid(),
+  albumId: z.string().uuid(),
+  mediaIds: z.array(z.string().uuid()).min(1).max(100)
+});
+
+export const createTreeAudioPlaylistSchema = z.object({
+  treeId: z.string().uuid(),
+  name: z.string().trim().min(1).max(120)
+});
+
+export const addAudioMediaToPlaylistSchema = z.object({
+  treeId: z.string().uuid(),
+  playlistId: z.string().uuid(),
+  mediaId: z.string().uuid()
+});
+
+export const downloadArchiveMediaSchema = z.object({
+  treeId: z.string().uuid(),
+  mediaIds: z.array(z.string().uuid()).min(1).max(100)
+});
+
+export const resolveMediaThumbBatchSchema = z.object({
+  treeId: z.string().uuid(),
+  mediaIds: z.array(z.string().uuid()).min(1).max(100)
 });
 
 export const setPrimaryPersonMediaSchema = z.object({
   personId: z.string().uuid(),
-  setPrimary: z.literal(true)
+  setPrimary: z.literal(true),
+  avatarCrop: avatarCropSchema.optional()
+});
+
+export const processVideoPreviewJobsSchema = z.object({
+  limit: z.number().int().min(1).max(10).optional(),
+  mediaIds: z.array(z.string().uuid()).max(25).optional(),
+  forceRetry: z.boolean().optional()
 });
 

@@ -181,6 +181,100 @@ Media access must respect:
 
 ---
 
+### 12.0.1 Media rendering must fail soft on missing storage objects
+
+If a thumb, preview variant, or original file is missing in storage:
+
+- the page must keep rendering
+- media UI may degrade to placeholders, hidden previews, or explicit open/download affordances
+- the failure must remain diagnosable through bounded debug logging
+
+Implications:
+
+- missing objects are not allowed to crash archive pages, viewer panels, or builder media surfaces
+- thumb preloading is an optimization, not a hard render dependency
+- original-file failure must degrade the single-media surface instead of taking down the whole route
+
+---
+
+### 12.0.2 Office document preview depends on an explicit public R2 base
+
+Inline preview for Office Word documents is allowed only when `CF_R2_PUBLIC_BASE_URL` is configured and the document path is compatible with that preview flow.
+
+Implications:
+
+- `.doc/.docx` preview must not be assumed for private signed URLs alone
+- when that public preview precondition is not met, the product must fall back to download/open behavior
+- attachment-oriented download behavior for documents and audio must remain explicit, not incidental
+
+---
+
+### 12.1 Archive album access is a hard upper bound for files inside it
+
+If an archive file belongs to one or more albums, its effective visibility must be the strictest of:
+
+- the file's own `visibility`
+- every linked album `access`
+
+Implications:
+
+- a file must never be effectively wider than the most restricted album containing it
+- `members` is stricter than `public`
+- effective visibility is computed in repository logic, not in UI
+- the system must not rely on separate ad hoc access checks in multiple places
+
+---
+
+### 12.2 Archive album kind is explicit and must not be inferred
+
+If an archive album exists, it must carry explicit media kind:
+
+- `photo`
+- `video`
+
+Implications:
+
+- album type must not be derived from current contents
+- empty albums must still have stable type
+- uploader albums are also kind-scoped, not just uploader-scoped
+- a file must never be linked into an album of different kind
+
+---
+
+### 12.3 Uploader albums are virtual views over uploader media
+
+If an album has uploader semantics:
+
+- its count must derive from all visible media matching `(tree_id, created_by, kind)`
+- its cover must derive from that same media set
+- its detail contents must derive from that same media set
+
+Implications:
+
+- uploader album summary semantics must not depend on persisted `tree_media_album_items`
+- persisted uploader album rows may still carry metadata, access behavior, and stable UI identity
+- manual album semantics remain relation-based, uploader album semantics remain virtual-view-based
+
+---
+
+### 12.4 In `All media`, uploader albums merge by uploader identity
+
+When archive UI is in combined mode:
+
+- uploader albums must merge by `uploader_user_id`
+
+When archive UI is in kind-specific mode:
+
+- uploader albums remain split by `kind`
+
+Implications:
+
+- `Все медиа` must not show duplicate uploader albums with the same title
+- merged uploader album count, cover, and detail contents must derive from the same combined visible uploader media set
+- this merge rule applies only to uploader albums, never to manual albums
+
+---
+
 # Data Integrity Invariants
 
 ### 13. Deletion must be explicit
@@ -210,6 +304,23 @@ Code may depend on database schema elements such as:
 If code expects them, the corresponding migration must exist remotely.
 
 Migration drift is a runtime correctness issue.
+
+---
+
+### 14.1 Archive album linking must be idempotent
+
+Archive album linking may be reached through:
+
+- direct add-to-album
+- archive upload completion
+- uploader-album plus selected-album overlap
+- retry-like repeated completion paths
+
+Implications:
+
+- repository logic must skip already existing `(album_id, media_id)` pairs
+- the unique constraint on `tree_media_album_items(album_id, media_id)` remains required
+- the system must not rely on duplicate-key failures as normal behavior
 
 ---
 

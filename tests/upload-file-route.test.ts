@@ -97,4 +97,39 @@ describe("upload-file route", () => {
       fileBuffer: Buffer.from("variant-webp"),
     });
   });
+
+  it("allows video files up to 200 MB", async () => {
+    const formData = new FormData();
+    formData.set("signedUrl", "https://example.com/video");
+    formData.set("contentType", "video/mp4");
+    const file = new File([new Uint8Array([7, 8, 9])], "family-video.mp4", { type: "video/mp4" });
+    Object.defineProperty(file, "size", {
+      configurable: true,
+      value: 150 * 1024 * 1024,
+    });
+    formData.set("file", file);
+
+    const response = await POST({ formData: async () => formData } as Request);
+
+    expect(response.status).toBe(200);
+    expect(uploadFileToSignedUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects video files above 200 MB", async () => {
+    const formData = new FormData();
+    formData.set("signedUrl", "https://example.com/video");
+    formData.set("contentType", "video/mp4");
+    const file = new File([new Uint8Array([7, 8, 9])], "too-big-video.mp4", { type: "video/mp4" });
+    Object.defineProperty(file, "size", {
+      configurable: true,
+      value: 201 * 1024 * 1024,
+    });
+    formData.set("file", file);
+
+    const response = await POST({ formData: async () => formData } as Request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error).toContain("200 МБ");
+  });
 });

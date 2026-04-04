@@ -118,6 +118,8 @@ Secondary planning / historical references:
   Viewer.
 - `app/tree/[slug]/builder/page.tsx`
   Builder.
+- `app/tree/[slug]/media/page.tsx`
+  Tree-level family archive.
 - `app/tree/[slug]/members/page.tsx`
   Access management.
 - `app/tree/[slug]/settings/page.tsx`
@@ -153,6 +155,12 @@ Important loader rule for tree pages:
 - `app/api/media/upload-file/route.ts`
 - `app/api/media/complete/route.ts`
 - `app/api/media/[mediaId]/route.ts`
+- `app/api/media/albums/route.ts`
+- `app/api/media/albums/items/route.ts`
+- `app/api/media/albums/[albumId]/route.ts`
+- `app/api/media/archive/upload-intent/route.ts`
+- `app/api/media/archive/complete/route.ts`
+- `app/api/media/archive/download/route.ts`
 - `app/api/tree/[slug]/snapshot/route.ts`
 - `app/api/tree/[slug]/builder-snapshot/route.ts`
 - `app/api/dashboard/route.ts`
@@ -189,6 +197,8 @@ Important loader rule for tree pages:
 
 - `components/members/member-management-panel.tsx`
   Invite flow, family share links, role changes, revoke actions.
+- `components/media/tree-media-archive-client.tsx`
+  Archive media workspace with gallery, albums, per-card actions, album edit/delete, selection mode, bulk album add, and bulk download.
 - `components/settings/tree-settings-form.tsx`
   Tree metadata and privacy controls.
 - `components/audit/audit-log-table.tsx`
@@ -206,6 +216,9 @@ Important loader rule for tree pages:
   - share links
   - persons and relationships
   - media creation/access/deletion
+  - archive album creation and album-item mutations
+  - album access writes and effective archive media access enforcement
+  - attachment-friendly single download and archive bulk zip download
   - object storage signed upload/read/delete flow
   - audit loading
 
@@ -387,13 +400,14 @@ If the task is access/auth:
 6. `lib/server/repository.ts`
 
 If the task is media:
-1. `components/tree/builder-workspace.tsx`
-2. `components/tree/tree-viewer-client.tsx`
-3. `app/api/media/*`
-4. `lib/validators/media.ts`
-5. `lib/server/repository.ts`
-6. latest media migrations in `supabase/migrations/`
-7. `tests/media-storage-e2e.mjs`
+1. `components/media/tree-media-archive-client.tsx`
+2. `components/tree/builder-workspace.tsx`
+3. `components/tree/tree-viewer-client.tsx`
+4. `app/api/media/*`
+5. `lib/validators/media.ts`
+6. `lib/server/repository.ts`
+7. latest media migrations in `supabase/migrations/`
+8. `tests/media-storage-e2e.mjs`
 
 ## Required Reading Matrix
 

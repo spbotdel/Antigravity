@@ -59,13 +59,14 @@ describe("acceptInvite", () => {
 
   it("upserts membership and returns the nested invite tree slug without extra tree lookup", async () => {
     mocks.fetchSupabaseAdminRestJson.mockImplementation(async (pathWithQuery: string, init?: { method?: string }) => {
-      if (pathWithQuery.startsWith("tree_invites?select=*,tree:trees!inner(id,slug)&token_hash=eq.")) {
+      if (pathWithQuery.startsWith("tree_invites?select=*,tree:trees!inner(id,slug,owner_user_id)&token_hash=eq.")) {
         return [
           {
             ...inviteBase,
             tree: {
               id: "tree-1",
               slug: "demo-family",
+              owner_user_id: "user-owner",
             },
           },
         ];
@@ -112,7 +113,7 @@ describe("acceptInvite", () => {
 
   it("falls back to tree lookup when invite relation does not include slug", async () => {
     mocks.fetchSupabaseAdminRestJson.mockImplementation(async (pathWithQuery: string, init?: { method?: string }) => {
-      if (pathWithQuery.startsWith("tree_invites?select=*,tree:trees!inner(id,slug)&token_hash=eq.")) {
+      if (pathWithQuery.startsWith("tree_invites?select=*,tree:trees!inner(id,slug,owner_user_id)&token_hash=eq.")) {
         return [inviteBase];
       }
 
@@ -169,13 +170,14 @@ describe("acceptInvite", () => {
     });
 
     mocks.fetchSupabaseAdminRestJson.mockImplementation(async (pathWithQuery: string, init?: { method?: string }) => {
-      if (pathWithQuery.startsWith("tree_invites?select=*,tree:trees!inner(id,slug)&token_hash=eq.")) {
+      if (pathWithQuery.startsWith("tree_invites?select=*,tree:trees!inner(id,slug,owner_user_id)&token_hash=eq.")) {
         return [
           {
             ...inviteBase,
             tree: {
               id: "tree-1",
               slug: "demo-family",
+              owner_user_id: "user-owner",
             },
           },
         ];

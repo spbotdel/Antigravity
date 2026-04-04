@@ -23,7 +23,7 @@ describe("media upload-intent routes", () => {
       bucket: "bucket-1",
       signedUrl: "https://example.com/original",
       token: null,
-      uploadProvider: "object_storage",
+      uploadProvider: "cloudflare_r2",
       configuredBackend: "cloudflare_r2",
       resolvedUploadBackend: "cloudflare_r2",
       rolloutState: "cloudflare_rollout_active",
@@ -36,7 +36,7 @@ describe("media upload-intent routes", () => {
           path: "trees/tree-1/media/photo/media-1/variants/thumb.webp",
           signedUrl: "https://example.com/thumb",
           token: null,
-          uploadProvider: "object_storage",
+          uploadProvider: "cloudflare_r2",
         },
       ],
     });

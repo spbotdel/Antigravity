@@ -3,7 +3,7 @@
 <!-- FRAMEWORK:PLAYBOOK:START -->
 ## Current Operational Sync
 
-- Updated at (UTC): `2026-03-12 18:00:28Z`
+- Updated at (UTC): `2026-04-02 13:51:57Z`
 - Current launch rule: `Cloudflare R2` rollout is mandatory for `Slava edition`; legacy Yandex-backed media remains compatibility/read path only until migration is closed.
 - Current person-media UI:
   - `Инфо` for person data and documents
@@ -24,7 +24,7 @@
 
 - `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
 - `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
-- Latest `smoke:media` artifact `media-storage-report-1773322585848.json` is green.
+- No `smoke:media` artifact was detected during the latest completion sync.
 - Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
 <!-- FRAMEWORK:PLAYBOOK:END -->
 

@@ -48,6 +48,7 @@ describe("share-link routes", () => {
       treeSlug: "demo-family",
       label: "Родные из РФ",
       expiresInDays: 14,
+      baseUrl: "http://localhost",
     });
     expect(payload.url).toContain("?share=");
     expect(payload.message).toBe("Семейная ссылка создана.");
@@ -114,7 +115,7 @@ describe("share-link routes", () => {
     });
     const payload = await response.json();
 
-    expect(revealShareLink).toHaveBeenCalledWith("share-1");
+    expect(revealShareLink).toHaveBeenCalledWith("share-1", "http://localhost");
     expect(response.status).toBe(200);
     expect(payload.canReveal).toBe(true);
     expect(payload.url).toContain("?share=");

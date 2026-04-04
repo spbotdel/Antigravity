@@ -222,6 +222,37 @@ describe("family tree canvas interactions", () => {
     expect(photoImage?.getAttribute("href")).toBe("/samples/member-photo.jpg");
   });
 
+  it("applies shared avatar crop placement to photo patterns when crop data is available", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "person-1",
+      name: "Ivan Petrov",
+      gender: "male",
+      birthDate: "1990-01-01",
+      deathDate: null,
+      children: []
+    };
+
+    const { container } = render(
+      <FamilyTreeCanvas
+        tree={tree}
+        selectedPersonId="person-1"
+        onSelectPerson={vi.fn()}
+        personPhotoUrls={{ "person-1": "/samples/member-photo.jpg" }}
+        personPhotoCrops={{ "person-1": { x: 0.5, y: 0.5, zoom: 2 } }}
+      />
+    );
+
+    const photoImage = container.querySelector("pattern#tree-avatar-person-1 image");
+
+    expect(photoImage?.getAttribute("href")).toBe("/samples/member-photo.jpg");
+    expect(photoImage?.getAttribute("x")).toBe("-0.5");
+    expect(photoImage?.getAttribute("y")).toBe("-0.5");
+    expect(photoImage?.getAttribute("width")).toBe("2");
+    expect(photoImage?.getAttribute("height")).toBe("2");
+    expect(photoImage?.getAttribute("preserveAspectRatio")).toBe("none");
+  });
+
   it("uses child avatars when age is under 18", () => {
     const tree: DisplayTreeNode = {
       type: "person",

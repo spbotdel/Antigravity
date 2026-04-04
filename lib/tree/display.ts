@@ -1,4 +1,4 @@
-import type { DisplayTreeNode, MediaAssetRecord, MediaKind, MediaVariantName, ParentLinkRecord, PartnershipRecord, TreeMediaAlbumItemRecord, TreeMediaAlbumRecord, TreeSnapshot } from "@/lib/types";
+import type { DisplayTreeNode, MediaAssetRecord, MediaKind, MediaVariantName, ParentLinkRecord, PartnershipRecord, TreeMediaAlbumItemRecord, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord, TreeSnapshot } from "@/lib/types";
 
 const PHOTO_VARIANT_ROLLOUT_AT_MS = Date.parse("2026-03-08T00:00:00Z");
 
@@ -73,6 +73,75 @@ export function buildPhotoPreviewRouteUrl(
   }
 
   return buildMediaRouteUrl(asset.id, { shareToken });
+}
+
+export function hasCloudflareVideoPreview(
+  asset: Pick<MediaAssetRecord, "kind" | "provider" | "preview_status">
+) {
+  return asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready";
+}
+
+export type MediaThumbSource =
+  | { kind: "image"; src: string }
+  | { kind: "video"; src: string }
+  | null;
+
+function getOptimisticCloudflareVideoPreviewUrl(
+  asset: Pick<MediaAssetRecord, "id" | "kind" | "provider" | "preview_status">,
+  optimisticVideoPreviewUrls?: Readonly<Record<string, string>>
+) {
+  if (asset.kind !== "video" || asset.provider !== "cloudflare_r2") {
+    return null;
+  }
+
+  if (asset.preview_status !== "pending" && asset.preview_status !== "processing") {
+    return null;
+  }
+
+  return optimisticVideoPreviewUrls?.[asset.id] || null;
+}
+
+export function buildMediaThumbRouteUrl(
+  asset: Pick<MediaAssetRecord, "id" | "kind" | "created_at" | "provider" | "preview_status">,
+  shareToken?: string | null
+) {
+  if (asset.kind === "photo") {
+    return buildPhotoPreviewRouteUrl(asset, "thumb", shareToken);
+  }
+
+  if (hasCloudflareVideoPreview(asset)) {
+    return buildMediaRouteUrl(asset.id, { shareToken, variant: "thumb" });
+  }
+
+  return null;
+}
+
+export function resolveMediaThumbSource(
+  asset: Pick<MediaAssetRecord, "id" | "kind" | "created_at" | "provider" | "preview_status">,
+  shareToken?: string | null,
+  optimisticVideoPreviewUrls?: Readonly<Record<string, string>>
+): MediaThumbSource {
+  const thumbUrl = buildMediaThumbRouteUrl(asset, shareToken);
+  if (thumbUrl) {
+    return {
+      kind: "image",
+      src: thumbUrl
+    };
+  }
+
+  const optimisticVideoUrl = getOptimisticCloudflareVideoPreviewUrl(asset, optimisticVideoPreviewUrls);
+  if (optimisticVideoUrl) {
+    return {
+      kind: "video",
+      src: optimisticVideoUrl
+    };
+  }
+
+  return null;
+}
+
+export function buildUploaderAlbumSyntheticId(userId: string, kind: TreeMediaAlbumMediaKind) {
+  return `uploader-${userId}-${kind}`;
 }
 
 export function buildDisplayTree(snapshot: TreeSnapshot): DisplayTreeNode | null {
@@ -309,12 +378,16 @@ export function collectPersonMedia(snapshot: TreeSnapshot, personId: string) {
   return snapshot.media.filter((asset) => mediaIds.includes(asset.id));
 }
 
-export function collectTreeMedia(snapshot: Pick<TreeSnapshot, "media">, kind?: Extract<MediaKind, "photo" | "video">) {
+export function collectTreeMedia(snapshot: Pick<TreeSnapshot, "media">, kind?: Extract<MediaKind, "photo" | "video" | "audio" | "document">) {
   if (!kind) {
     return snapshot.media;
   }
 
   return snapshot.media.filter((asset) => asset.kind === kind);
+}
+
+export function collectArchiveGalleryMedia(snapshot: Pick<TreeSnapshot, "media">) {
+  return snapshot.media.filter((asset) => asset.kind === "photo" || asset.kind === "video");
 }
 
 export function collectUnlinkedTreeMedia(snapshot: Pick<TreeSnapshot, "media" | "personMedia">) {
@@ -327,7 +400,7 @@ export function buildTreeMediaAlbumSummaries(input: {
   albums: TreeMediaAlbumRecord[];
   items: TreeMediaAlbumItemRecord[];
   albumMediaMap?: Record<string, TreeSnapshot["media"]>;
-  kind?: Extract<MediaKind, "photo" | "video">;
+  kind?: TreeMediaAlbumMediaKind;
 }) {
   const mediaById = new Map(input.media.map((asset) => [asset.id, asset] as const));
   const albumMediaIdsByAlbumId = new Map<string, string[]>();
@@ -341,23 +414,26 @@ export function buildTreeMediaAlbumSummaries(input: {
   }
 
   return input.albums
+    .filter((album) => !input.kind || album.kind === input.kind)
     .map((album) => {
       const albumAllMedia =
-        input.albumMediaMap?.[album.id] ||
-        (albumMediaIdsByAlbumId.get(album.id) || [])
-          .map((mediaId) => mediaById.get(mediaId))
-          .filter(Boolean) as TreeSnapshot["media"];
-      const albumMedia = albumAllMedia.filter((asset) => !input.kind || asset.kind === input.kind);
+        album.album_kind === "uploader" && album.uploader_user_id
+          ? input.media.filter((asset) => asset.created_by === album.uploader_user_id && asset.kind === album.kind)
+          : input.albumMediaMap?.[album.id] ||
+          (albumMediaIdsByAlbumId.get(album.id) || [])
+            .map((mediaId) => mediaById.get(mediaId))
+            .filter(Boolean) as TreeSnapshot["media"];
+      const albumMedia = albumAllMedia.filter((asset) => asset.kind === album.kind);
       const cover =
         albumMedia.find((asset) => asset.kind === "photo") ||
-        albumAllMedia.find((asset) => asset.kind === "photo") ||
-        albumMedia[0] ||
-        albumAllMedia[0];
+        albumMedia[0];
 
       return {
         id: album.id,
         title: album.title,
         description: album.description,
+        kind: album.kind,
+        access: album.access,
         albumKind: album.album_kind,
         uploaderUserId: album.uploader_user_id,
         count: albumMedia.length,
@@ -365,44 +441,56 @@ export function buildTreeMediaAlbumSummaries(input: {
       };
     })
     .filter(Boolean) as Array<{
-    id: string;
-    title: string;
-    description: string | null;
-    albumKind: TreeMediaAlbumRecord["album_kind"];
-    uploaderUserId: string | null;
-    count: number;
-    coverMediaId: string | null;
-  }>;
+      id: string;
+      title: string;
+      description: string | null;
+      kind: TreeMediaAlbumRecord["kind"];
+      access: TreeMediaAlbumRecord["access"];
+      albumKind: TreeMediaAlbumRecord["album_kind"];
+      uploaderUserId: string | null;
+      count: number;
+      coverMediaId: string | null;
+    }>;
 }
 
 export function buildDerivedUploaderAlbumSummaries(input: {
   media: TreeSnapshot["media"];
-  kind?: Extract<MediaKind, "photo" | "video">;
+  kind?: TreeMediaAlbumMediaKind;
   uploaderLabelsById: Map<string, string>;
 }) {
-  const grouped = new Map<string, TreeSnapshot["media"]>();
+  const grouped = new Map<string, { userId: string; kind: TreeMediaAlbumMediaKind; media: TreeSnapshot["media"] }>();
 
   for (const asset of input.media) {
     if (!asset.created_by) {
+      continue;
+    }
+    if (asset.kind !== "photo" && asset.kind !== "video") {
       continue;
     }
     if (input.kind && asset.kind !== input.kind) {
       continue;
     }
 
-    const current = grouped.get(asset.created_by) || [];
-    current.push(asset);
-    grouped.set(asset.created_by, current);
+    const key = `${asset.created_by}:${asset.kind}`;
+    const current = grouped.get(key) || {
+      userId: asset.created_by,
+      kind: asset.kind,
+      media: [] as TreeSnapshot["media"]
+    };
+    current.media.push(asset);
+    grouped.set(key, current);
   }
 
-  return [...grouped.entries()].map(([userId, media]) => {
+  return [...grouped.values()].map(({ userId, kind, media }) => {
     const cover = media.find((asset) => asset.kind === "photo") || media[0];
     const label = input.uploaderLabelsById.get(userId) || "От участника";
 
     return {
-      id: `uploader-${userId}`,
+      id: buildUploaderAlbumSyntheticId(userId, kind),
       title: label,
       description: null,
+      kind,
+      access: "members" as const,
       albumKind: "uploader" as const,
       uploaderUserId: userId,
       count: media.length,

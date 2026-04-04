@@ -363,7 +363,72 @@ const membersPhotoTitle = `Members Smoke Photo ${timestamp}`;
 const adminPhotoTitle = `Admin Smoke Photo ${timestamp}`;
 
 function builderInspector(page) {
-  return page.locator("aside.builder-inspector");
+  return page.locator(".builder-inspector");
+}
+
+function getBuilderTabControl(root, label) {
+  return root
+    .getByRole("tab", { name: label, exact: true })
+    .or(root.getByRole("button", { name: label, exact: true }))
+    .first();
+}
+
+function getGenderChoice(value) {
+  if (value === "female") {
+    return { value, label: "Женщина" };
+  }
+
+  if (value === "male") {
+    return { value, label: "Мужчина" };
+  }
+
+  if (value === "other") {
+    return { value, label: "Другое" };
+  }
+
+  return { value: "", label: "Не указывать" };
+}
+
+function getVisibilityChoice(value) {
+  if (value === "members") {
+    return { value, label: "Только членам семьи" };
+  }
+
+  return { value: "public", label: "Всем по ссылке" };
+}
+
+function getInviteRoleChoice(value) {
+  if (value === "admin") {
+    return { value, label: "Администратор" };
+  }
+
+  return { value: "viewer", label: "Участник" };
+}
+
+function getInviteMethodChoice(value) {
+  if (value === "email") {
+    return { value, label: "Отправить на email" };
+  }
+
+  return { value: "link", label: "Защищенная ссылка" };
+}
+
+async function setLabeledSelectValue(page, root, fieldLabel, choice) {
+  const field = root.getByLabel(fieldLabel);
+  await field.waitFor({ timeout: 90_000 });
+  const tagName = await field.evaluate((element) => element.tagName.toLowerCase());
+
+  if (tagName === "select") {
+    if (choice.value !== undefined) {
+      await field.selectOption(choice.value);
+    } else {
+      await field.selectOption({ label: choice.label });
+    }
+    return;
+  }
+
+  await field.click();
+  await page.getByRole("option", { name: choice.label, exact: true }).click();
 }
 
 async function waitForInspectorPerson(page, fullName, timeout = 90_000) {
@@ -393,7 +458,7 @@ async function waitForBuilderReady(page) {
   await page.locator(".builder-layout-reworked").waitFor({ timeout: 45_000 });
   await builderInspector(page).waitFor({ timeout: 45_000 });
   await builderInspector(page).locator("h2").waitFor({ timeout: 45_000 });
-  await page.getByRole("button", { name: "Инфо", exact: true }).waitFor({ timeout: 45_000 });
+  await getBuilderTabControl(builderInspector(page), "Инфо").waitFor({ timeout: 45_000 });
 }
 
 async function waitForPatchResponse(page, pathFragment, trigger) {
@@ -650,7 +715,7 @@ async function login(page, email, password, nextPath = "/dashboard") {
 
 async function createPerson(page, values) {
   const inspector = builderInspector(page);
-  await inspector.getByRole("button", { name: "Инфо", exact: true }).click();
+  await getBuilderTabControl(inspector, "Инфо").click();
   if (!values.preserveContext) {
     const createButton = inspector.getByRole("button", { name: "Новый человек", exact: true });
     const emptyCanvasCreateButton = page.locator(".tree-canvas-empty-action");
@@ -664,7 +729,7 @@ async function createPerson(page, values) {
   const createSection = inspector.locator("section.builder-panel-stack");
   await createSection.locator('input[name="fullName"]').fill(values.fullName);
   if (values.gender) {
-    await createSection.locator('select[name="gender"]').selectOption(values.gender);
+    await setLabeledSelectValue(page, createSection, "Пол", getGenderChoice(values.gender));
   }
   await createSection.locator('input[name="birthDate"]').fill(values.birthDate);
   await createSection.locator('input[name="birthPlace"]').fill(values.birthPlace);
@@ -688,7 +753,7 @@ async function createRelatedPersonInline(page, values) {
   await inspector.locator('input[name="fullName"]').fill(values.fullName);
   await inspector.locator('input[name="birthPlace"]').fill(values.birthPlace);
   if (values.gender) {
-    await inspector.locator('select[name="gender"]').selectOption(values.gender);
+    await setLabeledSelectValue(page, inspector, "Пол", getGenderChoice(values.gender));
   }
   if (values.birthDate) {
     await inspector.locator('input[name="birthDate"]').fill(values.birthDate);
@@ -706,7 +771,7 @@ async function updateSelectedPersonInline(page, values) {
     await inspector.locator('input[name="birthPlace"]').fill(values.birthPlace);
   }
   if (values.gender !== undefined) {
-    await inspector.locator('select[name="gender"]').selectOption(values.gender);
+    await setLabeledSelectValue(page, inspector, "Пол", getGenderChoice(values.gender));
   }
   await inspector.getByRole("button", { name: "Сохранить", exact: true }).click();
   if (values.fullName) {
@@ -716,17 +781,17 @@ async function updateSelectedPersonInline(page, values) {
 
 async function addRelationship(page) {
   const inspector = builderInspector(page);
-  await inspector.getByRole("button", { name: "Инфо", exact: true }).click();
+  await getBuilderTabControl(inspector, "Инфо").click();
   await inspector.locator(".builder-relation-card").filter({ hasText: ownerName }).first().waitFor({ timeout: 30000 });
 }
 
 async function configureTree(page) {
   await page.goto(`${baseUrl}/tree/${slug}/settings`, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
-  await page.getByLabel("Корневой человек").selectOption({ label: ownerName });
+  await setLabeledSelectValue(page, page, "Корневой человек", { label: ownerName });
   await waitForPatchResponse(page, "/api/trees/", async () => {
     await page.getByRole("button", { name: "Сохранить данные" }).click();
   });
-  await page.getByLabel("Корневой человек").locator("option:checked").filter({ hasText: ownerName }).waitFor({ timeout: 30_000 });
+  await page.getByLabel("Корневой человек").filter({ hasText: ownerName }).waitFor({ timeout: 30_000 });
 }
 
 async function uploadMediaFile(page, title, visibility) {
@@ -734,14 +799,13 @@ async function uploadMediaFile(page, title, visibility) {
   await waitForBuilderReady(page);
   await page.getByRole("button", { name: new RegExp(ownerName) }).first().click();
   const inspector = builderInspector(page);
-  await inspector.getByRole("button", { name: "Фото", exact: true }).click();
+  await getBuilderTabControl(inspector, "Фото").click();
   const photoForm = inspector.locator("form").nth(0);
   await photoForm.getByLabel("Фотографии с устройства").setInputFiles(fixturePath);
-  await photoForm.getByLabel("Подпись").fill(`${title} caption`);
-  await photoForm.getByLabel("Видимость").selectOption(visibility);
-  await photoForm.getByRole("button", { name: "Проверить фото перед загрузкой" }).click();
   const reviewDialog = page.getByRole("dialog", { name: "Проверка файлов перед загрузкой" });
   await reviewDialog.waitFor({ timeout: 30_000 });
+  await reviewDialog.getByLabel("Подпись").fill(`${title} caption`);
+  await setLabeledSelectValue(page, reviewDialog, "Видимость", getVisibilityChoice(visibility));
   await reviewDialog.getByRole("button", { name: "Сохранить 1" }).click();
   await inspector.getByRole("heading", { name: title, exact: true }).first().waitFor({ timeout: 30000 });
 }
@@ -750,8 +814,9 @@ async function createInvite(page, role, email, options = {}) {
   if (options.navigate !== false) {
     await page.goto(`${baseUrl}/tree/${slug}/members`, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
   }
-  await page.getByLabel("Роль").selectOption(role);
-  await page.getByLabel("Способ приглашения").selectOption("email");
+  await page.getByRole("button", { name: "Создать приглашение" }).waitFor({ timeout: 90_000 });
+  await setLabeledSelectValue(page, page, "Роль", getInviteRoleChoice(role));
+  await setLabeledSelectValue(page, page, "Способ приглашения", getInviteMethodChoice("email"));
   await page.locator('input[name="email"]').fill(email);
   const responsePromise = page.waitForResponse(
     (response) => response.request().method() === "POST" && response.url().includes("/api/invites"),
@@ -784,7 +849,7 @@ async function revokeInvite(page, email, options = {}) {
   if (options.navigate !== false) {
     await page.goto(`${baseUrl}/tree/${slug}/members`, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
   }
-  const invitesSection = page.locator("section").filter({ hasText: "Что уже отправлено" }).last();
+  const invitesSection = page.locator(".members-list-card").filter({ hasText: "Что уже отправлено" }).first();
   const inviteCard = invitesSection.locator(".members-entry-card").filter({ hasText: email }).first();
   await inviteCard.waitFor({ timeout: 30000 });
   const responsePromise = page.waitForResponse(
@@ -801,7 +866,7 @@ async function revokeInvite(page, email, options = {}) {
 }
 
 async function expectInviteAbsent(page, email) {
-  const invitesSection = page.locator("section").filter({ hasText: "Что уже отправлено" }).last();
+  const invitesSection = page.locator(".members-list-card").filter({ hasText: "Что уже отправлено" }).first();
   await page.waitForTimeout(500);
   const inviteCount = await invitesSection.locator(".members-entry-card").filter({ hasText: email }).count();
   if (inviteCount !== 0) {
@@ -813,6 +878,7 @@ async function createShareLink(page, treeId, label, options = {}) {
   if (options.navigate !== false) {
     await page.goto(`${baseUrl}/tree/${slug}/members`, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
   }
+  await page.getByRole("button", { name: "Создать ссылку для просмотра" }).waitFor({ timeout: 90_000 });
   await page.locator('input[name="label"]').fill(label);
   const responsePromise = page.waitForResponse(
     (response) => response.request().method() === "POST" && response.url().includes("/api/share-links"),
@@ -846,7 +912,7 @@ async function createShareLink(page, treeId, label, options = {}) {
 }
 
 async function revealExistingShareLink(page, label, expectedUrl) {
-  const shareListSection = page.locator("section").filter({ hasText: "Ссылки для семейного просмотра" }).last();
+  const shareListSection = page.locator(".members-list-card").filter({ hasText: "Ссылки для семейного просмотра" }).first();
   const shareCard = shareListSection.locator(".members-entry-card").filter({ hasText: label }).first();
   await shareCard.waitFor({ timeout: 30_000 });
 
@@ -878,7 +944,7 @@ async function revokeShareLink(page, shareLinkId, label, options = {}) {
   if (options.navigate !== false) {
     await page.goto(`${baseUrl}/tree/${slug}/members`, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
   }
-  const shareListSection = page.locator("section").filter({ hasText: "Ссылки для семейного просмотра" }).last();
+  const shareListSection = page.locator(".members-list-card").filter({ hasText: "Ссылки для семейного просмотра" }).first();
   const shareCard = shareListSection.locator(".members-entry-card").filter({ hasText: label }).first();
   await shareCard.waitFor({ timeout: 30_000 });
   const responsePromise = page.waitForResponse(

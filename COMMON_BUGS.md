@@ -591,6 +591,91 @@ Prefer page-specific repository loaders over full snapshot loading when the page
 
 ---
 
+# 17. Fullscreen Media Viewer Shows A Wide Horizontal Bar On Narrow Screens
+
+### Symptom
+
+On a narrow-width fullscreen media viewer:
+
+- a wide horizontal bar appears across the media stage
+- left and right arrows look merged into one oversized overlay
+- fullscreen composition breaks even though the inline gallery still looks acceptable
+
+### Likely Cause
+
+The fullscreen viewer and inline gallery share navigation classes such as `.media-lightbox-nav`.
+
+A generic mobile rule for `.media-lightbox-nav` can unintentionally stretch the fullscreen nav controls to full width.
+
+In the fullscreen path those controls are absolutely positioned side controls, so `width: 100%` makes the left and right buttons overlap across the stage.
+
+### First Checks
+
+1. Inspect the responsive rules for `.media-lightbox-nav` in `app/globals.css`.
+2. Confirm whether the fullscreen path uses `.media-lightbox-minimal`.
+3. Check whether fullscreen nav has an explicit scoped override such as `.media-lightbox-minimal .media-lightbox-nav`.
+4. Verify which element is drawing the bar before blaming filmstrip or browser video controls.
+
+### Typical Fix
+
+Keep inline/mobile responsive behavior separate from fullscreen responsive behavior.
+
+Use:
+
+- generic mobile rules for inline/shared baseline only
+- explicit fullscreen overrides through `.media-lightbox-minimal .media-lightbox-nav`
+
+Do not treat this as a `video-only` problem or a `filmstrip-only` problem unless inspection proves otherwise.
+
+### Relevant Files
+
+- `app/globals.css`
+- `components/tree/person-media-gallery.tsx`
+
+---
+
+# 18. Archive Upload Fails With Duplicate `(album_id, media_id)` Key Violation
+
+### Symptom
+
+Archive upload or album-targeted upload fails with errors such as:
+
+- `duplicate key value violates unique constraint "tree_media_album_items_album_id_media_id_key"`
+
+### Likely Cause
+
+Repository album-link logic attempted to insert the same `(album_id, media_id)` pair twice.
+
+Typical overlap zones:
+
+- selected manual album during archive upload
+- uploader auto-album linking
+- repeated completion/retry path for the same uploaded media
+
+### First Checks
+
+1. Inspect `completeArchiveMediaUpload(...)` in `lib/server/repository.ts`.
+2. Inspect `addMediaToTreeMediaAlbums(...)` in `lib/server/repository.ts`.
+3. Verify whether repository code checks for an existing album-item row before insert.
+4. Confirm whether uploader-album and manual target album could both point to the same final pair or whether the same completion path re-ran.
+
+### Typical Fix
+
+Do not weaken the unique constraint.
+
+Keep database integrity as-is and make repository linking idempotent:
+
+- fetch existing album-item rows for the candidate `(album_id, media_id)` pairs
+- insert only missing pairs
+
+### Relevant Files
+
+- `lib/server/repository.ts`
+- `components/media/tree-media-archive-client.tsx`
+- `app/api/media/archive/complete/route.ts`
+
+---
+
 # Practical Rule
 
 Before modifying production code, always determine which category the issue belongs to:

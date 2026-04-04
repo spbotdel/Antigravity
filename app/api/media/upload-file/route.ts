@@ -3,7 +3,9 @@ import sharp from "sharp";
 import { toErrorResponse } from "@/lib/server/errors";
 import { uploadFileToSignedUrl } from "@/lib/server/repository";
 
-const MAX_MEDIA_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
+const MAX_DEFAULT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const PHOTO_VARIANT_SPECS = {
   thumb: { width: 240, height: 240, fit: "cover" as const, quality: 72 },
   small: { width: 960, height: 960, fit: "inside" as const, quality: 78 },
@@ -14,6 +16,19 @@ interface VariantUploadTarget {
   variant: "thumb" | "small" | "medium";
   signedUrl: string;
   path: string;
+}
+
+function getMaxMediaFileSizeBytes(contentType?: string | null) {
+  const normalized = (contentType || "").trim().toLowerCase();
+  if (normalized.startsWith("video/")) {
+    return MAX_VIDEO_FILE_SIZE_BYTES;
+  }
+
+  if (normalized.startsWith("image/")) {
+    return MAX_PHOTO_FILE_SIZE_BYTES;
+  }
+
+  return MAX_DEFAULT_FILE_SIZE_BYTES;
 }
 
 function parseVariantTargets(rawValue: FormDataEntryValue | null): VariantUploadTarget[] {
@@ -82,10 +97,11 @@ export async function POST(request: Request) {
       return Response.json({ error: "Файл для загрузки не найден." }, { status: 400 });
     }
 
-    if (file.size > MAX_MEDIA_FILE_SIZE_BYTES) {
+    const maxFileSizeBytes = getMaxMediaFileSizeBytes(contentType || file.type);
+    if (file.size > maxFileSizeBytes) {
       return Response.json(
         {
-          error: `Размер файла превышает ${Math.round(MAX_MEDIA_FILE_SIZE_BYTES / (1024 * 1024))} МБ.`
+          error: `Размер файла превышает ${Math.round(maxFileSizeBytes / (1024 * 1024))} МБ.`
         },
         { status: 400 }
       );

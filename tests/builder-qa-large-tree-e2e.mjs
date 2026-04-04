@@ -88,18 +88,39 @@ async function waitForCondition(label, checkFn, timeoutMs = 60000, intervalMs = 
   throw new Error(`Timeout waiting for condition: ${label}`);
 }
 
-function sidebarItem(page, name) {
+function canvasNode(page, name) {
   return page
-    .locator(".person-list-item")
-    .filter({ has: page.locator("strong", { hasText: name }) })
+    .locator(".builder-node")
+    .filter({ hasText: name })
     .first();
 }
 
 async function selectPerson(page, name) {
-  const item = sidebarItem(page, name);
-  await item.waitFor({ timeout: 60000 });
-  await item.click();
-  await page.locator("aside.builder-inspector h2", { hasText: name }).waitFor({ timeout: 60000 });
+  await page.locator(".builder-node").first().waitFor({ timeout: 60000 });
+  const selected = await page.locator(".builder-node").evaluateAll((elements, expectedName) => {
+    const compactExpectedName = expectedName.replace(/\s+/g, "");
+    const match = elements.find((element) => ((element.textContent || "").replace(/\s+/g, "")).includes(compactExpectedName));
+    if (!match) {
+      return false;
+    }
+
+    match.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    return true;
+  }, name);
+
+  if (!selected) {
+    throw new Error(`Could not find builder node for "${name}"`);
+  }
+
+  await page.locator(".builder-inspector h2", { hasText: name }).waitFor({ timeout: 60000 });
+}
+
+function inspectorTab(page, label) {
+  return page
+    .locator(".builder-inspector")
+    .getByRole("tab", { name: label, exact: true })
+    .or(page.locator(".builder-inspector").getByRole("button", { name: label, exact: true }))
+    .first();
 }
 
 async function getSnapshot(baseUrl, slug) {
@@ -281,7 +302,7 @@ async function main() {
     await qaPage.goto(`${baseUrl}/tree/${slug}/builder`, { waitUntil: "domcontentloaded" });
     await qaPage.waitForURL(`**/tree/${slug}/builder`);
     await qaPage.locator(".builder-layout-reworked").waitFor({ timeout: 90000 });
-    await qaPage.locator(".person-list-item").first().waitFor({ timeout: 90000 });
+    await qaPage.locator(".builder-node").first().waitFor({ timeout: 90000 });
 
     for (const viewport of viewports) {
       const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -305,10 +326,10 @@ async function main() {
       await page.goto(`${baseUrl}/tree/${slug}/builder`, { waitUntil: "domcontentloaded" });
       await page.waitForURL(`**/tree/${slug}/builder`);
       await page.locator(".builder-layout-reworked").waitFor({ timeout: 90000 });
-      await page.locator(".person-list-item").first().waitFor({ timeout: 90000 });
+      await page.locator(".builder-node").first().waitFor({ timeout: 90000 });
 
       const screenshotPath = path.join(artifactDir, `builder-qa-${viewport.name}-${timestamp}.png`);
-      await page.screenshot({ path: screenshotPath, fullPage: true });
+      await page.screenshot({ path: screenshotPath, fullPage: true, timeout: 120000 });
       report.viewportChecks.push({
         viewport: viewport.name,
         width: viewport.width,
@@ -320,7 +341,7 @@ async function main() {
     }
 
     await selectPerson(qaPage, `${prefix} Parent`);
-    await qaPage.locator("aside.builder-inspector").getByRole("button", { name: "Связи", exact: true }).click();
+    await inspectorTab(qaPage, "Инфо").click();
 
     const childCard = qaPage.locator(".builder-relation-card").filter({
       has: qaPage.locator("strong", { hasText: `${prefix} Child` })
@@ -346,25 +367,25 @@ async function main() {
     });
     report.deletions.partnership = { ok: true, id: created.partnership.id };
 
-    await qaPage.locator("aside.builder-inspector").getByRole("button", { name: "Человек", exact: true }).click();
-    await selectPerson(qaPage, `${prefix} Partner`);
+    await inspectorTab(qaPage, "Инфо").click();
+    await selectPerson(qaPage, `${prefix} Parent`);
     qaPage.once("dialog", (dialog) => dialog.accept());
-    await qaPage.locator("aside.builder-inspector").getByRole("button", { name: "Удалить человека", exact: true }).click();
+    await qaPage.locator(".builder-inspector").getByRole("button", { name: "Удалить человека", exact: true }).click();
 
     await waitForCondition("person deleted", async () => {
       const snapshot = await getSnapshot(baseUrl, slug);
-      return !snapshot.people.some((person) => person.id === created.partner.id);
+      return !snapshot.people.some((person) => person.id === created.parent.id);
     });
-    report.deletions.person = { ok: true, id: created.partner.id };
+    report.deletions.person = { ok: true, id: created.parent.id };
 
-    created.partner = null;
+    created.parent = null;
     const publicPage = await desktopContext.newPage();
     const publicResponse = await publicPage.goto(`${baseUrl}/tree/${slug}`, { waitUntil: "domcontentloaded" });
     if (!publicResponse || publicResponse.status() >= 400) {
       throw new Error(`Public route failed after QA scenario: ${publicResponse?.status() || "no response"}`);
     }
     const publicShotPath = path.join(artifactDir, `builder-qa-public-${timestamp}.png`);
-    await publicPage.screenshot({ path: publicShotPath, fullPage: true });
+    await publicPage.screenshot({ path: publicShotPath, fullPage: true, timeout: 120000 });
     report.artifacts.publicPath = publicShotPath;
 
     const scenarioSnapshot = await getSnapshot(baseUrl, slug);

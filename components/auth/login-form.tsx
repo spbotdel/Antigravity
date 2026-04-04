@@ -3,6 +3,8 @@
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { translateAuthError } from "@/lib/auth-error";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
@@ -40,18 +42,18 @@ export function LoginForm() {
         }
       }}
     >
-      <label>
+      <label className="form-field">
         Почта
-        <input name="email" type="email" required placeholder="you@example.com" />
+        <Input name="email" type="email" required placeholder="you@example.com" />
       </label>
-      <label>
+      <label className="form-field">
         Пароль
-        <input name="password" type="password" required minLength={8} placeholder="********" />
+        <Input name="password" type="password" required minLength={8} placeholder="********" />
       </label>
       {error ? <p className="form-error">{error}</p> : null}
-      <button className="primary-button" type="submit" disabled={loading}>
+      <Button type="submit" disabled={loading}>
         {loading ? "Входим..." : "Войти"}
-      </button>
+      </Button>
     </form>
   );
 }

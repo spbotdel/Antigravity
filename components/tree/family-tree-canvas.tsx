@@ -1,9 +1,11 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 
-import type { DisplayTreeNode, ParentLinkRecord, PartnershipRecord, PersonRecord } from "@/lib/types";
+import { buildAvatarSvgImageAttrs } from "@/lib/avatar-crop";
+import type { AvatarCropValue, DisplayTreeNode, ParentLinkRecord, PartnershipRecord, PersonRecord } from "@/lib/types";
 
 const CARD_WIDTH = 248;
 const CARD_HEIGHT = 112;
@@ -320,6 +322,7 @@ interface FamilyTreeCanvasProps {
   parentLinks?: ParentLinkRecord[];
   partnerships?: PartnershipRecord[];
   personPhotoUrls?: Record<string, string>;
+  personPhotoCrops?: Record<string, AvatarCropValue>;
   viewportHeightHint?: number;
 }
 
@@ -587,15 +590,52 @@ function isPointComfortablyVisible(
   width: number,
   height: number
 ) {
+  const viewportMargins = getBuilderViewportMargins(width);
   const screenX = transform.applyX(point.x);
   const screenY = transform.applyY(point.y);
 
   return (
-    screenX >= BUILDER_VIEWPORT_MARGIN_X &&
-    screenX <= width - BUILDER_VIEWPORT_MARGIN_X &&
-    screenY >= BUILDER_VIEWPORT_MARGIN_Y &&
-    screenY <= height - BUILDER_VIEWPORT_MARGIN_Y
+    screenX >= viewportMargins.x &&
+    screenX <= width - viewportMargins.x &&
+    screenY >= viewportMargins.y &&
+    screenY <= height - viewportMargins.y
   );
+}
+
+function getBuilderViewportMargins(width: number) {
+  if (width <= 480) {
+    return { x: 40, y: 56 };
+  }
+
+  if (width <= 840) {
+    return { x: 52, y: 68 };
+  }
+
+  return { x: BUILDER_VIEWPORT_MARGIN_X, y: BUILDER_VIEWPORT_MARGIN_Y };
+}
+
+function getBuilderSelectedMinScale(width: number) {
+  if (width <= 480) {
+    return 0.82;
+  }
+
+  if (width <= 840) {
+    return 0.7;
+  }
+
+  return BUILDER_SELECTED_MIN_SCALE;
+}
+
+function getBuilderFocusRatios(width: number) {
+  if (width <= 480) {
+    return { x: 0.54, y: 0.36 };
+  }
+
+  if (width <= 840) {
+    return { x: 0.5, y: 0.34 };
+  }
+
+  return { x: BUILDER_FOCUS_X_RATIO, y: BUILDER_FOCUS_Y_RATIO };
 }
 
 interface BuilderCanvasLink {
@@ -1190,6 +1230,7 @@ export function FamilyTreeCanvas({
   parentLinks = [],
   partnerships = [],
   personPhotoUrls = EMPTY_PERSON_PHOTO_URLS,
+  personPhotoCrops = {},
   viewportHeightHint = 0
 }: FamilyTreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1288,13 +1329,13 @@ export function FamilyTreeCanvas({
 
     shadow.append("feDropShadow").attr("dx", 0).attr("dy", 10).attr("stdDeviation", 12).attr("flood-color", "#181b22").attr("flood-opacity", 0.08);
 
-    function registerAvatarPattern(personId: string, source: string) {
+    function registerAvatarPattern(personId: string, source: string, crop?: AvatarCropValue | null) {
       if (avatarPatternByPersonId.has(personId)) {
         return avatarPatternByPersonId.get(personId)!;
       }
 
       const patternId = getAvatarPatternId(personId);
-      defs
+      const image = defs
         .append("pattern")
         .attr("id", patternId)
         .attr("patternUnits", "objectBoundingBox")
@@ -1303,12 +1344,24 @@ export function FamilyTreeCanvas({
         .attr("height", 1)
         .append("image")
         .attr("href", source)
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("width", 1)
-        .attr("height", 1)
-        .attr("preserveAspectRatio", "xMidYMid slice")
         .attr("opacity", 0.96);
+
+      if (crop) {
+        const cropAttrs = buildAvatarSvgImageAttrs(crop);
+        image
+          .attr("x", cropAttrs.x)
+          .attr("y", cropAttrs.y)
+          .attr("width", cropAttrs.width)
+          .attr("height", cropAttrs.height)
+          .attr("preserveAspectRatio", "none");
+      } else {
+        image
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("width", 1)
+          .attr("height", 1)
+          .attr("preserveAspectRatio", "xMidYMid slice");
+      }
 
       avatarPatternByPersonId.set(personId, patternId);
       return patternId;
@@ -1318,6 +1371,8 @@ export function FamilyTreeCanvas({
       const layout = buildBuilderCanvasLayout(tree, people, parentLinks, partnerships, selectedPersonId);
       const selectedCanvasNode = selectedPersonId ? layout.nodes.find((node) => node.id === selectedPersonId) || null : null;
       const selectedChanged = lastSelectedPersonIdRef.current !== selectedPersonId;
+      const selectedMinScale = getBuilderSelectedMinScale(width);
+      const focusRatios = getBuilderFocusRatios(width);
       layout.nodes.forEach((node) => {
         if (node.type !== "person" || !node.id) {
           return;
@@ -1328,7 +1383,7 @@ export function FamilyTreeCanvas({
           return;
         }
 
-        registerAvatarPattern(node.id, badgeImage);
+        registerAvatarPattern(node.id, badgeImage, personPhotoUrls[node.id] ? personPhotoCrops[node.id] || null : null);
       });
 
       const zoom = d3
@@ -1673,23 +1728,23 @@ export function FamilyTreeCanvas({
           if (
             selectedChanged &&
             (!isPointComfortablyVisible(zoomTransformRef.current, selectedCanvasNode, width, height) ||
-              zoomTransformRef.current.k < BUILDER_SELECTED_MIN_SCALE)
+              zoomTransformRef.current.k < selectedMinScale)
           ) {
-            const nextScale = Math.max(zoomTransformRef.current.k, BUILDER_SELECTED_MIN_SCALE);
+            const nextScale = Math.max(zoomTransformRef.current.k, selectedMinScale);
             svg.call(
               zoom.transform,
-              getFocusedTransform(width, height, selectedCanvasNode, nextScale, BUILDER_FOCUS_X_RATIO, BUILDER_FOCUS_Y_RATIO)
+              getFocusedTransform(width, height, selectedCanvasNode, nextScale, focusRatios.x, focusRatios.y)
             );
           } else {
             svg.call(zoom.transform, zoomTransformRef.current);
           }
         } else {
           const scale = bounds && bounds.width > 0 && bounds.height > 0
-            ? Math.max(Math.min((width - 140) / bounds.width, (height - 120) / bounds.height, 1), BUILDER_SELECTED_MIN_SCALE)
-            : BUILDER_SELECTED_MIN_SCALE;
+            ? Math.max(Math.min((width - 140) / bounds.width, (height - 120) / bounds.height, 1), selectedMinScale)
+            : selectedMinScale;
           svg.call(
             zoom.transform,
-            getFocusedTransform(width, height, selectedCanvasNode, scale, BUILDER_FOCUS_X_RATIO, BUILDER_FOCUS_Y_RATIO)
+            getFocusedTransform(width, height, selectedCanvasNode, scale, focusRatios.x, focusRatios.y)
           );
         }
       } else if (zoomTransformRef.current) {
@@ -1730,7 +1785,7 @@ export function FamilyTreeCanvas({
         return;
       }
 
-      registerAvatarPattern(datum.data.id, badgeImage);
+      registerAvatarPattern(datum.data.id, badgeImage, personPhotoUrls[datum.data.id] ? personPhotoCrops[datum.data.id] || null : null);
     });
     const previewAnchorNode = createPreview
       ? selectPreferredCanvasItem(descendants, createPreview.anchorPersonId, (datum) => datum.data)
@@ -2024,16 +2079,19 @@ export function FamilyTreeCanvas({
       const y = height * VIEWER_FIT_Y_RATIO - bounds.y * scale;
       svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
     }
-  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoUrls, selectedPersonId, viewportHeightHint]);
+  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoCrops, personPhotoUrls, selectedPersonId, viewportHeightHint]);
 
   if (!tree) {
     return (
       <div className="empty-state tree-canvas-empty">
-        <p>Добавьте первого человека. Он станет корнем автоматически, а потом корень можно сменить прямо в конструкторе.</p>
+        <div className="empty-state-copy">
+          <strong>Дерево пока пусто</strong>
+          <p>Добавьте первого человека. Он станет корнем автоматически, а потом корень можно сменить прямо в конструкторе.</p>
+        </div>
         {interactive && onEmptyAction ? (
-          <button type="button" className="primary-button tree-canvas-empty-action" onClick={onEmptyAction}>
+          <Button type="button" className="tree-canvas-empty-action" onClick={onEmptyAction}>
             Добавить первый блок
-          </button>
+          </Button>
         ) : null}
       </div>
     );

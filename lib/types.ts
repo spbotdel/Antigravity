@@ -1,12 +1,17 @@
 export type UserRole = "owner" | "admin" | "viewer";
 export type TreeVisibility = "public" | "private";
 export type MediaVisibility = "public" | "members";
-export type MediaKind = "photo" | "video" | "document";
-export type MediaProvider = "supabase_storage" | "object_storage" | "yandex_disk";
+export type MediaKind = "photo" | "video" | "document" | "audio";
+export type MediaProvider = "supabase_storage" | "object_storage" | "cloudflare_r2" | "yandex_disk";
 export type MediaStorageBackend = "supabase" | "object_storage" | "cloudflare_r2";
 export type MediaUploadRolloutState = "steady_state" | "cloudflare_rollout_gated" | "cloudflare_rollout_active";
 export type MediaVariantName = "thumb" | "small" | "medium";
+export type MediaPreviewStatus = "pending" | "processing" | "ready" | "failed";
 export type TreeMediaAlbumKind = "manual" | "uploader";
+export type TreeMediaAlbumMediaKind = Extract<MediaKind, "photo" | "video">;
+export type AudioPlaybackSource =
+  | { type: "archive" }
+  | { type: "playlist"; playlistId: string };
 export type UploadMode = "direct" | "proxy";
 export type VariantUploadMode = "server_proxy" | "none";
 export type InviteMethod = "link" | "email";
@@ -89,6 +94,10 @@ export interface MediaAssetRecord {
   caption: string | null;
   mime_type: string | null;
   size_bytes: number | null;
+  preview_status: MediaPreviewStatus | null;
+  preview_error: string | null;
+  preview_attempt_count: number;
+  preview_claimed_at: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -98,6 +107,15 @@ export interface PersonMediaRecord {
   person_id: string;
   media_id: string;
   is_primary: boolean;
+  avatar_crop_x?: number | null;
+  avatar_crop_y?: number | null;
+  avatar_crop_zoom?: number | null;
+}
+
+export interface AvatarCropValue {
+  x: number;
+  y: number;
+  zoom: number;
 }
 
 export interface MediaAssetVariantRecord {
@@ -113,7 +131,7 @@ export interface MediaUploadVariantTarget {
   path: string;
   signedUrl: string;
   token: string | null;
-  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage">;
+  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage" | "cloudflare_r2">;
 }
 
 export interface MediaUploadTargetResponse {
@@ -123,7 +141,7 @@ export interface MediaUploadTargetResponse {
   bucket: string;
   signedUrl: string;
   token: string | null;
-  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage">;
+  uploadProvider: Extract<MediaProvider, "supabase_storage" | "object_storage" | "cloudflare_r2">;
   configuredBackend: MediaStorageBackend;
   resolvedUploadBackend: MediaStorageBackend;
   rolloutState: MediaUploadRolloutState;
@@ -138,6 +156,8 @@ export interface TreeMediaAlbumRecord {
   tree_id: string;
   title: string;
   description: string | null;
+  kind: TreeMediaAlbumMediaKind;
+  access: MediaVisibility;
   album_kind: TreeMediaAlbumKind;
   uploader_user_id: string | null;
   created_by: string | null;
@@ -149,6 +169,22 @@ export interface TreeMediaAlbumItemRecord {
   id: string;
   album_id: string;
   media_id: string;
+  created_at: string;
+}
+
+export interface TreeAudioPlaylistRecord {
+  id: string;
+  tree_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TreeAudioPlaylistItemRecord {
+  id: string;
+  playlist_id: string;
+  media_id: string;
+  position: number;
   created_at: string;
 }
 

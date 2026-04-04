@@ -153,39 +153,29 @@ Phase F — Avatar model
   - builder photo cards use preview variants by default
   - archive tiles and album covers use preview variants by default
 - [x] `smoke:media` and `smoke:media:direct` are green after the builder/gallery rewrite.
+- [x] Current engineering baseline is green on `typecheck`, `build`, `smoke:auth`, `smoke:e2e`, and `smoke:media:direct`.
+- [x] Hosted smoke baseline is green on the production alias used for current UAT checks.
+- [x] Builder QA now matches the current canvas-first UI and is green again on the viewport screenshot pass.
+- [x] Calm landing/dashboard copy pass is now in place with a fresh local visual QA report.
+- [x] Archive empty-state copy is now calmer without changing archive structure or workflow.
+- [x] Targeted hosted browser-emulation UAT is green for `builder`, `media`, `members`, and `viewer-share` on desktop/tablet/mobile.
+- [x] Targeted hosted album/mobile pass is green for a selected album state and mode switching on mobile.
 
 ## Remaining Focus
 
 - [ ] Visual and behavioral polish between person gallery and tree archive.
-- [ ] Archive album/mobile QA and calmer empty states.
-- [ ] Broader QA for builder/viewer/members after the current media UI pass.
-- [ ] Mandatory `Cloudflare R2` rollout for `Slava edition`:
-  - gated config verification
-  - direct-upload validation
-  - rollout activation
-  - post-activation stabilization
-  - legacy Yandex-backed read verification
-- [ ] Isolated broad smoke is still too slow for a reliable launch gate:
-  - profile `GET /api/dashboard`
-  - profile `GET /tree/[slug]/builder`
-  - profile `GET /tree/[slug]/members`
-  - profile `POST /api/invites/accept`
-  - profile `POST /api/share-links`
+- [ ] Final human archive album/mobile QA beyond the now-green synthetic pass.
+- [ ] Final live UAT for builder/viewer/members after the now-green automated and browser-emulated baseline.
+- [ ] Mandatory `Cloudflare R2` rollout for `Slava edition` is active and verified on smoke, but still needs final release/UAT close-out rather than more transport work.
+- [ ] Invite email path itself is healthy, but `Resend` sender/domain remains an external setup task that is intentionally deferred for now.
 
 ## Current Execution Order From Repo State
 
-1. Keep startup memory, README, and operational docs aligned with the launch rule that `Cloudflare R2` rollout is mandatory.
-2. Verify gated rollout readiness:
-   - `CF_R2_*`
-   - bucket CORS
-   - upload-intent metadata
-   - `smoke:media`
-   - `smoke:media:direct`
-3. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2`.
-4. Re-run targeted QA for archive/viewer/builder/members and close remaining media/archive regressions.
-5. Bring `smoke:e2e` back to a realistic launch-gate state by reducing isolated runtime latency on dashboard/tree/member/access flows.
-6. Run live `EU + RF` UAT.
-7. Execute backup/restore rehearsal and final launch checklist.
+1. Keep startup memory, README, and operational docs aligned with the now-green Cloudflare rollout baseline.
+2. Keep the active `Cloudflare R2` rollout stable and avoid widening transport scope unless a real regression appears.
+3. Re-run final human/UAT checks for archive/viewer/builder/members on the hosted truth surface.
+4. Run live `EU + RF` UAT.
+5. Capture a fresh manual database export and complete the final launch checklist.
 
 ## Status
 

@@ -1,16 +1,36 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
+import { ArrowUpRight, CalendarDays, Camera, Pencil } from "lucide-react";
+import { format as formatDateFn, parseISO } from "date-fns";
 
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SelectField } from "@/components/ui/select-field";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   FamilyTreeCanvas,
   type FamilyTreeCanvasAction
 } from "@/components/tree/family-tree-canvas";
+import { AvatarCropPreviewImage, BuilderAvatarPickerDialog } from "@/components/tree/builder-avatar-picker-dialog";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
-import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, collectPersonMedia } from "@/lib/tree/display";
-import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
+import { buildPrimaryPersonAvatarCrops, DEFAULT_AVATAR_CROP, getAvatarCropFromRelation } from "@/lib/avatar-crop";
+import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, buildUploaderAlbumSyntheticId, collectPersonMedia } from "@/lib/tree/display";
 import { formatDate, formatMediaUploadTransportHint, uploadFileWithTransportContract } from "@/lib/utils";
-import type { MediaUploadTargetResponse, ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
+import type { AvatarCropValue, MediaUploadTargetResponse, ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
 
 interface BuilderWorkspaceProps {
   snapshot: TreeSnapshot;
@@ -27,17 +47,13 @@ type CreateContext =
   | { type: "child"; anchorPersonId: string }
   | { type: "partner"; anchorPersonId: string };
 
-const PERSON_GENDER_OPTIONS = [
-  { value: "", label: "Не указывать" },
-  { value: "female", label: "Женщина" },
-  { value: "male", label: "Мужчина" },
-  { value: "other", label: "Другое" }
-] as const;
-
 const BUILDER_CANVAS_MIN_HEIGHT = 700;
 const BUILDER_CANVAS_MAX_HEIGHT = 1600;
-const MAX_MEDIA_FILES_PER_BATCH = 12;
-const MAX_MEDIA_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_MEDIA_FILES_PER_BATCH = 36;
+const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
+const MAX_DOCUMENT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const BIO_AUTOSAVE_DEBOUNCE_MS = 800;
 
 type MediaUploadKind = "photo" | "video" | "document" | "unknown";
 type MediaUploadStatus = "queued" | "uploading" | "finalizing" | "done" | "error";
@@ -102,57 +118,43 @@ function formatPartnershipStatus(value?: string | null) {
   return value;
 }
 
-function getMediaOpenLabel(kind: TreeSnapshot["media"][number]["kind"]) {
-  if (kind === "video") {
-    return "Открыть видео";
-  }
-
-  if (kind === "document") {
-    return "Открыть документ";
-  }
-
-  return "Открыть файл";
-}
-
-function getMediaSourceLabel(asset: TreeSnapshot["media"][number]) {
-  if (asset.provider === "yandex_disk") {
-    return "По ссылке";
-  }
-
-  return "Файл";
-}
-
 function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
   if (scope === "photo") {
     return {
       heading: "Фото",
-      description: "Фотографии добавляются в галерею человека и сразу доступны для выбора аватара и полного просмотра.",
       inputLabel: "Фотографии с устройства",
       accept: "image/*",
-      chooseButtonLabel: "Выбрать фото",
-      submitButtonLabel: "Проверить фото перед загрузкой"
+      chooseButtonLabel: "Загрузить фото"
     };
   }
 
   if (scope === "video") {
     return {
       heading: "Видео",
-      description: "Локальные видео загружаются отдельным потоком, а ссылки на внешний плеер остаются ниже как дополнительный сценарий.",
       inputLabel: "Видео с устройства",
       accept: "video/*",
-      chooseButtonLabel: "Выбрать видео",
-      submitButtonLabel: "Проверить видео перед загрузкой"
+      chooseButtonLabel: "Загрузить видео"
     };
   }
 
   return {
     heading: "Документы",
-    description: "Сканы, письма и другие документы остаются рядом с биографией и открываются отдельной ссылкой.",
     inputLabel: "Документы",
     accept: ".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx",
-    chooseButtonLabel: "Выбрать документы",
-    submitButtonLabel: "Проверить документы перед загрузкой"
+    chooseButtonLabel: "Загрузить документы"
   };
+}
+
+function getBuilderUploadScopeFileSizeLimit(scope: BuilderUploadScope) {
+  if (scope === "video") {
+    return MAX_VIDEO_FILE_SIZE_BYTES;
+  }
+
+  if (scope === "document") {
+    return MAX_DOCUMENT_FILE_SIZE_BYTES;
+  }
+
+  return MAX_PHOTO_FILE_SIZE_BYTES;
 }
 
 function detectMediaUploadKind(file: File): MediaUploadKind {
@@ -185,11 +187,13 @@ function formatMediaUploadBytes(value: number | null) {
   }
 
   if (value >= 1024 * 1024 * 1024) {
-    return `${(value / (1024 * 1024 * 1024)).toFixed(1)} ГБ`;
+    const scaledValue = value / (1024 * 1024 * 1024);
+    return `${Number.isInteger(scaledValue) ? scaledValue : scaledValue.toFixed(1)} ГБ`;
   }
 
   if (value >= 1024 * 1024) {
-    return `${(value / (1024 * 1024)).toFixed(1)} МБ`;
+    const scaledValue = value / (1024 * 1024);
+    return `${Number.isInteger(scaledValue) ? scaledValue : scaledValue.toFixed(1)} МБ`;
   }
 
   if (value >= 1024) {
@@ -199,35 +203,8 @@ function formatMediaUploadBytes(value: number | null) {
   return `${Math.round(value)} Б`;
 }
 
-function formatSelectedMediaFilesSummary(files: File[]) {
-  if (!files.length) {
-    return "Файлы не выбраны";
-  }
-
-  if (files.length === 1) {
-    return `Выбран 1 файл · ${formatMediaUploadBytes(files[0].size)}`;
-  }
-
-  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
-  return `Выбрано ${files.length} файлов · ${formatMediaUploadBytes(totalBytes)}`;
-}
-
-function formatSelectedMediaFilesHint(files: File[], scope: BuilderUploadScope) {
-  if (!files.length) {
-    if (scope === "photo") {
-      return "Можно выбрать сразу несколько фотографий для карточки человека.";
-    }
-
-    if (scope === "video") {
-      return "Можно выбрать сразу несколько видео с устройства.";
-    }
-
-    return "Документы добавляются отдельным набором и остаются рядом с биографией.";
-  }
-
-  return scope === "document"
-    ? "Проверьте выбранные файлы и сохраните набор."
-    : "Проверьте превью выбранных файлов перед сохранением.";
+function formatPhotoUploadCountLabel(count: number) {
+  return `${count} фото загружено`;
 }
 
 function formatMediaUploadQueueStatus(item: MediaUploadQueueItem) {
@@ -248,26 +225,6 @@ function formatMediaUploadQueueStatus(item: MediaUploadQueueItem) {
   }
 
   return "Файл загружается";
-}
-
-function formatMediaBatchProgressLabel(input: {
-  uploadedBytes: number;
-  totalBytes: number;
-  activeItem: MediaUploadQueueItem | null;
-  activeIndex: number | null;
-  totalItems: number;
-}) {
-  const uploadedLabel = `${formatMediaUploadBytes(input.uploadedBytes)} из ${formatMediaUploadBytes(input.totalBytes)}`;
-
-  if (!input.activeItem || !input.activeIndex) {
-    return `Подготавливаем загрузку. Уже отправили ${uploadedLabel}.`;
-  }
-
-  if (input.activeItem.status === "finalizing") {
-    return `Сохраняем файл ${input.activeIndex} из ${input.totalItems}. Уже отправили ${uploadedLabel}.`;
-  }
-
-  return `Загружаем файл ${input.activeIndex} из ${input.totalItems}. Уже отправили ${uploadedLabel}.`;
 }
 
 function buildMediaUploadProgress(loadedBytes: number, totalBytes: number, startedAtMs: number): MediaUploadProgressSnapshot {
@@ -292,6 +249,313 @@ function buildPendingMediaUploadItem(file: File): PendingMediaUploadItem {
     file,
     previewUrl: file.type.startsWith("image/") || file.type.startsWith("video/") ? URL.createObjectURL(file) : null
   };
+}
+
+function formatBuilderReviewFileSize(sizeBytes: number) {
+  if (sizeBytes >= 1024 * 1024) {
+    return `${(sizeBytes / (1024 * 1024)).toFixed(sizeBytes >= 10 * 1024 * 1024 ? 0 : 1)} МБ`;
+  }
+
+  if (sizeBytes >= 1024) {
+    return `${Math.round(sizeBytes / 1024)} КБ`;
+  }
+
+  return `${sizeBytes} Б`;
+}
+
+function getBuilderPendingUploadKindLabel(file: File) {
+  const kind = detectMediaUploadKind(file);
+
+  if (kind === "photo") {
+    return "Фото";
+  }
+
+  if (kind === "video") {
+    return "Видео";
+  }
+
+  if (kind === "document") {
+    return "Документ";
+  }
+
+  return "Файл";
+}
+
+function getInspectorAvatarFallback(name?: string | null) {
+  const parts = (name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) {
+    return "АГ";
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0] || "")
+    .join("")
+    .toUpperCase();
+}
+
+function getDisplayedBuilderGenderValue(value?: string | null) {
+  return value === "male" || value === "female" ? value : "";
+}
+
+function formatBuilderMetaDateValue(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return formatDateFn(parseISO(value), "dd.MM.yyyy");
+  } catch {
+    return "";
+  }
+}
+
+function buildPersonInfoDraftValue(values: {
+  gender?: string | null;
+  birthDate?: string | null;
+  deathDate?: string | null;
+  bio?: string | null;
+}) {
+  return {
+    gender: values.gender || "",
+    birthDate: values.birthDate || "",
+    deathDate: values.deathDate || "",
+    bio: values.bio || "",
+  };
+}
+
+function arePersonInfoDraftValuesEqual(
+  left: { gender: string; birthDate: string; deathDate: string; bio: string },
+  right: { gender: string; birthDate: string; deathDate: string; bio: string }
+) {
+  return (
+    left.gender === right.gender &&
+    left.birthDate === right.birthDate &&
+    left.deathDate === right.deathDate &&
+    left.bio === right.bio
+  );
+}
+
+function areStringSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>) {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function BuilderGenderToggleField({
+  name,
+  value,
+  onValueChange,
+  defaultValue = "",
+  suppressHydrationWarning = false,
+  className,
+  itemClassName,
+  ariaLabel = "Пол",
+  iconOnly = false,
+  spacing = 0,
+}: {
+  name?: string;
+  value?: string;
+  onValueChange?: (value: string) => void;
+  defaultValue?: string | null;
+  suppressHydrationWarning?: boolean;
+  className?: string;
+  itemClassName?: string;
+  ariaLabel?: string;
+  iconOnly?: boolean;
+  spacing?: number;
+}) {
+  const isControlled = value !== undefined;
+  const [internalValue, setInternalValue] = useState(defaultValue || "");
+
+  useEffect(() => {
+    if (!isControlled) {
+      setInternalValue(defaultValue || "");
+    }
+  }, [defaultValue, isControlled]);
+
+  const currentValue = isControlled ? value || "" : internalValue;
+  const displayedValue = getDisplayedBuilderGenderValue(currentValue);
+
+  return (
+    <>
+      {name ? <input type="hidden" name={name} value={currentValue} readOnly suppressHydrationWarning={suppressHydrationWarning} /> : null}
+      <ToggleGroup
+        aria-label={ariaLabel}
+        className={className || "grid w-full grid-cols-2 gap-2"}
+        value={displayedValue ? [displayedValue] : []}
+        onValueChange={(groupValue) => {
+          const nextValue = groupValue[0];
+          if (!nextValue) {
+            return;
+          }
+          if (isControlled) {
+            onValueChange?.(nextValue);
+            return;
+          }
+          setInternalValue(nextValue);
+        }}
+        variant="outline"
+        size="lg"
+        multiple={false}
+        spacing={spacing}
+      >
+        <ToggleGroupItem
+          aria-label="Мужчина"
+          className={itemClassName || "h-11 w-full justify-center rounded-md font-semibold"}
+          value="male"
+        >
+          {iconOnly ? "♂" : "Мужчина"}
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          aria-label="Женщина"
+          className={itemClassName || "h-11 w-full justify-center rounded-md font-semibold"}
+          value="female"
+        >
+          {iconOnly ? "♀" : "Женщина"}
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </>
+  );
+}
+
+function BuilderMetaDateField({
+  name,
+  defaultValue = "",
+  value,
+  onValueChange,
+  ariaLabel,
+}: {
+  name: string;
+  defaultValue?: string | null;
+  value?: string;
+  onValueChange?: (value: string) => void;
+  ariaLabel: string;
+}) {
+  const isControlled = value !== undefined;
+  const [internalValue, setInternalValue] = useState(defaultValue || "");
+
+  useEffect(() => {
+    if (!isControlled) {
+      setInternalValue(defaultValue || "");
+    }
+  }, [defaultValue, isControlled]);
+
+  const currentValue = isControlled ? value || "" : internalValue;
+  const selectedDate = currentValue ? parseISO(currentValue) : undefined;
+
+  return (
+    <>
+      <input
+        type="text"
+        className="sr-only"
+        aria-hidden="true"
+        tabIndex={-1}
+        name={name}
+        value={currentValue}
+        onChange={(event) => {
+          if (isControlled) {
+            onValueChange?.(event.currentTarget.value);
+            return;
+          }
+          setInternalValue(event.currentTarget.value);
+        }}
+      />
+      <Popover>
+        <PopoverTrigger
+          className="builder-inspector-meta-date-trigger"
+          aria-label={ariaLabel}
+          data-empty={currentValue ? "false" : "true"}
+          data-field={name === "deathDate" ? "death" : "birth"}
+        >
+          <span className="builder-inspector-meta-date-trigger-text">{formatBuilderMetaDateValue(currentValue) || "дд.мм.гггг"}</span>
+          <CalendarDays className="builder-inspector-meta-date-trigger-icon" aria-hidden="true" />
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            defaultMonth={selectedDate}
+            onSelect={(nextDate) => {
+              const nextValue = nextDate ? formatDateFn(nextDate, "yyyy-MM-dd") : "";
+              if (isControlled) {
+                onValueChange?.(nextValue);
+                return;
+              }
+              setInternalValue(nextValue);
+            }}
+            initialFocus
+          />
+          <div className="builder-inspector-meta-date-popover-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (isControlled) {
+                  onValueChange?.("");
+                  return;
+                }
+                setInternalValue("");
+              }}
+            >
+              Очистить
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </>
+  );
+}
+
+function buildBuilderPendingUploadsSummary(items: PendingMediaUploadItem[]) {
+  const stats = items.reduce(
+    (accumulator, item) => {
+      accumulator.totalBytes += item.file.size;
+
+      const kind = detectMediaUploadKind(item.file);
+      if (kind === "photo") {
+        accumulator.photoCount += 1;
+      } else if (kind === "video") {
+        accumulator.videoCount += 1;
+      } else {
+        accumulator.otherCount += 1;
+      }
+
+      return accumulator;
+    },
+    {
+      totalBytes: 0,
+      photoCount: 0,
+      videoCount: 0,
+      otherCount: 0,
+    }
+  );
+  const parts = [`${items.length} ${items.length === 1 ? "файл" : items.length < 5 ? "файла" : "файлов"}`];
+
+  if (stats.photoCount) {
+    parts.push(`${stats.photoCount} фото`);
+  }
+
+  if (stats.videoCount) {
+    parts.push(`${stats.videoCount} видео`);
+  }
+
+  if (stats.otherCount) {
+    parts.push(`${stats.otherCount} ${stats.otherCount === 1 ? "документ" : stats.otherCount < 5 ? "документа" : "документов"}`);
+  }
+
+  parts.push(formatBuilderReviewFileSize(stats.totalBytes));
+
+  return parts.join(" • ");
 }
 
 function revokePendingMediaUploadPreview(item: PendingMediaUploadItem) {
@@ -470,8 +734,27 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [pendingMediaUploads, setPendingMediaUploads] = useState<PendingMediaUploadItem[]>([]);
   const [isMediaUploadReviewOpen, setIsMediaUploadReviewOpen] = useState(false);
   const [isMediaUploadDiscardConfirmOpen, setIsMediaUploadDiscardConfirmOpen] = useState(false);
+  const [reviewMediaVisibility, setReviewMediaVisibility] = useState<"public" | "members">("public");
+  const [reviewMediaCaption, setReviewMediaCaption] = useState("");
+  const [isVideoAddPanelOpen, setIsVideoAddPanelOpen] = useState(false);
+  const [isVideoLinkFormOpen, setIsVideoLinkFormOpen] = useState(false);
+  const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
+  const [isEditingPersonName, setIsEditingPersonName] = useState(false);
+  const [isSavingPersonName, setIsSavingPersonName] = useState(false);
+  const [personNameDraft, setPersonNameDraft] = useState("");
+  const [selectedPersonGenderDraft, setSelectedPersonGenderDraft] = useState("");
+  const [selectedPersonBirthDateDraft, setSelectedPersonBirthDateDraft] = useState("");
+  const [selectedPersonDeathDateDraft, setSelectedPersonDeathDateDraft] = useState("");
+  const [bioDraft, setBioDraft] = useState("");
+  const [personInfoAutosaveState, setPersonInfoAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [expandedGalleryMode, setExpandedGalleryMode] = useState<"photo" | "video" | null>(null);
+  const [isPhotoSelectionMode, setIsPhotoSelectionMode] = useState(false);
+  const [selectedPhotoMediaIds, setSelectedPhotoMediaIds] = useState<Set<string>>(() => new Set());
+  const [isBulkPhotoDeleteConfirmOpen, setIsBulkPhotoDeleteConfirmOpen] = useState(false);
+  const [isBulkPhotoDeleting, setIsBulkPhotoDeleting] = useState(false);
   const [canvasHeight, setCanvasHeight] = useState(980);
+  const [builderInspectorWidth, setBuilderInspectorWidth] = useState(440);
+  const [isInspectorResizing, setIsInspectorResizing] = useState(false);
   const storageKeys = useMemo(
     () => ({
       canvasHeight: getBuilderStorageKey(snapshot.tree.id, "canvasHeight"),
@@ -483,13 +766,20 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   );
   const currentSnapshotRef = useRef(currentSnapshot);
   const resizeSessionRef = useRef<{ startHeight: number; startY: number } | null>(null);
+  const builderLayoutRef = useRef<HTMLDivElement | null>(null);
   const tempPersonResolutionPromisesRef = useRef(new Map<string, Promise<string | null>>());
   const tempPersonResolutionResolversRef = useRef(new Map<string, (personId: string | null) => void>());
   const resolvedTempPersonIdsRef = useRef(new Map<string, string | null>());
-  const mediaUploadFormRef = useRef<HTMLFormElement | null>(null);
   const mediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const reviewMediaFileInputRef = useRef<HTMLInputElement | null>(null);
   const pendingMediaUploadsRef = useRef<PendingMediaUploadItem[]>([]);
+  const pendingVideoPreviewPollIdsRef = useRef(new Set<string>());
+  const [optimisticVideoPreviewUrls, setOptimisticVideoPreviewUrls] = useState<Record<string, string>>({});
+  const selectedPersonIdRef = useRef<string | null>(selectedPersonId);
+  const personInfoDraftRef = useRef({ gender: "", birthDate: "", deathDate: "", bio: "" });
+  const lastSavedPersonInfoRef = useRef({ gender: "", birthDate: "", deathDate: "", bio: "" });
+  const personInfoSaveInFlightRef = useRef<{ personId: string; value: { gender: string; birthDate: string; deathDate: string; bio: string } } | null>(null);
+  const personInfoSaveRequestIdRef = useRef(0);
   const renderSnapshot = useMemo<TreeSnapshot>(
     () =>
       isClientReady
@@ -520,14 +810,16 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     () => (isClientReady ? buildPersonPhotoPreviewUrls(renderSnapshot) : {}),
     [renderSnapshot.media, renderSnapshot.personMedia, isClientReady]
   );
+  const personAvatarCrops = useMemo(
+    () => (isClientReady ? buildPrimaryPersonAvatarCrops(renderSnapshot) : {}),
+    [renderSnapshot.media, renderSnapshot.personMedia, isClientReady]
+  );
   const selectedPerson = selectedPersonId ? peopleById.get(selectedPersonId) || null : null;
   const selectedPersonPending = Boolean(selectedPerson && isTemporaryPersonId(selectedPerson.id));
   const selectedMedia = selectedPerson ? collectPersonMedia(renderSnapshot, selectedPerson.id) : [];
   const selectedStorageMedia = selectedMedia.filter((asset) => asset.provider !== "yandex_disk");
-  const selectedExternalVideos = selectedMedia.filter((asset) => asset.provider === "yandex_disk");
   const selectedPhotoMedia = selectedStorageMedia.filter((asset) => asset.kind === "photo");
   const selectedVideoMedia = selectedMedia.filter((asset) => asset.kind === "video");
-  const selectedLocalVideoMedia = selectedStorageMedia.filter((asset) => asset.kind === "video");
   const selectedDocumentMedia = selectedStorageMedia.filter((asset) => asset.kind === "document");
   const selectedPrimaryPhotoMediaId =
     selectedPerson
@@ -538,7 +830,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             renderSnapshot.media.some((asset) => asset.id === relation.media_id && asset.kind === "photo")
         )?.media_id || null
       : null;
+  const canDeleteSelectedPhotoMedia = currentSnapshot.actor.role === "owner" || currentSnapshot.actor.role === "admin";
+  const selectedPhotoMediaCount = selectedPhotoMediaIds.size;
   const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
+  const selectedAvatarCrop = selectedPerson ? personAvatarCrops[selectedPerson.id] || DEFAULT_AVATAR_CROP : DEFAULT_AVATAR_CROP;
+  const selectedPersonEditFormKey = selectedPerson ? selectedPerson.id : "edit-none";
   const anchorPerson = createContext.type === "standalone" ? null : peopleById.get(createContext.anchorPersonId) || null;
   const createHeading = getCreateContextHeading(createContext, anchorPerson);
   const createModeActive = activePanel === "person" && personMode === "create";
@@ -551,32 +847,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     ? renderSnapshot.partnerships.filter((partnership) => partnership.person_a_id === selectedPerson.id || partnership.person_b_id === selectedPerson.id)
     : [];
   const isSelectedRoot = Boolean(selectedPerson && visualRootPersonId === selectedPerson.id);
-  const totalQueuedMediaBytes = mediaUploadItems.reduce((sum, item) => sum + item.sizeBytes, 0);
-  const uploadedMediaBytes = mediaUploadItems.reduce((sum, item) => {
-    if (item.status === "done") {
-      return sum + item.sizeBytes;
-    }
-
-    return sum + Math.min(item.uploadedBytes, item.sizeBytes);
-  }, 0);
-  const activeMediaUploadItem =
-    mediaUploadItems.find((item) => item.status === "uploading" || item.status === "finalizing") || null;
-  const activeMediaUploadIndex = activeMediaUploadItem ? mediaUploadItems.findIndex((item) => item.id === activeMediaUploadItem.id) + 1 : null;
-  const mediaUploadProgressPercent =
-    isUploadingMedia && totalQueuedMediaBytes > 0 ? Math.min(100, Math.round((uploadedMediaBytes / totalQueuedMediaBytes) * 100)) : 0;
-  const selectedMediaFiles = pendingMediaUploads.map((item) => item.file);
-  const mediaUploadButtonLabel = isUploadingMedia ? `Загружаем ${mediaUploadProgressPercent}%` : activeUploadConfig.submitButtonLabel;
-  const mediaUploadProgressLabel = isUploadingMedia
-    ? formatMediaBatchProgressLabel({
-        uploadedBytes: uploadedMediaBytes,
-        totalBytes: totalQueuedMediaBytes,
-        activeItem: activeMediaUploadItem,
-        activeIndex: activeMediaUploadIndex,
-        totalItems: mediaUploadItems.length
-      })
-    : null;
-  const selectedMediaFilesSummary = formatSelectedMediaFilesSummary(selectedMediaFiles);
-  const selectedMediaFilesHint = formatSelectedMediaFilesHint(selectedMediaFiles, activeUploadScope);
   const inspectorTitle = createModeActive ? createHeading.title : selectedPerson ? selectedPerson.full_name : "Выберите человека";
   const inspectorDescription = createModeActive
     ? "Заполните поля и сохраните новый блок."
@@ -585,6 +855,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       : selectedPerson
       ? null
       : "Сначала выберите человека на схеме или в списке слева.";
+  const canInlineEditInspectorName = activePanel === "person" && !createModeActive && !selectedPersonPending && Boolean(selectedPerson);
+  const pendingMediaUploadsSummary = useMemo(
+    () => buildBuilderPendingUploadsSummary(pendingMediaUploads),
+    [pendingMediaUploads]
+  );
   const stageTitle = expandedGalleryMode
     ? selectedPerson
       ? expandedGalleryMode === "photo"
@@ -604,13 +879,132 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       : "Видео вынесены на основную сцену: здесь удобнее смотреть локальные ролики и переходить к внешним ссылкам."
     : createModeActive
       ? "Создайте новый отдельный блок. Для существующих карточек используйте +, чтобы сразу добавлять родственников в схему."
-      : selectedPerson
+    : selectedPerson
         ? "Выберите блок, чтобы он подсветился. Кнопка + открывает меню связей, корзина удаляет выбранного человека."
         : "Выберите карточку на схеме или добавьте первого человека, чтобы начать собирать структуру семьи.";
 
   useEffect(() => {
+    if (!status || status.endsWith("...")) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setStatus((currentStatus) => (currentStatus === status ? null : currentStatus));
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [status]);
+
+  useEffect(() => {
+    if (personInfoAutosaveState !== "saved") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setPersonInfoAutosaveState((currentState) => (currentState === "saved" ? "idle" : currentState));
+    }, 1600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [personInfoAutosaveState]);
+
+  useEffect(() => {
+    selectedPersonIdRef.current = selectedPersonId;
+  }, [selectedPersonId]);
+
+  useEffect(() => {
+    if (!selectedPerson || createModeActive) {
+      setIsAvatarPickerOpen(false);
+    }
+  }, [createModeActive, selectedPerson]);
+
+  useEffect(() => {
+    personInfoDraftRef.current = buildPersonInfoDraftValue({
+      gender: selectedPersonGenderDraft,
+      birthDate: selectedPersonBirthDateDraft,
+      deathDate: selectedPersonDeathDateDraft,
+      bio: bioDraft,
+    });
+  }, [selectedPersonGenderDraft, selectedPersonBirthDateDraft, selectedPersonDeathDateDraft, bioDraft]);
+
+  useEffect(() => {
     setIsClientReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!selectedPerson) {
+      setIsEditingPersonName(false);
+      setIsSavingPersonName(false);
+      setPersonNameDraft("");
+      setSelectedPersonGenderDraft("");
+      setSelectedPersonBirthDateDraft("");
+      setSelectedPersonDeathDateDraft("");
+      setBioDraft("");
+      lastSavedPersonInfoRef.current = buildPersonInfoDraftValue({});
+      personInfoSaveInFlightRef.current = null;
+      setPersonInfoAutosaveState("idle");
+      return;
+    }
+
+    setPersonNameDraft(selectedPerson.full_name);
+    setSelectedPersonGenderDraft(selectedPerson.gender || "");
+    setSelectedPersonBirthDateDraft(selectedPerson.birth_date || "");
+    setSelectedPersonDeathDateDraft(selectedPerson.death_date || "");
+    setBioDraft(selectedPerson.bio || "");
+    setIsEditingPersonName(false);
+    setIsSavingPersonName(false);
+  }, [selectedPerson?.id, selectedPerson?.full_name, selectedPerson?.gender, selectedPerson?.birth_date, selectedPerson?.death_date, selectedPerson?.bio]);
+
+  useEffect(() => {
+    lastSavedPersonInfoRef.current = buildPersonInfoDraftValue({
+      gender: selectedPerson?.gender,
+      birthDate: selectedPerson?.birth_date,
+      deathDate: selectedPerson?.death_date,
+      bio: selectedPerson?.bio,
+    });
+    personInfoSaveInFlightRef.current = null;
+    setPersonInfoAutosaveState("idle");
+  }, [selectedPerson?.id]);
+
+  useEffect(() => {
+    if (!selectedPerson || selectedPersonPending) {
+      return;
+    }
+
+    const currentDraft = buildPersonInfoDraftValue({
+      gender: selectedPersonGenderDraft,
+      birthDate: selectedPersonBirthDateDraft,
+      deathDate: selectedPersonDeathDateDraft,
+      bio: bioDraft,
+    });
+
+    if (arePersonInfoDraftValuesEqual(currentDraft, lastSavedPersonInfoRef.current)) {
+      return;
+    }
+
+    const inFlight = personInfoSaveInFlightRef.current;
+    if (inFlight && inFlight.personId === selectedPerson.id && arePersonInfoDraftValuesEqual(inFlight.value, currentDraft)) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void savePersonInfo(selectedPerson.id, personInfoDraftRef.current);
+    }, BIO_AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    bioDraft,
+    selectedPerson?.id,
+    selectedPersonGenderDraft,
+    selectedPersonBirthDateDraft,
+    selectedPersonDeathDateDraft,
+    selectedPersonPending,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -719,6 +1113,97 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     }
   }, [activePanel, currentBuilderTab, expandedGalleryMode]);
 
+  useEffect(() => {
+    if (!isInspectorResizing) {
+      return undefined;
+    }
+
+    function handlePointerMove(event: globalThis.PointerEvent) {
+      const layout = builderLayoutRef.current;
+      if (!layout) {
+        return;
+      }
+
+      const rect = layout.getBoundingClientRect();
+      const nextWidth = rect.right - event.clientX;
+      const maxWidth = Math.min(720, Math.max(420, rect.width - 320));
+      setBuilderInspectorWidth(Math.max(360, Math.min(maxWidth, nextWidth)));
+    }
+
+    function stopResize() {
+      setIsInspectorResizing(false);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+    };
+  }, [isInspectorResizing]);
+
+  useEffect(() => {
+    setIsPhotoSelectionMode(false);
+    setSelectedPhotoMediaIds(new Set());
+    setIsBulkPhotoDeleteConfirmOpen(false);
+    setIsBulkPhotoDeleting(false);
+  }, [selectedPersonId, currentBuilderTab]);
+
+  useEffect(() => {
+    if (!canDeleteSelectedPhotoMedia) {
+      setIsPhotoSelectionMode(false);
+      setSelectedPhotoMediaIds((currentSelection) => (currentSelection.size ? new Set() : currentSelection));
+      setIsBulkPhotoDeleteConfirmOpen(false);
+      return;
+    }
+
+    const availablePhotoIds = new Set(selectedPhotoMedia.map((asset) => asset.id));
+    setSelectedPhotoMediaIds((currentSelection) => {
+      const nextSelection = new Set([...currentSelection].filter((mediaId) => availablePhotoIds.has(mediaId)));
+      return areStringSetsEqual(currentSelection, nextSelection) ? currentSelection : nextSelection;
+    });
+  }, [canDeleteSelectedPhotoMedia, selectedPhotoMedia]);
+
+  useEffect(() => {
+    if (!selectedPhotoMediaCount && isBulkPhotoDeleteConfirmOpen) {
+      setIsBulkPhotoDeleteConfirmOpen(false);
+    }
+  }, [isBulkPhotoDeleteConfirmOpen, selectedPhotoMediaCount]);
+
+  useEffect(() => {
+    if (!selectedPhotoMediaCount && isPhotoSelectionMode) {
+      setIsPhotoSelectionMode(false);
+    }
+  }, [isPhotoSelectionMode, selectedPhotoMediaCount]);
+
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape" || !isPhotoSelectionMode || !selectedPhotoMediaCount) {
+        return;
+      }
+
+      if (document.body.classList.contains("media-lightbox-open")) {
+        return;
+      }
+
+      if (document.querySelector('[data-slot="dialog-content"]')) {
+        return;
+      }
+
+      if (document.querySelector('[data-slot="popover-content"]')) {
+        return;
+      }
+
+      clearSelectedPhotoMedia();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPhotoSelectionMode, selectedPhotoMediaCount]);
+
   function startCanvasResize(event: PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
     resizeSessionRef.current = {
@@ -823,8 +1308,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       for (const item of pendingMediaUploadsRef.current) {
         revokePendingMediaUploadPreview(item);
       }
+      pendingVideoPreviewPollIdsRef.current.clear();
+      for (const previewUrl of Object.values(optimisticVideoPreviewUrls)) {
+        URL.revokeObjectURL(previewUrl);
+      }
     };
-  }, []);
+  }, [optimisticVideoPreviewUrls]);
 
   useEffect(() => {
     if (!isClientReady) {
@@ -1224,6 +1713,261 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     return payload;
   }
 
+  function storeOptimisticVideoPreview(mediaId: string, previewUrl: string) {
+    setOptimisticVideoPreviewUrls((current) => {
+      if (current[mediaId] === previewUrl) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [mediaId]: previewUrl
+      };
+    });
+  }
+
+  function clearOptimisticVideoPreview(mediaId: string) {
+    setOptimisticVideoPreviewUrls((current) => {
+      const previewUrl = current[mediaId];
+      if (!previewUrl) {
+        return current;
+      }
+
+      URL.revokeObjectURL(previewUrl);
+      const next = { ...current };
+      delete next[mediaId];
+      return next;
+    });
+  }
+
+  async function pollBuilderVideoPreviewUntilReady(mediaId: string) {
+    if (pendingVideoPreviewPollIdsRef.current.has(mediaId)) {
+      return;
+    }
+
+    pendingVideoPreviewPollIdsRef.current.add(mediaId);
+
+    try {
+      for (let attempt = 0; attempt < 18; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, attempt < 6 ? 2000 : 5000));
+
+        const response = await fetch(
+          new URL(`/api/tree/${currentSnapshotRef.current.tree.slug}/builder-snapshot?includeMedia=1`, window.location.origin).toString(),
+          { cache: "no-store" }
+        );
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload) {
+          continue;
+        }
+
+        const nextSnapshot = payload as TreeSnapshot;
+        if (!nextSnapshot || !Array.isArray(nextSnapshot.media)) {
+          continue;
+        }
+        const refreshedMedia = nextSnapshot.media.find((asset) => asset.id === mediaId) || null;
+        if (!refreshedMedia) {
+          break;
+        }
+
+        updateSnapshot((prev) => ({
+          ...prev,
+          media: prev.media.map((asset) => (asset.id === mediaId ? refreshedMedia : asset))
+        }));
+
+        if (refreshedMedia.preview_status !== "pending" && refreshedMedia.preview_status !== "processing") {
+          clearOptimisticVideoPreview(mediaId);
+          break;
+        }
+      }
+    } finally {
+      pendingVideoPreviewPollIdsRef.current.delete(mediaId);
+    }
+  }
+
+  function switchToPhotoTab() {
+    setMediaMode("photo");
+    setActivePanel("media");
+  }
+
+  async function savePersonAvatar(mediaId: string, avatarCrop?: AvatarCropValue) {
+    if (!selectedPerson) {
+      return false;
+    }
+
+    setStatus(null);
+    const payload = await requestJson(`/api/media/${mediaId}`, "PATCH", {
+      personId: selectedPerson.id,
+      setPrimary: true,
+      avatarCrop
+    });
+    if (!payload?.relation) {
+      return false;
+    }
+
+    const nextCrop = getAvatarCropFromRelation(payload.relation);
+    updateSnapshot((prev) => {
+      let relationFound = false;
+      const nextPersonMedia = prev.personMedia.map((relation) => {
+        if (relation.person_id !== selectedPerson.id) {
+          return relation;
+        }
+
+        if (relation.media_id === mediaId) {
+          relationFound = true;
+          return {
+            ...relation,
+            is_primary: true,
+            avatar_crop_x: nextCrop.x,
+            avatar_crop_y: nextCrop.y,
+            avatar_crop_zoom: nextCrop.zoom
+          };
+        }
+
+        return {
+          ...relation,
+          is_primary: false
+        };
+      });
+
+      if (!relationFound) {
+        nextPersonMedia.push({
+          ...payload.relation,
+          person_id: selectedPerson.id,
+          media_id: mediaId,
+          is_primary: true,
+          avatar_crop_x: nextCrop.x,
+          avatar_crop_y: nextCrop.y,
+          avatar_crop_zoom: nextCrop.zoom
+        });
+      }
+
+      return {
+        ...prev,
+        personMedia: nextPersonMedia
+      };
+    });
+
+    setStatus(payload.message || "Аватар обновлен.");
+    return true;
+  }
+
+  async function requestBuilderPhotoDelete(mediaId: string) {
+    const { response, payload } = await requestJsonRaw(`/api/media/${mediaId}`, "DELETE", {});
+    if (!response.ok) {
+      throw new Error(payload.error || "Не удалось удалить фото.");
+    }
+
+    return payload;
+  }
+
+  function patchDeletedMedia(mediaIds: Iterable<string>) {
+    const deletedMediaIds = new Set(mediaIds);
+    if (!deletedMediaIds.size) {
+      return;
+    }
+
+    for (const mediaId of deletedMediaIds) {
+      clearOptimisticVideoPreview(mediaId);
+    }
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      media: prev.media.filter((asset) => !deletedMediaIds.has(asset.id)),
+      personMedia: prev.personMedia.filter((relation) => !deletedMediaIds.has(relation.media_id)),
+    }));
+  }
+
+  async function deleteBuilderPhoto(mediaId: string) {
+    setStatus(null);
+    setError(null);
+
+    try {
+      const payload = await requestBuilderPhotoDelete(mediaId);
+      patchDeletedMedia([mediaId]);
+      setStatus(payload.message || "Фото удалено.");
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : "Не удалось удалить фото.";
+      setError(message);
+      throw deleteError;
+    }
+  }
+
+  function toggleSelectedPhotoMedia(mediaId: string) {
+    if (!canDeleteSelectedPhotoMedia) {
+      return;
+    }
+
+    setSelectedPhotoMediaIds((currentSelection) => {
+      const nextSelection = new Set(currentSelection);
+      if (nextSelection.has(mediaId)) {
+        nextSelection.delete(mediaId);
+      } else {
+        nextSelection.add(mediaId);
+      }
+      return nextSelection;
+    });
+  }
+
+  function startPhotoSelectionMode(mediaId: string) {
+    if (!canDeleteSelectedPhotoMedia) {
+      return;
+    }
+
+    setIsPhotoSelectionMode(true);
+    setSelectedPhotoMediaIds((currentSelection) => new Set([...currentSelection, mediaId]));
+  }
+
+  function clearSelectedPhotoMedia() {
+    setIsPhotoSelectionMode(false);
+    setSelectedPhotoMediaIds(new Set());
+    setIsBulkPhotoDeleteConfirmOpen(false);
+  }
+
+  async function deleteSelectedBuilderPhotos() {
+    const mediaIdsToDelete = [...selectedPhotoMediaIds];
+    if (!mediaIdsToDelete.length || isBulkPhotoDeleting) {
+      return;
+    }
+
+    setStatus(null);
+    setError(null);
+    setIsBulkPhotoDeleting(true);
+
+    const deletedMediaIds: string[] = [];
+    let firstErrorMessage: string | null = null;
+
+    try {
+      for (const mediaId of mediaIdsToDelete) {
+        try {
+          await requestBuilderPhotoDelete(mediaId);
+          deletedMediaIds.push(mediaId);
+        } catch (deleteError) {
+          if (!firstErrorMessage) {
+            firstErrorMessage = deleteError instanceof Error ? deleteError.message : "Не удалось удалить выбранные фото.";
+          }
+        }
+      }
+
+      if (deletedMediaIds.length) {
+        patchDeletedMedia(deletedMediaIds);
+      }
+
+      clearSelectedPhotoMedia();
+
+      if (deletedMediaIds.length === mediaIdsToDelete.length) {
+        setStatus(`Удалено ${deletedMediaIds.length} ${deletedMediaIds.length === 1 ? "фото" : "фото"}.`);
+      } else if (deletedMediaIds.length > 0) {
+        setStatus(`Удалено ${deletedMediaIds.length} из ${mediaIdsToDelete.length} фото.`);
+      }
+
+      if (firstErrorMessage) {
+        setError(firstErrorMessage);
+      }
+    } finally {
+      setIsBulkPhotoDeleting(false);
+    }
+  }
+
   async function setRootPerson(personId: string | null) {
     setStatus(null);
     const payload = await requestJson(`/api/trees/${currentSnapshotRef.current.tree.id}`, "PATCH", {
@@ -1399,20 +2143,86 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setStatus(payload.message || "Дата пары обновлена.");
   }
 
-  async function savePerson(personId: string, values: {
-    fullName: string;
-    gender: string | null;
-    birthDate: string | null;
-    deathDate: string | null;
-    birthPlace?: string | null;
-    deathPlace?: string | null;
-    bio: string | null;
-    isLiving: boolean;
-  }) {
-    setStatus(null);
-    const payload = await requestJson(`/api/persons/${personId}`, "PATCH", values);
+  async function savePersonInfo(
+    personId: string,
+    nextValues: { gender: string; birthDate: string; deathDate: string; bio: string }
+  ) {
+    if (arePersonInfoDraftValuesEqual(nextValues, lastSavedPersonInfoRef.current)) {
+      return null;
+    }
+
+    const inFlight = personInfoSaveInFlightRef.current;
+    if (inFlight && inFlight.personId === personId && arePersonInfoDraftValuesEqual(inFlight.value, nextValues)) {
+      return null;
+    }
+
+    const requestId = ++personInfoSaveRequestIdRef.current;
+    personInfoSaveInFlightRef.current = { personId, value: nextValues };
+    setPersonInfoAutosaveState("saving");
+
+    const payload = await requestJson(`/api/persons/${personId}`, "PATCH", {
+      gender: nextValues.gender || null,
+      birthDate: nextValues.birthDate || null,
+      deathDate: nextValues.deathDate || null,
+      bio: nextValues.bio || null,
+      isLiving: !nextValues.deathDate,
+    });
+
+    if (
+      personInfoSaveInFlightRef.current &&
+      personInfoSaveInFlightRef.current.personId === personId &&
+      arePersonInfoDraftValuesEqual(personInfoSaveInFlightRef.current.value, nextValues)
+    ) {
+      personInfoSaveInFlightRef.current = null;
+    }
+
     if (!payload?.person) {
-      return;
+      if (personInfoSaveRequestIdRef.current === requestId) {
+        setPersonInfoAutosaveState("idle");
+      }
+      return null;
+    }
+
+    const updatedPerson = {
+      ...payload.person,
+      gender: nextValues.gender || null,
+      birth_date: nextValues.birthDate || null,
+      death_date: nextValues.deathDate || null,
+      bio: nextValues.bio || null,
+    } as PersonRecord;
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      people: sortPeopleRecords(prev.people.map((person) => (person.id === personId ? updatedPerson : person)))
+    }));
+    if (selectedPersonIdRef.current === personId) {
+      lastSavedPersonInfoRef.current = buildPersonInfoDraftValue({
+        gender: updatedPerson.gender,
+        birthDate: updatedPerson.birth_date,
+        deathDate: updatedPerson.death_date,
+        bio: updatedPerson.bio,
+      });
+    }
+
+    if (
+      selectedPersonIdRef.current === personId &&
+      personInfoSaveRequestIdRef.current === requestId &&
+      arePersonInfoDraftValuesEqual(personInfoDraftRef.current, lastSavedPersonInfoRef.current)
+    ) {
+      setPersonInfoAutosaveState("saved");
+    }
+
+    return updatedPerson;
+  }
+
+  async function savePersonName(personId: string, fullName: string) {
+    setStatus(null);
+    setError(null);
+    setIsSavingPersonName(true);
+    const payload = await requestJson(`/api/persons/${personId}`, "PATCH", { fullName });
+    setIsSavingPersonName(false);
+    if (!payload?.person) {
+      return null;
     }
 
     updateSnapshot((prev) => ({
@@ -1420,6 +2230,43 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       people: sortPeopleRecords(prev.people.map((person) => (person.id === personId ? payload.person : person)))
     }));
     setStatus(payload.message || "Данные человека обновлены.");
+    return payload.person as PersonRecord;
+  }
+
+  function startPersonNameEdit() {
+    if (!selectedPerson || !canInlineEditInspectorName) {
+      return;
+    }
+
+    setError(null);
+    setPersonNameDraft(selectedPerson.full_name);
+    setIsEditingPersonName(true);
+  }
+
+  async function commitPersonNameEdit() {
+    if (!selectedPerson || isSavingPersonName) {
+      return;
+    }
+
+    const nextName = personNameDraft.trim();
+    if (nextName === selectedPerson.full_name) {
+      setPersonNameDraft(selectedPerson.full_name);
+      setIsEditingPersonName(false);
+      return;
+    }
+
+    if (nextName.length < 2) {
+      setError("Полное имя должно быть не короче 2 символов.");
+      return;
+    }
+
+    const updatedPerson = await savePersonName(selectedPerson.id, nextName);
+    if (!updatedPerson) {
+      return;
+    }
+
+    setPersonNameDraft(updatedPerson.full_name);
+    setIsEditingPersonName(false);
   }
 
   function updateMediaUploadItem(itemId: string, updates: Partial<MediaUploadQueueItem>) {
@@ -1427,23 +2274,15 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   }
 
   function getMediaUploadFormValues() {
-    const formElement = mediaUploadFormRef.current;
-    if (!formElement) {
-      return {
-        title: "",
-        visibility: "public",
-        caption: ""
-      };
-    }
-
-    const form = new FormData(formElement);
     return {
-      visibility: String(form.get("visibility") || "public"),
-      caption: String(form.get("caption") || "")
+      visibility: reviewMediaVisibility,
+      caption: reviewMediaCaption.trim()
     };
   }
 
   function validatePendingMediaFiles(files: File[]) {
+    const maxFileSizeBytes = getBuilderUploadScopeFileSizeLimit(activeUploadScope);
+
     if (!files.length) {
       return "Сначала выберите хотя бы один файл.";
     }
@@ -1452,9 +2291,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       return `За один раз можно загрузить не больше ${MAX_MEDIA_FILES_PER_BATCH} файлов.`;
     }
 
-    const oversizedFiles = files.filter((file) => file.size > MAX_MEDIA_FILE_SIZE_BYTES);
+    const oversizedFiles = files.filter((file) => file.size > maxFileSizeBytes);
     if (oversizedFiles.length) {
-      return `Файл больше ${formatMediaUploadBytes(MAX_MEDIA_FILE_SIZE_BYTES)}: ${oversizedFiles
+      return `Файл больше ${formatMediaUploadBytes(maxFileSizeBytes)}: ${oversizedFiles
         .slice(0, 3)
         .map((file) => file.name)
         .join(", ")}.`;
@@ -1463,15 +2302,19 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     return null;
   }
 
-  function clearPendingMediaUploads() {
+  function clearPendingMediaUploads(options?: { preservePreviewUrls?: boolean }) {
     for (const item of pendingMediaUploadsRef.current) {
-      revokePendingMediaUploadPreview(item);
+      if (!options?.preservePreviewUrls) {
+        revokePendingMediaUploadPreview(item);
+      }
     }
 
     pendingMediaUploadsRef.current = [];
     setPendingMediaUploads([]);
     setIsMediaUploadReviewOpen(false);
     setIsMediaUploadDiscardConfirmOpen(false);
+    setReviewMediaVisibility("public");
+    setReviewMediaCaption("");
 
     if (mediaFileInputRef.current) {
       mediaFileInputRef.current.value = "";
@@ -1518,6 +2361,134 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     event.target.value = "";
   }
 
+  function openMediaPickerOrReview() {
+    if (pendingMediaUploadsRef.current.length) {
+      setError(null);
+      setIsMediaUploadReviewOpen(true);
+      return;
+    }
+
+    mediaFileInputRef.current?.click();
+  }
+
+  function handleVideoAddPanelOpenChange(open: boolean) {
+    setIsVideoAddPanelOpen(open);
+    if (!open) {
+      setIsVideoLinkFormOpen(false);
+    }
+  }
+
+  function renderMediaAddTileContent(label: string) {
+    return (
+      <span className="person-media-thumb-visual builder-media-add-tile-visual">
+        <span className="builder-media-add-tile-plus" aria-hidden="true">+</span>
+        <span className="builder-media-add-tile-label">{label}</span>
+      </span>
+    );
+  }
+
+  function renderPhotoAddTile() {
+    return (
+      <button
+        type="button"
+        className="person-media-thumb person-media-thumb-compact builder-media-add-tile"
+        aria-label="Добавить фото"
+        onClick={openMediaPickerOrReview}
+      >
+        {renderMediaAddTileContent("Добавить фото")}
+      </button>
+    );
+  }
+
+  function renderVideoAddTile() {
+    return (
+      <Popover open={isVideoAddPanelOpen} onOpenChange={handleVideoAddPanelOpenChange}>
+        <PopoverTrigger
+          className="person-media-thumb person-media-thumb-compact builder-media-add-tile"
+          aria-label="Добавить видео"
+        >
+          {renderMediaAddTileContent("Добавить видео")}
+        </PopoverTrigger>
+        <PopoverContent className="builder-video-add-popover" align="start" sideOffset={8}>
+          {!isVideoLinkFormOpen ? (
+            <div className="archive-action-bar builder-video-add-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                className="builder-video-link-toggle"
+                onClick={() => {
+                  setIsVideoAddPanelOpen(false);
+                  openMediaPickerOrReview();
+                }}
+              >
+                Загрузить видео
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="builder-video-link-toggle"
+                onClick={() => setIsVideoLinkFormOpen(true)}
+              >
+                Видео по ссылке
+              </Button>
+            </div>
+          ) : (
+            <form
+              className="stack-form builder-form-grid builder-video-link-form"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const selectedPersonId = selectedPerson?.id;
+                if (!selectedPersonId) {
+                  setIsVideoLinkFormOpen(false);
+                  setIsVideoAddPanelOpen(false);
+                  return;
+                }
+                const form = new FormData(event.currentTarget);
+                await submitJson("/api/media/complete", "POST", {
+                  treeId: currentSnapshot.tree.id,
+                  personId: selectedPersonId,
+                  mediaId: crypto.randomUUID(),
+                  provider: "yandex_disk",
+                  externalUrl: String(form.get("externalUrl") || "").trim(),
+                  visibility: String(form.get("visibility") || "public"),
+                  title: String(form.get("title") || "").trim(),
+                  caption: String(form.get("caption") || "").trim()
+                });
+
+                event.currentTarget.reset();
+                setIsVideoLinkFormOpen(false);
+                setIsVideoAddPanelOpen(false);
+              }}
+            >
+              <label className="form-field builder-field-span">
+                Ссылка на видео
+                <Input name="externalUrl" type="url" required placeholder="https://disk.yandex.ru/..." />
+              </label>
+              <label className="form-field">
+                Название
+                <Input name="title" required placeholder="Семейная хроника" />
+              </label>
+              <label className="form-field">
+                Видимость
+                <SelectField name="visibility" defaultValue="public">
+                  <option value="public">Всем по ссылке</option>
+                  <option value="members">Только участникам</option>
+                </SelectField>
+              </label>
+              <label className="form-field builder-field-span">
+                Подпись
+                <Textarea name="caption" rows={3} placeholder="Например: оцифрованная запись, семейный архив или внешний видеоплеер" />
+              </label>
+              <Button className="builder-field-span" type="submit">
+                Добавить видео по ссылке
+              </Button>
+            </form>
+          )}
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
   function removePendingMediaUpload(itemId: string) {
     setPendingMediaUploads((items) => {
       const item = items.find((entry) => entry.id === itemId);
@@ -1559,26 +2530,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     clearPendingMediaUploads();
   }
 
-  function openMediaUploadReview() {
-    if (!selectedPerson) {
-      setError("Сначала выберите человека, чтобы привязать к нему медиа.");
-      return;
-    }
-
-    if (!pendingMediaUploadsRef.current.length) {
-      setError("Сначала выберите хотя бы один файл.");
-      return;
-    }
-
-    setError(null);
-    setIsMediaUploadReviewOpen(true);
-  }
-
-  function handleMediaUploadFormSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    openMediaUploadReview();
-  }
-
   function handleSubmitOnEnter(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter") {
       return;
@@ -1588,25 +2539,27 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     event.currentTarget.form?.requestSubmit();
   }
 
-  async function uploadSelectedMediaFiles(files: File[], formValues: { visibility: string; caption: string }) {
+  async function uploadSelectedMediaFiles(items: PendingMediaUploadItem[], formValues: { visibility: string; caption: string }) {
     if (!selectedPerson) {
       setError("Сначала выберите человека, чтобы привязать к нему медиа.");
       return;
     }
 
-    const formElement = mediaUploadFormRef.current;
-    const uploadQueue = files.map((file) => ({
-      id: crypto.randomUUID(),
-      name: file.name,
-      kind: detectMediaUploadKind(file),
-      sizeBytes: file.size,
-      status: "queued" as const,
-      uploadedBytes: 0,
-      progressPercent: 0,
-      speedBytesPerSecond: null,
-      remainingMs: null,
-      message: null
-    }));
+    const uploadQueue = items.map((item) => {
+      const file = item.file;
+      return {
+        id: crypto.randomUUID(),
+        name: file.name,
+        kind: detectMediaUploadKind(file),
+        sizeBytes: file.size,
+        status: "queued" as const,
+        uploadedBytes: 0,
+        progressPercent: 0,
+        speedBytesPerSecond: null,
+        remainingMs: null,
+        message: null
+      };
+    });
 
     setError(null);
     setStatus(null);
@@ -1618,8 +2571,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     const failedFiles: string[] = [];
 
     try {
-      for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
+      for (let index = 0; index < items.length; index += 1) {
+        const pendingItem = items[index];
+        const file = pendingItem.file;
         const queueItem = uploadQueue[index];
 
         try {
@@ -1661,7 +2615,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             message: "Сохраняется..."
           });
 
-          await requestJsonOrThrow("/api/media/complete", "POST", {
+          const completePayload = await requestJsonOrThrow("/api/media/complete", "POST", {
             treeId: currentSnapshotRef.current.tree.id,
             personId: selectedPerson.id,
             mediaId: request.mediaId,
@@ -1676,6 +2630,23 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             mimeType: file.type,
             sizeBytes: file.size
           });
+
+          const createdMedia =
+            completePayload && typeof completePayload === "object" && "media" in completePayload
+              ? completePayload.media as TreeSnapshot["media"][number]
+              : null;
+
+          if (
+            createdMedia?.kind === "video" &&
+            createdMedia.provider === "cloudflare_r2" &&
+            (createdMedia.preview_status === "pending" || createdMedia.preview_status === "processing") &&
+            pendingItem.previewUrl
+          ) {
+            storeOptimisticVideoPreview(createdMedia.id, pendingItem.previewUrl);
+            void pollBuilderVideoPreviewUntilReady(createdMedia.id);
+          } else if (pendingItem.previewUrl) {
+            revokePendingMediaUploadPreview(pendingItem);
+          }
 
           uploadedCount += 1;
           updateMediaUploadItem(queueItem.id, {
@@ -1695,13 +2666,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
       if (uploadedCount > 0) {
         await reloadSnapshot();
-        formElement?.reset();
       }
 
       if (uploadedCount > 0) {
         setStatus(
           failedFiles.length
-            ? `Загружено ${uploadedCount} из ${files.length} файлов.`
+            ? `Загружено ${uploadedCount} из ${items.length} файлов.`
             : `Загружено ${uploadedCount} ${uploadedCount === 1 ? "файл" : uploadedCount < 5 ? "файла" : "файлов"}.`
         );
       }
@@ -1720,11 +2690,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       return;
     }
 
-    const files = pendingMediaUploadsRef.current.map((item) => item.file);
+    const uploads = [...pendingMediaUploadsRef.current];
     const formValues = getMediaUploadFormValues();
 
-    clearPendingMediaUploads();
-    await uploadSelectedMediaFiles(files, formValues);
+    clearPendingMediaUploads({ preservePreviewUrls: true });
+    await uploadSelectedMediaFiles(uploads, formValues);
   }
 
   function openExpandedGallery(mode: "photo" | "video") {
@@ -1737,19 +2707,33 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     setExpandedGalleryMode(null);
   }
 
-  function buildSelectedPhotoArchiveHref() {
+  function buildSelectedArchiveHref(mode: "photo" | "video") {
+    const selectedMedia = mode === "photo" ? selectedPhotoMedia : selectedVideoMedia;
     const params = new URLSearchParams({
-      mode: "photo",
+      mode,
       view: "albums"
     });
     const actorUserId = currentSnapshot.actor.userId;
     const preferredUploaderUserId =
-      (actorUserId && selectedPhotoMedia.some((asset) => asset.created_by === actorUserId) ? actorUserId : null) ||
-      selectedPhotoMedia.find((asset) => asset.created_by)?.created_by ||
+      (actorUserId && selectedMedia.some((asset) => asset.created_by === actorUserId) ? actorUserId : null) ||
+      selectedMedia.find((asset) => asset.created_by)?.created_by ||
       null;
 
     if (preferredUploaderUserId) {
-      params.set("album", `uploader-${preferredUploaderUserId}`);
+      params.set("album", buildUploaderAlbumSyntheticId(preferredUploaderUserId, mode));
+    }
+
+    return `/tree/${currentSnapshot.tree.slug}/media?${params.toString()}`;
+  }
+
+  function buildPhotoArchiveHrefForMedia(asset: TreeSnapshot["media"][number]) {
+    const params = new URLSearchParams({
+      mode: "photo",
+      view: "albums",
+    });
+
+    if (asset.created_by) {
+      params.set("album", buildUploaderAlbumSyntheticId(asset.created_by, "photo"));
     }
 
     return `/tree/${currentSnapshot.tree.slug}/media?${params.toString()}`;
@@ -1765,90 +2749,13 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           <span>{mediaCount} {mediaCount === 1 ? "материал" : mediaCount < 5 ? "материала" : "материалов"} на основной сцене</span>
         </div>
         <div className="archive-action-bar">
-          <button type="button" className="ghost-button" onClick={closeExpandedGallery}>
+          <Button type="button" variant="ghost" onClick={closeExpandedGallery}>
             Вернуться к дереву
-          </button>
-          {pendingMediaUploads.length ? (
-            <button type="button" className="ghost-button" onClick={() => setIsMediaUploadReviewOpen(true)}>
-              Проверить набор
-            </button>
-          ) : null}
-          <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
-            {mode === "photo" ? "Выбрать фото" : "Выбрать видео"}
-          </button>
+          </Button>
+          <Button type="button" variant="secondary" onClick={openMediaPickerOrReview}>
+            {mode === "photo" ? "Загрузить фото" : "Загрузить видео"}
+          </Button>
         </div>
-      </div>
-    );
-  }
-
-  function renderMediaUploadForm(scope: BuilderUploadScope) {
-    const config = getBuilderUploadScopeConfig(scope);
-
-    return (
-      <div className="builder-section-block">
-        <div className="builder-block-heading">
-          <strong>{config.heading}</strong>
-          <p className="muted-copy">{config.description}</p>
-        </div>
-        <form ref={mediaUploadFormRef} className="stack-form builder-form-grid" onSubmit={handleMediaUploadFormSubmit}>
-          <div className="builder-field-span builder-file-picker">
-            <label className="builder-file-picker-label" htmlFor="builder-media-file-input">
-              {config.inputLabel}
-            </label>
-            <input
-              id="builder-media-file-input"
-              ref={mediaFileInputRef}
-              className="builder-native-file-input"
-              name="mediaFile"
-              type="file"
-              accept={config.accept}
-              multiple
-              disabled={isUploadingMedia}
-              onChange={handleMediaFileSelection}
-            />
-            <div className="builder-file-picker-shell">
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={isUploadingMedia}
-                onClick={() => {
-                  mediaFileInputRef.current?.click();
-                }}
-              >
-                {config.chooseButtonLabel}
-              </button>
-              <div className="builder-file-picker-copy">
-                <strong>{selectedMediaFilesSummary}</strong>
-                <span>{selectedMediaFilesHint}</span>
-              </div>
-            </div>
-          </div>
-          <label>
-            Видимость
-            <select name="visibility" defaultValue="public">
-              <option value="public">Всем по ссылке</option>
-              <option value="members">Только участникам</option>
-            </select>
-          </label>
-          <label className="builder-field-span">
-            Подпись
-            <textarea name="caption" rows={3} placeholder="Общая подпись для выбранных файлов, если она нужна" />
-          </label>
-          <button
-            className={`primary-button builder-field-span${isUploadingMedia ? " builder-upload-submit-button" : ""}`}
-            type="submit"
-            disabled={isUploadingMedia}
-            style={isUploadingMedia ? ({ ["--upload-progress" as string]: `${mediaUploadProgressPercent}%` } as CSSProperties) : undefined}
-          >
-            <span className="builder-upload-submit-button-label">{mediaUploadButtonLabel}</span>
-          </button>
-          <div className="builder-upload-feedback builder-field-span">
-            <p className="builder-media-limits-note">
-              За один раз: до {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(MAX_MEDIA_FILE_SIZE_BYTES)} на файл.
-            </p>
-            {pendingMediaUploads.length ? <p className="muted-copy">Набор подготовлен, но еще не сохранен. Перед отправкой можно убрать лишние файлы или добрать еще.</p> : null}
-          </div>
-        </form>
       </div>
     );
   }
@@ -1882,155 +2789,237 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
   if (!isClientReady) {
     return (
-      <section className="surface-card builder-loading-state" data-testid="builder-workspace-loading">
+      <Card className="builder-loading-state p-6" data-testid="builder-workspace-loading">
         <p className="eyebrow">Конструктор</p>
-        <h2>Подготавливаю рабочее пространство</h2>
+        <h2 className="card-heading">Подготавливаю рабочее пространство</h2>
         <p className="muted-copy">Схема, связи и карточки загрузятся сразу после инициализации клиента.</p>
-      </section>
+      </Card>
     );
   }
 
   return (
     <>
-      <div className="builder-layout builder-layout-reworked builder-layout-canvas">
-      <main className="builder-main">
-        <div className="surface-card viewer-stage builder-stage builder-stage-canvas">
-          <div className="stage-header builder-stage-header builder-stage-header-overlay">
-            <div className="stage-header-copy">
-              <p className="stage-kicker">{expandedGalleryMode ? "Галерея" : "Схема дерева"}</p>
-              <h2>{stageTitle}</h2>
-              <p className="builder-stage-note">{stageNote}</p>
+      <div
+        ref={builderLayoutRef}
+        className={`builder-layout builder-layout-reworked builder-layout-canvas${isInspectorResizing ? " builder-layout-resizing" : ""}`}
+        style={{ "--builder-inspector-overlay-width": `${builderInspectorWidth}px` } as CSSProperties}
+      >
+        <main className="builder-main">
+          <Card className="viewer-stage builder-stage builder-stage-canvas">
+            <div className="stage-header builder-stage-header builder-stage-header-overlay">
+              <div className="stage-header-copy">
+                <p className="stage-kicker">{expandedGalleryMode ? "Галерея" : "Схема дерева"}</p>
+                <h2 className="card-heading">{stageTitle}</h2>
+                <p className="builder-stage-note">{stageNote}</p>
+              </div>
+              {expandedGalleryMode ? (
+                <div className="builder-stage-meta">
+                  <Button type="button" variant="ghost" size="sm" onClick={closeExpandedGallery}>
+                    Вернуться к дереву
+                  </Button>
+                </div>
+              ) : null}
             </div>
             {expandedGalleryMode ? (
-              <div className="builder-stage-meta">
-                <button type="button" className="ghost-button ghost-button-compact" onClick={closeExpandedGallery}>
-                  Вернуться к дереву
-                </button>
-              </div>
-            ) : null}
-          </div>
-          {expandedGalleryMode ? (
-            <div className="builder-stage-gallery-shell">
-              <PersonMediaGallery
-                media={expandedGalleryMode === "photo" ? selectedPhotoMedia : selectedVideoMedia}
-                emptyTitle={expandedGalleryMode === "photo" ? "Фотографий пока нет" : "Видео пока нет"}
-                emptyMessage={expandedGalleryMode === "photo" ? "Для этого человека пока нет фотографий." : "Для этого человека пока нет видео."}
-                avatarMediaId={expandedGalleryMode === "photo" ? selectedPrimaryPhotoMediaId : null}
-                showStickyFooter={false}
-                onSetAvatar={
-                  expandedGalleryMode === "photo" && selectedPerson
-                    ? (mediaId) =>
-                        submitJson(`/api/media/${mediaId}`, "PATCH", {
-                          personId: selectedPerson.id,
-                          setPrimary: true
-                        }).then(() => undefined)
-                    : undefined
-                }
-              />
-              {renderExpandedGalleryFooter(expandedGalleryMode)}
-            </div>
-          ) : (
-            <>
-              <div className="builder-canvas-shell" style={{ height: `${canvasHeight}px` }}>
-                <FamilyTreeCanvas
-                  tree={displayTree}
-                  selectedPersonId={selectedPersonId}
-                  onSelectPerson={focusPerson}
-                  interactive
-                  displayMode="builder"
-                  people={currentSnapshot.people}
-                  parentLinks={currentSnapshot.parentLinks}
-                  partnerships={currentSnapshot.partnerships}
-                  personPhotoUrls={personPhotoPreviewUrls}
-                  viewportHeightHint={canvasHeight}
-                  onPartnershipDateChange={savePartnershipDate}
-                  onNodeAction={handleCanvasAction}
-                  onEmptyAction={startStandaloneCreate}
+              <div className="builder-stage-gallery-shell">
+                <PersonMediaGallery
+                  media={expandedGalleryMode === "photo" ? selectedPhotoMedia : selectedVideoMedia}
+                  optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+                  emptyTitle={expandedGalleryMode === "photo" ? "Фотографий пока нет" : "Видео пока нет"}
+                  emptyMessage={expandedGalleryMode === "photo" ? "Для этого человека пока нет фотографий." : "Для этого человека пока нет видео."}
+                  avatarMediaId={expandedGalleryMode === "photo" ? selectedPrimaryPhotoMediaId : null}
+                  showStickyFooter={false}
+                  onSetAvatar={
+                    expandedGalleryMode === "photo" && selectedPerson
+                      ? (mediaId) => {
+                          const currentRelation = currentSnapshotRef.current.personMedia.find(
+                            (relation) => relation.person_id === selectedPerson.id && relation.media_id === mediaId
+                          );
+                          return savePersonAvatar(mediaId, getAvatarCropFromRelation(currentRelation)).then(() => undefined);
+                        }
+                      : undefined
+                  }
                 />
+                {renderExpandedGalleryFooter(expandedGalleryMode)}
               </div>
-              <button
-                type="button"
-                className="builder-canvas-resize-handle"
-                aria-label="Изменить высоту схемы"
-                onPointerDown={startCanvasResize}
-              >
-                <span className="builder-canvas-resize-grip" />
-              </button>
-            </>
-          )}
-        </div>
-      </main>
+            ) : (
+              <>
+                <div className="builder-canvas-shell" style={{ height: `${canvasHeight}px` }}>
+                  <FamilyTreeCanvas
+                    tree={displayTree}
+                    selectedPersonId={selectedPersonId}
+                    onSelectPerson={focusPerson}
+                    interactive
+                    displayMode="builder"
+                    people={currentSnapshot.people}
+                    parentLinks={currentSnapshot.parentLinks}
+                    partnerships={currentSnapshot.partnerships}
+                    personPhotoUrls={personPhotoPreviewUrls}
+                    personPhotoCrops={personAvatarCrops}
+                    viewportHeightHint={canvasHeight}
+                    onPartnershipDateChange={savePartnershipDate}
+                    onNodeAction={handleCanvasAction}
+                    onEmptyAction={startStandaloneCreate}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="builder-canvas-resize-handle"
+                  aria-label="Изменить высоту схемы"
+                  onPointerDown={startCanvasResize}
+                >
+                  <span className="builder-canvas-resize-grip" />
+                </button>
+              </>
+            )}
+          </Card>
+        </main>
 
-      <aside className="surface-card builder-inspector builder-inspector-overlay">
-        <div className="builder-inspector-header">
-          <div className="builder-inspector-copy">
-            <p className="eyebrow">{createModeActive ? "Новый блок" : "Карточка человека"}</p>
-            <h2>{inspectorTitle}</h2>
+        <div
+          className="builder-inspector-resize-handle"
+          aria-label="Изменить ширину карточки человека"
+          role="separator"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setIsInspectorResizing(true);
+          }}
+        />
+
+        <Card className="builder-inspector builder-inspector-overlay utility-section-card p-6">
+        <div className="builder-inspector-header utility-section-heading">
+          <div className="builder-inspector-copy utility-section-heading-copy">
+            <div className="builder-inspector-copy-topline">
+              <div className="builder-inspector-copy-main">
+                <p className="eyebrow">{createModeActive ? "Новый блок" : "Карточка человека"}</p>
+                {canInlineEditInspectorName ? (
+                  <div className="builder-inspector-name-row">
+                    {isEditingPersonName ? (
+                      <Input
+                        aria-label="Имя человека"
+                        className="builder-inspector-name-input"
+                        value={personNameDraft}
+                        onChange={(event) => setPersonNameDraft(event.target.value)}
+                        onBlur={() => void commitPersonNameEdit()}
+                        onFocus={(event) => event.currentTarget.select()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                            return;
+                          }
+
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            setPersonNameDraft(selectedPerson?.full_name || "");
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        autoFocus
+                        required
+                        suppressHydrationWarning
+                      />
+                    ) : (
+                      <button type="button" className="builder-inspector-name-button" aria-label="Редактировать имя человека" onClick={startPersonNameEdit}>
+                        <span className="card-heading builder-inspector-name-text person-card-name">{inspectorTitle}</span>
+                        <Pencil className="builder-inspector-name-edit-icon" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <h2 className="card-heading person-card-name">{inspectorTitle}</h2>
+                )}
+              </div>
+              {selectedPerson && !createModeActive ? (
+                <button
+                  type="button"
+                  className="person-summary-avatar builder-person-summary-avatar builder-person-summary-avatar-button builder-inspector-avatar builder-inspector-avatar-button"
+                  aria-label={`Настроить аватар для ${selectedPerson.full_name}`}
+                  onClick={() => setIsAvatarPickerOpen(true)}
+                >
+                  {selectedAvatarUrl ? (
+                    <AvatarCropPreviewImage
+                      src={selectedAvatarUrl}
+                      alt={`Аватар: ${selectedPerson.full_name}`}
+                      crop={selectedAvatarCrop}
+                    />
+                  ) : (
+                    <span className="builder-inspector-avatar-fallback" aria-hidden="true">
+                      {getInspectorAvatarFallback(selectedPerson.full_name)}
+                    </span>
+                  )}
+                  <span className="builder-inspector-avatar-badge" aria-hidden="true">
+                    <Camera className="builder-inspector-avatar-badge-icon" />
+                  </span>
+                </button>
+              ) : null}
+            </div>
             {inspectorDescription ? <p className="muted-copy">{inspectorDescription}</p> : null}
           </div>
-          <div className="builder-panel-tabs" role="tablist" aria-label="Панели конструктора">
-            <button
-              type="button"
-              className={currentBuilderTab === "info" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"}
-              onClick={() => setActivePanel("person")}
-            >
-              Инфо
-            </button>
-            <button
-              type="button"
-              className={currentBuilderTab === "photo" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"}
-              onClick={() => {
-                setMediaMode("photo");
+          <div className="builder-inspector-tabs-row">
+            <Tabs
+              value={currentBuilderTab}
+              onValueChange={(value) => {
+                if (value === "info") {
+                  setActivePanel("person");
+                  return;
+                }
+
+                setMediaMode(value === "video" ? "video" : "photo");
                 setActivePanel("media");
               }}
             >
-              Фото
-            </button>
-            <button
-              type="button"
-              className={currentBuilderTab === "video" ? "builder-panel-tab builder-panel-tab-active" : "builder-panel-tab"}
-              onClick={() => {
-                setMediaMode("video");
-                setActivePanel("media");
-              }}
-            >
-              Видео
-            </button>
+              <TabsList className="builder-inspector-tabs" aria-label="Панели конструктора">
+                <TabsTrigger className={currentBuilderTab === "info" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="info">
+                  Инфо
+                </TabsTrigger>
+                <TabsTrigger className={currentBuilderTab === "photo" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="photo">
+                  Фото
+                </TabsTrigger>
+                <TabsTrigger className={currentBuilderTab === "video" ? "builder-inspector-tab builder-inspector-tab-active" : "builder-inspector-tab"} value="video">
+                  Видео
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {selectedPerson ? (
+              <a href={buildSelectedArchiveHref(currentBuilderTab === "video" ? "video" : mediaMode === "video" ? "video" : "photo")} className={`${buttonVariants({ variant: "ghost", size: "sm" })} builder-inspector-tab-action`}>
+                <ArrowUpRight aria-hidden="true" />
+                Перейти в альбом
+              </a>
+            ) : null}
           </div>
         </div>
 
         {createModeActive ? (
-          <div className="builder-person-summary builder-person-summary-empty">
+          <div className="builder-person-summary builder-person-summary-empty utility-note-card">
             <strong>{createHeading.title}</strong>
             <span>{createContext.type === "standalone" ? "Новый блок появится отдельно, а связи можно добавить позже." : "Новый блок сразу встанет в выбранную связь."}</span>
           </div>
         ) : activePanel === "media" || selectedPerson ? null : (
-          <div className="builder-person-summary builder-person-summary-empty">
+          <div className="builder-person-summary builder-person-summary-empty utility-note-card">
             <strong>Выберите человека</strong>
             <span>После выбора справа откроются его данные, связи и медиа.</span>
           </div>
         )}
 
         {error ? <p className="form-error">{error}</p> : null}
-        {status ? <p className="form-success">{status}</p> : null}
 
         {activePanel === "person" ? (
           <section className="builder-panel-stack">
             {personMode === "create" ? (
-              <div className="builder-section-block">
-                <div className="builder-section-heading">
-                  <h3>{createHeading.title}</h3>
+              <div className="builder-section-block utility-section-card">
+                <div className="builder-section-heading utility-section-heading">
+                  <h3 className="card-heading">{createHeading.title}</h3>
                   <p className="muted-copy">Заполните данные человека. После сохранения новый блок появится на схеме.</p>
                 </div>
                 {createContext.type !== "standalone" && anchorPerson ? (
-                  <div className="builder-create-context-card">
+                  <div className="builder-create-context-card utility-note-card">
                     <div className="builder-create-context-copy">
                       <strong>{anchorPerson.full_name}</strong>
                       <span>Отдельный блок создается без связи. Для мгновенного добавления родственника используйте + на карточке дерева.</span>
                     </div>
-                    <button type="button" className="ghost-button ghost-button-compact" onClick={startStandaloneCreate}>
+                    <Button type="button" variant="ghost" size="sm" onClick={startStandaloneCreate}>
                       Без связи
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
                 <form
@@ -2038,118 +3027,112 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                   className="stack-form builder-form-grid"
                   onSubmit={submitCreatePerson}
                 >
-                  <label className="builder-field-span">
+                  <label className="form-field builder-field-span">
                     Полное имя
-                    <input name="fullName" required placeholder="Мария Иванова" onKeyDown={handleSubmitOnEnter} />
+                    <Input name="fullName" required placeholder="Мария Иванова" onKeyDown={handleSubmitOnEnter} />
                   </label>
-                  <label>
+                  <label className="form-field">
                     Пол
-                    <select name="gender" defaultValue="">
-                      {PERSON_GENDER_OPTIONS.map((option) => (
-                        <option key={option.value || "none"} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    <BuilderGenderToggleField name="gender" />
                   </label>
-                  <label>
+                  <label className="form-field">
                     Дата рождения
-                    <input name="birthDate" type="date" />
+                    <Input name="birthDate" type="date" />
                   </label>
-                  <label>
+                  <label className="form-field">
                     Дата смерти
-                    <input name="deathDate" type="date" />
+                    <Input name="deathDate" type="date" />
                   </label>
-                  <label className="builder-field-span">
+                  <label className="form-field builder-field-span">
                     Био
-                    <textarea name="bio" rows={3} placeholder="Короткая биография, заметки или семейные воспоминания..." />
+                    <Textarea name="bio" rows={3} placeholder="Короткая биография, заметки или семейные воспоминания..." />
                   </label>
-                  <button className="primary-button builder-field-span" type="submit">
+                  <Button className="builder-field-span" type="submit">
                     {createHeading.submitLabel}
-                  </button>
+                  </Button>
                 </form>
               </div>
             ) : selectedPersonPending ? (
-              <div className="builder-section-block">
-                <div className="builder-section-heading">
-                  <h3>Блок создается</h3>
+              <div className="builder-section-block utility-section-card">
+                <div className="builder-section-heading utility-section-heading">
+                  <h3 className="card-heading">Блок создается</h3>
                   <p className="muted-copy">Новый человек уже стоит на схеме. Дождитесь подтверждения сервера, и поля станут редактируемыми.</p>
                 </div>
                 <div className="builder-relation-empty">Сейчас запись создается в базе. Обычно это занимает несколько секунд.</div>
               </div>
             ) : selectedPerson ? (
-              <div className="builder-section-block">
-                <form
-                  key={`edit-${selectedPerson.id}`}
-                  className="stack-form builder-form-grid"
-                  onSubmit={async (event) => {
-                    event.preventDefault();
-                    const form = new FormData(event.currentTarget);
-                    await savePerson(selectedPerson.id, {
-                      fullName: String(form.get("fullName") || "").trim(),
-                      gender: String(form.get("gender") || "") || null,
-                      birthDate: String(form.get("birthDate") || "") || null,
-                      deathDate: String(form.get("deathDate") || "") || null,
-                      birthPlace: form.has("birthPlace") ? String(form.get("birthPlace") || "") || null : undefined,
-                      deathPlace: form.has("deathPlace") ? String(form.get("deathPlace") || "") || null : undefined,
-                      bio: String(form.get("bio") || "") || null,
-                      isLiving: !String(form.get("deathDate") || "")
-                    });
-                  }}
-                >
-                  <label className="builder-field-span">
-                    Полное имя
-                    <input name="fullName" defaultValue={selectedPerson.full_name} required suppressHydrationWarning onKeyDown={handleSubmitOnEnter} />
-                  </label>
-                  <label>
-                    Пол
-                    <select name="gender" defaultValue={selectedPerson.gender || ""} suppressHydrationWarning>
-                      {PERSON_GENDER_OPTIONS.map((option) => (
-                        <option key={option.value || "none"} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Дата рождения
-                    <input name="birthDate" type="date" defaultValue={selectedPerson.birth_date || ""} suppressHydrationWarning />
-                  </label>
-                  <label>
-                    Дата смерти
-                    <input name="deathDate" type="date" defaultValue={selectedPerson.death_date || ""} suppressHydrationWarning />
-                  </label>
-                  <label className="builder-field-span">
-                    Био
-                    <textarea name="bio" rows={3} defaultValue={selectedPerson.bio || ""} suppressHydrationWarning />
-                  </label>
-                  <div className="card-actions builder-field-span builder-form-actions">
-                    <button className="primary-button" type="submit">
-                      Сохранить
-                    </button>
-                    {!isSelectedRoot ? (
-                      <button
-                        className="ghost-button"
-                        type="button"
-                        onClick={() => {
-                          void setRootPerson(selectedPerson.id);
-                        }}
-                      >
-                        Сделать корнем
-                      </button>
-                    ) : null}
-                    <button
-                      className="danger-button"
+              <>
+                {!isSelectedRoot ? (
+                  <div className="action-row builder-form-actions builder-inspector-card-actions">
+                    <Button
+                      className="builder-inspector-secondary-action"
                       type="button"
-                      onClick={() => {
-                        void handleDeletePerson(selectedPerson);
-                      }}
+                      variant="ghost"
+                      onClick={() => void setRootPerson(selectedPerson.id)}
                     >
-                      Удалить человека
-                    </button>
+                      Сделать корнем
+                    </Button>
                   </div>
+                ) : null}
+                <form
+                  key={`edit-${selectedPersonEditFormKey}`}
+                  className="builder-panel-stack"
+                >
+                <div className="builder-inspector-meta-row" aria-label="Краткая информация о человеке">
+                  <BuilderGenderToggleField
+                    name="gender"
+                    value={selectedPersonGenderDraft}
+                    onValueChange={setSelectedPersonGenderDraft}
+                    className="builder-inspector-meta-gender-group"
+                    itemClassName="builder-inspector-meta-gender-item"
+                    ariaLabel="Пол человека"
+                    iconOnly
+                    spacing={0}
+                  />
+                  <div className="builder-inspector-meta-dates">
+                    <BuilderMetaDateField
+                      name="birthDate"
+                      value={selectedPersonBirthDateDraft}
+                      onValueChange={setSelectedPersonBirthDateDraft}
+                      ariaLabel="Дата рождения"
+                    />
+                    <span className="builder-inspector-meta-date-separator" aria-hidden="true">—</span>
+                    <BuilderMetaDateField
+                      name="deathDate"
+                      value={selectedPersonDeathDateDraft}
+                      onValueChange={setSelectedPersonDeathDateDraft}
+                      ariaLabel="Дата смерти"
+                    />
+                  </div>
+                </div>
+                <Textarea
+                  aria-label="Био"
+                  className="builder-inspector-bio-textarea"
+                  name="bio"
+                  rows={3}
+                  value={bioDraft}
+                  onChange={(event) => {
+                    setBioDraft(event.target.value);
+                    setPersonInfoAutosaveState((currentState) => (currentState === "saved" ? "idle" : currentState));
+                  }}
+                  onBlur={() => {
+                    void savePersonInfo(selectedPerson.id, personInfoDraftRef.current);
+                  }}
+                  placeholder="Краткая информация о человеке…"
+                  suppressHydrationWarning
+                />
+                <div className="builder-inspector-bio-status-row">
+                  <span
+                    className="builder-inspector-bio-status"
+                    role="status"
+                    aria-live="polite"
+                    data-state={personInfoAutosaveState}
+                  >
+                    {personInfoAutosaveState === "saving" ? "Сохраняется…" : personInfoAutosaveState === "saved" ? "Сохранено ✓" : ""}
+                  </span>
+                </div>
                 </form>
-              </div>
+              </>
             ) : (
               <div className="empty-state">Выберите человека в списке или на схеме, чтобы отредактировать его данные.</div>
             )}
@@ -2160,10 +3143,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           <section className="builder-panel-stack">
             {selectedPerson ? (
               <>
-                <div className="builder-section-block">
+                <div className="builder-section-block builder-relations-section">
                   <div className="builder-section-heading">
-                    <h3>Текущие связи</h3>
-                    <p className="muted-copy">Нужного родственника можно открыть отсюда. Новые связи добавляются через + на карточке дерева.</p>
+                    <h3 className="card-heading">Текущие связи</h3>
+                    <p className="muted-copy builder-relations-copy">
+                      Нужного родственника можно открыть отсюда. Новые связи добавляются через + на карточке дерева.
+                    </p>
                   </div>
                   <div className="builder-relation-board">
                     <div className="builder-relation-group">
@@ -2171,33 +3156,29 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       {selectedParentLinks.length ? (
                         selectedParentLinks.map((link) => {
                           const parent = peopleById.get(link.parent_person_id);
+                          const parentName = parent?.full_name || "Неизвестный человек";
                           return (
-                            <article key={link.id} className="builder-relation-card">
-                              <div className="builder-relation-card-copy">
-                                <strong>{parent?.full_name || "Неизвестный человек"}</strong>
-                                <span>{formatParentLinkMeta(link.relation_type)}</span>
-                              </div>
-                              <div className="builder-relation-card-actions">
-                                {parent ? (
-                                  <button type="button" className="ghost-button ghost-button-compact" onClick={() => focusPerson(parent.id)}>
-                                    Открыть
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  className="danger-button danger-button-compact"
-                                  onClick={async () => {
-                                    await removeParentLink(link.id);
-                                  }}
-                                >
-                                  Удалить
+                            <article key={link.id} className="builder-relation-row">
+                              {parent ? (
+                                <button type="button" className="builder-relation-link" onClick={() => focusPerson(parent.id)}>
+                                  {parentName}
                                 </button>
-                              </div>
+                              ) : (
+                                <span className="builder-relation-link builder-relation-link-static">{parentName}</span>
+                              )}
+                              <button
+                                type="button"
+                                className="builder-relation-remove"
+                                aria-label={`Удалить связь с «${parentName}»`}
+                                onClick={async () => await removeParentLink(link.id)}
+                              >
+                                ×
+                              </button>
                             </article>
                           );
                         })
                       ) : (
-                        <div className="builder-relation-empty">Родители пока не добавлены.</div>
+                        <div className="builder-relation-empty builder-relation-empty-inline">Родители не добавлены</div>
                       )}
                     </div>
 
@@ -2206,70 +3187,62 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                       {selectedChildLinks.length ? (
                         selectedChildLinks.map((link) => {
                           const child = peopleById.get(link.child_person_id);
+                          const childName = child?.full_name || "Неизвестный человек";
                           return (
-                            <article key={link.id} className="builder-relation-card">
-                              <div className="builder-relation-card-copy">
-                                <strong>{child?.full_name || "Неизвестный человек"}</strong>
-                                <span>{formatParentLinkMeta(link.relation_type)}</span>
-                              </div>
-                              <div className="builder-relation-card-actions">
-                                {child ? (
-                                  <button type="button" className="ghost-button ghost-button-compact" onClick={() => focusPerson(child.id)}>
-                                    Открыть
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  className="danger-button danger-button-compact"
-                                  onClick={async () => {
-                                    await removeParentLink(link.id);
-                                  }}
-                                >
-                                  Удалить
+                            <article key={link.id} className="builder-relation-row">
+                              {child ? (
+                                <button type="button" className="builder-relation-link" onClick={() => focusPerson(child.id)}>
+                                  {childName}
                                 </button>
-                              </div>
+                              ) : (
+                                <span className="builder-relation-link builder-relation-link-static">{childName}</span>
+                              )}
+                              <button
+                                type="button"
+                                className="builder-relation-remove"
+                                aria-label={`Удалить связь с «${childName}»`}
+                                onClick={async () => await removeParentLink(link.id)}
+                              >
+                                ×
+                              </button>
                             </article>
                           );
                         })
                       ) : (
-                        <div className="builder-relation-empty">Дети пока не добавлены.</div>
+                        <div className="builder-relation-empty builder-relation-empty-inline">Дети не добавлены</div>
                       )}
                     </div>
 
                     <div className="builder-relation-group">
-                      <span className="builder-relation-group-title">Пары</span>
+                      <span className="builder-relation-group-title">Партнёры</span>
                       {selectedPartnerships.length ? (
                         selectedPartnerships.map((partnership) => {
                           const partnerId = partnership.person_a_id === selectedPerson.id ? partnership.person_b_id : partnership.person_a_id;
                           const partner = peopleById.get(partnerId);
+                          const partnerName = partner?.full_name || "Неизвестный человек";
 
                           return (
-                            <article key={partnership.id} className="builder-relation-card">
-                              <div className="builder-relation-card-copy">
-                                <strong>{partner?.full_name || "Неизвестный человек"}</strong>
-                                <span>{formatPartnershipStatus(partnership.status)}</span>
-                              </div>
-                              <div className="builder-relation-card-actions">
-                                {partner ? (
-                                  <button type="button" className="ghost-button ghost-button-compact" onClick={() => focusPerson(partner.id)}>
-                                    Открыть
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  className="danger-button danger-button-compact"
-                                  onClick={async () => {
-                                    await removePartnership(partnership.id);
-                                  }}
-                                >
-                                  Удалить
+                            <article key={partnership.id} className="builder-relation-row">
+                              {partner ? (
+                                <button type="button" className="builder-relation-link" onClick={() => focusPerson(partner.id)}>
+                                  {partnerName}
                                 </button>
-                              </div>
+                              ) : (
+                                <span className="builder-relation-link builder-relation-link-static">{partnerName}</span>
+                              )}
+                              <button
+                                type="button"
+                                className="builder-relation-remove"
+                                aria-label={`Удалить связь с «${partnerName}»`}
+                                onClick={async () => await removePartnership(partnership.id)}
+                              >
+                                ×
+                              </button>
                             </article>
                           );
                         })
                       ) : (
-                        <div className="builder-relation-empty">Пары пока не добавлены.</div>
+                        <div className="builder-relation-empty builder-relation-empty-inline">Партнёры не добавлены</div>
                       )}
                     </div>
                   </div>
@@ -2283,40 +3256,53 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
         {activePanel === "person" && !createModeActive && !selectedPersonPending && selectedPerson ? (
           <section className="builder-panel-stack">
-            {renderMediaUploadForm("document")}
-
-            <div className="builder-media-group">
+            <div className="builder-section-block builder-relations-section builder-documents-section">
               <div className="builder-block-heading">
                 <strong>Документы</strong>
-                <p className="muted-copy">Сканы, письма и другие файлы, которые удобнее держать рядом с биографией, а не в фото- или видео-галерее.</p>
               </div>
-              <div className="builder-media-grid">
+              <input
+                id="builder-media-file-input"
+                ref={mediaFileInputRef}
+                className="builder-native-file-input"
+                name="mediaFile"
+                type="file"
+                accept={activeUploadConfig.accept}
+                multiple
+                disabled={isUploadingMedia}
+                aria-label="Документы"
+                onChange={handleMediaFileSelection}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className="builder-documents-upload-button"
+                disabled={isUploadingMedia}
+                onClick={openMediaPickerOrReview}
+              >
+                Загрузить файл
+              </Button>
+              <p className="builder-media-limits-note builder-documents-limits-note">
+                До {MAX_MEDIA_FILES_PER_BATCH} файлов, до {formatMediaUploadBytes(getBuilderUploadScopeFileSizeLimit("document"))} на файл.
+              </p>
+              <div className="builder-relation-board">
                 {selectedDocumentMedia.length ? (
                   selectedDocumentMedia.map((asset) => (
-                    <article key={asset.id} className="media-card builder-media-card">
-                      <div className="media-meta">
-                        <span>{formatMediaKind(asset.kind)}</span>
-                        <span>{formatMediaVisibility(asset.visibility)}</span>
-                        <span>{getMediaSourceLabel(asset)}</span>
-                      </div>
-                      <h4>{asset.title}</h4>
-                      {asset.caption ? <p>{asset.caption}</p> : null}
-                      <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className="ghost-button">
-                        Открыть документ
+                    <article key={asset.id} className="builder-relation-row">
+                      <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className="builder-relation-link">
+                        {asset.title}
                       </a>
                       <button
-                        className="danger-button"
                         type="button"
-                        onClick={async () => {
-                          await submitJson(`/api/media/${asset.id}`, "DELETE", {});
-                        }}
+                        className="builder-relation-remove"
+                        aria-label={`Удалить документ «${asset.title}»`}
+                        onClick={async () => await submitJson(`/api/media/${asset.id}`, "DELETE", {})}
                       >
-                        Удалить документ
+                        ×
                       </button>
                     </article>
                   ))
                 ) : (
-                  <div className="builder-relation-empty">Документы для этого человека пока не добавлены.</div>
+                  <div className="builder-relation-empty builder-relation-empty-inline">Документы не добавлены</div>
                 )}
               </div>
             </div>
@@ -2329,220 +3315,88 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
               <>
                 {currentBuilderTab === "photo" ? (
                   <>
-                    <div className="builder-section-block">
-                      <div className="builder-block-heading">
-                        <strong>Галерея фото</strong>
-                        <p className="muted-copy">Фотографии открываются как отдельная галерея: здесь же можно выбрать аватар и пролистать семейные снимки без смешивания с видео.</p>
-                      </div>
+                    <div className="builder-section-block builder-media-tab-section">
+                      <input
+                        id="builder-media-file-input"
+                        ref={mediaFileInputRef}
+                        className="builder-native-file-input"
+                        name="mediaFile"
+                        type="file"
+                        accept={activeUploadConfig.accept}
+                        multiple
+                        disabled={isUploadingMedia}
+                        aria-label="Фотографии с устройства"
+                        onChange={handleMediaFileSelection}
+                      />
+                      {canDeleteSelectedPhotoMedia && selectedPhotoMediaCount ? (
+                        <div className="builder-media-selection-bar" role="region" aria-label="Действия с выбранными фотографиями">
+                          <div className="builder-media-selection-copy">
+                            <strong>Выбрано: {selectedPhotoMediaCount}</strong>
+                            <span>{selectedPhotoMediaCount} {selectedPhotoMediaCount === 1 ? "фото" : "фото"} готово к удалению.</span>
+                          </div>
+                          <div className="archive-action-bar builder-media-selection-actions">
+                            <Button type="button" disabled={isBulkPhotoDeleting} onClick={() => setIsBulkPhotoDeleteConfirmOpen(true)}>
+                              {isBulkPhotoDeleting ? "Удаляю..." : "Удалить"}
+                            </Button>
+                            <Button type="button" variant="ghost" disabled={isBulkPhotoDeleting} onClick={clearSelectedPhotoMedia}>
+                              Отмена
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                       <PersonMediaGallery
                         media={selectedPhotoMedia}
+                        optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                         emptyTitle="Фотографий пока нет"
                         emptyMessage="Для этого человека пока нет фотографий."
-                        emptyActions={
-                          <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
-                            Выбрать фото
-                          </button>
-                        }
                         avatarMediaId={selectedPrimaryPhotoMediaId}
+                        canDeleteMedia={canDeleteSelectedPhotoMedia}
+                        showInlineMediaActions
+                        canManageInlineMediaActions={canDeleteSelectedPhotoMedia}
+                        getInlineMediaAlbumHref={buildPhotoArchiveHrefForMedia}
+                        selectionMode={isPhotoSelectionMode}
+                        canSelectMedia={canDeleteSelectedPhotoMedia}
+                        selectedMediaIds={selectedPhotoMediaIds}
                         showStickyFooter={false}
-                        onSetAvatar={(mediaId) =>
-                          submitJson(`/api/media/${mediaId}`, "PATCH", {
-                            personId: selectedPerson.id,
-                            setPrimary: true
-                          }).then(() => undefined)
-                        }
+                        showStage={false}
+                        showViewerAvatarAction
+                        appendTile={renderPhotoAddTile()}
+                        onStartMediaSelection={startPhotoSelectionMode}
+                        onToggleMediaSelection={toggleSelectedPhotoMedia}
+                        onDeleteMedia={(mediaId) => deleteBuilderPhoto(mediaId)}
+                        onSetAvatar={(mediaId) => {
+                          const currentRelation = currentSnapshotRef.current.personMedia.find(
+                            (relation) => relation.person_id === selectedPerson.id && relation.media_id === mediaId
+                          );
+                          return savePersonAvatar(mediaId, getAvatarCropFromRelation(currentRelation)).then(() => undefined);
+                        }}
                       />
-                    </div>
-
-                    {renderMediaUploadForm("photo")}
-
-                    <div className="archive-sticky-footer">
-                      <div className="archive-sticky-copy">
-                        <strong>Фото</strong>
-                        <span>{selectedPhotoMedia.length} фото в карточке человека</span>
-                      </div>
-                      <div className="archive-action-bar">
-                        {selectedPhotoMedia.length ? (
-                          <a href={buildSelectedPhotoArchiveHref()} className="ghost-button">
-                            Показать все
-                          </a>
-                        ) : null}
-                        {pendingMediaUploads.length ? (
-                          <button type="button" className="ghost-button" onClick={() => setIsMediaUploadReviewOpen(true)}>
-                            Проверить набор
-                          </button>
-                        ) : null}
-                        <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
-                          Выбрать фото
-                        </button>
-                      </div>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="builder-section-block">
-                      <div className="builder-block-heading">
-                        <strong>Галерея видео</strong>
-                        <p className="muted-copy">Локальные видео и внешние ролики открываются в одном просмотре, но загружаются разными путями.</p>
-                      </div>
+                    <div className="builder-section-block builder-media-tab-section">
+                      <input
+                        id="builder-media-file-input"
+                        ref={mediaFileInputRef}
+                        className="builder-native-file-input"
+                        name="mediaFile"
+                        type="file"
+                        accept={activeUploadConfig.accept}
+                        multiple
+                        disabled={isUploadingMedia}
+                        aria-label="Видео с устройства"
+                        onChange={handleMediaFileSelection}
+                      />
                       <PersonMediaGallery
                         media={selectedVideoMedia}
+                        optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                         emptyTitle="Видео пока нет"
                         emptyMessage="Для этого человека пока нет видео."
-                        emptyActions={
-                          <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
-                            Выбрать видео
-                          </button>
-                        }
                         showStickyFooter={false}
+                        showStage={false}
+                        appendTile={renderVideoAddTile()}
                       />
-                    </div>
-
-                    {renderMediaUploadForm("video")}
-
-                    <div className="builder-section-block">
-                      <div className="builder-block-heading">
-                        <strong>Видео по ссылке</strong>
-                        <p className="muted-copy">Подходит для видео, которое уже лежит в другом сервисе и должно открываться по ссылке без повторной загрузки файла.</p>
-                      </div>
-                      <form
-                        className="stack-form builder-form-grid"
-                        onSubmit={async (event) => {
-                          event.preventDefault();
-                          const form = new FormData(event.currentTarget);
-                          await submitJson("/api/media/complete", "POST", {
-                            treeId: currentSnapshot.tree.id,
-                            personId: selectedPerson.id,
-                            mediaId: crypto.randomUUID(),
-                            provider: "yandex_disk",
-                            externalUrl: String(form.get("externalUrl") || "").trim(),
-                            visibility: String(form.get("visibility") || "public"),
-                            title: String(form.get("title") || "").trim(),
-                            caption: String(form.get("caption") || "").trim()
-                          });
-
-                          event.currentTarget.reset();
-                        }}
-                      >
-                        <label className="builder-field-span">
-                          Ссылка на видео
-                          <input name="externalUrl" type="url" required placeholder="https://disk.yandex.ru/..." />
-                        </label>
-                        <label>
-                          Название
-                          <input name="title" required placeholder="Семейная хроника" />
-                        </label>
-                        <label>
-                          Видимость
-                          <select name="visibility" defaultValue="public">
-                            <option value="public">Всем по ссылке</option>
-                            <option value="members">Только участникам</option>
-                          </select>
-                        </label>
-                        <label className="builder-field-span">
-                          Подпись
-                          <textarea name="caption" rows={3} placeholder="Например: оцифрованная запись, семейный архив или внешний видеоплеер" />
-                        </label>
-                        <button className="primary-button builder-field-span" type="submit">
-                          Добавить видео по ссылке
-                        </button>
-                      </form>
-                    </div>
-
-                    <div className="builder-media-library">
-                      <section className="builder-media-group">
-                        <div className="builder-block-heading">
-                          <strong>Локальные видео</strong>
-                          <p className="muted-copy">Файлы, загруженные прямо в архив этого человека.</p>
-                        </div>
-                        <div className="builder-media-grid">
-                          {selectedLocalVideoMedia.length ? (
-                            selectedLocalVideoMedia.map((asset) => (
-                              <article key={asset.id} className="media-card builder-media-card">
-                                <div className="media-meta">
-                                  <span>{formatMediaKind(asset.kind)}</span>
-                                  <span>{formatMediaVisibility(asset.visibility)}</span>
-                                  <span>{getMediaSourceLabel(asset)}</span>
-                                </div>
-                                <h4>{asset.title}</h4>
-                                {asset.caption ? <p>{asset.caption}</p> : null}
-                                <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className="ghost-button">
-                                  Открыть видео
-                                </a>
-                                <button
-                                  className="danger-button"
-                                  type="button"
-                                  onClick={async () => {
-                                    await submitJson(`/api/media/${asset.id}`, "DELETE", {});
-                                  }}
-                                >
-                                  Удалить видео
-                                </button>
-                              </article>
-                            ))
-                          ) : (
-                            <div className="builder-relation-empty">Локально загруженных видео пока нет.</div>
-                          )}
-                        </div>
-                      </section>
-
-                      <section className="builder-media-group">
-                        <div className="builder-block-heading">
-                          <strong>Видео по ссылке</strong>
-                          <p className="muted-copy">Видео, которые открываются во внешнем источнике и не загружаются в архив.</p>
-                        </div>
-                        <div className="builder-media-grid">
-                          {selectedExternalVideos.length ? (
-                            selectedExternalVideos.map((asset) => (
-                              <article key={asset.id} className="media-card builder-media-card">
-                                <div className="media-meta">
-                                  <span>{formatMediaKind(asset.kind)}</span>
-                                  <span>{formatMediaVisibility(asset.visibility)}</span>
-                                  <span>{getMediaSourceLabel(asset)}</span>
-                                </div>
-                                <h4>{asset.title}</h4>
-                                {asset.caption ? <p>{asset.caption}</p> : null}
-                                <a href={buildMediaOpenRouteUrl(asset)} target="_blank" rel="noreferrer" className="ghost-button">
-                                  Открыть видео
-                                </a>
-                                <button
-                                  className="danger-button"
-                                  type="button"
-                                  onClick={async () => {
-                                    await submitJson(`/api/media/${asset.id}`, "DELETE", {});
-                                  }}
-                                >
-                                  Удалить ссылку
-                                </button>
-                              </article>
-                            ))
-                          ) : (
-                            <div className="builder-relation-empty">Внешние видео по ссылке пока не добавлены.</div>
-                          )}
-                        </div>
-                      </section>
-                    </div>
-
-                    <div className="archive-sticky-footer">
-                      <div className="archive-sticky-copy">
-                        <strong>Видео</strong>
-                        <span>{selectedVideoMedia.length} видео в карточке человека</span>
-                      </div>
-                      <div className="archive-action-bar">
-                        {selectedVideoMedia.length ? (
-                          <button type="button" className="ghost-button" onClick={() => openExpandedGallery("video")}>
-                            Показать все
-                          </button>
-                        ) : null}
-                        {pendingMediaUploads.length ? (
-                          <button type="button" className="ghost-button" onClick={() => setIsMediaUploadReviewOpen(true)}>
-                            Проверить набор
-                          </button>
-                        ) : null}
-                        <button type="button" className="secondary-button" onClick={() => mediaFileInputRef.current?.click()}>
-                          Выбрать видео
-                        </button>
-                      </div>
                     </div>
                   </>
                 )}
@@ -2552,34 +3406,58 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             )}
           </section>
         ) : null}
-      </aside>
+        </Card>
       </div>
 
-      {isMediaUploadReviewOpen ? (
-        <div
-          className="media-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Проверка файлов перед загрузкой"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              requestCloseMediaUploadReview();
-            }
-          }}
-        >
-          <div className="media-lightbox-dialog archive-dialog">
-            <div className="media-lightbox-header">
-              <div className="media-lightbox-copy">
-                <h3>Проверка перед загрузкой</h3>
-                <p>
-                  {selectedPerson
-                    ? `Файлы будут привязаны к карточке «${selectedPerson.full_name}».`
-                    : "Файлы будут привязаны к выбранной карточке."}
-                </p>
-              </div>
+      {selectedPerson && !createModeActive ? (
+        <BuilderAvatarPickerDialog
+          open={isAvatarPickerOpen}
+          personName={selectedPerson.full_name}
+          photos={selectedPhotoMedia}
+          currentAvatarMediaId={selectedPrimaryPhotoMediaId}
+          currentAvatarCrop={selectedAvatarCrop}
+          onOpenChange={setIsAvatarPickerOpen}
+          onJumpToPhotos={switchToPhotoTab}
+          onSave={savePersonAvatar}
+        />
+      ) : null}
+
+      <Dialog open={isMediaUploadReviewOpen} onOpenChange={(open) => (!open ? requestCloseMediaUploadReview() : null)}>
+        <DialogContent className="archive-dialog" aria-label="Проверка файлов перед загрузкой" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Проверка файлов перед загрузкой</DialogTitle>
+            <DialogDescription>
+              {selectedPerson
+                ? `Файлы будут привязаны к карточке «${selectedPerson.full_name}».`
+                : "Файлы будут привязаны к выбранной карточке."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="archive-review-layout">
+            <div className="archive-review-summary" aria-label="Сводка выбранных файлов">
+              {pendingMediaUploadsSummary}
+            </div>
+            <div className="archive-review-metadata">
+              <label className="form-field">
+                Видимость
+                <SelectField value={reviewMediaVisibility} onChange={(event) => setReviewMediaVisibility(event.target.value as "public" | "members")} disabled={isUploadingMedia}>
+                  <option value="public">Всем по ссылке</option>
+                  <option value="members">Только членам семьи</option>
+                </SelectField>
+              </label>
+              <label className="form-field">
+                Подпись
+                <Textarea
+                  rows={1}
+                  className="min-h-11"
+                  value={reviewMediaCaption}
+                  onChange={(event) => setReviewMediaCaption(event.target.value)}
+                  placeholder="Общая подпись для выбранных файлов, если она нужна"
+                  disabled={isUploadingMedia}
+                />
+              </label>
             </div>
             <div className="archive-review-body">
-              <div className={`archive-grid archive-review-grid${pendingMediaUploads.length > 8 ? " archive-review-grid-dense" : ""}`}>
+              <div className={`archive-grid archive-review-grid${pendingMediaUploads.length > 12 ? " archive-review-grid-dense" : ""}`}>
                 {pendingMediaUploads.map((item) => (
                   <article key={item.id} className="archive-review-tile">
                     <button
@@ -2599,63 +3477,86 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         <span>{item.file.type.startsWith("video/") ? "▶" : "DOC"}</span>
                       </div>
                     )}
+                    <div className="archive-review-tile-copy">
+                      <span>{getBuilderPendingUploadKindLabel(item.file)} • {formatBuilderReviewFileSize(item.file.size)}</span>
+                    </div>
                   </article>
                 ))}
               </div>
             </div>
-            <div className="archive-action-bar archive-review-footer">
-              <input
-                ref={reviewMediaFileInputRef}
-                className="builder-native-file-input"
-                type="file"
-                multiple
-                accept={activeUploadConfig.accept}
-                disabled={isUploadingMedia}
-                onChange={handleReviewMediaFileSelection}
-              />
-              <button type="button" className="ghost-button" disabled={isUploadingMedia} onClick={() => reviewMediaFileInputRef.current?.click()}>
-                Добавить еще
-              </button>
-              <button type="button" className="ghost-button" disabled={isUploadingMedia} onClick={hideMediaUploadReview}>
-                Обратно
-              </button>
-              <button type="button" className="ghost-button" disabled={isUploadingMedia} onClick={requestCloseMediaUploadReview}>
-                Отмена
-              </button>
-              <button type="button" className="primary-button" disabled={isUploadingMedia} onClick={() => void savePendingMediaUploads()}>
-                Сохранить {pendingMediaUploads.length}
-              </button>
-            </div>
           </div>
-        </div>
-      ) : null}
+          <DialogFooter className="archive-review-footer archive-actions">
+            <input
+              ref={reviewMediaFileInputRef}
+              className="builder-native-file-input"
+              type="file"
+              multiple
+              accept={activeUploadConfig.accept}
+              disabled={isUploadingMedia}
+              onChange={handleReviewMediaFileSelection}
+            />
+            <Button type="button" variant="secondary" disabled={isUploadingMedia} onClick={() => reviewMediaFileInputRef.current?.click()}>
+              Добавить еще
+            </Button>
+            <Button type="button" variant="outline" disabled={isUploadingMedia} onClick={hideMediaUploadReview}>
+              Обратно
+            </Button>
+            <Button type="button" variant="outline" disabled={isUploadingMedia} onClick={requestCloseMediaUploadReview}>
+              Отмена
+            </Button>
+            <Button type="button" disabled={isUploadingMedia} onClick={() => void savePendingMediaUploads()}>
+              Сохранить {pendingMediaUploads.length}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {isMediaUploadDiscardConfirmOpen ? (
-        <div
-          className="media-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Сбросить выбранные файлы"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setIsMediaUploadDiscardConfirmOpen(false);
-            }
-          }}
-        >
-          <div className="media-lightbox-dialog archive-confirm-dialog">
-            <div className="media-lightbox-copy">
-              <h3>Сбросить выбранный набор?</h3>
-              <p>Файлы уже выбраны, но еще не сохранены. Если закрыть окно сейчас, набор придется собирать заново.</p>
-            </div>
-            <div className="card-actions archive-actions">
-              <button type="button" className="ghost-button" onClick={() => setIsMediaUploadDiscardConfirmOpen(false)}>
-                Вернуться
-              </button>
-              <button type="button" className="primary-button" onClick={discardPendingMediaUploads}>
-                Сбросить набор
-              </button>
-            </div>
-          </div>
+      <Dialog open={isMediaUploadDiscardConfirmOpen} onOpenChange={setIsMediaUploadDiscardConfirmOpen}>
+        <DialogContent className="archive-confirm-dialog" aria-label="Сбросить выбранные файлы" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Сбросить выбранные файлы</DialogTitle>
+            <DialogDescription>Файлы уже выбраны, но еще не сохранены. Если закрыть окно сейчас, набор придется собирать заново.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="archive-actions">
+            <Button type="button" variant="ghost" onClick={() => setIsMediaUploadDiscardConfirmOpen(false)}>
+              Вернуться
+            </Button>
+            <Button type="button" onClick={discardPendingMediaUploads}>
+              Сбросить набор
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isBulkPhotoDeleteConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open && !isBulkPhotoDeleting) {
+            setIsBulkPhotoDeleteConfirmOpen(false);
+          }
+        }}
+      >
+        <DialogContent className="archive-confirm-dialog" aria-label="Удалить выбранные фото?" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Удалить выбранные фото?</DialogTitle>
+            <DialogDescription>
+              {selectedPhotoMediaCount ? `${selectedPhotoMediaCount} фото будут удалены.` : "Выбранные фото будут удалены."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="archive-actions">
+            <Button type="button" variant="ghost" disabled={isBulkPhotoDeleting} onClick={() => setIsBulkPhotoDeleteConfirmOpen(false)}>
+              Отмена
+            </Button>
+            <Button type="button" disabled={isBulkPhotoDeleting} onClick={() => void deleteSelectedBuilderPhotos()}>
+              {isBulkPhotoDeleting ? "Удаляю..." : "Удалить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {status ? (
+        <div className="builder-status-toast" role="status" aria-live="polite">
+          {status}
         </div>
       ) : null}
     </>

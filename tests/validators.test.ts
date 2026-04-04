@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeMediaAlbumSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema } from "@/lib/validators/media";
+import { addAudioMediaToPlaylistSchema, addMediaToTreeMediaAlbumSchema, archiveMediaUploadIntentSchema, completeArchiveMediaSchema, completeMediaSchema, createTreeAudioPlaylistSchema, createTreeMediaAlbumSchema, downloadArchiveMediaSchema, mediaUploadIntentSchema, setPrimaryPersonMediaSchema, updateTreeMediaAlbumSchema } from "@/lib/validators/media";
 import { createTreeSchema } from "@/lib/validators/tree";
 import { inviteSchema } from "@/lib/validators/invite";
 
@@ -114,7 +114,71 @@ describe("validators", () => {
     const result = createTreeMediaAlbumSchema.safeParse({
       treeId: crypto.randomUUID(),
       title: "День рождения тети Светы",
-      description: "Фото и видео из одного архива"
+      description: "Фото и видео из одного архива",
+      kind: "photo",
+      access: "members"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts uploader tree media album creation payloads", () => {
+    const result = createTreeMediaAlbumSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      title: "От Сергея Тест",
+      description: "",
+      kind: "video",
+      access: "public",
+      albumKind: "uploader",
+      uploaderUserId: crypto.randomUUID(),
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts tree media album update payloads", () => {
+    const result = updateTreeMediaAlbumSchema.safeParse({
+      title: "Обновленный альбом",
+      description: "Новая подпись",
+      access: "members"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts bulk add-to-album payloads for existing archive media", () => {
+    const result = addMediaToTreeMediaAlbumSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      albumId: crypto.randomUUID(),
+      mediaIds: [crypto.randomUUID(), crypto.randomUUID()]
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts audio playlist creation payloads", () => {
+    const result = createTreeAudioPlaylistSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      name: "Колыбельные",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts add-audio-to-playlist payloads", () => {
+    const result = addAudioMediaToPlaylistSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      playlistId: crypto.randomUUID(),
+      mediaId: crypto.randomUUID(),
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts bulk archive download payloads", () => {
+    const result = downloadArchiveMediaSchema.safeParse({
+      treeId: crypto.randomUUID(),
+      mediaIds: [crypto.randomUUID(), crypto.randomUUID()]
     });
 
     expect(result.success).toBe(true);
@@ -123,7 +187,12 @@ describe("validators", () => {
   it("accepts avatar selection payloads for person media", () => {
     const result = setPrimaryPersonMediaSchema.safeParse({
       personId: crypto.randomUUID(),
-      setPrimary: true
+      setPrimary: true,
+      avatarCrop: {
+        x: 0.5,
+        y: 0.5,
+        zoom: 1.75
+      }
     });
 
     expect(result.success).toBe(true);

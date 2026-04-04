@@ -2,30 +2,22 @@
 
 *Operational memory only. Not the canonical architecture document.*
 
-*Last updated: 2026-03-13*
+*Last updated: 2026-04-02*
 
 ## Current State
 
+- Framework mode: active
+- Active branch: `feat/audio-docs-experiment`
 - Runtime application: `Next.js 16 + React 19 + TypeScript`
-- Backend/data layer: `Supabase` auth, database, RLS, and storage metadata
-- Linked remote Supabase project: `untwxmiqqwepopeepzqe`
-- Current workstream: `Media Upload Flow V2` has shifted into post-UAT launch hardening
-- `Cloudflare R2` rollout is confirmed active for new uploads
-- Legacy media paths remain readable as compatibility paths during transition
-- Hosted `Vercel` project `antigravity` is created and the latest `main` deployment is live
-- Local validation baseline is green:
-  - `npm run typecheck`
-  - `npm test`
-  - `npm run build`
-  - `npm run smoke:media`
-  - `npm run smoke:auth`
-  - `npm run smoke:e2e`
-- `smoke:auth` now degrades more safely through fallback-user handling when local auth signup is distorted by environment noise
-- The legacy static viewer is preserved in `legacy/`, but it is not the primary runtime
+- Backend/data layer: `Supabase` auth, database, RLS + S3-compatible object storage
+- Dev environment: linked to Supabase project `untwxmiqqwepopeepzqe`
+- Legacy static viewer: preserved in `legacy/` and old `index.html`, but no longer the main runtime
+- Current workstream: family archive foundation, uploader/manual albums, variant-aware media delivery, and Cloudflare R2 groundwork are already in the worktree; current effort should focus on stabilizing `smoke:media` and finishing archive/viewer QA
+- Target media platform: `Cloudflare` for the next binary/media delivery stage, while the current Yandex path remains transitional compatibility.
 
 ## Current Active Task
 
-- `tasks/active/media-upload-flow-v2` — `Post-UAT launch hardening inside Media Upload Flow V2` (`in_progress`, priority `high`)
+- `tasks/active/media-upload-flow-v2` — `Media Upload Flow V2` (`in_progress`, priority `high`)
 
 ## Working Assumptions
 
@@ -46,28 +38,59 @@
 
 ## Current Focus
 
-- Local `Wave 1` hardening is largely complete and validated against unit/component/build plus local smoke flows
-- Hosted `Vercel` deployment is live and ready for real staged validation
-- Hosted smoke signal is partially green:
-  - `smoke:auth` passes against `https://antigravity-zeta-two.vercel.app`
-  - `smoke:e2e` passes against `https://antigravity-zeta-two.vercel.app`
-  - hosted `smoke:e2e` now also exercises `Показать ссылку` / `Скопировать` for an existing family share link after the remote reveal migration
-- Keep operational docs aligned with the current ownership split:
-  - app hosting on `Vercel`
-  - storage on client-owned `Cloudflare R2`
-  - email sending on client-owned `Resend`
+- [x] Unified local-file upload now covers photos and videos from device in one flow.
+- [x] Multi-file batches, visible limits copy, and human-readable progress feedback are in place in the builder.
+- [x] Viewer and builder now expose an in-app media gallery with inline playback for file-backed video.
+- [x] `smoke:media` now persists a JSON report artifact in `tests/artifacts/`.
+- [x] Tree-level `/tree/[slug]/media` archive foundation is in place with navigation, page shell, and archive client.
+- [x] Archive album persistence exists for manual albums and uploader albums.
+- [x] Archive upload review flow exists with batch confirmation and discard guard.
+- [x] Variant-aware media delivery foundation exists for `thumb/small/medium` photo previews.
+- [x] Cloudflare R2 runtime/config foundation is present for the next media storage stage.
+- [ ] Finish the current `family-tree-canvas` interaction and visual pass.
+- [ ] Validate `Участники`, invites and share links as one coherent access-management flow.
+- [ ] QA the reworked builder layout so the tree keeps visual priority on desktop and mobile.
+- [ ] Keep startup context, task capsules and memory files aligned with the current sprint.
 
 ## Active Blockers
 
-- `Resend` domain is still pending DNS verification, so real email delivery is not fully enabled yet
-- The branch alias on `Vercel` currently responds with `401 Authentication Required`, so hosted UAT should use the production alias unless protection settings are changed
-- Live UAT for `Owner EU`, `Helper RF`, and `Relative RF` is not completed yet
-- Full database restore rehearsal is still pending on a machine or environment with `pg_dump` / `psql` or a safe staging target
+- [ ] Current media upload UX is still not archive-ready: single flow, multi-file batches, device video, limits and progress need to be confirmed end-to-end.
+- [ ] Cloudflare target foundations exist in code/env, but the actual migration away from the transitional Yandex path is still incomplete.
+- [ ] Preview variant foundations exist, but rollout and QA are still incomplete; originals should not leak back into archive/viewer/builder previews.
+- [ ] The tree-level family archive foundation exists, but sticky actions, large viewer/lightbox flow, and broader end-to-end QA are still unfinished.
+- [ ] Builder canvas resize and overlay inspector still need practical QA on desktop, tablet and mobile widths.
+- [ ] Members/invite/share-link flows need end-to-end validation against live API responses and clipboard behavior.
+- [ ] Manual memory notes must stay aligned with the actual workstream after each `/fi`.
+- [ ] Landing/dashboard cleanup is no longer the primary blocker, but still needs a secondary calm pass after tree/member flows stabilize.
 
 ## Next Steps
 
-- Run hosted UAT from the live `Vercel` deployment
-- Add final `Resend` sender vars after domain verification
-- Complete the full restore rehearsal in a suitable environment
-- Review UAT and recovery findings and update launch decision docs
-- Close the cycle with `/fi` after the next concrete operational pass
+- [ ] Convert the Cloudflare target into an explicit migration sequence: rollout gating, direct upload, Stream, and Queues.
+- [ ] Finish the archive surface with sticky actions, large viewer/lightbox behavior, and broader album flow QA.
+- [ ] Switch tree cards, side rails, archive tiles, and media galleries to preview variants by default and confirm legacy fallbacks.
+- [ ] Run targeted QA for viewer, builder and members after the current media UI pass.
+- [ ] Review `Участники` end-to-end with invite, copy and revoke flows.
+- [ ] Revisit landing and dashboard only after tree/member workflows are stable.
+- [ ] Close each concrete work cycle with `/fi`; completion now needs to keep manual memory sections current as well.
+
+## Completion Capture
+
+- Primary captured workstream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
+- Detected foundation: tree-level `Медиа` route, archive client, archive upload endpoints, and persisted album model are present in the worktree.
+- Detected archive upload review flow with pending batch state and discard confirmation.
+- Detected variant-aware media delivery foundation for photo previews (`thumb/small/medium`).
+- Detected Cloudflare R2 foundation in env/runtime config and supporting project files.
+- No `smoke:media` artifact was found during completion capture.
+
+## Runtime Rules
+
+- Server-side Supabase transport is `native-first`: `lib/supabase/admin-rest.ts` and `lib/supabase/server-fetch.ts` should prefer native Node fetch and use the PowerShell bridge only as fallback or explicit override.
+- Tree pages should not default to `getTreeSnapshot(...)`: `audit`, `members`, `media`, and `settings` now rely on specialized repository page-data loaders, while full snapshots remain for real snapshot consumers such as viewer and snapshot APIs.
+- Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
+- "
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
+- Custom marker-driven runtime rule should surface in startup memory.\n")
+

@@ -1,4 +1,42 @@
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
 import type { MediaStorageBackend, MediaUploadRolloutState, UploadMode, VariantUploadMode } from "@/lib/types";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+type MediaErrorLogType = "thumb" | "original";
+
+const loggedMediaErrors = new Set<string>();
+
+function shouldLogMediaErrors() {
+  return process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG_MEDIA_ERRORS === "1";
+}
+
+export function logMediaError(input: {
+  mediaId: string;
+  type: MediaErrorLogType;
+  context: string;
+  src?: string | null;
+}) {
+  if (typeof window === "undefined" || !shouldLogMediaErrors()) {
+    return;
+  }
+
+  const dedupeKey = `${input.mediaId}:${input.type}`;
+  if (loggedMediaErrors.has(dedupeKey)) {
+    return;
+  }
+
+  loggedMediaErrors.add(dedupeKey);
+  console.warn("[media-client]", input);
+}
+
+export function __resetLoggedMediaErrorsForTests() {
+  loggedMediaErrors.clear();
+}
 
 export function formatDate(date: string | null) {
   if (!date) return "";
@@ -7,10 +45,6 @@ export function formatDate(date: string | null) {
     month: "short",
     year: "numeric"
   }).format(new Date(date));
-}
-
-export function cn(...parts: Array<string | false | null | undefined>) {
-  return parts.filter(Boolean).join(" ");
 }
 
 export interface BrowserMediaVariantTarget {
@@ -64,6 +98,23 @@ export interface BasicUploadProgressSnapshot {
   percent: number;
 }
 
+class BrowserUploadTransportError extends Error {
+  kind: "network" | "timeout" | "abort" | "response";
+
+  constructor(kind: "network" | "timeout" | "abort" | "response", message: string) {
+    super(message);
+    this.name = "BrowserUploadTransportError";
+    this.kind = kind;
+  }
+}
+
+function shouldFallbackToProxyUpload(error: unknown) {
+  return (
+    error instanceof BrowserUploadTransportError &&
+    (error.kind === "network" || error.kind === "timeout")
+  );
+}
+
 async function uploadFileWithXhr(input: {
   url: string;
   method: "PUT" | "POST";
@@ -86,7 +137,9 @@ async function uploadFileWithXhr(input: {
       const percent = totalBytes > 0 ? Math.min(100, Math.round((uploadedBytes / totalBytes) * 100)) : 0;
       input.onProgress?.({ uploadedBytes, totalBytes, percent });
     };
-    xhr.onerror = () => reject(new Error(input.errorMessage));
+    xhr.onerror = () => reject(new BrowserUploadTransportError("network", input.errorMessage));
+    xhr.onabort = () => reject(new BrowserUploadTransportError("abort", "Загрузка файла была отменена."));
+    xhr.ontimeout = () => reject(new BrowserUploadTransportError("timeout", input.errorMessage));
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve();
@@ -95,7 +148,8 @@ async function uploadFileWithXhr(input: {
 
       const payload = xhr.response && typeof xhr.response === "object" ? xhr.response : null;
       reject(
-        new Error(
+        new BrowserUploadTransportError(
+          "response",
           (payload && "error" in payload && typeof payload.error === "string" && payload.error) ||
             xhr.responseText ||
             input.responseErrorMessage
@@ -154,15 +208,32 @@ export async function uploadFileWithTransportContract(input: {
   const variantErrorMessage = input.variantErrorMessage || "Не удалось подготовить preview-варианты.";
 
   if (input.target.uploadMode === "direct") {
-    await uploadFileWithXhr({
-      url: input.target.signedUrl,
-      method: "PUT",
-      body: input.file,
-      contentType: input.file.type || undefined,
-      onProgress: input.onProgress,
-      errorMessage: directErrorMessage,
-      responseErrorMessage: directErrorMessage,
-    });
+    try {
+      await uploadFileWithXhr({
+        url: input.target.signedUrl,
+        method: "PUT",
+        body: input.file,
+        contentType: input.file.type || undefined,
+        onProgress: input.onProgress,
+        errorMessage: directErrorMessage,
+        responseErrorMessage: directErrorMessage,
+      });
+    } catch (error) {
+      if (!shouldFallbackToProxyUpload(error)) {
+        throw error;
+      }
+
+      await proxyMediaUpload({
+        file: input.file,
+        signedUrl: input.target.signedUrl,
+        contentType: input.file.type,
+        variantTargets: input.target.variantTargets,
+        onProgress: input.onProgress,
+        errorMessage: proxyErrorMessage,
+        responseErrorMessage: proxyResponseErrorMessage,
+      });
+      return;
+    }
 
     if (input.target.variantUploadMode === "server_proxy" && input.target.variantTargets?.length) {
       await proxyMediaUpload({

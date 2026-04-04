@@ -34,7 +34,7 @@ export default async function BuilderPage({ params, searchParams }: BuilderPageP
   const shareToken = getSearchParam(resolvedSearchParams.share);
   let snapshot;
   try {
-    snapshot = await getBuilderSnapshot(slug, { shareToken });
+    snapshot = await getBuilderSnapshot(slug, { includeMedia: true, shareToken });
   } catch (error) {
     if (error instanceof AppError && error.status === 403) {
       redirect(buildViewerHref(slug, shareToken));
@@ -67,7 +67,7 @@ export default async function BuilderPage({ params, searchParams }: BuilderPageP
           canManageSettings={snapshot.actor.canManageSettings}
         />
       </section>
-      <BuilderWorkspace snapshot={snapshot} mediaLoaded={false} />
+      <BuilderWorkspace snapshot={snapshot} mediaLoaded />
     </main>
   );
 }

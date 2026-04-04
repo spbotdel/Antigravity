@@ -2,7 +2,7 @@
 
 *Operational task backlog only.*
 
-*Updated: 2026-03-13*
+*Updated: 2026-04-02*
 
 ## Wave 1 — Current Execution
 
@@ -12,7 +12,7 @@
 - [x] Show the full absolute tree URL in `Настройки` and add copy action
 - [ ] Finish the remaining local Wave 1 builder/media/archive cleanup from the live pass:
   calmer copy/labels, final affordance cleanup, and any last UI-only deltas that do not require hosted staging
-- [ ] Keep video thumbnail generation out of scope for Wave 1
+- [x] Add `cloudflare_r2` video thumbnail generation plus live optimistic UI refresh without changing the server thumb as source of truth
 
 Status note:
 - local `Wave 1` validation is currently green on `npm test`, `npm run build`, `npm run smoke:media`, `npm run smoke:auth`, and `npm run smoke:e2e`
@@ -27,6 +27,7 @@ Status note:
 - [ ] Run hosted UAT for `Owner EU`, `Helper RF`, and `Relative RF`
 - [x] Add invite email delivery via `Resend` with manual-copy fallback
 - [ ] Finish `Resend` sender/domain setup and add `RESEND_FROM_EMAIL` plus optional `INVITE_EMAIL_REPLY_TO` to hosted env
+  Проверено на production alias: email-invite path не падает, но сейчас возвращает `deliveryStatus=skipped` и manual-copy fallback, потому что `Resend` не настроен.
 - [ ] Review staged UAT findings and fix any release-blocking defects
 
 Operational note:
@@ -43,12 +44,43 @@ Operational note:
 
 ## Launch-Critical
 
-- [ ] Complete a full database backup/restore rehearsal on a machine or environment with `pg_dump` / `psql` or a safe staging target
+- [x] For the current milestone, remove `backup/restore rehearsal` from launch blockers and use manual database export discipline instead
+  Принятое решение: это продукт для одной семьи, медиа уже лежат в `Cloudflare`, а для текущего риска достаточно ручного экспорта данных/схемы из `Supabase` dashboard или SQL editor с сохранением файла вне платформы.
 - [ ] Update the final launch decision notes after staged UAT and recovery checks are complete
 - [ ] Keep startup memory and launch docs aligned with the actual execution order
 
 ## Wave 3 — Visual System
 
-- [ ] Add `Tailwind + shadcn/ui` foundation
-- [ ] Migrate shared primitives: buttons, inputs, selects, textareas, dialogs, tabs, cards
-- [ ] Bring the remaining custom builder/media/member surfaces to the same visual language without forcing the canvas onto stock components
+- [x] Add `Tailwind + shadcn/ui` foundation
+- [x] Migrate shared primitives: buttons, inputs, selects, textareas, dialogs, tabs, cards
+- [x] Bring the main tree-scoped builder/media/member/settings/audit surfaces to one visual language without forcing the canvas onto stock components
+- [x] Run a calm post-migration pass on landing/dashboard and close the remaining low-risk visual drift there
+
+## Active Sprint
+
+### High Priority
+
+- [ ] Подтвердить, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий.
+- [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
+- [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
+- [ ] Довести variant architecture до green regression: `thumb/small/medium` должны стабильно использоваться в archive/viewer/builder, а оригинал открываться только явно.
+- [ ] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
+- [ ] Завершить текущий pass по `family-tree-canvas`: age-aware avatars, fallback badge states, читаемость карточек и стабильное выделение выбранного узла в viewer и builder.
+- [ ] Стабилизировать layout конструктора: resizable canvas shell, overlay inspector на desktop и предсказуемое поведение на tablet/mobile без потери приоритета дерева.
+- [ ] Довести экран `Участники`: приглашения по аккаунту и read-only share links должны быть самодостаточными, с понятными подсказками, копированием ссылок и безопасным отзывом доступа.
+- [ ] Провести целевой QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.
+- [ ] Держать startup context, task capsules и memory-файлы актуальными: `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.
+
+### Medium Priority
+
+- [ ] Вернуться к calm pass для landing и dashboard после стабилизации builder/members: сократить лишний copy, выровнять ритм заголовков и CTA.
+- [ ] Добить единый light visual system для `Настройки`, `Журнал`, `Участники`, builder и viewer.
+- [ ] Проверить аватары и карточки дерева на кейсах без фото, с кириллицей в gender, с детьми и пожилыми, чтобы визуальные fallback-и были предсказуемыми.
+- [ ] Уточнить, какие из новых проектных документов должны оставаться обязательным startup context, а какие достаточно держать как справочные.
+- [ ] Подготовить следующий smoke cycle после текущих UI правок и обновления memory-файлов.
+
+### Low Priority
+
+- [ ] Добавлять motion-акценты только после стабилизации canvas/layout/access flows.
+- [ ] Возвращаться к бренд-деталям landing только если это не конфликтует с коротким utilitarian тоном продукта.
+

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildBuilderDisplayTree, buildDerivedUploaderAlbumSummaries, buildDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPersistedTreeMediaAlbumMediaMap, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, collectPersonMedia, collectTreeMedia, collectUnlinkedTreeMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildDerivedUploaderAlbumSummaries, buildDisplayTree, buildMediaOpenRouteUrl, buildMediaThumbRouteUrl, buildPersonPhotoPreviewUrls, buildPersistedTreeMediaAlbumMediaMap, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, collectPersonMedia, collectTreeMedia, collectUnlinkedTreeMedia } from "@/lib/tree/display";
 import type { TreeSnapshot } from "@/lib/types";
 
 const snapshot: TreeSnapshot = {
@@ -82,6 +82,10 @@ const snapshot: TreeSnapshot = {
       caption: null,
       mime_type: "image/jpeg",
       size_bytes: 1024,
+      preview_status: null,
+      preview_error: null,
+      preview_attempt_count: 0,
+      preview_claimed_at: null,
       created_by: null,
       created_at: new Date().toISOString()
     }
@@ -308,6 +312,10 @@ describe("tree display helpers", () => {
           caption: null,
           mime_type: "image/jpeg",
           size_bytes: 2048,
+          preview_status: null,
+          preview_error: null,
+          preview_attempt_count: 0,
+          preview_claimed_at: null,
           created_by: null,
           created_at: new Date().toISOString()
         }
@@ -336,6 +344,10 @@ describe("tree display helpers", () => {
             caption: null,
             mime_type: null,
             size_bytes: null,
+            preview_status: null,
+            preview_error: null,
+            preview_attempt_count: 0,
+            preview_claimed_at: null,
             created_by: null,
             created_at: new Date().toISOString()
           }
@@ -351,7 +363,29 @@ describe("tree display helpers", () => {
   it("builds album summaries filtered by media kind", () => {
     const summaries = buildTreeMediaAlbumSummaries({
       media: [
-        ...snapshot.media,
+        {
+          ...snapshot.media[0],
+          created_by: "user-1"
+        },
+        {
+          id: "media-photo-2",
+          tree_id: "tree-1",
+          kind: "photo",
+          provider: "supabase_storage",
+          visibility: "public",
+          storage_path: "trees/tree-1/media/photo/media-photo-2/file.jpg",
+          external_url: null,
+          title: "Photo 2",
+          caption: null,
+          mime_type: "image/jpeg",
+          size_bytes: 1024,
+          preview_status: null,
+          preview_error: null,
+          preview_attempt_count: 0,
+          preview_claimed_at: null,
+          created_by: "user-1",
+          created_at: new Date().toISOString()
+        },
         {
           id: "media-video",
           tree_id: "tree-1",
@@ -364,6 +398,10 @@ describe("tree display helpers", () => {
           caption: null,
           mime_type: null,
           size_bytes: null,
+          preview_status: null,
+          preview_error: null,
+          preview_attempt_count: 0,
+          preview_claimed_at: null,
           created_by: null,
           created_at: new Date().toISOString()
         }
@@ -374,6 +412,8 @@ describe("tree display helpers", () => {
           tree_id: "tree-1",
           title: "От Виктора Петровича",
           description: null,
+          kind: "photo",
+          access: "members",
           album_kind: "uploader",
           uploader_user_id: "user-1",
           created_by: "user-1",
@@ -392,8 +432,10 @@ describe("tree display helpers", () => {
     expect(summaries[0]).toMatchObject({
       id: "album-1",
       title: "От Виктора Петровича",
+      kind: "photo",
+      access: "members",
       uploaderUserId: "user-1",
-      count: 1,
+      count: 2,
       coverMediaId: "media-1"
     });
   });
@@ -417,6 +459,10 @@ describe("tree display helpers", () => {
           caption: null,
           mime_type: null,
           size_bytes: null,
+          preview_status: null,
+          preview_error: null,
+          preview_attempt_count: 0,
+          preview_claimed_at: null,
           created_by: "user-1",
           created_at: new Date().toISOString()
         }
@@ -427,8 +473,10 @@ describe("tree display helpers", () => {
 
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toMatchObject({
-      id: "uploader-user-1",
+      id: "uploader-user-1-photo",
       title: "От Виктора Петровича",
+      kind: "photo",
+      access: "members",
       albumKind: "uploader",
       uploaderUserId: "user-1",
       count: 1,
@@ -452,6 +500,10 @@ describe("tree display helpers", () => {
           caption: null,
           mime_type: null,
           size_bytes: null,
+          preview_status: null,
+          preview_error: null,
+          preview_attempt_count: 0,
+          preview_claimed_at: null,
           created_by: "user-1",
           created_at: new Date().toISOString()
         }
@@ -466,7 +518,7 @@ describe("tree display helpers", () => {
     expect(map["album-1"]?.[0]?.id).toBe("media-1");
   });
 
-  it("keeps manual albums visible in filtered mode even when the current mode has zero items", () => {
+  it("filters out albums whose explicit kind does not match the current media mode", () => {
     const summaries = buildTreeMediaAlbumSummaries({
       media: [
         {
@@ -480,6 +532,8 @@ describe("tree display helpers", () => {
           tree_id: "tree-1",
           title: "Семейный альбом",
           description: null,
+          kind: "photo",
+          access: "members",
           album_kind: "manual",
           uploader_user_id: null,
           created_by: "user-1",
@@ -491,13 +545,7 @@ describe("tree display helpers", () => {
       kind: "video"
     });
 
-    expect(summaries).toHaveLength(1);
-    expect(summaries[0]).toMatchObject({
-      id: "album-1",
-      title: "Семейный альбом",
-      count: 0,
-      coverMediaId: "media-1"
-    });
+    expect(summaries).toHaveLength(0);
   });
 
   it("builds preview photo URLs per person and prefers primary photos", () => {
@@ -516,6 +564,10 @@ describe("tree display helpers", () => {
           caption: null,
           mime_type: "image/jpeg",
           size_bytes: 1024,
+          preview_status: null,
+          preview_error: null,
+          preview_attempt_count: 0,
+          preview_claimed_at: null,
           created_by: null,
           created_at: new Date().toISOString()
         },
@@ -531,6 +583,10 @@ describe("tree display helpers", () => {
           caption: null,
           mime_type: null,
           size_bytes: null,
+          preview_status: null,
+          preview_error: null,
+          preview_attempt_count: 0,
+          preview_claimed_at: null,
           created_by: null,
           created_at: new Date().toISOString()
         }
@@ -561,6 +617,10 @@ describe("tree display helpers", () => {
       caption: null,
       mime_type: "image/jpeg",
       size_bytes: 2048,
+      preview_status: null,
+      preview_error: null,
+      preview_attempt_count: 0,
+      preview_claimed_at: null,
       created_by: null,
       created_at: "2026-03-09T00:00:00.000Z"
     };
@@ -573,6 +633,25 @@ describe("tree display helpers", () => {
     expect(buildPhotoPreviewRouteUrl(freshPhoto, "small")).toBe("/api/media/media-fresh?variant=small");
     expect(buildPhotoPreviewRouteUrl(freshPhoto, "thumb", "share-token")).toBe("/api/media/media-fresh?variant=thumb&share=share-token");
     expect(buildPhotoPreviewRouteUrl(legacyPhoto, "small")).toBe("/api/media/media-legacy");
+    expect(buildMediaThumbRouteUrl(freshPhoto)).toBe("/api/media/media-fresh?variant=thumb");
+    expect(
+      buildMediaThumbRouteUrl({
+        id: "media-video-ready",
+        kind: "video",
+        created_at: "2026-03-28T00:00:00.000Z",
+        provider: "cloudflare_r2",
+        preview_status: "ready"
+      })
+    ).toBe("/api/media/media-video-ready?variant=thumb");
+    expect(
+      buildMediaThumbRouteUrl({
+        id: "media-video-pending",
+        kind: "video",
+        created_at: "2026-03-28T00:00:00.000Z",
+        provider: "cloudflare_r2",
+        preview_status: "pending"
+      })
+    ).toBeNull();
     expect(buildMediaOpenRouteUrl(freshPhoto)).toBe("/api/media/media-fresh");
     expect(buildMediaOpenRouteUrl(freshPhoto, "share-token")).toBe("/api/media/media-fresh?share=share-token");
   });

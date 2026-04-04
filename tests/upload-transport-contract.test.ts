@@ -10,6 +10,7 @@ type MockProgressEvent = {
 
 class MockXMLHttpRequest {
   static requests: MockXMLHttpRequest[] = [];
+  static responders: Array<(request: MockXMLHttpRequest) => void> = [];
 
   method = "";
   url = "";
@@ -21,6 +22,9 @@ class MockXMLHttpRequest {
   body: Document | XMLHttpRequestBodyInit | null = null;
   onload: (() => void) | null = null;
   onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  ontimeout: (() => void) | null = null;
+  timeout = 0;
   upload: { onprogress: ((event: MockProgressEvent) => void) | null } = {
     onprogress: null,
   };
@@ -37,6 +41,12 @@ class MockXMLHttpRequest {
   send(body: Document | XMLHttpRequestBodyInit | null) {
     this.body = body;
     MockXMLHttpRequest.requests.push(this);
+
+    const responder = MockXMLHttpRequest.responders.shift();
+    if (responder) {
+      responder(this);
+      return;
+    }
 
     if (body instanceof File && this.upload.onprogress) {
       this.upload.onprogress({
@@ -58,6 +68,7 @@ const originalXmlHttpRequest = globalThis.XMLHttpRequest;
 describe("upload transport contract", () => {
   beforeEach(() => {
     MockXMLHttpRequest.requests = [];
+    MockXMLHttpRequest.responders = [];
     globalThis.XMLHttpRequest = MockXMLHttpRequest as unknown as typeof XMLHttpRequest;
   });
 
@@ -143,5 +154,181 @@ describe("upload transport contract", () => {
     expect(MockXMLHttpRequest.requests[0].method).toBe("PUT");
     expect(MockXMLHttpRequest.requests[0].url).toBe("https://example.com/video-original");
     expect(MockXMLHttpRequest.requests[0].body).toBe(file);
+  });
+
+  it("falls back to proxy upload when direct browser upload fails", async () => {
+    const file = new File([new Uint8Array([9, 8, 7])], "family-photo.png", { type: "image/png" });
+    MockXMLHttpRequest.responders.push((request) => {
+      request.onerror?.();
+    });
+
+    await uploadFileWithTransportContract({
+      target: {
+        signedUrl: "https://example.com/original",
+        configuredBackend: "cloudflare_r2",
+        resolvedUploadBackend: "cloudflare_r2",
+        rolloutState: "cloudflare_rollout_active",
+        forceProxyUpload: false,
+        uploadMode: "direct",
+        variantUploadMode: "server_proxy",
+        variantTargets: [
+          {
+            variant: "thumb",
+            path: "trees/tree-1/media/photo/media-1/variants/thumb.webp",
+            signedUrl: "https://example.com/thumb",
+          },
+        ],
+      },
+      file,
+    });
+
+    expect(MockXMLHttpRequest.requests).toHaveLength(2);
+    expect(MockXMLHttpRequest.requests[0].method).toBe("PUT");
+    expect(MockXMLHttpRequest.requests[1].method).toBe("POST");
+    expect(MockXMLHttpRequest.requests[1].url).toBe("/api/media/upload-file");
+
+    const formData = MockXMLHttpRequest.requests[1].body as FormData;
+    expect(formData.get("signedUrl")).toBe("https://example.com/original");
+    expect(formData.get("skipPrimaryUpload")).toBeNull();
+  });
+
+  it("falls back to proxy upload when direct browser upload times out", async () => {
+    const file = new File([new Uint8Array([9, 8, 7])], "family-photo.png", { type: "image/png" });
+    MockXMLHttpRequest.responders.push((request) => {
+      request.ontimeout?.();
+    });
+
+    await uploadFileWithTransportContract({
+      target: {
+        signedUrl: "https://example.com/original",
+        configuredBackend: "cloudflare_r2",
+        resolvedUploadBackend: "cloudflare_r2",
+        rolloutState: "cloudflare_rollout_active",
+        forceProxyUpload: false,
+        uploadMode: "direct",
+        variantUploadMode: "server_proxy",
+        variantTargets: [
+          {
+            variant: "thumb",
+            path: "trees/tree-1/media/photo/media-1/variants/thumb.webp",
+            signedUrl: "https://example.com/thumb",
+          },
+        ],
+      },
+      file,
+    });
+
+    expect(MockXMLHttpRequest.requests).toHaveLength(2);
+    expect(MockXMLHttpRequest.requests[0].method).toBe("PUT");
+    expect(MockXMLHttpRequest.requests[1].method).toBe("POST");
+    expect(MockXMLHttpRequest.requests[1].url).toBe("/api/media/upload-file");
+  });
+
+  it("does not fall back to proxy upload when the direct upload is aborted by the user", async () => {
+    const file = new File([new Uint8Array([9, 8, 7])], "family-photo.png", { type: "image/png" });
+    MockXMLHttpRequest.responders.push((request) => {
+      request.onabort?.();
+    });
+
+    await expect(
+      uploadFileWithTransportContract({
+        target: {
+          signedUrl: "https://example.com/original",
+          configuredBackend: "cloudflare_r2",
+          resolvedUploadBackend: "cloudflare_r2",
+          rolloutState: "cloudflare_rollout_active",
+          forceProxyUpload: false,
+          uploadMode: "direct",
+          variantUploadMode: "server_proxy",
+          variantTargets: [
+            {
+              variant: "thumb",
+              path: "trees/tree-1/media/photo/media-1/variants/thumb.webp",
+              signedUrl: "https://example.com/thumb",
+            },
+          ],
+        },
+        file,
+      })
+    ).rejects.toThrow("Загрузка файла была отменена.");
+
+    expect(MockXMLHttpRequest.requests).toHaveLength(1);
+    expect(MockXMLHttpRequest.requests[0].method).toBe("PUT");
+  });
+
+  it("does not fall back to proxy upload when the direct upload returns a 4xx error", async () => {
+    const file = new File([new Uint8Array([9, 8, 7])], "family-photo.png", { type: "image/png" });
+    MockXMLHttpRequest.responders.push((request) => {
+      request.status = 403;
+      request.response = { error: "Signed URL is no longer valid." };
+      request.responseText = JSON.stringify(request.response);
+      request.onload?.();
+    });
+
+    await expect(
+      uploadFileWithTransportContract({
+        target: {
+          signedUrl: "https://example.com/original",
+          configuredBackend: "cloudflare_r2",
+          resolvedUploadBackend: "cloudflare_r2",
+          rolloutState: "cloudflare_rollout_active",
+          forceProxyUpload: false,
+          uploadMode: "direct",
+          variantUploadMode: "server_proxy",
+          variantTargets: [
+            {
+              variant: "thumb",
+              path: "trees/tree-1/media/photo/media-1/variants/thumb.webp",
+              signedUrl: "https://example.com/thumb",
+            },
+          ],
+        },
+        file,
+      })
+    ).rejects.toThrow("Signed URL is no longer valid.");
+
+    expect(MockXMLHttpRequest.requests).toHaveLength(1);
+    expect(MockXMLHttpRequest.requests[0].method).toBe("PUT");
+  });
+
+  it("keeps full-proxy uploads on the server path together with variant targets", async () => {
+    const file = new File([new Uint8Array([1, 2, 3, 4])], "family-photo.png", { type: "image/png" });
+
+    await uploadFileWithTransportContract({
+      target: {
+        signedUrl: "https://example.com/original",
+        configuredBackend: "cloudflare_r2",
+        resolvedUploadBackend: "cloudflare_r2",
+        rolloutState: "cloudflare_rollout_active",
+        forceProxyUpload: true,
+        uploadMode: "proxy",
+        variantUploadMode: "server_proxy",
+        variantTargets: [
+          {
+            variant: "thumb",
+            path: "trees/tree-1/media/photo/media-1/variants/thumb.webp",
+            signedUrl: "https://example.com/thumb",
+          },
+        ],
+      },
+      file,
+    });
+
+    expect(MockXMLHttpRequest.requests).toHaveLength(1);
+    expect(MockXMLHttpRequest.requests[0].method).toBe("POST");
+    expect(MockXMLHttpRequest.requests[0].url).toBe("/api/media/upload-file");
+
+    const formData = MockXMLHttpRequest.requests[0].body as FormData;
+    expect(formData.get("signedUrl")).toBe("https://example.com/original");
+    expect(formData.get("skipPrimaryUpload")).toBeNull();
+    expect(formData.get("contentType")).toBe("image/png");
+    expect(formData.get("file")).toBe(file);
+    expect(JSON.parse(String(formData.get("variantTargets")))).toEqual([
+      {
+        variant: "thumb",
+        path: "trees/tree-1/media/photo/media-1/variants/thumb.webp",
+        signedUrl: "https://example.com/thumb",
+      },
+    ]);
   });
 });

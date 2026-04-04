@@ -3,35 +3,28 @@
 <!-- FRAMEWORK:LAUNCH:START -->
 ## Current Launch Sync
 
-- Updated at (UTC): `2026-03-13 13:55:00Z`
-- Launch is currently blocked by post-UAT hardening, hosted validation, and recovery checks.
+- Updated at (UTC): `2026-04-02 13:51:57Z`
+- Launch is currently blocked until `Cloudflare R2` rollout is activated and confirmed as the steady-state upload path.
 - Current execution order:
-1. Keep the local Wave 1 baseline green while switching validation to the hosted `Vercel` environment.
-2. Update hosted `NEXT_PUBLIC_SITE_URL` to the stable `Vercel` UAT URL and keep `DEV_IMPERSONATE_*` disabled there.
-3. Apply the new share-link reveal migration remotely so hosted reveal works without fallback.
-4. Finish `Resend` sender/domain verification and add final hosted sender vars.
-5. Run staged UAT for owner `EU`, helper `RF`, and read-only relative `RF`, including perceived speed observations from staging.
-6. Complete backup/restore rehearsal and the final launch checklist before release decision.
+1. Verify gated `Cloudflare R2` readiness: `CF_R2_*`, bucket CORS, upload-intent metadata, `smoke:media`, and `smoke:media:direct`.
+2. Activate rollout and confirm `resolvedUploadBackend=cloudflare_r2` for new uploads.
+3. Run post-activation regression for archive/viewer/builder/members, preview variants, and legacy Yandex-backed reads.
+4. Run live UAT for owner `EU`, helper `RF`, and read-only relative `RF`.
+5. Complete backup/restore rehearsal and the final launch checklist before release decision.
 
 ### Current Validation Signal
 
 - `.claude/*` files are auto-synced during `completion`; this is the canonical automatic state path.
 - `README.md`, operational docs, and the main `Slava edition` plan docs reflect current runtime/launch state only if completion owns an explicit sync path for them; operational docs and plan docs are now covered by that sync.
-- Local validation is green on:
-  - `npm test`
-  - `npm run build`
-  - `npm run smoke:media`
-  - `npm run smoke:auth`
-  - `npm run smoke:e2e`
-- Hosted `Vercel` deployment for the latest `main` commit is live:
-  - `https://antigravity-git-main-spbotdel-4945s-projects.vercel.app`
+- No `smoke:media` artifact was detected during the latest completion sync.
+- Broad `smoke:e2e` still needs a clean confirmation cycle in the current environment.
 <!-- FRAMEWORK:LAUNCH:END -->
 
 ## 1. Цель
 
 1. Этот документ нужен перед private production launch.
 2. Его задача - собрать минимальный checklist запуска без лишнего process overhead.
-3. Для текущего состояния проекта launch считается заблокированным, пока не закрыты post-UAT hardening, hosted validation и recovery checks.
+3. Для текущего состояния проекта launch считается заблокированным, пока не закрыты post-UAT hardening, hosted validation и текущая минимальная recovery discipline.
 
 ## 2. Технический pre-launch
 
@@ -318,7 +311,7 @@
 2. `last_accessed_at` по семейным ссылкам обновляется.
 3. Ошибки на ключевых действиях отображаются пользователю.
 4. При email-invite ошибке UI явно показывает fallback через ручное копирование ссылки.
-5. Backup/restore rehearsal выполнен и задокументирован.
+5. Свежий manual database export сохранен и задокументирован.
 
 ## 7. Network and geography check
 
@@ -337,7 +330,7 @@
 4. Родственник может читать дерево по ссылке.
 5. Файлы работают по private delivery.
 6. Email invite delivery либо работает через `Resend`, либо честно отрабатывает через ручной fallback без потери invite URL.
-7. Есть backup/restore дисциплина.
+7. Есть понятная manual export дисциплина для базы и понятный media recovery path.
 
 Запуск откладывается, если:
 1. `Cloudflare R2` rollout не активирован или не подтвержден.
@@ -345,4 +338,4 @@
 3. Семейные ссылки ведут себя нестабильно.
 4. Upload/read media ломается в реальном сценарии.
 5. Hosted staging не подтверждает реальные auth/speed user paths.
-6. Нет понятного recovery path.
+6. Нет понятного manual export / recovery path.

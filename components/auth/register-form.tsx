@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { translateAuthError } from "@/lib/auth-error";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
@@ -85,39 +88,39 @@ export function RegisterForm() {
         }
       }}
     >
-      <div className="field-grid field-grid-2">
-        <label>
+      <div className="form-grid form-grid-2">
+        <label className="form-field">
           Ваше имя
-          <input name="displayName" required placeholder="Анна Петровна" />
+          <Input name="displayName" required placeholder="Анна Петровна" />
         </label>
-        <label>
+        <label className="form-field">
           Почта
-          <input name="email" type="email" required placeholder="owner@example.com" />
+          <Input name="email" type="email" required placeholder="owner@example.com" />
         </label>
       </div>
-      <div className="field-grid field-grid-2">
-        <label>
+      <div className="form-grid form-grid-2">
+        <label className="form-field">
           Пароль
-          <input name="password" type="password" required minLength={8} placeholder="Минимум 8 символов" />
+          <Input name="password" type="password" required minLength={8} placeholder="Минимум 8 символов" />
         </label>
-        <label>
+        <label className="form-field">
           Адрес ссылки
-          <input name="slug" placeholder="ivanov-family" />
+          <Input name="slug" placeholder="ivanov-family" />
         </label>
       </div>
-      <label>
+      <label className="form-field">
         Название семейного дерева
-        <input name="treeTitle" required placeholder="Семейное дерево Ивановых" />
+        <Input name="treeTitle" required placeholder="Семейное дерево Ивановых" />
       </label>
-      <label>
+      <label className="form-field">
         Описание
-        <textarea name="description" rows={4} placeholder="Частный архив семьи, историй, фотографий и памяти." />
+        <Textarea name="description" rows={4} placeholder="Частный архив семьи, историй, фотографий и памяти." />
       </label>
       {error ? <p className="form-error">{error}</p> : null}
       {message ? <p className="form-success">{message}</p> : null}
-      <button className="primary-button" type="submit" disabled={loading}>
+      <Button type="submit" disabled={loading}>
         {loading ? "Создаю аккаунт..." : "Зарегистрировать владельца"}
-      </button>
+      </Button>
     </form>
   );
 }

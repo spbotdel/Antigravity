@@ -43,6 +43,14 @@ describe("invite routes", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(201);
+    expect(createInvite).toHaveBeenCalledWith({
+      treeId: expect.any(String),
+      role: "viewer",
+      inviteMethod: "link",
+      email: "viewer@example.com",
+      expiresInDays: 7,
+      baseUrl: "http://localhost",
+    });
     expect(payload.url).toContain("accept-invite");
     expect(payload.deliveryStatus).toBe("sent");
     expect(payload.deliveryMessage).toBe("Письмо отправлено на viewer@example.com.");

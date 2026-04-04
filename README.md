@@ -89,6 +89,7 @@ Required env vars:
 - `CF_R2_SECRET_ACCESS_KEY` required when `MEDIA_STORAGE_BACKEND=cloudflare_r2`
 - `CF_R2_ENDPOINT` optional for Cloudflare R2, defaults to `https://<CF_ACCOUNT_ID>.r2.cloudflarestorage.com`
 - `CF_R2_REGION` optional, defaults to `auto`
+- `CF_R2_PUBLIC_BASE_URL` optional public R2/custom-domain base used for Office `.doc/.docx` iframe preview
 - `CF_R2_ROLLOUT_AT` optional UTC timestamp for migration gating; before this moment new uploads remain on the legacy object-storage path even if `MEDIA_STORAGE_BACKEND=cloudflare_r2`
 
 Current transitional compatibility path:
@@ -131,7 +132,7 @@ Mandatory rollout sequence for `Slava edition`:
 8. Treat release readiness as blocked until:
    - targeted archive/viewer/builder/members QA is green
    - live `EU + RF` UAT is complete
-   - backup/restore rehearsal is complete
+   - a fresh manual database export is captured and stored outside the platform
 
 Controlled rollout checklist:
 
@@ -154,7 +155,7 @@ Controlled rollout checklist:
 - Phase 5. Launch hardening
   - targeted archive/viewer/builder/members QA is green
   - live `EU + RF` UAT is complete
-  - backup/restore rehearsal and launch checklist are complete
+  - a fresh manual database export is captured and launch checklist is complete
 
 Current transition detail:
 
@@ -191,6 +192,8 @@ For the current media/object-storage path this includes at least:
 - [`supabase/migrations/20260306173100_unified_media_constraints_v1.sql`](./supabase/migrations/20260306173100_unified_media_constraints_v1.sql)
 - [`supabase/migrations/20260307111500_object_storage_provider_v1.sql`](./supabase/migrations/20260307111500_object_storage_provider_v1.sql)
 - [`supabase/migrations/20260307111600_object_storage_provider_constraints_v1.sql`](./supabase/migrations/20260307111600_object_storage_provider_constraints_v1.sql)
+- [`supabase/migrations/20260320093000_cloudflare_r2_provider_v1.sql`](./supabase/migrations/20260320093000_cloudflare_r2_provider_v1.sql)
+- [`supabase/migrations/20260320093100_cloudflare_r2_provider_constraints_v1.sql`](./supabase/migrations/20260320093100_cloudflare_r2_provider_constraints_v1.sql)
 
 4. Optionally run [`supabase/seed.sql`](./supabase/seed.sql) after at least one auth user exists.
 

@@ -573,6 +573,426 @@ The main viewer page and snapshot APIs remain valid consumers of the full snapsh
 
 ---
 
+# 2026-03-22 — Fullscreen media viewer and inline gallery must use separate responsive nav behavior
+
+### Decision
+
+Responsive behavior for shared media navigation classes must be scoped by UI context.
+
+For `inline gallery` usage, mobile layouts may use wider navigation controls when that helps the inline composition.
+
+For `fullscreen media viewer` usage under `.media-lightbox-minimal`:
+
+- navigation must remain compact side controls
+- fullscreen path must not inherit `width: 100%` mobile nav behavior from shared classes
+- fullscreen-specific overrides must be applied explicitly through a context selector such as `.media-lightbox-minimal .media-lightbox-nav`
+
+### Why
+
+The media lightbox and inline gallery currently reuse classes such as `.media-lightbox-nav`.
+
+A generic mobile rule for `.media-lightbox-nav` was acceptable for inline/mobile gallery, but it also affected the fullscreen lightbox path.
+
+In fullscreen mode the nav controls are absolutely positioned at the left and right sides of the stage. When the shared mobile rule stretched them to full width:
+
+- left and right controls overlapped
+- the viewer showed a wide horizontal bar across the media stage
+- fullscreen composition broke even though the inline/mobile gallery behavior itself was still reasonable
+
+This is a class-sharing and cascade-scoping problem, not a media-type-specific layout problem.
+
+### Consequence
+
+Future responsive work on shared media components must preserve this rule:
+
+- shared responsive rules should be treated as inline-safe defaults, not automatically fullscreen-safe behavior
+- fullscreen viewer must explicitly override conflicting mobile rules through scoped selectors
+- when inline and fullscreen surfaces share classes, responsive changes must be reviewed in both contexts before they are treated as safe
+
+This reduces the chance that a mobile polish change for inline gallery quietly breaks fullscreen viewer composition.
+
+---
+
+# 2026-03-27 — Archive album access is a hard upper bound for files inside it
+
+### Decision
+
+Tree-level archive albums now carry their own access:
+
+- `members`
+- `public`
+
+File access is enforced by the strictest context:
+
+- file `visibility`
+- every linked album `access`
+
+The single repository entry point for this rule is:
+
+- `resolveEffectiveMediaAccess(mediaId)`
+
+### Why
+
+The product promise for a private family archive is:
+
+- if an album is closed to family only, nothing inside it should remain wider by accident
+
+Keeping file access wider than its enclosing album would create a direct mismatch between:
+
+- what the UI implies
+- what the signed file route actually allows
+
+### Consequence
+
+Future work must preserve these rules:
+
+- file `visibility` remains authored state
+- album `access` is a limiting boundary
+- effective file visibility is computed, not stored as a third permanent truth column
+- `resolveMediaAccess(...)` must enforce through `resolveEffectiveMediaAccess(...)`
+- tightening may close access immediately through effective visibility
+- loosening must not silently widen files unless their own authored visibility and all other album constraints already allow it
+
+---
+
+# 2026-03-28 — Archive albums have explicit media kind and legacy mixed test albums are reset
+
+### Decision
+
+Tree-level archive albums now have a required explicit media kind:
+
+- `photo`
+- `video`
+
+Album kind is authored server-side state.
+
+It must not be inferred dynamically from current album contents.
+
+The same product rule also applies to uploader albums:
+
+- uploader albums are scoped by `(uploader_user_id, kind)`
+- one uploader may therefore have one photo uploader album and one video uploader album inside the same tree
+
+Existing legacy archive albums were treated as disposable test data and reset during the migration rollout.
+
+No backfill or auto-classification path is part of this decision.
+
+### Why
+
+Showing the same persisted albums in both `Фото` and `Видео` tabs created a direct UX and data-model mismatch.
+
+If album kind were derived from current contents instead of stored explicitly:
+
+- tab filtering would stay ambiguous
+- empty albums would have no stable type
+- mixed or legacy contents would keep forcing compatibility heuristics
+
+The product now prefers a strict explicit model over legacy flexibility.
+
+### Consequence
+
+Future work must preserve these rules:
+
+- manual albums must always be created with explicit `kind`
+- uploader albums must also carry explicit `kind`
+- album contents must stay same-kind only
+- archive UI should render album lists from explicit `album.kind`, not from content inference
+- migrations and runtime code should assume that old mixed test albums were intentionally discarded, not preserved
+
+---
+
+# 2026-03-28 — Album-targeted archive upload inherits album access by default, but effective access stays strictest
+
+### Decision
+
+When the archive upload review flow targets a specific album, file visibility should default to that album's `access`.
+
+The UI should not force the user to repeat the same privacy choice for album-targeted uploads.
+
+This is a UX default only.
+
+The repository access model remains unchanged:
+
+- file `visibility` is still authored state
+- effective access is still the strictest of file visibility and every enclosing album access
+
+### Why
+
+Once album access became selectable at creation time, asking for file visibility again during upload into that same album created redundant and confusing UX.
+
+The user intent in that flow is usually:
+
+- choose the album
+- inherit the album privacy
+
+not:
+
+- choose album privacy
+- then immediately restate the same visibility choice for each file
+
+### Consequence
+
+Future work must preserve these rules:
+
+- upload into a selected album should default to the album's current `access`
+- standalone archive upload may still expose normal file visibility choice
+- this UX shortcut must not weaken the strictest-rule access model
+- repository and DB logic must continue enforcing effective access independently of UI defaults
+
+---
+
+# 2026-03-28 — Archive album linking must be idempotent
+
+### Decision
+
+Application-level album linking for archive media must be idempotent.
+
+If a `(album_id, media_id)` relation already exists, repository code should skip it instead of attempting a second insert.
+
+### Why
+
+The database uniqueness constraint on `tree_media_album_items(album_id, media_id)` is correct and must remain in place.
+
+However, archive upload and album-targeting paths can legitimately re-enter album-linking logic through retries, overlapping uploader-album/manual-album handling, or repeated completion calls.
+
+In that situation, treating an existing link as an error creates avoidable runtime failure even though the desired final state already exists.
+
+### Consequence
+
+Future work must preserve these rules:
+
+- keep the unique constraint
+- do not use duplicate-key exceptions as normal control flow
+- repository album-link writes should insert only missing pairs
+- uploader-album and selected-album flows may overlap, so deduping must happen before insert
+
+---
+
+# 2026-03-28 — Uploader albums are virtual archive albums
+
+### Decision
+
+Uploader/system albums such as `От Сергей Тест` are virtual albums.
+
+For uploader albums, the source of truth for summary and detail semantics is the visible media set matching:
+
+- `tree_id`
+- `created_by`
+- `kind`
+
+This applies to:
+
+- album card count
+- album card cover/preview
+- album detail contents
+
+Persisted uploader album rows still matter only for:
+
+- metadata
+- access / edit / delete behavior
+- stable album identity in UI
+
+Persisted `tree_media_album_items` must not be treated as the semantic source of truth for uploader album summary behavior, even when such links exist.
+
+### Why
+
+Uploader albums are intended as a convenient archive view over one uploader's visible media for one media kind.
+
+If uploader album cards use persisted `tree_media_album_items`, while album detail uses all visible media by `(created_by, kind)`, the product shows contradictory counts and broken expectations.
+
+That mismatch is a product-model problem, not a presentation problem.
+
+### Consequence
+
+Future work must preserve these rules:
+
+- uploader album card count and uploader album detail must always be derived from the same virtual media set
+- uploader album cover must also be derived from that same media set
+- manual albums may keep using persisted album-item relations as their source of truth
+- persisted uploader album rows may exist, but they must not narrow uploader album count/detail semantics to linked items only
+
+---
+
+# 2026-03-28 — In `All media`, uploader albums merge by uploader while kind-specific modes stay split
+
+### Decision
+
+Uploader albums remain split by `kind` in:
+
+- `Фото`
+- `Видео`
+
+But in `Все медиа`, uploader albums must be merged into a single virtual album per `uploader_user_id`.
+
+The merged uploader album should:
+
+- include all visible uploader media across photo and video
+- expose combined count
+- derive cover from that same combined media set
+
+Manual albums must not be merged by this rule.
+
+### Why
+
+Once uploader albums became explicit per-kind virtual albums, `Все медиа` started showing duplicate uploader cards with the same title.
+
+That is correct from a storage/model perspective, but wrong from a browsing perspective:
+
+- users expect one uploader album in the combined archive mode
+- users still expect separate uploader albums in the kind-specific modes
+
+### Consequence
+
+Future work must preserve these rules:
+
+- `Все медиа` should show one uploader album per uploader
+- `Фото` and `Видео` should keep uploader albums split by kind
+- merged uploader album count, cover, and detail contents must all derive from the same combined visible media set
+- manual albums remain one-card-per-persisted-album and are not affected by this merge rule
+
+---
+
+# 2026-03-30 — Archive grid keeps initial next-page thumb prefetch enabled by default
+
+### Decision
+
+The archive grid keeps one-page-ahead thumb URL prefetch enabled by default.
+
+Current default behavior:
+
+- initial screen uses server-pre-resolved direct thumb URLs
+- hydrated client resolves the current visible thumb set through one batched request when needed
+- exactly one next visible set may be prefetched during idle time
+
+The evaluated `delay initial prefetch until visible images settle` mode remains diagnostic-only and is not part of the default product runtime.
+
+### Why
+
+The archive grid already had a real UX win after `Показать еще` once next-page thumb prefetch was enabled.
+
+Further investigation showed:
+
+- immediate initial-page next-set URL prefetch does mechanically overlap with the current visible screen
+- browser image warming overlap was worth refining and was adjusted
+- but after that refinement, no stable evidence showed that immediate initial-page URL prefetch alone causes a meaningful user-visible regression
+- the dev environment remained too noisy, and cache order influenced the measurements too strongly to justify changing the default behavior
+
+### Consequence
+
+Future work should preserve these rules:
+
+- keep one-page-ahead archive thumb prefetch enabled by default
+- keep browser image warming limited so it does not interfere with the current visible screen
+- do not enable `delay initial prefetch until settle` as product behavior without cleaner benchmark or real-user evidence
+- if archive grid performance work resumes, treat the next bottleneck as a new measured problem rather than reopening this decision by default
+
+---
+
+# 2026-04-04 — Media surfaces must degrade gracefully on missing thumb and original objects
+
+### Decision
+
+Missing storage objects are treated as recoverable runtime defects, not route-fatal conditions.
+
+Current behavior must follow this shape:
+
+- server-side thumb pre-resolution is best-effort only
+- missing thumb objects must not crash `/tree/[slug]/media`
+- missing original objects must degrade the local media surface to a placeholder or open/download affordance
+- client-side broken-media logging may exist, but it must stay small, deduplicated, and local-only
+
+### Why
+
+The product already had real cases where storage and DB state drifted enough for:
+
+- thumb objects to disappear
+- original objects to be missing
+- otherwise healthy tree pages to fail with `Object not found`
+
+That failure mode is too expensive for a family archive UI.
+
+The user needs:
+
+- the page to stay open
+- enough signal to notice broken media
+- no silent assumption that the object is healthy
+
+### Consequence
+
+Future media work must preserve these rules:
+
+- thumb loading is an optimization, not a render prerequisite
+- broken media should remain observable through bounded debug logging
+- client and server fallback behavior should degrade the affected tile or stage, not the whole route
+- fixing storage drift is a data task, not an excuse to keep route-level crash behavior
+
+---
+
+# 2026-04-04 — Office Word preview depends on `CF_R2_PUBLIC_BASE_URL`, while download stays the safe fallback
+
+### Decision
+
+Office `.doc/.docx` preview is not a generic right of all document records.
+
+It depends on:
+
+- a compatible Cloudflare R2-backed object path
+- `CF_R2_PUBLIC_BASE_URL` being configured
+
+When those preconditions are not met, the product should prefer download/open behavior instead of pretending inline preview is universally available.
+
+### Why
+
+Word document preview relies on a publicly reachable R2 or custom-domain base that an iframe-style viewer can fetch directly.
+
+Private signed URLs are still correct for access control, but they are not the same thing as a stable preview base.
+
+### Consequence
+
+Future document behavior should preserve this split:
+
+- preview only when the explicit public-base precondition is satisfied
+- otherwise use explicit download/open flows
+- attachment-friendly behavior for documents and audio remains part of the product contract, not an incidental browser default
+
+---
+
+# 2026-04-04 — `test-tree` fixture was intentionally reset as disposable data
+
+### Decision
+
+The previous `test-tree` media and people set was treated as disposable test data and reset completely.
+
+The reset principle was:
+
+- do not recover the old fixture
+- clear tree-scoped DB references
+- clear tree-scoped storage objects
+- reseed a small, coherent fixture from scratch
+
+### Why
+
+The old `test-tree` had drifted into a mixed, noisy state:
+
+- excessive person counts and unrealistic family shapes
+- stale and orphan-prone media state
+- broken storage references
+- low confidence in whether any given test artifact was still intentional
+
+That made debugging harder than rebuilding the fixture cleanly.
+
+### Consequence
+
+Future work should treat `test-tree` as an explicitly disposable local/staging fixture.
+
+If it drifts again:
+
+- prefer a full reset over ad hoc preservation of unclear artifacts
+- do not assume historical media in that fixture is valuable unless a new decision says otherwise
+- keep fixture cleanup and reseed behavior explicit so DB and storage do not drift independently
+
+---
+
 # How to update this file
 
 Add a new entry when:
