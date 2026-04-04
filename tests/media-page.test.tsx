@@ -351,7 +351,7 @@ describe("media page", () => {
       })
     );
 
-    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("mode:all;view:all;album:none;media:2;albums:0");
+    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("mode:all;view:all;album:none;media:4;albums:0");
   });
 
   it("re-triggers visible cloudflare video previews that are still pending or processing", async () => {

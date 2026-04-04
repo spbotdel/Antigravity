@@ -185,6 +185,30 @@ Do not regress to:
 
 Legacy external URL support may exist, but it is fallback compatibility, not the preferred architecture.
 
+## Rule 9.1: Media Rendering Must Degrade Gracefully When Storage Objects Are Missing
+
+Media pages, viewer panels, and gallery surfaces must not crash just because a thumb or original object is missing in storage.
+
+If a media object cannot be resolved:
+- server-side thumb preloading should fail soft and continue rendering the page
+- client-side thumb/original failures should fall back to placeholders or reduced UI states
+- missing media should remain diagnosable through targeted debug logging, not silent corruption
+
+Broken storage objects are a data-quality problem, not a reason to take down the whole tree surface.
+
+## Rule 9.2: Document Preview And Download Rules Must Stay Explicit
+
+Document handling must preserve a clear split between:
+- inline preview when the format and storage setup support it
+- attachment-style download when preview is not appropriate
+
+Current practical rules:
+- Office `.doc/.docx` iframe preview depends on `CF_R2_PUBLIC_BASE_URL`
+- if `CF_R2_PUBLIC_BASE_URL` is absent or the document is not preview-compatible, the UI should fall back to download/open flows instead of pretending preview is available
+- audio and document downloads should remain attachment-friendly where the product explicitly expects download behavior
+
+Do not broaden inline preview behavior casually across arbitrary document formats or storage providers.
+
 ## Rule 10: Migrations Are Part Of The Runtime Contract
 
 Code that expects new tables/columns/policies must be considered incomplete until the matching migration is applied remotely.

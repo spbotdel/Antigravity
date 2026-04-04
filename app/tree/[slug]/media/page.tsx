@@ -140,13 +140,14 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   const audioPlaylistItems = pageData.audioPlaylistItems || [];
   const audioPlaylistsAvailable = pageData.audioPlaylistsAvailable !== false;
 
-  const photoMedia = collectTreeMedia({ media: pageData.media }, "photo");
-  const videoMedia = collectTreeMedia({ media: pageData.media }, "video");
-  const audioMedia = collectTreeMedia({ media: pageData.media }, "audio");
-  const documentMedia = collectTreeMedia({ media: pageData.media }, "document");
-  const allMedia = collectArchiveGalleryMedia({ media: pageData.media });
+  const fullMedia = pageData.media;
+  const photoMedia = collectTreeMedia({ media: fullMedia }, "photo");
+  const videoMedia = collectTreeMedia({ media: fullMedia }, "video");
+  const audioMedia = collectTreeMedia({ media: fullMedia }, "audio");
+  const documentMedia = collectTreeMedia({ media: fullMedia }, "document");
+  const allMedia = collectArchiveGalleryMedia({ media: fullMedia });
   const persistedAlbumMediaMap = buildPersistedTreeMediaAlbumMediaMap({
-    media: pageData.media,
+    media: fullMedia,
     items
   });
   const persistedAllAlbumSummaries = buildTreeMediaAlbumSummaries({
@@ -293,7 +294,7 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
         initialMode={mode}
         initialView={view}
         initialAlbumId={albumId}
-        allMedia={allMedia}
+        allMedia={fullMedia}
       allAlbums={persistedAllAlbumSummaries}
         persistedAlbumMediaMap={persistedAlbumMediaMap}
         initialThumbUrlsByMediaId={initialThumbUrlsByMediaId}

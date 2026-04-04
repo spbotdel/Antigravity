@@ -1518,6 +1518,14 @@ describe("tree media archive client", () => {
     expect(screen.queryByRole("button", { name: "Открыть файл: Документ 1" })).not.toBeInTheDocument();
     expect(screen.queryByText("Аудио 1")).not.toBeInTheDocument();
     expect(screen.queryByText("Документ 1")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Аудио" }));
+    expect(screen.getByText("Аудио 1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть фото: Фото 1" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Документы" }));
+    expect(screen.getByText("Документ 1")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть видео: Видео 1" })).not.toBeInTheDocument();
   });
 
   it("opens an edit dialog from the album card menu and updates the manual album", async () => {

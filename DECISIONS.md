@@ -888,6 +888,111 @@ Future work should preserve these rules:
 
 ---
 
+# 2026-04-04 — Media surfaces must degrade gracefully on missing thumb and original objects
+
+### Decision
+
+Missing storage objects are treated as recoverable runtime defects, not route-fatal conditions.
+
+Current behavior must follow this shape:
+
+- server-side thumb pre-resolution is best-effort only
+- missing thumb objects must not crash `/tree/[slug]/media`
+- missing original objects must degrade the local media surface to a placeholder or open/download affordance
+- client-side broken-media logging may exist, but it must stay small, deduplicated, and local-only
+
+### Why
+
+The product already had real cases where storage and DB state drifted enough for:
+
+- thumb objects to disappear
+- original objects to be missing
+- otherwise healthy tree pages to fail with `Object not found`
+
+That failure mode is too expensive for a family archive UI.
+
+The user needs:
+
+- the page to stay open
+- enough signal to notice broken media
+- no silent assumption that the object is healthy
+
+### Consequence
+
+Future media work must preserve these rules:
+
+- thumb loading is an optimization, not a render prerequisite
+- broken media should remain observable through bounded debug logging
+- client and server fallback behavior should degrade the affected tile or stage, not the whole route
+- fixing storage drift is a data task, not an excuse to keep route-level crash behavior
+
+---
+
+# 2026-04-04 — Office Word preview depends on `CF_R2_PUBLIC_BASE_URL`, while download stays the safe fallback
+
+### Decision
+
+Office `.doc/.docx` preview is not a generic right of all document records.
+
+It depends on:
+
+- a compatible Cloudflare R2-backed object path
+- `CF_R2_PUBLIC_BASE_URL` being configured
+
+When those preconditions are not met, the product should prefer download/open behavior instead of pretending inline preview is universally available.
+
+### Why
+
+Word document preview relies on a publicly reachable R2 or custom-domain base that an iframe-style viewer can fetch directly.
+
+Private signed URLs are still correct for access control, but they are not the same thing as a stable preview base.
+
+### Consequence
+
+Future document behavior should preserve this split:
+
+- preview only when the explicit public-base precondition is satisfied
+- otherwise use explicit download/open flows
+- attachment-friendly behavior for documents and audio remains part of the product contract, not an incidental browser default
+
+---
+
+# 2026-04-04 — `test-tree` fixture was intentionally reset as disposable data
+
+### Decision
+
+The previous `test-tree` media and people set was treated as disposable test data and reset completely.
+
+The reset principle was:
+
+- do not recover the old fixture
+- clear tree-scoped DB references
+- clear tree-scoped storage objects
+- reseed a small, coherent fixture from scratch
+
+### Why
+
+The old `test-tree` had drifted into a mixed, noisy state:
+
+- excessive person counts and unrealistic family shapes
+- stale and orphan-prone media state
+- broken storage references
+- low confidence in whether any given test artifact was still intentional
+
+That made debugging harder than rebuilding the fixture cleanly.
+
+### Consequence
+
+Future work should treat `test-tree` as an explicitly disposable local/staging fixture.
+
+If it drifts again:
+
+- prefer a full reset over ad hoc preservation of unclear artifacts
+- do not assume historical media in that fixture is valuable unless a new decision says otherwise
+- keep fixture cleanup and reseed behavior explicit so DB and storage do not drift independently
+
+---
+
 # How to update this file
 
 Add a new entry when:

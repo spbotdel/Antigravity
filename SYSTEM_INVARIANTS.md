@@ -181,6 +181,34 @@ Media access must respect:
 
 ---
 
+### 12.0.1 Media rendering must fail soft on missing storage objects
+
+If a thumb, preview variant, or original file is missing in storage:
+
+- the page must keep rendering
+- media UI may degrade to placeholders, hidden previews, or explicit open/download affordances
+- the failure must remain diagnosable through bounded debug logging
+
+Implications:
+
+- missing objects are not allowed to crash archive pages, viewer panels, or builder media surfaces
+- thumb preloading is an optimization, not a hard render dependency
+- original-file failure must degrade the single-media surface instead of taking down the whole route
+
+---
+
+### 12.0.2 Office document preview depends on an explicit public R2 base
+
+Inline preview for Office Word documents is allowed only when `CF_R2_PUBLIC_BASE_URL` is configured and the document path is compatible with that preview flow.
+
+Implications:
+
+- `.doc/.docx` preview must not be assumed for private signed URLs alone
+- when that public preview precondition is not met, the product must fall back to download/open behavior
+- attachment-oriented download behavior for documents and audio must remain explicit, not incidental
+
+---
+
 ### 12.1 Archive album access is a hard upper bound for files inside it
 
 If an archive file belongs to one or more albums, its effective visibility must be the strictest of:
