@@ -210,6 +210,8 @@ describe("Audio archive player state", () => {
         );
 
         expect(screen.getByText("Загрузить аудио")).toBeInTheDocument();
+        expect(screen.getByText("+ Загрузить аудио")).toBeInTheDocument();
+        expect(screen.getByText("Перетащите файлы сюда или")).toBeInTheDocument();
 
         const input = view.container.querySelector('input[type="file"][accept="audio/*"]') as HTMLInputElement | null;
         expect(input).not.toBeNull();

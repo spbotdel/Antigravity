@@ -855,6 +855,17 @@ export function AudioArchiveView({
 
     return (
         <div className={`audio-archive${activeTrackId ? " audio-archive-has-player" : ""}`}>
+            {canEdit ? (
+                <input
+                    id={audioFileInputId}
+                    ref={fileInputRef}
+                    className="builder-native-file-input"
+                    type="file"
+                    multiple
+                    accept="audio/*"
+                    onChange={handleFileSelection}
+                />
+            ) : null}
             {error ? <p className="form-error">{error}</p> : null}
 
             {isUploading && uploadProgress ? (
@@ -876,15 +887,6 @@ export function AudioArchiveView({
                     <p>Загрузите аудиофайлы — голосовые записи, интервью, музыку.</p>
                     {canEdit ? (
                         <>
-                            <input
-                                id={audioFileInputId}
-                                ref={fileInputRef}
-                                className="builder-native-file-input"
-                                type="file"
-                                multiple
-                                accept="audio/*"
-                                onChange={handleFileSelection}
-                            />
                             <label htmlFor={audioFileInputId} className={buttonVariants({ variant: "secondary" })}>
                                 Загрузить аудио
                             </label>
@@ -923,28 +925,7 @@ export function AudioArchiveView({
                                 </div>
 
                                 {canEdit ? (
-                                    <div
-                                        className={`audio-archive-dropzone${isDragging ? " audio-archive-dropzone-active" : ""}`}
-                                        onDragOver={handleDragOver}
-                                        onDragLeave={handleDragLeave}
-                                        onDrop={handleDrop}
-                                    >
-                                        <input
-                                            id={audioFileInputId}
-                                            ref={fileInputRef}
-                                            className="builder-native-file-input"
-                                            type="file"
-                                            multiple
-                                            accept="audio/*"
-                                            onChange={handleFileSelection}
-                                        />
-                                        <p>
-                                            Перетащите аудиофайлы сюда или{" "}
-                                            <label htmlFor={audioFileInputId} className="audio-archive-dropzone-btn">
-                                                выберите файлы
-                                            </label>
-                                        </p>
-                                    </div>
+                                    null
                                 ) : null}
                             </>
                         ) : (
@@ -954,15 +935,6 @@ export function AudioArchiveView({
                                 <p>Загрузите аудиофайлы — голосовые записи, интервью, музыку.</p>
                                 {canEdit ? (
                                     <>
-                                        <input
-                                            id={audioFileInputId}
-                                            ref={fileInputRef}
-                                            className="builder-native-file-input"
-                                            type="file"
-                                            multiple
-                                            accept="audio/*"
-                                            onChange={handleFileSelection}
-                                        />
                                         <label htmlFor={audioFileInputId} className={buttonVariants({ variant: "secondary" })}>
                                             Загрузить аудио
                                         </label>
@@ -1055,6 +1027,22 @@ export function AudioArchiveView({
                 </>
             ) : null}
 
+            {canEdit && sectionView === "all" ? (
+                <div
+                    className={`audio-archive-dropzone${isDragging ? " audio-archive-dropzone-active" : ""}`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                >
+                    <p>
+                        Перетащите файлы сюда или{" "}
+                        <label htmlFor={audioFileInputId} className="audio-archive-dropzone-btn">
+                            выберите
+                        </label>
+                    </p>
+                </div>
+            ) : null}
+
             <AudioPlayer
                 tracks={playbackTracks}
                 activeTrackId={activeTrackId}
@@ -1124,6 +1112,12 @@ export function AudioArchiveView({
                 <div className="builder-status-toast" role="status" aria-live="polite">
                     {status}
                 </div>
+            ) : null}
+
+            {canEdit ? (
+                <label htmlFor={audioFileInputId} className={`${buttonVariants({ size: "lg" })} media-upload-fab`}>
+                    + Загрузить аудио
+                </label>
             ) : null}
         </div>
     );

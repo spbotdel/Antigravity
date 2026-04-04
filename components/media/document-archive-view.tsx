@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import { DocumentPreviewDialog } from "@/components/media/document-preview-dialog";
 import { buildCloudflareOfficeDocumentPublicUrl, isOfficeWordDocumentAsset } from "@/components/media/office-document-preview";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 interface DocumentArchiveViewProps {
     treeId: string;
@@ -129,6 +129,7 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const mountedRef = useRef(true);
+    const documentFileInputId = useId();
 
     const handleClosePreview = useCallback(() => {
         setPreviewAsset(null);
@@ -262,6 +263,17 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
 
     return (
         <div className="document-archive">
+            {canEdit ? (
+                <input
+                    id={documentFileInputId}
+                    ref={fileInputRef}
+                    className="builder-native-file-input"
+                    type="file"
+                    multiple
+                    accept={DOCUMENT_ACCEPT}
+                    onChange={handleFileSelection}
+                />
+            ) : null}
             {error ? <p className="form-error">{error}</p> : null}
             {status ? <p className="form-success">{status}</p> : null}
 
@@ -278,17 +290,9 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                     <p>Загрузите PDF, Word, Excel или другие документы.</p>
                     {canEdit ? (
                         <>
-                            <input
-                                ref={fileInputRef}
-                                className="builder-native-file-input"
-                                type="file"
-                                multiple
-                                accept={DOCUMENT_ACCEPT}
-                                onChange={handleFileSelection}
-                            />
-                            <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                            <label htmlFor={documentFileInputId} className={buttonVariants({ variant: "secondary" })}>
                                 Загрузить документ
-                            </Button>
+                            </label>
                         </>
                     ) : null}
                 </div>
@@ -365,15 +369,7 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                 >
-                    <input
-                        ref={fileInputRef}
-                        className="builder-native-file-input"
-                        type="file"
-                        multiple
-                        accept={DOCUMENT_ACCEPT}
-                        onChange={handleFileSelection}
-                    />
-                    <p>Перетащите документы сюда или <button type="button" className="document-archive-dropzone-btn" onClick={() => fileInputRef.current?.click()}>выберите файлы</button></p>
+                    <p>Перетащите файлы сюда или <label htmlFor={documentFileInputId} className="document-archive-dropzone-btn">выберите</label></p>
                 </div>
             ) : null}
 
@@ -388,6 +384,12 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                         </div>
                     </div>
                 </div>
+            ) : null}
+
+            {canEdit ? (
+                <label htmlFor={documentFileInputId} className={`${buttonVariants({ size: "lg" })} media-upload-fab`}>
+                    + Загрузить документ
+                </label>
             ) : null}
         </div>
     );

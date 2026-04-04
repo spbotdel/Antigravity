@@ -3075,6 +3075,29 @@ textarea {
   align-self: start;
 }
 
+.archive-upload-dropzone {
+  display: grid;
+  place-items: center;
+  min-height: 88px;
+  padding: 18px 20px;
+  border: 1px dashed rgba(18, 27, 43, 0.14);
+  border-radius: 20px;
+  background: rgba(255, 251, 245, 0.78);
+  color: var(--muted);
+  text-align: center;
+}
+
+.archive-upload-dropzone-active {
+  border-color: var(--accent, #f06d3d);
+  background: var(--accent-bg, rgba(240, 109, 61, 0.05));
+}
+
+.archive-upload-dropzone-btn {
+  color: var(--accent, #f06d3d);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .archive-field {
   min-width: 0;
   display: grid;
@@ -3689,6 +3712,13 @@ textarea {
   line-height: 1.4;
 }
 
+.media-upload-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+}
+
 .builder-media-tab-section {
   gap: 10px;
   padding: 12px;
@@ -3945,6 +3975,18 @@ textarea {
   outline: none;
 }
 
+.archive-album-card-create {
+  border-style: dashed;
+  border-color: rgba(18, 27, 43, 0.16);
+  background: rgba(255, 251, 245, 0.52);
+}
+
+.archive-album-card-create:hover,
+.archive-album-card-create:focus-visible {
+  border-color: rgba(240, 109, 61, 0.32);
+  box-shadow: 0 12px 26px rgba(18, 27, 43, 0.05);
+}
+
 .archive-album-cover {
   position: relative;
   min-height: 0;
@@ -3982,6 +4024,25 @@ textarea {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+.archive-album-create-visual {
+  display: grid;
+  place-items: center;
+  min-height: 168px;
+  border: 1px dashed rgba(18, 27, 43, 0.12);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.archive-album-create-icon {
+  width: 30px;
+  height: 30px;
+  color: rgba(240, 109, 61, 0.92);
+  stroke-width: 2.2;
+}
+
+.archive-album-create-copy small {
+  -webkit-line-clamp: 2;
 }
 
 .archive-album-empty-placeholder-video {
