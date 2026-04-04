@@ -39,10 +39,15 @@ const initialState: DashboardPageState = {
   error: null
 };
 const DASHBOARD_REQUEST_TIMEOUT_MS = 20000;
+const DASHBOARD_TIMEOUT_ERROR = "__dashboard_timeout__";
 
 function getDashboardErrorMessage(error: string | null) {
   if (!error) {
     return "Не удалось загрузить панель управления.";
+  }
+
+  if (error === DASHBOARD_TIMEOUT_ERROR) {
+    return "Сервер слишком долго отвечает при загрузке панели управления.";
   }
 
   if (error.includes("AbortError")) {
@@ -71,58 +76,75 @@ export function DashboardPageClient() {
 
   useEffect(() => {
     let active = true;
+    let timedOut = false;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort(new Error("AbortError"));
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
     }, DASHBOARD_REQUEST_TIMEOUT_MS);
 
     async function loadDashboard() {
-      const response = await fetch("/api/dashboard", {
-        credentials: "include",
-        signal: controller.signal,
-        cache: "no-store"
-      });
-
-      if (!active) {
-        return;
-      }
-
-      if (response.status === 401) {
-        startTransition(() => {
-          router.replace("/auth/login");
+      try {
+        const response = await fetch("/api/dashboard", {
+          credentials: "include",
+          signal: controller.signal,
+          cache: "no-store"
         });
-        return;
-      }
 
-      const payload = await response.json();
+        if (!active) {
+          return;
+        }
 
-      if (!response.ok) {
+        if (response.status === 401) {
+          startTransition(() => {
+            router.replace("/auth/login");
+          });
+          return;
+        }
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          setState({
+            status: "error",
+            items: [],
+            error: payload.error || "Не удалось загрузить панель управления."
+          });
+          return;
+        }
+
+        setState({
+          status: "ready",
+          items: (payload.items as DashboardPageState["items"]) ?? [],
+          error: null
+        });
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+
+        if (controller.signal.aborted) {
+          if (timedOut) {
+            setState({
+              status: "error",
+              items: [],
+              error: DASHBOARD_TIMEOUT_ERROR
+            });
+          }
+          return;
+        }
+
         setState({
           status: "error",
           items: [],
-          error: payload.error || "Не удалось загрузить панель управления."
+          error: error instanceof Error ? error.message : "Не удалось загрузить панель управления."
         });
-        return;
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      setState({
-        status: "ready",
-        items: (payload.items as DashboardPageState["items"]) ?? [],
-        error: null
-      });
     }
 
-    void loadDashboard().catch((error) => {
-      if (!active) {
-        return;
-      }
-
-      setState({
-        status: "error",
-        items: [],
-        error: error instanceof Error ? error.message : "Не удалось загрузить панель управления."
-      });
-    });
+    void loadDashboard();
 
     return () => {
       active = false;
