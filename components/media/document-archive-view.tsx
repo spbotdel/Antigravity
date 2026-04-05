@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useId, useRef, useState } from "react";
+import { FilePlus } from "lucide-react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import { DocumentPreviewDialog } from "@/components/media/document-preview-dialog";
@@ -387,8 +388,9 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
             ) : null}
 
             {canEdit ? (
-                <label htmlFor={documentFileInputId} className={`${buttonVariants({ size: "lg" })} media-upload-fab`}>
-                    + Загрузить документ
+                <label htmlFor={documentFileInputId} className="media-upload-fab" title="Загрузить" aria-label="Загрузить">
+                    <FilePlus className="media-upload-fab-icon" aria-hidden="true" />
+                    <span className="sr-only">Загрузить</span>
                 </label>
             ) : null}
         </div>

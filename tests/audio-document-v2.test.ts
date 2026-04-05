@@ -27,6 +27,21 @@ import type { MediaAssetRecord, MediaKind } from "@/lib/types";
 import { collectTreeMedia } from "@/lib/tree/display";
 import { formatMediaKind } from "@/lib/ui-text";
 
+function getByExactTextContent(text: string) {
+    return screen.getByText((_, node) => {
+        if (!node) {
+            return false;
+        }
+
+        const normalized = node.textContent?.replace(/\s+/g, " ").trim();
+        if (normalized !== text) {
+            return false;
+        }
+
+        return Array.from(node.children).every((child) => child.textContent?.replace(/\s+/g, " ").trim() !== text);
+    });
+}
+
 describe("MediaKind type", () => {
     it("includes audio as a valid value", () => {
         const kind: MediaKind = "audio";
@@ -210,8 +225,8 @@ describe("Audio archive player state", () => {
         );
 
         expect(screen.getByText("Загрузить аудио")).toBeInTheDocument();
-        expect(screen.getByText("+ Загрузить аудио")).toBeInTheDocument();
-        expect(screen.getByText("Перетащите файлы сюда или")).toBeInTheDocument();
+        expect(screen.getByTitle("Загрузить")).toBeInTheDocument();
+        expect(getByExactTextContent("Перетащите файлы сюда или выберите")).toBeInTheDocument();
 
         const input = view.container.querySelector('input[type="file"][accept="audio/*"]') as HTMLInputElement | null;
         expect(input).not.toBeNull();

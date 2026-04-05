@@ -2,7 +2,7 @@
 
 import { memo, startTransition, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -24,7 +24,7 @@ import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeAudioPlaylistItemRecord, TreeAudioPlaylistRecord, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
 import { AudioArchiveView } from "@/components/media/audio-archive-view";
 import { DocumentArchiveView } from "@/components/media/document-archive-view";
-import { LockIcon, MoreHorizontalIcon, PlayIcon, PlusIcon } from "lucide-react";
+import { FilePlus, LockIcon, MoreHorizontalIcon, PlayIcon, PlusIcon } from "lucide-react";
 
 type MediaMode = "photo" | "video" | "audio" | "document" | "all";
 type ArchiveView = "all" | "albums";
@@ -3210,13 +3210,6 @@ export function TreeMediaArchiveClient({
         ? "video/*"
         : "image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx";
   const isDedicatedMode = mode === "audio" || mode === "document";
-  const genericStickyUploadLabel =
-    mode === "photo"
-      ? "+ Загрузить фото"
-      : mode === "video"
-        ? "+ Загрузить видео"
-        : "+ Загрузить";
-
   function stageArchiveFiles(files: File[]) {
     if (!files.length) {
       return;
@@ -3654,8 +3647,9 @@ export function TreeMediaArchiveClient({
           ) : null}
 
           {canEdit && !isDedicatedMode ? (
-            <label htmlFor={archiveUploadInputId} className={`${buttonVariants({ size: "lg" })} media-upload-fab`}>
-              {genericStickyUploadLabel}
+            <label htmlFor={archiveUploadInputId} className="media-upload-fab" title="Загрузить" aria-label="Загрузить">
+              <FilePlus className="media-upload-fab-icon" aria-hidden="true" />
+              <span className="sr-only">Загрузить</span>
             </label>
           ) : null}
 

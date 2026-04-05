@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { FilePlus, Pause, Play } from "lucide-react";
 
 import { AudioPlayer } from "@/components/media/audio-player";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1115,8 +1115,9 @@ export function AudioArchiveView({
             ) : null}
 
             {canEdit ? (
-                <label htmlFor={audioFileInputId} className={`${buttonVariants({ size: "lg" })} media-upload-fab`}>
-                    + Загрузить аудио
+                <label htmlFor={audioFileInputId} className="media-upload-fab" title="Загрузить" aria-label="Загрузить">
+                    <FilePlus className="media-upload-fab-icon" aria-hidden="true" />
+                    <span className="sr-only">Загрузить</span>
                 </label>
             ) : null}
         </div>
