@@ -9,6 +9,11 @@
   --bg: #f5efe6;
   --bg-soft: #fcf8f2;
   --bg-muted: #ede4d7;
+  --accent-primary: #C96A4A;
+  --accent-primary-hover: #B85A3C;
+  --accent-secondary: #6E8B6B;
+  --accent-secondary-soft: rgba(110, 139, 107, 0.12);
+  --border-soft: rgba(0,0,0,0.06);
   --panel: rgba(255, 250, 244, 0.9);
   --panel-strong: #fffaf4;
   --panel-muted: rgba(244, 237, 228, 0.95);
@@ -18,7 +23,7 @@
   --muted: #6f7888;
   --accent: #d06a42;
   --accent-strong: #dc5a2b;
-  --accent-soft: rgba(208, 106, 66, 0.12);
+  --accent-soft: rgba(201, 106, 74, 0.08);
   --accent-pale: #fff0e5;
   --success: #1f825c;
   --danger: #c94a42;
@@ -290,7 +295,6 @@ textarea {
 .card-kicker,
 .privacy-option-label,
 .settings-link-preview span,
-.settings-inline-note-label,
 .inline-feedback-label {
   text-transform: uppercase;
   letter-spacing: 0.18em;
@@ -302,6 +306,10 @@ textarea {
 .inline-feedback-label,
 .settings-inline-note-label {
   font-weight: 700;
+}
+
+.settings-inline-note-label {
+  color: var(--accent-secondary);
 }
 
 .hero-actions,
@@ -361,6 +369,7 @@ textarea {
 .person-list-item:hover,
 .privacy-option:hover:not(:disabled) {
   transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--accent-primary) 28%, var(--border-soft));
 }
 
 .pill-link,
@@ -385,6 +394,10 @@ textarea {
   font-size: 0.94rem;
 }
 
+.pill-link:hover {
+  color: var(--accent-primary-hover);
+}
+
 .privacy-option:disabled {
   opacity: 0.7;
   cursor: not-allowed;
@@ -393,14 +406,14 @@ textarea {
 
 .pill-link-active,
 .person-list-item-active {
-  background: color-mix(in oklab, var(--secondary) 80%, white 20%);
-  border-color: var(--panel-border);
+  background: var(--accent-soft);
+  border-color: var(--accent-primary);
   color: var(--text);
-  box-shadow: var(--surface-shadow-soft);
+  box-shadow: none;
 }
 
 .pill-link-active {
-  border-color: var(--panel-border);
+  border-color: var(--accent-primary);
 }
 
 .pill-link::after {
@@ -1559,27 +1572,27 @@ textarea {
 
 .tree-link {
   fill: none;
-  stroke: rgba(24, 33, 48, 0.14);
+  stroke: rgba(24, 33, 48, 0.12);
   stroke-width: 2.4;
   stroke-linecap: round;
 }
 
 .tree-preview-link {
-  stroke: rgba(240, 109, 61, 0.24);
+  stroke: rgba(24, 33, 48, 0.1);
   stroke-width: 2.4;
 }
 
 .tree-parent-link {
-  stroke: rgba(24, 33, 48, 0.18);
+  stroke: rgba(24, 33, 48, 0.16);
 }
 
 .tree-partner-link {
-  stroke: rgba(86, 123, 187, 0.44);
+  stroke: rgba(24, 33, 48, 0.16);
   stroke-width: 2.2;
 }
 
 .tree-shared-child-link {
-  stroke: rgba(24, 33, 48, 0.18);
+  stroke: rgba(24, 33, 48, 0.16);
   stroke-width: 2.4;
 }
 
@@ -1593,12 +1606,12 @@ textarea {
 
 .tree-partnership-chip {
   fill: rgba(255, 255, 255, 0.98);
-  stroke: rgba(93, 126, 183, 0.34);
+  stroke: rgba(24, 33, 48, 0.14);
   stroke-width: 1.2;
 }
 
 .tree-partnership-chip-heart {
-  fill: #e16384;
+  fill: rgba(28, 36, 51, 0.56);
   font-size: 12px;
   font-weight: 700;
   font-family: var(--font-sans), sans-serif;
@@ -1606,7 +1619,7 @@ textarea {
 }
 
 .tree-partnership-chip-text {
-  fill: rgba(46, 68, 104, 0.94);
+  fill: rgba(28, 36, 51, 0.78);
   font-size: 11px;
   font-weight: 600;
   font-family: var(--font-sans), sans-serif;
@@ -1673,24 +1686,24 @@ textarea {
 
 .tree-card-preview {
   fill: rgba(255, 255, 255, 0.98);
-  stroke: rgba(240, 109, 61, 0.46);
-  stroke-width: 2.2;
+  stroke: rgba(24, 33, 48, 0.16);
+  stroke-width: 1.8;
 }
 
 .tree-card-selected {
-  stroke: rgba(240, 109, 61, 0.96);
-  stroke-width: 2.8;
-  fill: rgba(255, 250, 246, 0.98);
+  stroke: var(--accent-primary);
+  stroke-width: 2.5;
+  fill: rgba(255, 255, 255, 0.98);
 }
 
 .tree-card-couple.tree-card-selected {
-  fill: rgba(255, 244, 238, 0.98);
+  fill: rgba(255, 255, 255, 0.98);
 }
 
 .tree-card-selection-halo {
-  fill: rgba(240, 109, 61, 0.1);
-  stroke: rgba(240, 109, 61, 0.28);
-  stroke-width: 2.2;
+  fill: var(--accent-soft);
+  stroke: color-mix(in oklab, var(--accent-primary) 52%, transparent);
+  stroke-width: 2;
 }
 
 .tree-card-couple {
@@ -1698,7 +1711,7 @@ textarea {
 }
 
 .tree-node-badge {
-  stroke: rgba(240, 109, 61, 0.2);
+  stroke: rgba(24, 33, 48, 0.14);
 }
 
 .tree-node-badge-couple {
@@ -1707,8 +1720,8 @@ textarea {
 }
 
 .tree-node-badge-preview {
-  fill: rgba(240, 109, 61, 0.12);
-  stroke: rgba(240, 109, 61, 0.2);
+  fill: rgba(24, 33, 48, 0.05);
+  stroke: rgba(24, 33, 48, 0.14);
 }
 
 .tree-node-initials {
@@ -1882,9 +1895,9 @@ textarea {
   min-height: 34px;
   padding: 0 12px;
   border-radius: 10px;
-  border: 1px solid rgba(18, 27, 43, 0.08);
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--muted);
+  border: 1px solid color-mix(in oklab, var(--accent-secondary) 18%, transparent);
+  background: var(--accent-secondary-soft);
+  color: var(--accent-secondary);
   font-size: 0.76rem;
   font-weight: 600;
   text-align: center;
@@ -2029,9 +2042,9 @@ textarea {
 }
 
 .tree-inline-companion-button-active {
-  border-color: rgba(240, 109, 61, 0.18);
-  background: rgba(255, 242, 235, 0.94);
-  color: var(--accent-strong);
+  border-color: var(--accent-primary);
+  background: var(--accent-soft);
+  color: var(--text);
 }
 
 .tree-inline-relations {
@@ -2705,23 +2718,25 @@ textarea {
 
 .person-media-thumb:hover {
   transform: translateY(-1px);
-  border-color: rgba(240, 109, 61, 0.18);
+  border-color: color-mix(in oklab, var(--accent-primary) 36%, transparent);
 }
 
 .person-media-thumb:focus-visible,
 .media-lightbox-nav:focus-visible {
-  outline: 2px solid rgba(240, 109, 61, 0.7);
+  outline: 2px solid color-mix(in oklab, var(--accent-primary) 78%, transparent);
   outline-offset: 2px;
 }
 
 .person-media-thumb-active {
-  border-color: rgba(240, 109, 61, 0.3);
-  box-shadow: 0 10px 24px rgba(240, 109, 61, 0.12);
+  border-color: var(--accent-primary);
+  background: var(--accent-soft);
+  box-shadow: none;
 }
 
 .person-media-thumb-shell-selected .person-media-thumb {
-  border-color: rgba(208, 106, 66, 0.34);
-  box-shadow: 0 10px 24px rgba(208, 106, 66, 0.14);
+  border-color: var(--accent-primary);
+  background: var(--accent-soft);
+  box-shadow: none;
 }
 
 .person-media-thumb-selector {
@@ -2773,11 +2788,9 @@ textarea {
 
 .person-media-thumb-checkbox:checked+.media-selection-indicator,
 .archive-tile-checkbox:checked+.media-selection-indicator {
-  border-color: rgba(208, 106, 66, 0.98);
-  background: rgba(208, 106, 66, 0.96);
-  box-shadow:
-    0 0 0 1px rgba(208, 106, 66, 0.22),
-    0 10px 22px rgba(208, 106, 66, 0.22);
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  box-shadow: none;
 }
 
 .person-media-thumb-checkbox:checked+.media-selection-indicator .media-selection-checkmark,
@@ -2788,9 +2801,7 @@ textarea {
 
 .person-media-thumb-checkbox:focus-visible+.media-selection-indicator,
 .archive-tile-checkbox:focus-visible+.media-selection-indicator {
-  box-shadow:
-    0 0 0 3px rgba(240, 109, 61, 0.16),
-    0 8px 18px rgba(18, 27, 43, 0.16);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-primary) 18%, transparent);
 }
 
 .builder-media-card-actions-popover[data-slot="popover-content"] {
@@ -3322,14 +3333,13 @@ textarea {
 
 .archive-tile-shell-selected .archive-tile-image,
 .archive-tile-shell-selected .archive-tile-placeholder {
-  box-shadow:
-    0 0 0 2px rgba(208, 106, 66, 0.52),
-    0 0 0 6px rgba(208, 106, 66, 0.09),
-    0 10px 24px rgba(208, 106, 66, 0.17);
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .archive-tile-shell-selected .archive-tile {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .archive-tile-image,
@@ -6115,11 +6125,12 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 .builder-inspector-tab[data-slot="tabs-trigger"]:hover,
 .builder-inspector-tab[data-slot="tabs-trigger"]:focus-visible {
   background: transparent;
-  color: var(--text);
+  color: var(--accent-primary-hover);
   box-shadow: none;
 }
 
 .builder-inspector-tab[data-slot="tabs-trigger"]:hover::after {
+  background: color-mix(in oklab, var(--accent-primary) 62%, transparent);
   opacity: 0.68;
 }
 
@@ -6154,20 +6165,23 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 }
 
 .builder-inspector-tab-active[data-slot="tabs-trigger"] {
-  background: transparent;
+  background: var(--accent-soft);
+  border-color: var(--accent-primary);
+  border-radius: 8px 8px 0 0;
   color: var(--text);
   box-shadow: none;
 }
 
 .builder-inspector-tab-active[data-slot="tabs-trigger"]::after {
-  background: color-mix(in oklab, var(--text) 78%, var(--muted) 22%);
+  background: var(--accent-primary);
   opacity: 1;
 }
 
 .builder-mode-button-active {
-  background: color-mix(in oklab, var(--panel-strong) 96%, white 4%);
+  border: 1px solid var(--accent-primary);
+  background: var(--accent-soft);
   color: var(--text);
-  box-shadow: 0 1px 2px rgba(18, 27, 43, 0.08);
+  box-shadow: none;
 }
 
 .builder-mode-button:disabled {
@@ -6399,8 +6413,8 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 }
 
 .builder-inline-toggle-button-active {
-  border-color: rgba(240, 109, 61, 0.18);
-  background: rgba(255, 242, 235, 0.92);
+  border-color: var(--accent-primary);
+  background: var(--accent-soft);
   color: var(--text);
 }
 
@@ -7006,7 +7020,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 
 .members-helper-note {
   margin: 0;
-  color: var(--muted);
+  color: var(--accent-secondary);
   font-size: 0.9rem;
   line-height: 1.55;
 }
@@ -7126,7 +7140,8 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 .settings-inline-note {
   display: grid;
   gap: 8px;
-  background: rgba(248, 244, 238, 0.82);
+  background: var(--accent-secondary-soft);
+  border-color: color-mix(in oklab, var(--accent-secondary) 20%, transparent);
 }
 
 .settings-inline-note strong,
@@ -7174,8 +7189,8 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 }
 
 .privacy-option-active {
-  background: color-mix(in oklab, var(--secondary) 86%, white 14%);
-  border-color: var(--panel-border-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent-primary);
   box-shadow: none;
 }
 
@@ -7185,7 +7200,8 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 }
 
 .settings-note-panel {
-  background: rgba(248, 244, 238, 0.84);
+  background: var(--accent-secondary-soft);
+  border-color: color-mix(in oklab, var(--accent-secondary) 20%, transparent);
 }
 
 .settings-note-panel-compact p:last-child {
@@ -7425,9 +7441,9 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
   place-items: center;
   min-height: 220px;
   padding: 18px;
-  border: 1px dashed rgba(18, 27, 43, 0.12);
+  border: 1px dashed color-mix(in oklab, var(--accent-secondary) 24%, transparent);
   border-radius: 14px;
-  background: rgba(248, 246, 242, 0.75);
+  background: var(--accent-secondary-soft);
   text-align: center;
 }
 
@@ -7444,6 +7460,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 .empty-state-copy strong {
   font-size: 1rem;
   line-height: 1.2;
+  color: var(--accent-secondary);
 }
 
 .empty-state-copy p {

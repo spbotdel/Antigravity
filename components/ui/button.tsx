@@ -9,13 +9,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "border-primary bg-primary text-primary-foreground shadow-[0_18px_38px_-24px_color-mix(in_oklab,var(--color-primary)_82%,transparent)] hover:bg-[color:color-mix(in_oklab,var(--color-primary)_90%,black_10%)] hover:border-[color:color-mix(in_oklab,var(--color-primary)_90%,black_10%)]",
+          "border-[color:var(--accent-primary)] bg-[color:var(--accent-primary)] text-white hover:border-[color:var(--accent-primary-hover)] hover:bg-[color:var(--accent-primary-hover)]",
         outline:
-          "border-border bg-card text-foreground hover:bg-[color:var(--bg-soft)] hover:border-[color:var(--color-ring)]",
+          "border-border bg-card text-foreground hover:border-[color:var(--accent-primary)] hover:text-[color:var(--accent-primary-hover)]",
         secondary:
           "border-border bg-secondary text-secondary-foreground hover:bg-[color:color-mix(in_oklab,var(--color-secondary)_85%,white_15%)]",
         ghost:
-          "border-transparent bg-transparent text-foreground hover:bg-[color:var(--accent-pale)] hover:text-foreground",
+          "border-transparent bg-transparent text-foreground hover:border-[color:var(--border-soft)] hover:text-[color:var(--accent-primary-hover)]",
         destructive:
           "border-[color:color-mix(in_oklab,var(--color-destructive)_18%,transparent)] bg-[color:color-mix(in_oklab,var(--color-destructive)_10%,white_90%)] text-destructive hover:bg-[color:color-mix(in_oklab,var(--color-destructive)_16%,white_84%)] focus-visible:border-destructive/40 focus-visible:ring-destructive/15",
         link: "text-primary underline-offset-4 hover:underline",
