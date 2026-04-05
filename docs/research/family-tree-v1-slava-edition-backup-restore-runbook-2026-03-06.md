@@ -3,7 +3,7 @@
 <!-- FRAMEWORK:RECOVERY:START -->
 ## Current Recovery Sync
 
-- Updated at (UTC): `2026-04-02 13:51:57Z`
+- Updated at (UTC): `2026-04-05 07:49:48Z`
 - Active binary-plane assumptions:
   - new uploads must move to `Cloudflare R2` before release
   - legacy Yandex-backed media must remain readable until migration is explicitly closed

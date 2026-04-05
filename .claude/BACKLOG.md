@@ -2,7 +2,7 @@
 
 *Operational task backlog only.*
 
-*Updated: 2026-04-02*
+*Updated: 2026-04-05*
 
 ## Wave 1 — Current Execution
 

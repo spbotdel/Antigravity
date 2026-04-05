@@ -2,12 +2,12 @@
 
 *Operational memory only. Not the canonical architecture document.*
 
-*Last updated: 2026-04-02*
+*Last updated: 2026-04-05*
 
 ## Current State
 
 - Framework mode: active
-- Active branch: `feat/audio-docs-experiment`
+- Active branch: `fix/media-hardening`
 - Runtime application: `Next.js 16 + React 19 + TypeScript`
 - Backend/data layer: `Supabase` auth, database, RLS + S3-compatible object storage
 - Dev environment: linked to Supabase project `untwxmiqqwepopeepzqe`
