@@ -1,5 +1,7 @@
 import type { MembershipRecord, TreeVisibility, UserRole, ViewerAccessSource, ViewerActor } from "@/lib/types";
 
+export type HeaderMode = "admin" | "participant" | "guest";
+
 export function canViewTree(treeVisibility: TreeVisibility, membership: MembershipRecord | null, hasShareLinkAccess = false) {
   return treeVisibility === "public" || hasShareLinkAccess || Boolean(membership && membership.status === "active");
 }
@@ -64,4 +66,20 @@ export function hasRequiredRole(role: UserRole | null, allowedRoles: UserRole[])
 
 export function canSeeMedia(role: UserRole | null, visibility: "public" | "members", hasShareLinkAccess = false) {
   return visibility === "public" || role !== null || hasShareLinkAccess;
+}
+
+export function resolveHeaderModeFromActor(actor: ViewerActor | null | undefined): HeaderMode {
+  if (!actor || actor.accessSource !== "membership") {
+    return "guest";
+  }
+
+  if (actor.role === "owner" || actor.role === "admin") {
+    return "admin";
+  }
+
+  if (actor.role === "viewer") {
+    return "participant";
+  }
+
+  return "guest";
 }

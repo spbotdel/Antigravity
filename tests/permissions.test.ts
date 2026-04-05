@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildViewerActor, canSeeMedia, canViewTree, hasRequiredRole, normalizeMembershipRole, resolveTreeRole } from "@/lib/permissions";
+import { buildViewerActor, canSeeMedia, canViewTree, hasRequiredRole, normalizeMembershipRole, resolveHeaderModeFromActor, resolveTreeRole } from "@/lib/permissions";
 
 describe("permissions", () => {
   it("allows public trees for anonymous viewers", () => {
@@ -20,6 +20,15 @@ describe("permissions", () => {
     expect(shareViewer.canEdit).toBe(false);
     expect(shareViewer.accessSource).toBe("share_link");
     expect(shareViewer.shareLinkId).toBe("share-1");
+  });
+
+  it("resolves header presentation mode from actor access source and role", () => {
+    expect(resolveHeaderModeFromActor(buildViewerActor("u1", "owner"))).toBe("admin");
+    expect(resolveHeaderModeFromActor(buildViewerActor("u1", "admin"))).toBe("admin");
+    expect(resolveHeaderModeFromActor(buildViewerActor("u2", "viewer"))).toBe("participant");
+    expect(resolveHeaderModeFromActor(buildViewerActor(null, null, { accessSource: "share_link", shareLinkId: "share-1" }))).toBe("guest");
+    expect(resolveHeaderModeFromActor(buildViewerActor(null, null, { accessSource: "public" }))).toBe("guest");
+    expect(resolveHeaderModeFromActor(buildViewerActor(null, null, { accessSource: "anonymous" }))).toBe("guest");
   });
 
   it("checks role membership and media visibility", () => {

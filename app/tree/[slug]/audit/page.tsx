@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { AuditLogTable } from "@/components/audit/audit-log-table";
+import { AppHeader } from "@/components/layout/app-header";
 import { TreeNav } from "@/components/layout/tree-nav";
+import { resolveHeaderModeFromActor } from "@/lib/permissions";
 import { AppError } from "@/lib/server/errors";
 import { getTreeAuditPageContext, listAudit } from "@/lib/server/repository";
 
@@ -62,30 +64,34 @@ export default async function AuditPage({ params, searchParams }: AuditPageProps
   }
 
   const audit = await listAudit(treeContext.tree.id, { page, pageSize: 50 });
+  const headerMode = resolveHeaderModeFromActor(treeContext.actor);
 
   return (
-    <main className="page-shell workspace-page">
-      <section className="section-header workspace-header">
-        <div className="workspace-header-main">
-          <div className="workspace-meta-row">
-            <p className="eyebrow">Журнал владельца</p>
-            <span className="workspace-meta-chip">{audit.total} событий</span>
-            <span className="workspace-meta-chip">Страница {audit.page}</span>
-            <span className="workspace-meta-chip">МСК</span>
+    <>
+      <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
+      <main className="page-shell workspace-page">
+        <section className="section-header workspace-header">
+          <div className="workspace-header-main">
+            <div className="workspace-meta-row">
+              <p className="eyebrow">Журнал владельца</p>
+              <span className="workspace-meta-chip">{audit.total} событий</span>
+              <span className="workspace-meta-chip">Страница {audit.page}</span>
+              <span className="workspace-meta-chip">МСК</span>
+            </div>
+            <h1>{treeContext.tree.title}</h1>
+            <p className="muted-copy">История действий по дереву собрана в одну спокойную ленту без технического шума и лишних полей.</p>
           </div>
-          <h1>{treeContext.tree.title}</h1>
-          <p className="muted-copy">История действий по дереву собрана в одну спокойную ленту без технического шума и лишних полей.</p>
-        </div>
-        <TreeNav
-          slug={slug}
-          shareToken={shareToken}
-          canEdit={treeContext.actor.canEdit}
-          canManageMembers={treeContext.actor.canManageMembers}
-          canReadAudit={treeContext.actor.canReadAudit}
-          canManageSettings={treeContext.actor.canManageSettings}
-        />
-      </section>
-      <AuditLogTable entries={audit.entries} total={audit.total} page={audit.page} pageSize={audit.pageSize} slug={slug} />
-    </main>
+          <TreeNav
+            slug={slug}
+            shareToken={shareToken}
+            canEdit={treeContext.actor.canEdit}
+            canManageMembers={treeContext.actor.canManageMembers}
+            canReadAudit={treeContext.actor.canReadAudit}
+            canManageSettings={treeContext.actor.canManageSettings}
+          />
+        </section>
+        <AuditLogTable entries={audit.entries} total={audit.total} page={audit.page} pageSize={audit.pageSize} slug={slug} />
+      </main>
+    </>
   );
 }

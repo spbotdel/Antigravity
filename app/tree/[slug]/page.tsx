@@ -1,5 +1,7 @@
+import { AppHeader } from "@/components/layout/app-header";
 import { TreeNav } from "@/components/layout/tree-nav";
 import { Card } from "@/components/ui/card";
+import { resolveHeaderModeFromActor } from "@/lib/permissions";
 import { TreeViewerClient } from "@/components/tree/tree-viewer-client";
 import { AppError } from "@/lib/server/errors";
 import { getTreeSnapshot } from "@/lib/server/repository";
@@ -26,24 +28,28 @@ export default async function TreePage({ params, searchParams }: TreePageProps) 
 
   try {
     const snapshot = await getTreeSnapshot(slug, { shareToken });
+    const headerMode = resolveHeaderModeFromActor(snapshot.actor);
 
     return (
-      <main className="page-shell workspace-page workspace-page-canvas">
-        <TreeViewerClient
-          snapshot={snapshot}
-          shareToken={shareToken}
-          nav={
-            <TreeNav
-              slug={slug}
-              shareToken={shareToken}
-              canEdit={snapshot.actor.canEdit}
-              canManageMembers={snapshot.actor.canManageMembers}
-              canReadAudit={snapshot.actor.canReadAudit}
-              canManageSettings={snapshot.actor.canManageSettings}
-            />
-          }
-        />
-      </main>
+      <>
+        <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
+        <main className="page-shell workspace-page workspace-page-canvas">
+          <TreeViewerClient
+            snapshot={snapshot}
+            shareToken={shareToken}
+            nav={
+              <TreeNav
+                slug={slug}
+                shareToken={shareToken}
+                canEdit={snapshot.actor.canEdit}
+                canManageMembers={snapshot.actor.canManageMembers}
+                canReadAudit={snapshot.actor.canReadAudit}
+                canManageSettings={snapshot.actor.canManageSettings}
+              />
+            }
+          />
+        </main>
+      </>
     );
   } catch (error) {
     const message = error instanceof AppError ? error.message : "Не удалось загрузить семейное дерево.";

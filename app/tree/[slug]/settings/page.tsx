@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 
+import { AppHeader } from "@/components/layout/app-header";
 import { TreeNav } from "@/components/layout/tree-nav";
 import { TreeSettingsForm } from "@/components/settings/tree-settings-form";
 import { getBaseUrl } from "@/lib/env";
+import { resolveHeaderModeFromActor } from "@/lib/permissions";
 import { AppError } from "@/lib/server/errors";
 import { getTreeSettingsPageData } from "@/lib/server/repository";
 import { formatTreeVisibility } from "@/lib/ui-text";
@@ -49,28 +51,33 @@ export default async function SettingsPage({ params, searchParams }: SettingsPag
     redirect(buildViewerHref(slug, shareToken));
   }
 
+  const headerMode = resolveHeaderModeFromActor(pageData.actor);
+
   return (
-    <main className="page-shell workspace-page">
-      <section className="section-header workspace-header">
-        <div className="workspace-header-main">
-          <div className="workspace-meta-row">
-            <p className="eyebrow">Настройки</p>
-            <span className="workspace-meta-chip">{formatTreeVisibility(pageData.tree.visibility)}</span>
-            <span className="workspace-meta-chip">{pageData.people.length} человек</span>
+    <>
+      <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
+      <main className="page-shell workspace-page">
+        <section className="section-header workspace-header">
+          <div className="workspace-header-main">
+            <div className="workspace-meta-row">
+              <p className="eyebrow">Настройки</p>
+              <span className="workspace-meta-chip">{formatTreeVisibility(pageData.tree.visibility)}</span>
+              <span className="workspace-meta-chip">{pageData.people.length} человек</span>
+            </div>
+            <h1>{pageData.tree.title}</h1>
+            <p className="muted-copy">Название, адрес, корень дерева и режим доступа собраны в один спокойный экран с понятной иерархией.</p>
           </div>
-          <h1>{pageData.tree.title}</h1>
-          <p className="muted-copy">Название, адрес, корень дерева и режим доступа собраны в один спокойный экран с понятной иерархией.</p>
-        </div>
-        <TreeNav
-          slug={slug}
-          shareToken={shareToken}
-          canEdit={pageData.actor.canEdit}
-          canManageMembers={pageData.actor.canManageMembers}
-          canReadAudit={pageData.actor.canReadAudit}
-          canManageSettings={pageData.actor.canManageSettings}
-        />
-      </section>
-      <TreeSettingsForm tree={pageData.tree} people={pageData.people} initialBaseUrl={getBaseUrl()} />
-    </main>
+          <TreeNav
+            slug={slug}
+            shareToken={shareToken}
+            canEdit={pageData.actor.canEdit}
+            canManageMembers={pageData.actor.canManageMembers}
+            canReadAudit={pageData.actor.canReadAudit}
+            canManageSettings={pageData.actor.canManageSettings}
+          />
+        </section>
+        <TreeSettingsForm tree={pageData.tree} people={pageData.people} initialBaseUrl={getBaseUrl()} />
+      </main>
+    </>
   );
 }

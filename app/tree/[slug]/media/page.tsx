@@ -1,7 +1,9 @@
 import { after } from "next/server";
 
+import { AppHeader } from "@/components/layout/app-header";
 import { TreeMediaArchiveClient } from "@/components/media/tree-media-archive-client";
 import { TreeNav } from "@/components/layout/tree-nav";
+import { resolveHeaderModeFromActor } from "@/lib/permissions";
 import { buildDerivedUploaderAlbumSummaries, buildPersistedTreeMediaAlbumMediaMap, buildTreeMediaAlbumSummaries, collectArchiveGalleryMedia, collectTreeMedia } from "@/lib/tree/display";
 import type { MediaAssetRecord } from "@/lib/types";
 import { getCloudflareR2PublicBaseUrl } from "@/lib/env";
@@ -260,49 +262,54 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
     });
   }
 
+  const headerMode = resolveHeaderModeFromActor(pageData.actor);
+
   return (
-    <main className="page-shell workspace-page">
-      <section className="section-header workspace-header">
-        <div className="workspace-header-main">
-          <div className="workspace-meta-row">
-            <p className="eyebrow">{formatTreeVisibility(pageData.tree.visibility)} дерево</p>
-            <span className="workspace-meta-chip">{photoMedia.length} фото</span>
-            <span className="workspace-meta-chip">{videoMedia.length} видео</span>
-            <span className="workspace-meta-chip">{audioMedia.length} аудио</span>
-            <span className="workspace-meta-chip">{documentMedia.length} док.</span>
-            <span className="workspace-meta-chip">{allAlbumSummaries.length} альбомов</span>
+    <>
+      <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
+      <main className="page-shell workspace-page">
+        <section className="section-header workspace-header">
+          <div className="workspace-header-main">
+            <div className="workspace-meta-row">
+              <p className="eyebrow">{formatTreeVisibility(pageData.tree.visibility)} дерево</p>
+              <span className="workspace-meta-chip">{photoMedia.length} фото</span>
+              <span className="workspace-meta-chip">{videoMedia.length} видео</span>
+              <span className="workspace-meta-chip">{audioMedia.length} аудио</span>
+              <span className="workspace-meta-chip">{documentMedia.length} док.</span>
+              <span className="workspace-meta-chip">{allAlbumSummaries.length} альбомов</span>
+            </div>
+            <h1>{pageData.tree.title}</h1>
+            <p className="muted-copy">Семейный архив собирает общие фото, видео, аудиозаписи и документы в одной галерее.</p>
           </div>
-          <h1>{pageData.tree.title}</h1>
-          <p className="muted-copy">Семейный архив собирает общие фото, видео, аудиозаписи и документы в одной галерее.</p>
-        </div>
-        <TreeNav
+          <TreeNav
+            slug={slug}
+            shareToken={shareToken}
+            canEdit={pageData.actor.canEdit}
+            canManageMembers={pageData.actor.canManageMembers}
+            canReadAudit={pageData.actor.canReadAudit}
+            canManageSettings={pageData.actor.canManageSettings}
+          />
+        </section>
+
+        <TreeMediaArchiveClient
+          treeId={pageData.tree.id}
           slug={slug}
           shareToken={shareToken}
+          cloudflareR2PublicBaseUrl={getCloudflareR2PublicBaseUrl()}
           canEdit={pageData.actor.canEdit}
-          canManageMembers={pageData.actor.canManageMembers}
-          canReadAudit={pageData.actor.canReadAudit}
-          canManageSettings={pageData.actor.canManageSettings}
+          initialMode={mode}
+          initialView={view}
+          initialAlbumId={albumId}
+          allMedia={fullMedia}
+          allAlbums={persistedAllAlbumSummaries}
+          persistedAlbumMediaMap={persistedAlbumMediaMap}
+          initialThumbUrlsByMediaId={initialThumbUrlsByMediaId}
+          uploaderLabels={Array.from(uploaderLabelsById.entries()).map(([userId, label]) => ({ userId, label }))}
+          audioPlaylists={audioPlaylists}
+          audioPlaylistItems={audioPlaylistItems}
+          audioPlaylistsAvailable={audioPlaylistsAvailable}
         />
-      </section>
-
-      <TreeMediaArchiveClient
-        treeId={pageData.tree.id}
-        slug={slug}
-        shareToken={shareToken}
-        cloudflareR2PublicBaseUrl={getCloudflareR2PublicBaseUrl()}
-        canEdit={pageData.actor.canEdit}
-        initialMode={mode}
-        initialView={view}
-        initialAlbumId={albumId}
-        allMedia={fullMedia}
-      allAlbums={persistedAllAlbumSummaries}
-        persistedAlbumMediaMap={persistedAlbumMediaMap}
-        initialThumbUrlsByMediaId={initialThumbUrlsByMediaId}
-        uploaderLabels={Array.from(uploaderLabelsById.entries()).map(([userId, label]) => ({ userId, label }))}
-        audioPlaylists={audioPlaylists}
-        audioPlaylistItems={audioPlaylistItems}
-        audioPlaylistsAvailable={audioPlaylistsAvailable}
-      />
-  </main>
+      </main>
+    </>
   );
 }

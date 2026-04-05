@@ -6,17 +6,23 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { translateAuthError } from "@/lib/auth-error";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { cn } from "@/lib/utils";
 
-export function SignOutButton() {
+interface SignOutButtonProps {
+  className?: string;
+}
+
+export function SignOutButton({ className }: SignOutButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <>
+    <div className={cn("sign-out-button", className)}>
       <Button
         variant="ghost"
         size="sm"
+        className="sign-out-button-trigger"
         disabled={loading}
         onClick={async () => {
           setLoading(true);
@@ -36,7 +42,7 @@ export function SignOutButton() {
       >
         {loading ? "Выходим..." : "Выйти"}
       </Button>
-      {error ? <p className="form-error">{error}</p> : null}
-    </>
+      {error ? <p className="form-error sign-out-button-error">{error}</p> : null}
+    </div>
   );
 }

@@ -1,114 +1,32 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 
-import { buttonVariants } from "@/components/ui/button";
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { buttonVariants } from "@/components/ui/button";
+import type { HeaderMode } from "@/lib/permissions";
 
 interface AppHeaderProps {
-  initialUser: {
-    id: string;
-    email: string | null;
-  } | null;
+  mode: HeaderMode;
+  showDashboardLink: boolean;
 }
 
-export function AppHeader({ initialUser }: AppHeaderProps) {
-  const pathname = usePathname();
-  const [user, setUser] = useState(initialUser);
-
-  function normalizeUser(
-    value:
-      | {
-          id: string;
-          email: string | null;
-        }
-      | {
-          id: string;
-          email?: string | null;
-        }
-      | null
-      | undefined
-  ) {
-    if (!value) {
-      return null;
-    }
-
-    return {
-      id: value.id,
-      email: value.email ?? null
-    };
-  }
-
-  useEffect(() => {
-    const supabase = createBrowserSupabaseClient();
-    let active = true;
-
-    void supabase.auth
-      .getUser()
-      .then(({ data }) => {
-        if (active) {
-          setUser(normalizeUser(data.user) ?? initialUser ?? null);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setUser(initialUser ?? null);
-        }
-      });
-
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) {
-        setUser(normalizeUser(session?.user) ?? initialUser ?? null);
-      }
-    });
-
-    return () => {
-      active = false;
-      subscription.unsubscribe();
-    };
-  }, [initialUser]);
-
+export function AppHeader({ mode, showDashboardLink }: AppHeaderProps) {
   return (
-    <header className="app-header">
+    <header className="app-header" data-mode={mode}>
       <Link href="/" className="brandmark">
-        <span className="brandmark-seal">AG</span>
-        <span>
-          <strong>Семейное дерево</strong>
-          <small>Система семейной памяти</small>
-        </span>
+        <span className="brandmark-seal" aria-hidden="true">AG</span>
+        <strong>Семейное дерево</strong>
       </Link>
 
-      <div className="header-actions">
-        {user ? (
-          <>
-            <span className="header-user">{user.email}</span>
-            {pathname === "/dashboard" ? (
-              <span className={buttonVariants({ variant: "secondary", size: "sm" })} aria-current="page">
-                Панель
-              </span>
-            ) : (
-              <Link href="/dashboard" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                Панель
-              </Link>
-            )}
-            <SignOutButton />
-          </>
-        ) : (
-          <>
-            <Link href="/auth/login" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-              Войти
+      {mode === "guest" ? null : (
+        <div className="header-actions">
+          {mode === "admin" && showDashboardLink ? (
+            <Link href="/dashboard" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              Панель
             </Link>
-            <Link href="/auth/register" className={buttonVariants({ size: "sm" })}>
-              Создать дерево
-            </Link>
-          </>
-        )}
-      </div>
+          ) : null}
+          <SignOutButton />
+        </div>
+      )}
     </header>
   );
 }
