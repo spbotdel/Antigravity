@@ -676,6 +676,52 @@ Keep database integrity as-is and make repository linking idempotent:
 
 ---
 
+# 19. Cloudflare Video Preview Stays In `pending` Or `processing`
+
+### Symptom
+
+Archive video tiles or album covers show:
+
+- dark placeholder instead of generated thumb
+- the video itself still opens and plays
+- `summary=1` for the media reports `preview_status: pending` or `preview_status: processing`
+
+### Likely Cause
+
+Preview generation was started but not fully completed, or the original best-effort post-upload processing did not recover automatically after interruption.
+
+### First Checks
+
+1. Check `GET /api/media/:id?summary=1` for:
+   - `provider`
+   - `preview_status`
+   - `preview_error`
+   - `preview_claimed_at`
+2. Confirm the file is actually `provider = cloudflare_r2`.
+3. Confirm whether the affected media is visible on `/tree/[slug]/media`, because visible editor surfaces now re-trigger recovery for stuck previews.
+4. If the tile is already visible, verify whether the client eventually refreshes the tile from placeholder to thumb without a manual reload.
+
+### Typical Fix
+
+Do not treat this as a broken video file by default.
+
+The correct path is:
+
+- server-side visible-preview recovery from the media page
+- client-side bounded polling for visible `pending` / `processing` video previews
+- normal thumb batching once the preview becomes `ready`
+
+Only escalate to file/FFmpeg investigation when `preview_status = failed` or `preview_error` is populated.
+
+### Relevant Files
+
+- `app/tree/[slug]/media/page.tsx`
+- `components/media/tree-media-archive-client.tsx`
+- `app/api/internal/media/process-video-previews/route.ts`
+- `lib/server/repository.ts`
+
+---
+
 # Practical Rule
 
 Before modifying production code, always determine which category the issue belongs to:

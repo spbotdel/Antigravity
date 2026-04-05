@@ -1618,6 +1618,12 @@ export function TreeMediaArchiveClient({
 
     return () => {
       cancelled = true;
+      mediaIds.forEach((mediaId) => pendingThumbUrlIdsRef.current.delete(mediaId));
+      requestedThumbSetKeysRef.current.delete(visibleSetKey);
+      for (const controller of pendingThumbBatchFetchControllersRef.current) {
+        controller.abort();
+      }
+      pendingThumbBatchFetchControllersRef.current.clear();
     };
   }, [isHydrated, resolvedThumbUrlsByMediaId, shareToken, thumbRequestRetryTick, treeId, visibleThumbMediaIds]);
 
@@ -1786,6 +1792,12 @@ export function TreeMediaArchiveClient({
     return () => {
       cancelled = true;
       cancelIdlePrefetch();
+      nextMediaIds.forEach((mediaId) => pendingThumbUrlIdsRef.current.delete(mediaId));
+      prefetchedThumbSetKeysRef.current.delete(nextVisibleSetKey);
+      for (const controller of prefetchedThumbBatchFetchControllersRef.current) {
+        controller.abort();
+      }
+      prefetchedThumbBatchFetchControllersRef.current.clear();
     };
   }, [isHydrated, nextVisibleThumbMediaIds, resolvedThumbUrlsByMediaId, shareToken, treeId, visibleThumbMediaIds]);
 
