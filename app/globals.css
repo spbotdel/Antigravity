@@ -3048,8 +3048,6 @@ textarea {
 .archive-album-copy,
 .archive-album-form,
 .archive-review-tile,
-.archive-sticky-footer,
-.archive-sticky-copy,
 .archive-viewer-strip {
   display: grid;
   gap: 14px;
@@ -3057,7 +3055,6 @@ textarea {
 
 .archive-card {
   align-content: start;
-  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
 .archive-header {
@@ -3685,32 +3682,21 @@ textarea {
   align-items: center;
 }
 
-.archive-sticky-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-  grid-template-columns: minmax(0, 1fr) auto;
+.archive-load-more-row {
   align-items: center;
-  padding: 14px 16px;
-  margin: 4px -2px -2px;
-  border-top: 1px solid rgba(18, 27, 43, 0.08);
-  background: rgba(255, 251, 245, 0.96);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  justify-content: space-between;
 }
 
-.archive-sticky-copy {
-  gap: 4px;
-  min-width: 0;
+.archive-load-more-note {
+  margin-left: auto;
+  text-align: right;
+  font-size: 0.84rem;
+  line-height: 1.3;
+  color: rgba(24, 33, 48, 0.58);
 }
 
-.archive-sticky-copy strong {
-  font-size: 0.98rem;
-}
-
-.archive-sticky-copy span {
-  color: var(--muted);
-  line-height: 1.4;
+.archive-load-more-row + .archive-upload-dropzone {
+  margin-top: -4px;
 }
 
 .media-upload-fab {
@@ -7808,23 +7794,18 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
     height: 44px;
   }
 
-  .archive-sticky-footer {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .archive-header-actions {
     display: none;
   }
 
-  .archive-sticky-footer .archive-action-bar {
-    justify-content: stretch;
+  .archive-load-more-row {
+    align-items: flex-start;
   }
 
-  .archive-sticky-footer .archive-action-bar>[data-slot="button"],
-  .archive-sticky-footer .archive-action-bar>a {
-    flex: 1 1 100%;
+  .archive-load-more-note {
     width: 100%;
-    justify-content: center;
+    margin-left: 0;
+    text-align: left;
   }
 
   .person-media-stage,
@@ -8129,8 +8110,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 
   .person-media-stage,
   .archive-upload-panel,
-  .archive-album-card,
-  .archive-sticky-footer {
+  .archive-album-card {
     padding-left: 12px;
     padding-right: 12px;
   }

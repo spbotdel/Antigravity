@@ -382,10 +382,11 @@ describe("tree media archive client", () => {
       expect(thumbRequests).toHaveLength(1);
     });
     expect(thumbRequests[0]).toHaveLength(18);
+    expect(view.container.querySelector(".archive-sticky-footer")).toBeNull();
 
     const expectedRequestCounts = [2, 3, 4, 5, 7];
     for (const expectedCount of expectedRequestCounts) {
-      const showMoreButton = view.container.querySelector(".archive-sticky-footer button") as HTMLButtonElement | null;
+      const showMoreButton = view.container.querySelector(".archive-load-more-row button") as HTMLButtonElement | null;
       expect(showMoreButton).not.toBeNull();
       fireEvent.click(showMoreButton as HTMLButtonElement);
       await waitFor(() => {
@@ -414,7 +415,7 @@ describe("tree media archive client", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
 
     for (let step = 0; step < 5; step += 1) {
-      const showMoreButton = view.container.querySelector(".archive-sticky-footer button") as HTMLButtonElement | null;
+      const showMoreButton = view.container.querySelector(".archive-load-more-row button") as HTMLButtonElement | null;
       expect(showMoreButton).not.toBeNull();
       fireEvent.click(showMoreButton as HTMLButtonElement);
     }
@@ -563,7 +564,7 @@ describe("tree media archive client", () => {
     expect(requests[1]).toEqual(media.slice(18, 36).map((asset) => asset.id));
     expect(resolvePrefetchRequest).toBeDefined();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Показать еще" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Показать еще" }));
 
     const newlyVisiblePlaceholder = view.container.querySelector('[data-archive-thumb-media-id="media-photo-19"] .archive-tile-placeholder');
     expect(newlyVisiblePlaceholder).not.toBeNull();

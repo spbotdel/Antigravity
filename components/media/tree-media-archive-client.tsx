@@ -3271,6 +3271,29 @@ export function TreeMediaArchiveClient({
     );
   }
 
+  function renderArchiveLoadMore(totalItems: number, summaryLabel: string) {
+    if (visibleItems >= totalItems) {
+      return null;
+    }
+
+    return (
+      <div className="action-row archive-load-more-row">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="archive-load-more-button h-10 rounded-[12px] border-[rgba(0,0,0,0.08)] bg-white px-[14px] shadow-none hover:bg-[#f8f6f3] hover:border-[rgba(0,0,0,0.08)]"
+          onClick={handleShowMore}
+        >
+          Показать еще
+        </Button>
+        <span className="members-static-note archive-load-more-note">
+          Показано {Math.min(visibleItems, totalItems)} из {totalItems} {summaryLabel}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <Card className="archive-card p-6">
       {canEdit && !isDedicatedMode ? (
@@ -3456,16 +3479,7 @@ export function TreeMediaArchiveClient({
                   {visibleMedia.map((asset) => renderArchiveTile(asset, visibleMedia))}
                 </div>
 
-                {visibleItems < currentMedia.length ? (
-                  <div className="action-row archive-actions">
-                    <Button type="button" variant="ghost" onClick={handleShowMore}>
-                      Показать еще
-                    </Button>
-                    <span className="members-static-note">
-                      Показано {Math.min(visibleItems, currentMedia.length)} из {currentMedia.length} {itemLabel}
-                    </span>
-                  </div>
-                ) : null}
+                {renderArchiveLoadMore(currentMedia.length, itemLabel)}
               </>
             ) : (
               renderArchiveEmptyState({
@@ -3490,16 +3504,7 @@ export function TreeMediaArchiveClient({
                     {visibleSelectedAlbumMedia.map((asset) => renderArchiveTile(asset, visibleSelectedAlbumMedia))}
                   </div>
 
-                  {visibleItems < selectedAlbumMedia.length ? (
-                    <div className="action-row archive-actions">
-                      <Button type="button" variant="ghost" onClick={handleShowMore}>
-                        Показать еще
-                      </Button>
-                      <span className="members-static-note">
-                        Показано {Math.min(visibleItems, selectedAlbumMedia.length)} из {selectedAlbumMedia.length} {mode === "all" ? "материалов" : itemLabel}
-                      </span>
-                    </div>
-                  ) : null}
+                  {renderArchiveLoadMore(selectedAlbumMedia.length, mode === "all" ? "материалов" : itemLabel)}
                 </>
               ) : (
                 renderArchiveEmptyState({
@@ -3631,20 +3636,6 @@ export function TreeMediaArchiveClient({
           )}
 
           {renderArchiveUploadDropzone()}
-
-          {!activeContextAlbum && view === "all" && visibleItems < currentMedia.length ? (
-            <div className="archive-sticky-footer">
-              <div className="archive-sticky-copy">
-                <strong>{modeLabel}</strong>
-                <span>{`${currentMedia.length} ${mode === "all" ? "материалов" : itemLabel} в текущем режиме`}</span>
-              </div>
-              <div className="archive-action-bar">
-                <Button type="button" variant="ghost" onClick={handleShowMore}>
-                  Показать еще
-                </Button>
-              </div>
-            </div>
-          ) : null}
 
           {canEdit && !isDedicatedMode ? (
             <label htmlFor={archiveUploadInputId} className="media-upload-fab" title="Загрузить" aria-label="Загрузить">
