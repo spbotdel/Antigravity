@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/auth/sign-out-button", () => ({
@@ -36,5 +36,32 @@ describe("app header", () => {
     expect(screen.getByText("Семейное дерево")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Выйти" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Панель" })).not.toBeInTheDocument();
+  });
+
+  it("toggles the scrolled class when the page scrolls past the header threshold", async () => {
+    Object.defineProperty(window, "scrollY", {
+      value: 0,
+      writable: true,
+      configurable: true
+    });
+
+    const { container } = render(<AppHeader mode="guest" showDashboardLink />);
+    const header = container.querySelector(".app-header");
+
+    expect(header).not.toHaveClass("is-scrolled");
+
+    window.scrollY = 24;
+    fireEvent.scroll(window);
+
+    await waitFor(() => {
+      expect(header).toHaveClass("is-scrolled");
+    });
+
+    window.scrollY = 0;
+    fireEvent.scroll(window);
+
+    await waitFor(() => {
+      expect(header).not.toHaveClass("is-scrolled");
+    });
   });
 });
