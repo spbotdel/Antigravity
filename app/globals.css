@@ -5653,7 +5653,10 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 .builder-inspector-meta-date-popover-actions {
   display: flex;
   justify-content: flex-end;
-  padding: 0 8px 8px;
+  margin-top: 2px;
+  padding: 4px 8px 6px;
+  border-top: 1px solid rgba(18, 27, 43, 0.05);
+  background: linear-gradient(180deg, rgba(255, 251, 245, 0.32), rgba(255, 248, 241, 0.64));
 }
 
 .builder-inspector-bio-textarea[data-slot="textarea"] {

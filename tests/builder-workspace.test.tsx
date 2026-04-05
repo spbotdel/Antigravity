@@ -6,6 +6,7 @@ const { uploadFileWithTransportContract } = vi.hoisted(() => ({
 }));
 
 import { BuilderWorkspace } from "@/components/tree/builder-workspace";
+import { Calendar } from "@/components/ui/calendar";
 import type { TreeSnapshot } from "@/lib/types";
 
 vi.mock("@/components/tree/family-tree-canvas", () => ({
@@ -581,6 +582,31 @@ describe("builder workspace", () => {
     await waitFor(() => {
       expect(within(inspector).getByText("Сохранено ✓")).toBeInTheDocument();
     }, { timeout: 1500 });
+  });
+
+  it("shows month and year dropdowns in the meta date popover and keeps clear working", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
+
+    await waitFor(() => {
+      const inspector = document.querySelector(".builder-inspector");
+      expect(inspector).not.toBeNull();
+      expect((inspector?.querySelector('input[name="birthDate"]') as HTMLInputElement | null)?.value).toBe("1990-01-01");
+    });
+
+    const inspector = document.querySelector(".builder-inspector") as HTMLElement;
+    const birthDateInput = inspector.querySelector('input[name="birthDate"]') as HTMLInputElement;
+
+    fireEvent.click(within(inspector).getByLabelText("Дата рождения"));
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("combobox")).toHaveLength(2);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Очистить" }));
+
+    await waitFor(() => {
+      expect(birthDateInput.value).toBe("");
+    });
   });
 
   it("autosaves the bio field after inactivity, skips duplicate saves, and forces save on blur", async () => {
@@ -1308,5 +1334,20 @@ describe("builder workspace", () => {
       const shell = container.querySelector(".builder-canvas-shell");
       expect(shell).toHaveStyle({ height: "1600px" });
     });
+  });
+
+  it("renders selected calendar days without the old heavy primary fill", () => {
+    const { container } = render(
+      <Calendar
+        mode="single"
+        selected={new Date("1990-01-14T00:00:00.000Z")}
+        defaultMonth={new Date("1990-01-14T00:00:00.000Z")}
+        captionLayout="dropdown"
+      />
+    );
+
+    const selectedDay = container.querySelector('[aria-selected="true"]');
+    expect(selectedDay).not.toBeNull();
+    expect(selectedDay?.className).not.toContain("bg-primary");
   });
 });

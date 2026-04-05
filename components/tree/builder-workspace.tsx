@@ -54,6 +54,8 @@ const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
 const MAX_DOCUMENT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const BIO_AUTOSAVE_DEBOUNCE_MS = 800;
+const BUILDER_META_DATE_START_MONTH = new Date(1900, 0);
+const BUILDER_META_DATE_END_MONTH = new Date(new Date().getFullYear() + 1, 11);
 
 type MediaUploadKind = "photo" | "video" | "document" | "unknown";
 type MediaUploadStatus = "queued" | "uploading" | "finalizing" | "done" | "error";
@@ -482,8 +484,12 @@ function BuilderMetaDateField({
         <PopoverContent className="w-auto p-0" align="start">
           <Calendar
             mode="single"
+            captionLayout="dropdown"
+            navLayout="around"
             selected={selectedDate}
             defaultMonth={selectedDate}
+            startMonth={BUILDER_META_DATE_START_MONTH}
+            endMonth={BUILDER_META_DATE_END_MONTH}
             onSelect={(nextDate) => {
               const nextValue = nextDate ? formatDateFn(nextDate, "yyyy-MM-dd") : "";
               if (isControlled) {
