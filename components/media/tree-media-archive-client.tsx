@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { memo, startTransition, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,7 +24,7 @@ import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeAudioPlaylistItemRecord, TreeAudioPlaylistRecord, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
 import { AudioArchiveView } from "@/components/media/audio-archive-view";
 import { DocumentArchiveView } from "@/components/media/document-archive-view";
-import { LockIcon, MoreHorizontalIcon, PlayIcon, PlusIcon } from "lucide-react";
+import { FilePlus, LockIcon, MoreHorizontalIcon, PlayIcon, PlusIcon } from "lucide-react";
 
 type MediaMode = "photo" | "video" | "audio" | "document" | "all";
 type ArchiveView = "all" | "albums";
@@ -262,6 +262,10 @@ function getArchiveUploadItemKindLabel(file: File) {
     return "Видео";
   }
 
+   if (file.type.startsWith("audio/")) {
+    return "Аудио";
+  }
+
   return "Файл";
 }
 
@@ -274,6 +278,8 @@ function buildPendingUploadSummary(items: PendingArchiveUploadItem[]) {
         accumulator.photoCount += 1;
       } else if (item.file.type.startsWith("video/")) {
         accumulator.videoCount += 1;
+      } else if (item.file.type.startsWith("audio/")) {
+        accumulator.audioCount += 1;
       } else {
         accumulator.otherCount += 1;
       }
@@ -284,6 +290,7 @@ function buildPendingUploadSummary(items: PendingArchiveUploadItem[]) {
       totalBytes: 0,
       photoCount: 0,
       videoCount: 0,
+      audioCount: 0,
       otherCount: 0,
     }
   );
@@ -295,6 +302,10 @@ function buildPendingUploadSummary(items: PendingArchiveUploadItem[]) {
 
   if (stats.videoCount) {
     parts.push(`${stats.videoCount} видео`);
+  }
+
+  if (stats.audioCount) {
+    parts.push(`${stats.audioCount} аудио`);
   }
 
   if (stats.otherCount) {
@@ -831,6 +842,8 @@ export function TreeMediaArchiveClient({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const reviewFileInputRef = useRef<HTMLInputElement | null>(null);
+  const archiveUploadInputId = useId();
+  const [isArchiveDropzoneActive, setIsArchiveDropzoneActive] = useState(false);
   const pendingUploadsRef = useRef<PendingArchiveUploadItem[]>([]);
   const pendingVideoPreviewPollIdsRef = useRef(new Set<string>());
   const pendingVideoPreviewPollWaitsRef = useRef(new Map<string, { timeoutId: number; resolve: (continued: boolean) => void }>());
@@ -3056,25 +3069,7 @@ export function TreeMediaArchiveClient({
 
   async function handleArchiveFileSelection(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []).filter((file) => file.size > 0);
-    if (!files.length) {
-      return;
-    }
-
-    const oversized = files.find((file) => file.size > getArchiveMaxMediaFileSizeBytes(file));
-    if (oversized) {
-      setError(`Файл больше ${Math.round(getArchiveMaxMediaFileSizeBytes(oversized) / (1024 * 1024))} МБ: ${oversized.name}.`);
-      return;
-    }
-
-    const nextItems = files.map(buildPendingArchiveUploadItem);
-    const nextPendingUploads = [...pendingUploadsRef.current, ...nextItems];
-    const nextPendingUploadKind = resolveSingleAlbumKind(nextPendingUploads.map((item) => getAlbumCompatibleKindForFile(item.file)));
-    setPendingUploads((current) => [...current, ...nextItems]);
-    if (selectedAlbum?.albumKind === "manual" && nextPendingUploadKind && selectedAlbum.kind === nextPendingUploadKind) {
-      setReviewAlbumId(selectedAlbum.id);
-    }
-    setIsUploadReviewOpen(true);
-    setError(null);
+    stageArchiveFiles(files);
 
     if (event.target instanceof HTMLInputElement) {
       event.target.value = "";
@@ -3208,34 +3203,115 @@ export function TreeMediaArchiveClient({
     );
   }
 
+  const archiveUploadAccept =
+    mode === "photo"
+      ? "image/*"
+      : mode === "video"
+        ? "video/*"
+        : "image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx";
+  const isDedicatedMode = mode === "audio" || mode === "document";
+  function stageArchiveFiles(files: File[]) {
+    if (!files.length) {
+      return;
+    }
+
+    const oversized = files.find((file) => file.size > getArchiveMaxMediaFileSizeBytes(file));
+    if (oversized) {
+      setError(`Файл больше ${Math.round(getArchiveMaxMediaFileSizeBytes(oversized) / (1024 * 1024))} МБ: ${oversized.name}.`);
+      return;
+    }
+
+    const nextItems = files.map(buildPendingArchiveUploadItem);
+    const nextPendingUploads = [...pendingUploadsRef.current, ...nextItems];
+    const nextPendingUploadKind = resolveSingleAlbumKind(nextPendingUploads.map((item) => getAlbumCompatibleKindForFile(item.file)));
+    setPendingUploads((current) => [...current, ...nextItems]);
+    if (selectedAlbum?.albumKind === "manual" && nextPendingUploadKind && selectedAlbum.kind === nextPendingUploadKind) {
+      setReviewAlbumId(selectedAlbum.id);
+    }
+    setIsUploadReviewOpen(true);
+    setError(null);
+  }
+
+  function handleArchiveDropzoneDragOver(event: React.DragEvent) {
+    event.preventDefault();
+    setIsArchiveDropzoneActive(true);
+  }
+
+  function handleArchiveDropzoneDragLeave(event: React.DragEvent) {
+    event.preventDefault();
+    setIsArchiveDropzoneActive(false);
+  }
+
+  function handleArchiveDropzoneDrop(event: React.DragEvent) {
+    event.preventDefault();
+    setIsArchiveDropzoneActive(false);
+    const files = Array.from(event.dataTransfer.files || []).filter((file) => file.size > 0);
+    stageArchiveFiles(files);
+  }
+
+  function renderArchiveUploadDropzone() {
+    if (!canEdit || isDedicatedMode) {
+      return null;
+    }
+
+    return (
+      <div
+        className={`archive-upload-dropzone${isArchiveDropzoneActive ? " archive-upload-dropzone-active" : ""}`}
+        onDragOver={handleArchiveDropzoneDragOver}
+        onDragLeave={handleArchiveDropzoneDragLeave}
+        onDrop={handleArchiveDropzoneDrop}
+      >
+        <p>
+          Перетащите файлы сюда или{" "}
+          <label htmlFor={archiveUploadInputId} className="archive-upload-dropzone-btn">
+            выберите
+          </label>
+        </p>
+      </div>
+    );
+  }
+
+  function renderArchiveLoadMore(totalItems: number, summaryLabel: string) {
+    if (visibleItems >= totalItems) {
+      return null;
+    }
+
+    return (
+      <div className="action-row archive-load-more-row">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="archive-load-more-button h-10 rounded-[12px] border-[rgba(0,0,0,0.08)] bg-white px-[14px] shadow-none hover:bg-[#f8f6f3] hover:border-[rgba(0,0,0,0.08)]"
+          onClick={handleShowMore}
+        >
+          Показать еще
+        </Button>
+        <span className="members-static-note archive-load-more-note">
+          Показано {Math.min(visibleItems, totalItems)} из {totalItems} {summaryLabel}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <Card className="archive-card p-6">
+      {canEdit && !isDedicatedMode ? (
+        <input
+          id={archiveUploadInputId}
+          ref={fileInputRef}
+          className="builder-native-file-input"
+          type="file"
+          multiple
+          accept={archiveUploadAccept}
+          onChange={handleArchiveFileSelection}
+        />
+      ) : null}
       <div className="archive-header">
         <div className="archive-header-copy">
           <p className="eyebrow">Семейный архив</p>
           <h2 className="card-heading">{modeLabel}</h2>
         </div>
-        {canEdit ? (
-          <div className="archive-action-bar archive-header-actions">
-            <input
-              ref={fileInputRef}
-              className="builder-native-file-input"
-              type="file"
-              multiple
-              accept={mode === "photo" ? "image/*" : mode === "video" ? "video/*" : "image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx"}
-              onChange={handleArchiveFileSelection}
-            />
-            <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
-              {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
-            </Button>
-            {!activeContextAlbum ? (
-              <Button type="button" variant="secondary" onClick={openCreateAlbumDialog}>
-                <PlusIcon />
-                Создать альбом
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
       </div>
 
       {error ? <p className="form-error">{error}</p> : null}
@@ -3403,34 +3479,15 @@ export function TreeMediaArchiveClient({
                   {visibleMedia.map((asset) => renderArchiveTile(asset, visibleMedia))}
                 </div>
 
-                {visibleItems < currentMedia.length ? (
-                  <div className="action-row archive-actions">
-                    <Button type="button" variant="ghost" onClick={handleShowMore}>
-                      Показать еще
-                    </Button>
-                    <span className="members-static-note">
-                      Показано {Math.min(visibleItems, currentMedia.length)} из {currentMedia.length} {itemLabel}
-                    </span>
-                  </div>
-                ) : null}
+                {renderArchiveLoadMore(currentMedia.length, itemLabel)}
               </>
             ) : (
               renderArchiveEmptyState({
                 title: mode === "photo" ? "В этом разделе пока нет фотографий" : mode === "video" ? "В этом разделе пока нет видео" : "Семейный архив пока пуст",
                 description: canEdit
-                  ? "Добавьте первые файлы или сразу создайте альбом под семейную подборку."
+                  ? "Добавьте первые файлы через кнопку загрузки или drag and drop."
                   : "Когда материалы появятся, они соберутся здесь в спокойной галерее.",
-                actions: canEdit ? (
-                  <>
-                    <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
-                      {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
-                    </Button>
-                    <Button type="button" variant="secondary" onClick={openCreateAlbumDialog}>
-                      <PlusIcon />
-                      Создать альбом
-                    </Button>
-                  </>
-                ) : null
+                actions: null
               })
             )
           ) : selectedAlbum ? (
@@ -3447,30 +3504,42 @@ export function TreeMediaArchiveClient({
                     {visibleSelectedAlbumMedia.map((asset) => renderArchiveTile(asset, visibleSelectedAlbumMedia))}
                   </div>
 
-                  {visibleItems < selectedAlbumMedia.length ? (
-                    <div className="action-row archive-actions">
-                      <Button type="button" variant="ghost" onClick={handleShowMore}>
-                        Показать еще
-                      </Button>
-                      <span className="members-static-note">
-                        Показано {Math.min(visibleItems, selectedAlbumMedia.length)} из {selectedAlbumMedia.length} {mode === "all" ? "материалов" : itemLabel}
-                      </span>
-                    </div>
-                  ) : null}
+                  {renderArchiveLoadMore(selectedAlbumMedia.length, mode === "all" ? "материалов" : itemLabel)}
                 </>
               ) : (
                 renderArchiveEmptyState({
                   title: mode === "photo" ? "В этом альбоме пока нет фото" : mode === "video" ? "В этом альбоме пока нет видео" : "В этом альбоме пока нет медиа",
-                  actions: canEdit ? (
-                    <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()}>
-                      {mode === "photo" ? "Загрузить фото" : mode === "video" ? "Загрузить видео" : "Загрузить файлы"}
-                    </Button>
-                  ) : null
+                  actions: null
                 })
               )}
             </>
-          ) : currentAlbums.length ? (
+          ) : currentAlbums.length || canEdit ? (
             <div className="archive-album-grid">
+              {canEdit ? (
+                <div className="archive-album-card-shell">
+                  <div
+                    className="archive-album-card archive-album-card-create"
+                    role="button"
+                    tabIndex={0}
+                    onClick={openCreateAlbumDialog}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openCreateAlbumDialog();
+                      }
+                    }}
+                  >
+                    <div className="archive-album-cover archive-album-create-visual" aria-hidden="true">
+                      <PlusIcon className="archive-album-create-icon" />
+                    </div>
+                    <div className="archive-album-copy archive-album-create-copy">
+                      <strong>Создать альбом</strong>
+                      <span>Новая подборка</span>
+                      <small>Добавьте отдельную серию для поездки, события или семейной темы.</small>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               {currentAlbums.map((album) => {
                 renderedAlbumIdsThisRender.push(album.id);
                 const isAlbumActionsOpen = openArchiveAlbumActionsId === album.id;
@@ -3560,29 +3629,19 @@ export function TreeMediaArchiveClient({
             renderArchiveEmptyState({
               title: "Альбомов для этого раздела пока нет",
               description: canEdit
-                ? "Создайте первый альбом для поездки, праздника или другой общей серии."
+                ? "Переключитесь в режим альбомов и создайте первую подборку прямо в сетке."
                 : "Когда владелец или редактор соберет альбомы, они появятся здесь.",
-              actions: canEdit ? (
-                <Button type="button" variant="secondary" onClick={openCreateAlbumDialog}>
-                  <PlusIcon />
-                  Создать альбом
-                </Button>
-              ) : null
+              actions: null
             })
           )}
 
-          {!activeContextAlbum && view === "all" && visibleItems < currentMedia.length ? (
-            <div className="archive-sticky-footer">
-              <div className="archive-sticky-copy">
-                <strong>{modeLabel}</strong>
-                <span>{`${currentMedia.length} ${mode === "all" ? "материалов" : itemLabel} в текущем режиме`}</span>
-              </div>
-              <div className="archive-action-bar">
-                <Button type="button" variant="ghost" onClick={handleShowMore}>
-                  Показать еще
-                </Button>
-              </div>
-            </div>
+          {renderArchiveUploadDropzone()}
+
+          {canEdit && !isDedicatedMode ? (
+            <label htmlFor={archiveUploadInputId} className="media-upload-fab" title="Загрузить" aria-label="Загрузить">
+              <FilePlus className="media-upload-fab-icon" aria-hidden="true" />
+              <span className="sr-only">Загрузить</span>
+            </label>
           ) : null}
 
         </>

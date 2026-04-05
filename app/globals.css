@@ -3048,8 +3048,6 @@ textarea {
 .archive-album-copy,
 .archive-album-form,
 .archive-review-tile,
-.archive-sticky-footer,
-.archive-sticky-copy,
 .archive-viewer-strip {
   display: grid;
   gap: 14px;
@@ -3073,6 +3071,29 @@ textarea {
 
 .archive-header-actions {
   align-self: start;
+}
+
+.archive-upload-dropzone {
+  display: grid;
+  place-items: center;
+  min-height: 88px;
+  padding: 18px 20px;
+  border: 1px dashed rgba(18, 27, 43, 0.14);
+  border-radius: 20px;
+  background: rgba(255, 251, 245, 0.78);
+  color: var(--muted);
+  text-align: center;
+}
+
+.archive-upload-dropzone-active {
+  border-color: var(--accent, #f06d3d);
+  background: var(--accent-bg, rgba(240, 109, 61, 0.05));
+}
+
+.archive-upload-dropzone-btn {
+  color: var(--accent, #f06d3d);
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 .archive-field {
@@ -3661,32 +3682,63 @@ textarea {
   align-items: center;
 }
 
-.archive-sticky-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-  grid-template-columns: minmax(0, 1fr) auto;
+.archive-load-more-row {
   align-items: center;
-  padding: 14px 16px;
-  margin: 4px -2px -2px;
-  border-top: 1px solid rgba(18, 27, 43, 0.08);
-  background: rgba(255, 251, 245, 0.96);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  justify-content: space-between;
 }
 
-.archive-sticky-copy {
-  gap: 4px;
-  min-width: 0;
+.archive-load-more-note {
+  margin-left: auto;
+  text-align: right;
+  font-size: 0.84rem;
+  line-height: 1.3;
+  color: rgba(24, 33, 48, 0.58);
 }
 
-.archive-sticky-copy strong {
-  font-size: 0.98rem;
+.archive-load-more-row + .archive-upload-dropzone {
+  margin-top: -4px;
 }
 
-.archive-sticky-copy span {
-  color: var(--muted);
-  line-height: 1.4;
+.media-upload-fab {
+  position: fixed;
+  right: 32px;
+  bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.09);
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.media-upload-fab:hover {
+  background: #f3f0ec;
+  transform: scale(1.06);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.media-upload-fab:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(240, 109, 61, 0.16),
+    0 8px 18px rgba(0, 0, 0, 0.09);
+}
+
+.media-upload-fab-icon {
+  width: 18px;
+  height: 18px;
+  color: #111827;
+  opacity: 1;
 }
 
 .builder-media-tab-section {
@@ -3945,6 +3997,18 @@ textarea {
   outline: none;
 }
 
+.archive-album-card-create {
+  border-style: dashed;
+  border-color: rgba(18, 27, 43, 0.16);
+  background: rgba(255, 251, 245, 0.52);
+}
+
+.archive-album-card-create:hover,
+.archive-album-card-create:focus-visible {
+  border-color: rgba(240, 109, 61, 0.32);
+  box-shadow: 0 12px 26px rgba(18, 27, 43, 0.05);
+}
+
 .archive-album-cover {
   position: relative;
   min-height: 0;
@@ -3982,6 +4046,25 @@ textarea {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+.archive-album-create-visual {
+  display: grid;
+  place-items: center;
+  min-height: 168px;
+  border: 1px dashed rgba(18, 27, 43, 0.12);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.archive-album-create-icon {
+  width: 30px;
+  height: 30px;
+  color: rgba(240, 109, 61, 0.92);
+  stroke-width: 2.2;
+}
+
+.archive-album-create-copy small {
+  -webkit-line-clamp: 2;
 }
 
 .archive-album-empty-placeholder-video {
@@ -7711,23 +7794,18 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
     height: 44px;
   }
 
-  .archive-sticky-footer {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .archive-header-actions {
     display: none;
   }
 
-  .archive-sticky-footer .archive-action-bar {
-    justify-content: stretch;
+  .archive-load-more-row {
+    align-items: flex-start;
   }
 
-  .archive-sticky-footer .archive-action-bar>[data-slot="button"],
-  .archive-sticky-footer .archive-action-bar>a {
-    flex: 1 1 100%;
+  .archive-load-more-note {
     width: 100%;
-    justify-content: center;
+    margin-left: 0;
+    text-align: left;
   }
 
   .person-media-stage,
@@ -8032,8 +8110,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 
   .person-media-stage,
   .archive-upload-panel,
-  .archive-album-card,
-  .archive-sticky-footer {
+  .archive-album-card {
     padding-left: 12px;
     padding-right: 12px;
   }

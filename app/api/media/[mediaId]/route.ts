@@ -2,7 +2,7 @@ import { hashOpaqueToken } from "@/lib/server/invite-token";
 import { getCurrentUser } from "@/lib/server/auth";
 import { NextResponse } from "next/server";
 
-import { toErrorResponse } from "@/lib/server/errors";
+import { AppError, toErrorResponse } from "@/lib/server/errors";
 import type { MediaVisibility, ViewerAccessSource } from "@/lib/types";
 import { buildAttachmentContentDisposition, buildMediaDownloadFilename, deleteMedia, getMediaSummary, resolveMediaAccess, setPrimaryPersonMedia } from "@/lib/server/repository";
 import { setPrimaryPersonMediaSchema } from "@/lib/validators/media";
@@ -26,6 +26,7 @@ interface ThumbRedirectCacheEntry {
 }
 
 const MEDIA_THUMB_ROUTE_CACHE_TTL_MS = 30_000;
+const MAX_PDF_PROXY_BYTES = 100 * 1024 * 1024;
 const thumbRedirectCache = new Map<string, ThumbRedirectCacheEntry>();
 const thumbRedirectInFlight = new Map<string, Promise<ThumbRedirectCacheEntry>>();
 const thumbMediaScopeCache = new Map<string, ThumbMediaScopeCacheEntry>();
@@ -177,13 +178,18 @@ export async function GET(request: Request, { params }: Params) {
           throw new Error("Не удалось подготовить PDF для скачивания.");
         }
 
+        const contentLength = upstreamResponse.headers.get("content-length");
+        const parsedContentLength = contentLength ? Number(contentLength) : Number.NaN;
+        if (Number.isFinite(parsedContentLength) && parsedContentLength > MAX_PDF_PROXY_BYTES) {
+          throw new AppError(413, "PDF слишком большой для скачивания через сервер.");
+        }
+
         const responseHeaders = new Headers();
         responseHeaders.set("Content-Type", "application/octet-stream");
         responseHeaders.set("Content-Disposition", buildAttachmentContentDisposition(buildMediaDownloadFilename(media)));
         responseHeaders.set("Cache-Control", "no-store");
         responseHeaders.set("X-Content-Type-Options", "nosniff");
 
-        const contentLength = upstreamResponse.headers.get("content-length");
         if (contentLength) {
           responseHeaders.set("Content-Length", contentLength);
         }

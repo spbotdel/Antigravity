@@ -39,6 +39,21 @@ function createMediaAsset(overrides: Partial<MediaAssetRecord>): MediaAssetRecor
   } as MediaAssetRecord;
 }
 
+function getByExactTextContent(text: string) {
+  return screen.getByText((_, node) => {
+    if (!node) {
+      return false;
+    }
+
+    const normalized = node.textContent?.replace(/\s+/g, " ").trim();
+    if (normalized !== text) {
+      return false;
+    }
+
+    return Array.from(node.children).every((child) => child.textContent?.replace(/\s+/g, " ").trim() !== text);
+  });
+}
+
 function renderArchiveClient(options?: {
   allMedia?: MediaAssetRecord[];
   allAlbums?: Array<{
@@ -55,7 +70,7 @@ function renderArchiveClient(options?: {
   persistedAlbumMediaMap?: Record<string, MediaAssetRecord[]>;
   canEdit?: boolean;
   uploaderLabels?: Array<{ userId: string; label: string }>;
-  initialMode?: "photo" | "video" | "all";
+  initialMode?: "photo" | "video" | "audio" | "document" | "all";
   initialView?: "all" | "albums";
   initialAlbumId?: string | null;
   initialThumbUrlsByMediaId?: Record<string, string>;
@@ -367,10 +382,11 @@ describe("tree media archive client", () => {
       expect(thumbRequests).toHaveLength(1);
     });
     expect(thumbRequests[0]).toHaveLength(18);
+    expect(view.container.querySelector(".archive-sticky-footer")).toBeNull();
 
     const expectedRequestCounts = [2, 3, 4, 5, 7];
     for (const expectedCount of expectedRequestCounts) {
-      const showMoreButton = view.container.querySelector(".archive-sticky-footer button") as HTMLButtonElement | null;
+      const showMoreButton = view.container.querySelector(".archive-load-more-row button") as HTMLButtonElement | null;
       expect(showMoreButton).not.toBeNull();
       fireEvent.click(showMoreButton as HTMLButtonElement);
       await waitFor(() => {
@@ -399,7 +415,7 @@ describe("tree media archive client", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
 
     for (let step = 0; step < 5; step += 1) {
-      const showMoreButton = view.container.querySelector(".archive-sticky-footer button") as HTMLButtonElement | null;
+      const showMoreButton = view.container.querySelector(".archive-load-more-row button") as HTMLButtonElement | null;
       expect(showMoreButton).not.toBeNull();
       fireEvent.click(showMoreButton as HTMLButtonElement);
     }
@@ -548,7 +564,7 @@ describe("tree media archive client", () => {
     expect(requests[1]).toEqual(media.slice(18, 36).map((asset) => asset.id));
     expect(resolvePrefetchRequest).toBeDefined();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Показать еще" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Показать еще" }));
 
     const newlyVisiblePlaceholder = view.container.querySelector('[data-archive-thumb-media-id="media-photo-19"] .archive-tile-placeholder');
     expect(newlyVisiblePlaceholder).not.toBeNull();
@@ -1202,13 +1218,15 @@ describe("tree media archive client", () => {
     expect(abortedSignal.aborted).toBe(true);
   });
 
-  it("keeps only the top archive action group by default", () => {
+  it("removes top upload actions and keeps upload access in the sticky button and dropzone", () => {
     renderArchiveClient();
 
-    expect(screen.getAllByRole("button", { name: "Загрузить файлы" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Создать альбом" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Загрузить файлы" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Создать альбом" })).not.toBeInTheDocument();
+    expect(screen.getByTitle("Загрузить")).toBeInTheDocument();
+    expect(getByExactTextContent("Перетащите файлы сюда или выберите")).toBeInTheDocument();
     expect(screen.queryByText("3 материалов в текущем режиме")).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   it("keeps the archive grid visual-first while preserving album descriptions", () => {
     const photo = createMediaAsset({
@@ -1274,8 +1292,8 @@ describe("tree media archive client", () => {
     const albumGrid = view.container.querySelector(".archive-album-grid");
     expect(albumGrid).toBeNull();
     expect(screen.queryByRole("button", { name: /Свадьба.*Пользовательский альбом/ })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Загрузить видео" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Создать альбом" })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Загрузить видео" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Создать альбом" })).toHaveLength(1);
   });
 
   it("shows a management trigger for manual album cards without changing the main card structure", () => {
@@ -1844,8 +1862,8 @@ describe("tree media archive client", () => {
 
     const grid = view.container.querySelector(".archive-grid");
     expect(grid).not.toBeNull();
-    expect(screen.getAllByRole("button", { name: "Загрузить видео" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Создать альбом" })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Загрузить видео" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Создать альбом" })).not.toBeInTheDocument();
     expect(screen.queryByText("2 видео в текущем режиме")).not.toBeInTheDocument();
     expect(grid?.querySelectorAll(".archive-tile-shell")).toHaveLength(2);
     expect(grid?.querySelectorAll(".archive-tile")).toHaveLength(2);
@@ -2182,8 +2200,9 @@ describe("tree media archive client", () => {
 
     const emptyState = screen.getByText("Семейный архив пока пуст").closest(".empty-state");
     expect(emptyState).not.toBeNull();
-    expect(within(emptyState as HTMLElement).getByRole("button", { name: "Загрузить файлы" })).toBeInTheDocument();
-    expect(within(emptyState as HTMLElement).getByRole("button", { name: "Создать альбом" })).toBeInTheDocument();
+    expect(getByExactTextContent("Перетащите файлы сюда или выберите")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    expect(screen.getByRole("button", { name: /Создать альбом.*Новая подборка/ })).toBeInTheDocument();
   });
 
   it("opens the archive viewer from the visible grid subset instead of the full mode collection", () => {
@@ -2339,7 +2358,7 @@ describe("tree media archive client", () => {
 
     expect(screen.getAllByText("Свадьба")).toHaveLength(1);
     expect(screen.getByText("1 фото")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /Загрузить/ })).toHaveLength(1);
+    expect(screen.getAllByTitle("Загрузить")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Создать альбом" })).not.toBeInTheDocument();
     expect(screen.queryByText("1 фото в альбоме")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Свадьба.*Пользовательский альбом/ })).not.toBeInTheDocument();
@@ -2533,9 +2552,8 @@ describe("tree media archive client", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
     expect(screen.queryByText("Семейный альбом")).not.toBeInTheDocument();
-    const emptyState = screen.getByText("Альбомов для этого раздела пока нет").closest(".empty-state");
-    expect(emptyState).not.toBeNull();
-    expect(within(emptyState as HTMLElement).getByRole("button", { name: "Создать альбом" })).toBeInTheDocument();
+    expect(screen.queryByText("Альбомов для этого раздела пока нет")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Создать альбом.*Новая подборка/ })).toBeInTheDocument();
   });
 
   it("shows upload progress without the old transport hint noise", async () => {
@@ -2614,6 +2632,34 @@ describe("tree media archive client", () => {
     });
 
     expect(screen.getByText("Материал сохранен в семейный архив.")).toBeInTheDocument();
+  });
+
+  it("hides the top archive uploader in audio mode and leaves audio upload to the dedicated audio section", () => {
+    const view = renderArchiveClient({
+      initialMode: "audio",
+      allMedia: [],
+    });
+
+    expect(screen.queryByRole("button", { name: "Создать альбом" })).not.toBeInTheDocument();
+    expect(view.container.querySelector('.archive-header-actions input[type="file"]')).toBeNull();
+    expect(screen.getByText("Загрузить аудио")).toBeInTheDocument();
+    expect(view.container.querySelector('input[type="file"][accept="audio/*"]')).not.toBeNull();
+    expect(screen.getByTitle("Загрузить")).toBeInTheDocument();
+    expect(getByExactTextContent("Перетащите файлы сюда или выберите")).toBeInTheDocument();
+  });
+
+  it("hides the top archive uploader in document mode and leaves document upload to the dedicated document section", () => {
+    const view = renderArchiveClient({
+      initialMode: "document",
+      allMedia: [],
+    });
+
+    expect(screen.queryByRole("button", { name: "Создать альбом" })).not.toBeInTheDocument();
+    expect(view.container.querySelector('.archive-header-actions input[type="file"]')).toBeNull();
+    expect(screen.getByText("Загрузить документ")).toBeInTheDocument();
+    expect(view.container.querySelector('input[type="file"]')).not.toBeNull();
+    expect(screen.getByTitle("Загрузить")).toBeInTheDocument();
+    expect(getByExactTextContent("Перетащите файлы сюда или выберите")).toBeInTheDocument();
   });
 
   it("inherits album access by default and hides visibility selection when uploading into a specific album", async () => {
@@ -2789,7 +2835,8 @@ describe("tree media archive client", () => {
 
     renderArchiveClient();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Создать альбом" })[0]);
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    fireEvent.click(screen.getByRole("button", { name: /Создать альбом.*Новая подборка/ }));
     expect(screen.getByLabelText("Название")).toHaveValue("Новый альбом");
     expect(screen.getByLabelText("Доступ")).toHaveTextContent("Только для семьи");
     expect(screen.getByText("Виден всем участникам семейного дерева")).toBeInTheDocument();
@@ -2843,7 +2890,8 @@ describe("tree media archive client", () => {
 
     renderArchiveClient();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Создать альбом" })[0]);
+    fireEvent.click(screen.getByRole("tab", { name: "Альбомы" }));
+    fireEvent.click(screen.getByRole("button", { name: /Создать альбом.*Новая подборка/ }));
     const dialog = screen.getByRole("dialog", { name: "Создать альбом" });
     const accessCombobox = within(dialog).getByRole("combobox", { name: /Доступ/ });
     const accessHiddenInput = accessCombobox.parentElement?.querySelector('input[aria-hidden="true"]') as HTMLInputElement | null;

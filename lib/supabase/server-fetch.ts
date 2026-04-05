@@ -18,6 +18,10 @@ const FALLBACK_ERROR_CODES = new Set([
 ]);
 let nativeServerFetchFallbackUntil = 0;
 
+function canUsePowerShellFallback() {
+  return process.platform === "win32";
+}
+
 function createUnavailableResponse(status: number) {
   return new Response(
     JSON.stringify({
@@ -58,7 +62,7 @@ function shouldUsePowerShellFallback(error: unknown) {
 }
 
 function shouldPreferPowerShellFallbackNow() {
-  return Date.now() < nativeServerFetchFallbackUntil;
+  return canUsePowerShellFallback() && Date.now() < nativeServerFetchFallbackUntil;
 }
 
 function noteNativeServerFetchFallback() {
@@ -225,6 +229,9 @@ export function createServerSupabaseFetch(timeoutMs = getServerSupabaseRequestTi
 
       if (timedOut || shouldUsePowerShellFallback(error)) {
         noteNativeServerFetchFallback();
+        if (!canUsePowerShellFallback()) {
+          return createUnavailableResponse(timedOut ? 504 : 503);
+        }
         try {
           return await powerShellFetch(
             input,

@@ -1,7 +1,8 @@
 import path from "node:path";
 
-import { zipSync } from "fflate";
+import { Zip, ZipPassThrough } from "fflate";
 
+import { getCurrentUser } from "@/lib/server/auth";
 import { toErrorResponse } from "@/lib/server/errors";
 import { listExistingArchiveMediaForEditor, resolveMediaAccess } from "@/lib/server/repository";
 import { downloadArchiveMediaSchema } from "@/lib/validators/media";
@@ -26,6 +27,29 @@ function buildZipEntryName(input: { title: string; fallbackName: string }, usedN
   return candidate;
 }
 
+async function pipeResponseBodyToZipEntry(response: Response, entry: ZipPassThrough) {
+  if (!response.body) {
+    throw new Error("Файл недоступен для потокового скачивания.");
+  }
+
+  const reader = response.body.getReader();
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      entry.push(value, false);
+    }
+
+    entry.push(new Uint8Array(0), true);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const payload = downloadArchiveMediaSchema.parse(await request.json());
@@ -34,31 +58,67 @@ export async function POST(request: Request) {
       return Response.json({ error: "Не выбраны материалы для скачивания." }, { status: 400 });
     }
 
+    const resolvedUser = await getCurrentUser();
     const usedEntryNames = new Set<string>();
-    const zipEntries: Record<string, Uint8Array> = {};
-
-    for (const asset of media) {
-      const access = await resolveMediaAccess(asset.id, null, null, { download: false });
-      const response = await fetch(access.url);
-      if (!response.ok) {
-        throw new Error(`Не удалось скачать файл «${asset.title}».`);
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const entryName = buildZipEntryName(
-        {
-          title: asset.title,
-          fallbackName: asset.storage_path ? path.basename(asset.storage_path) : `media-${asset.id}`,
-        },
-        usedEntryNames
-      );
-      zipEntries[entryName] = new Uint8Array(arrayBuffer);
-    }
-
-    const zip = zipSync(zipEntries, { level: 0 });
     const filename = `archive-media-${new Date().toISOString().slice(0, 10)}.zip`;
+    let zip: Zip | null = null;
 
-    return new Response(Buffer.from(zip), {
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let streamFailed = false;
+        zip = new Zip((error, chunk, final) => {
+          if (streamFailed) {
+            return;
+          }
+
+          if (error) {
+            streamFailed = true;
+            controller.error(error);
+            return;
+          }
+
+          controller.enqueue(chunk);
+          if (final) {
+            controller.close();
+          }
+        });
+
+        try {
+          for (const asset of media) {
+            const access = await resolveMediaAccess(asset.id, null, null, {
+              download: false,
+              resolvedUser
+            });
+            const response = await fetch(access.url);
+            if (!response.ok) {
+              throw new Error(`Не удалось скачать файл «${asset.title}».`);
+            }
+
+            const entryName = buildZipEntryName(
+              {
+                title: asset.title,
+                fallbackName: asset.storage_path ? path.basename(asset.storage_path) : `media-${asset.id}`,
+              },
+              usedEntryNames
+            );
+            const entry = new ZipPassThrough(entryName);
+            zip.add(entry);
+            await pipeResponseBodyToZipEntry(response, entry);
+          }
+
+          zip.end();
+        } catch (error) {
+          streamFailed = true;
+          zip.terminate();
+          controller.error(error);
+        }
+      },
+      cancel() {
+        zip?.terminate();
+      }
+    });
+
+    return new Response(body, {
       status: 200,
       headers: {
         "Content-Type": "application/zip",

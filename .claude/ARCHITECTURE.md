@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-04-02 13:51:57Z`
+- Generated at (UTC): `2026-04-05 07:49:48Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -135,10 +135,10 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-04-02 13:51:57Z`
-- Active branch: `feat/audio-docs-experiment`
-- Git status: `STATUS:27 files`
-- Git diff: `DIFF:4566 lines`
+- Updated at (UTC): `2026-04-05 07:49:48Z`
+- Active branch: `fix/media-hardening`
+- Git status: `STATUS:9 files`
+- Git diff: `DIFF:201 lines`
 
 ### Detected Stack
 
@@ -154,6 +154,7 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `.next/`
 - `.next-dev.err.log`
 - `.next-dev.log`
+- `.playwright-cli/`
 - `.tmp/`
 - `3.ged`
 - `AGENTS.md`
@@ -165,36 +166,29 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `cloudflare/`
 - `COMMON_BUGS.md`
 - `components/`
-- `components.json`
 
 ### Recently Changed Paths
 
 - `.claude/ARCHITECTURE.md`
 - `.claude/BACKLOG.md`
 - `.claude/SNAPSHOT.md`
-- `app/globals.css`
-- `app/tree/[slug]/media/page.tsx`
-- `components/media/audio-archive-view.tsx`
-- `components/media/audio-player.tsx`
-- `components/media/document-archive-view.tsx`
-- `components/media/document-preview-dialog.tsx`
-- `components/media/tree-media-archive-client.tsx`
 - `docs/research/family-tree-v1-slava-edition-backup-restore-runbook-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-implementation-plan-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-launch-checklist-2026-03-06.md`
 - `docs/research/family-tree-v1-slava-edition-owner-playbook-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-plan-2026-03-06.md`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-04-02 13:51:57Z`
-- Branch: `feat/audio-docs-experiment`
-- Git status summary: `STATUS:27 files`
-- Git diff summary: `DIFF:4566 lines`
+- Completed at (UTC): `2026-04-05 07:49:48Z`
+- Branch: `fix/media-hardening`
+- Git status summary: `STATUS:9 files`
+- Git diff summary: `DIFF:201 lines`
 
-- Session summary: `27` changed files, `4566` diff lines, `15` tracked changed paths.
+- Session summary: `9` changed files, `201` diff lines, `9` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -202,8 +196,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:27 files`)
-- `git_diff`: `success` (`DIFF:4566 lines`)
+- `git_status`: `success` (`STATUS:9 files`)
+- `git_diff`: `success` (`DIFF:201 lines`)
 <!-- FRAMEWORK:SESSION:END -->
 
 ## Current Media Architecture

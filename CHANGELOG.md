@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 - Initial framework baseline created.
 
+### `fix/media-hardening`
+
+- Media downloads were hardened:
+  bulk archive download no longer assembles the whole ZIP in memory, PDF proxy now rejects oversized files above `100 MB`, and server-side Supabase PowerShell fallback is explicitly disabled on non-Windows.
+- Media upload UX was unified:
+  top upload buttons were removed, upload access now relies on bottom dropzones plus sticky upload buttons, and audio/document tabs keep their dedicated upload flows.
+- Album creation entry moved into the album grid:
+  the top `Создать альбом` action was removed from generic media tabs and replaced with a first-card `Создать альбом` entrypoint in `Альбомы`.
+- Dedicated audio/document upload triggers were stabilized:
+  native file-input labels replaced brittle programmatic clicks, and the audio `mountedRef` false-unmount regression after `upload-intent` was fixed.
+
 ### Merge `feat/audio-docs-experiment` into `main`
 
 - Key changes:

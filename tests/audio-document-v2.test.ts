@@ -2,6 +2,18 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+const { uploadFileWithTransportContract } = vi.hoisted(() => ({
+    uploadFileWithTransportContract: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/lib/utils", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/utils")>("@/lib/utils");
+    return {
+        ...actual,
+        uploadFileWithTransportContract,
+    };
+});
+
 // --- resolveMediaKindFromMimeType tests ---
 // We can't import the private function directly, so we test the public surface
 // that depends on it: the type system and display helpers.
@@ -14,6 +26,21 @@ import { buildAttachmentContentDisposition } from "@/lib/server/repository";
 import type { MediaAssetRecord, MediaKind } from "@/lib/types";
 import { collectTreeMedia } from "@/lib/tree/display";
 import { formatMediaKind } from "@/lib/ui-text";
+
+function getByExactTextContent(text: string) {
+    return screen.getByText((_, node) => {
+        if (!node) {
+            return false;
+        }
+
+        const normalized = node.textContent?.replace(/\s+/g, " ").trim();
+        if (normalized !== text) {
+            return false;
+        }
+
+        return Array.from(node.children).every((child) => child.textContent?.replace(/\s+/g, " ").trim() !== text);
+    });
+}
 
 describe("MediaKind type", () => {
     it("includes audio as a valid value", () => {
@@ -146,6 +173,81 @@ function mockAudioPlayback() {
 }
 
 describe("Audio archive player state", () => {
+    it("uploads audio from the empty-state button flow", async () => {
+        vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+            const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+            if (url.includes("/api/media/archive/upload-intent")) {
+                return Response.json(
+                    {
+                        mediaId: "audio-upload-1",
+                        kind: "audio",
+                        path: "trees/tree-1/media/audio/audio-upload-1/original.mp3",
+                        bucket: "bucket-1",
+                        signedUrl: "https://example.com/audio.mp3",
+                        token: null,
+                        uploadProvider: "cloudflare_r2",
+                        configuredBackend: "cloudflare_r2",
+                        resolvedUploadBackend: "cloudflare_r2",
+                        rolloutState: "cloudflare_rollout_active",
+                        forceProxyUpload: true,
+                        uploadMode: "proxy",
+                        variantUploadMode: "none",
+                        variantTargets: [],
+                    },
+                    { status: 201 }
+                );
+            }
+
+            if (url.includes("/api/media/archive/complete")) {
+                return Response.json(
+                    {
+                        media: createAudioAsset("audio-upload-1", "voice-note.mp3"),
+                        uploaderAlbumId: null,
+                        message: "Материал сохранен в семейный архив.",
+                    },
+                    { status: 201 }
+                );
+            }
+
+            return Response.json({}, { status: 200 });
+        });
+
+        const onMediaChange = vi.fn();
+        const view = render(
+            createElement(AudioArchiveView, {
+                treeId: "tree-1",
+                slug: "test-tree",
+                canEdit: true,
+                media: [] as any,
+                onMediaChange,
+            })
+        );
+
+        expect(screen.getByText("Загрузить аудио")).toBeInTheDocument();
+        expect(screen.getByTitle("Загрузить")).toBeInTheDocument();
+        expect(getByExactTextContent("Перетащите файлы сюда или выберите")).toBeInTheDocument();
+
+        const input = view.container.querySelector('input[type="file"][accept="audio/*"]') as HTMLInputElement | null;
+        expect(input).not.toBeNull();
+
+        const file = new File([new Uint8Array([1, 2, 3])], "voice-note.mp3", { type: "audio/mpeg" });
+        Object.defineProperty(input, "files", {
+            configurable: true,
+            value: [file],
+        });
+        fireEvent.change(input as HTMLInputElement);
+
+        expect(await screen.findByText("Аудио загружено.")).toBeInTheDocument();
+        expect(uploadFileWithTransportContract).toHaveBeenCalled();
+        expect(onMediaChange).toHaveBeenCalledWith([
+            expect.objectContaining({
+                id: "audio-upload-1",
+                kind: "audio",
+            }),
+        ]);
+    });
+
     it("routes audio row download through explicit attachment mode", () => {
         const media = [createAudioAsset("audio-1", "Аудио 1")];
 
