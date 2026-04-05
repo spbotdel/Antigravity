@@ -722,6 +722,47 @@ Only escalate to file/FFmpeg investigation when `preview_status = failed` or `pr
 
 ---
 
+# 20. Tree avatars blink and requests go to `storage.yandexcloud.net`
+
+### Symptom
+
+On tree load:
+
+- avatar badges appear a moment after the rest of the tree
+- browser network or status text shows requests to `storage.yandexcloud.net`
+
+### Likely Cause
+
+Active avatar rows in the current demo tree still use legacy `provider = object_storage`.
+
+Tree card avatars are inserted only after the client effect in `FamilyTreeCanvas`, and those inserted avatar images then resolve through `/api/media/:id`, which may redirect to legacy object storage for old rows.
+
+### First Checks
+
+1. Inspect primary `person_media` rows for the active tree.
+2. Check matching `media_assets.provider` and `created_at`.
+3. Confirm whether the tree is using disposable demo or fixture data such as `popovi` or smoke trees.
+
+### Typical Fix
+
+Treat this as demo-data remediation first:
+
+- recreate the affected avatar media through the current file-backed flow
+- reassign them as primary avatars
+- delete the old legacy rows
+
+Do not start by adding resolver exceptions for Yandex-backed avatars.
+
+### Relevant Files
+
+- `components/tree/family-tree-canvas.tsx`
+- `lib/tree/display.ts`
+- `app/api/media/[mediaId]/route.ts`
+- `lib/server/repository.ts`
+- `lib/env.ts`
+
+---
+
 # Practical Rule
 
 Before modifying production code, always determine which category the issue belongs to:

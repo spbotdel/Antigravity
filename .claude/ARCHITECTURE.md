@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-04-05 07:49:48Z`
+- Generated at (UTC): `2026-04-05 10:08:46Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -38,6 +38,8 @@
 - Tree pages should not default to `getTreeSnapshot(...)`:
   - full snapshot is for viewer and snapshot consumers
   - narrower tree pages should use specialized repository page loaders when possible
+- Builder normal tree mode now behaves as a workspace surface rather than a page hero: the page-level hero block is removed, the section nav is mounted in-stage, and the tree heading is rendered as a text-only overlay inside the canvas shell.
+- Expanded Builder gallery mode intentionally keeps its separate stage-header/back-action path; the in-stage overlay pattern applies to normal tree mode only.
 - Keep project-specific architectural decisions here only when they cannot be inferred from repository structure.
 
 ## System Architecture
@@ -135,10 +137,10 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-04-05 07:49:48Z`
-- Active branch: `fix/media-hardening`
-- Git status: `STATUS:9 files`
-- Git diff: `DIFF:201 lines`
+- Updated at (UTC): `2026-04-05 10:08:46Z`
+- Active branch: `feature/ui-design-block`
+- Git status: `STATUS:0 files`
+- Git diff: `DIFF:0 lines`
 
 ### Detected Stack
 
@@ -169,26 +171,18 @@ The display tree is derived and must not be treated as the canonical domain mode
 
 ### Recently Changed Paths
 
-- `.claude/ARCHITECTURE.md`
-- `.claude/BACKLOG.md`
-- `.claude/SNAPSHOT.md`
-- `docs/research/family-tree-v1-slava-edition-backup-restore-runbook-2026-03-06.md`
-- `docs/research/family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md`
-- `docs/research/family-tree-v1-slava-edition-implementation-plan-2026-03-06.md`
-- `docs/research/family-tree-v1-slava-edition-launch-checklist-2026-03-06.md`
-- `docs/research/family-tree-v1-slava-edition-owner-playbook-2026-03-06.md`
-- `docs/research/family-tree-v1-slava-edition-plan-2026-03-06.md`
+- `<none>`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-04-05 07:49:48Z`
-- Branch: `fix/media-hardening`
-- Git status summary: `STATUS:9 files`
-- Git diff summary: `DIFF:201 lines`
+- Completed at (UTC): `2026-04-05 10:08:46Z`
+- Branch: `feature/ui-design-block`
+- Git status summary: `STATUS:0 files`
+- Git diff summary: `DIFF:0 lines`
 
-- Session summary: `9` changed files, `201` diff lines, `9` tracked changed paths.
+- Session summary: `0` changed files, `0` diff lines, `0` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -196,8 +190,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:9 files`)
-- `git_diff`: `success` (`DIFF:201 lines`)
+- `git_status`: `success` (`STATUS:0 files`)
+- `git_diff`: `success` (`DIFF:0 lines`)
 <!-- FRAMEWORK:SESSION:END -->
 
 ## Current Media Architecture
@@ -207,6 +201,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Photo delivery already has a variant-aware foundation: preview reads may use `thumb/small/medium`, while originals should remain an explicit full-view path.
 - The binary plane is in transitional mode: current file-backed reads still preserve object-storage compatibility, while Cloudflare R2 foundation is already present in env/runtime config for the next migration stage.
 - Architectural boundary remains unchanged: `app/api/media*` stays thin, repository owns media/archive mutations, and rendering consumes repository snapshots rather than issuing direct DB traversal.
+- Demo avatar remediation is now treated as a data-replacement concern rather than a resolver concern: active `popovi` primary avatars were recreated through the current file-backed flow so they no longer depend on legacy `object_storage` / Yandex reads.
+- Legacy `object_storage` remains only as a compatibility read-path for older rows still present elsewhere in fixture or historic data; active demo-tree avatars should not rely on it.
 - Active architecture-driving task: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 - Server-side Supabase transport is now a first-class runtime rule: native Node fetch is preferred, while the PowerShell bridge remains fallback/debug transport only.
 - Tree runtime now distinguishes between full snapshot consumers and narrow page-data consumers; `audit`, `members`, `media`, and `settings` should stay on specialized loaders instead of drifting back to full snapshots.
@@ -224,6 +220,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
+- Viewer collapsed rail containment is handled at the layout container level so rail transforms do not create page-level horizontal drag.
+- Builder/Viewer workspace parity should be maintained through shell/layout composition and fixture-data remediation, not by deepening legacy media resolver branches.
 - "
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"

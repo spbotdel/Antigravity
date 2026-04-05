@@ -993,6 +993,60 @@ If it drifts again:
 
 ---
 
+# 2026-04-05 — Builder tree mode uses an in-stage workspace shell
+
+### Decision
+
+Builder normal tree mode now follows the same spatial model as Viewer:
+
+- the tree is the first dominant surface under the header
+- the page-level hero block is removed
+- the section nav is mounted inside the stage
+- the tree title is rendered as a text-only top-left overlay
+
+Expanded gallery mode keeps its separate stage-header/back-action path for now.
+
+### Why
+
+The previous Builder layout behaved like a document page with sections instead of a workspace with a living tree.
+
+That created avoidable vertical waste and made Builder feel like a different product from Viewer.
+
+### Consequence
+
+Future Builder work should preserve this rule:
+
+- normal tree mode is a workspace surface, not a hero page
+- new controls should not reintroduce large content bands above the tree
+- gallery mode may remain a separate path until it is intentionally redesigned
+
+---
+
+# 2026-04-05 — Demo-tree legacy avatars must be fixed by data replacement, not resolver exceptions
+
+### Decision
+
+When an active demo/fixture tree still depends on legacy `object_storage` avatar rows, remediation should happen by replacing those media rows through the current file-backed flow.
+
+Do not add special-case resolver logic for old Yandex-backed avatar rows just to keep a demo tree working.
+
+### Why
+
+The active `popovi` demo tree was still using legacy `object_storage` primary avatar rows that redirected to Yandex Object Storage.
+
+That was a demo-data problem, not a resolver-design problem.
+
+### Consequence
+
+Future remediation should follow this order:
+
+- recreate active demo avatars as current media rows
+- reassign them as primary avatars
+- delete the old legacy rows
+- keep resolver logic focused on compatibility reads, not demo-specific exceptions
+
+---
+
 # How to update this file
 
 Add a new entry when:
