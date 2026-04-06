@@ -347,6 +347,52 @@ describe("builder workspace", () => {
     expect(screen.getByTestId("family-tree-canvas")).toBeInTheDocument();
   });
 
+  it("floors a stored canvas height to the current viewport parity height", async () => {
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 1000,
+    });
+    window.localStorage.setItem("antigravity.builder.tree-1.canvasHeight", "700");
+
+    const { container } = render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
+
+    await waitFor(() => {
+      const shell = container.querySelector(".builder-canvas-shell");
+      expect(shell).toHaveStyle({ height: "914px" });
+    });
+  });
+
+  it("renders a minimal tree overlay inside the canvas shell in tree mode", async () => {
+    const { container } = render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
+
+    await waitFor(() => {
+      const shell = container.querySelector(".builder-canvas-shell");
+      expect(shell).not.toBeNull();
+      expect(shell?.querySelector(".tree-overlay")).not.toBeNull();
+    });
+
+  const shell = container.querySelector(".builder-canvas-shell") as HTMLElement;
+  expect(within(shell).getByText("Demo Tree")).toBeInTheDocument();
+  expect(within(shell).getByText("1 человек • 1 поколение")).toBeInTheDocument();
+  expect(screen.queryByText("Схема дерева")).not.toBeInTheDocument();
+  expect(screen.queryByText("Выберите блок, чтобы он подсветился. Кнопка + открывает меню связей, корзина удаляет выбранного человека.")).not.toBeInTheDocument();
+});
+
+  it("mounts builder navigation as an in-stage overlay in tree mode", async () => {
+    const { container } = render(
+      <BuilderWorkspace snapshot={createSnapshot()} mediaLoaded nav={<div data-testid="builder-nav">nav</div>} />
+    );
+
+    await waitFor(() => {
+      const overlay = container.querySelector(".builder-nav-overlay");
+      expect(overlay).not.toBeNull();
+    });
+
+    const overlay = container.querySelector(".builder-nav-overlay") as HTMLElement;
+    expect(within(overlay).getByTestId("builder-nav")).toBeInTheDocument();
+  });
+
   it("restores the selected inspector panel from localStorage", async () => {
     window.localStorage.setItem("antigravity.builder.tree-1.activePanel", "media");
 
@@ -413,6 +459,89 @@ describe("builder workspace", () => {
       expect(screen.getAllByText("Demo Person").length).toBeGreaterThan(0);
       expect(screen.queryByText("Текущий корень")).not.toBeInTheDocument();
     });
+  });
+
+  it("renders the tree heading overlay with derived people and generation counts and saves the title inline for owners", async () => {
+    const snapshot = createSnapshot();
+    snapshot.people.push({
+      id: "person-2",
+      tree_id: "tree-1",
+      full_name: "Second Person",
+      gender: "female",
+      birth_date: null,
+      death_date: null,
+      birth_place: null,
+      death_place: null,
+      bio: null,
+      is_living: true,
+      created_by: null,
+      created_at: "2026-03-09T00:00:00.000Z",
+      updated_at: "2026-03-09T00:00:00.000Z",
+    });
+    snapshot.parentLinks.push({
+      id: "link-1",
+      tree_id: "tree-1",
+      parent_person_id: "person-1",
+      child_person_id: "person-2",
+      relation_type: "biological",
+      created_at: "2026-03-09T00:00:00.000Z",
+    });
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+      if (url.endsWith("/api/trees/tree-1") && init?.method === "PATCH") {
+        return Response.json(
+          {
+            tree: {
+              ...snapshot.tree,
+              title: "Семья Русякиных",
+            },
+            message: "Данные дерева обновлены."
+          },
+          { status: 200 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(document.querySelector(".builder-tree-overlay")).not.toBeNull();
+    });
+
+    const overlay = document.querySelector(".builder-tree-overlay") as HTMLElement;
+    expect(within(overlay).getByText("Demo Tree")).toBeInTheDocument();
+    expect(within(overlay).getByText("2 человека • 2 поколения")).toBeInTheDocument();
+
+    fireEvent.click(within(overlay).getByRole("button", { name: "Редактировать название дерева" }));
+
+    const titleInput = within(overlay).getByLabelText("Название дерева");
+    fireEvent.change(titleInput, { target: { value: "Семья Русякиных" } });
+    fireEvent.keyDown(titleInput, { key: "Enter", code: "Enter" });
+
+    await waitFor(() => {
+      expect(within(overlay).getByText("Семья Русякиных")).toBeInTheDocument();
+    });
+  });
+
+  it("keeps the tree heading read-only for editors without settings access", async () => {
+    const snapshot = createSnapshot();
+    snapshot.actor.role = "admin";
+    snapshot.actor.canManageSettings = false;
+
+    render(<BuilderWorkspace snapshot={snapshot} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(document.querySelector(".builder-tree-overlay")).not.toBeNull();
+    });
+
+    const overlay = document.querySelector(".builder-tree-overlay") as HTMLElement;
+    expect(within(overlay).getByText("Demo Tree")).toBeInTheDocument();
+    expect(within(overlay).getByText("1 человек • 1 поколение")).toBeInTheDocument();
+    expect(within(overlay).queryByRole("button", { name: "Редактировать название дерева" })).not.toBeInTheDocument();
   });
 
   it("uses the same shared person-card-name class for the header across info, photo, and video tabs", async () => {

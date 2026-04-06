@@ -144,6 +144,50 @@ export function buildUploaderAlbumSyntheticId(userId: string, kind: TreeMediaAlb
   return `uploader-${userId}-${kind}`;
 }
 
+export function countTreeGenerations(snapshot: Pick<TreeSnapshot, "people" | "parentLinks">) {
+  if (!snapshot.people.length) {
+    return 0;
+  }
+
+  const personIds = new Set(snapshot.people.map((person) => person.id));
+  const parentIdsByChild = new Map<string, string[]>();
+
+  for (const link of snapshot.parentLinks) {
+    if (!personIds.has(link.parent_person_id) || !personIds.has(link.child_person_id) || link.parent_person_id === link.child_person_id) {
+      continue;
+    }
+
+    const nextParentIds = parentIdsByChild.get(link.child_person_id) || [];
+    if (!nextParentIds.includes(link.parent_person_id)) {
+      nextParentIds.push(link.parent_person_id);
+      parentIdsByChild.set(link.child_person_id, nextParentIds);
+    }
+  }
+
+  const depthByPersonId = new Map<string, number>();
+  const activePath = new Set<string>();
+
+  function resolveDepth(personId: string): number {
+    const cachedDepth = depthByPersonId.get(personId);
+    if (cachedDepth !== undefined) {
+      return cachedDepth;
+    }
+
+    if (activePath.has(personId)) {
+      return 0;
+    }
+
+    activePath.add(personId);
+    const parentIds = parentIdsByChild.get(personId) || [];
+    const depth = parentIds.length ? 1 + Math.max(...parentIds.map((parentId) => resolveDepth(parentId))) : 1;
+    activePath.delete(personId);
+    depthByPersonId.set(personId, depth);
+    return depth;
+  }
+
+  return snapshot.people.reduce((maxDepth, person) => Math.max(maxDepth, resolveDepth(person.id)), 0);
+}
+
 export function buildDisplayTree(snapshot: TreeSnapshot): DisplayTreeNode | null {
   const peopleById = new Map(snapshot.people.map((person) => [person.id, person]));
   if (!peopleById.size) {

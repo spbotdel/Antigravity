@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { buildBuilderDisplayTree, buildDerivedUploaderAlbumSummaries, buildDisplayTree, buildMediaOpenRouteUrl, buildMediaThumbRouteUrl, buildPersonPhotoPreviewUrls, buildPersistedTreeMediaAlbumMediaMap, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, collectPersonMedia, collectTreeMedia, collectUnlinkedTreeMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildDerivedUploaderAlbumSummaries, buildDisplayTree, buildMediaOpenRouteUrl, buildMediaThumbRouteUrl, buildPersonPhotoPreviewUrls, buildPersistedTreeMediaAlbumMediaMap, buildPhotoPreviewRouteUrl, buildTreeMediaAlbumSummaries, collectPersonMedia, collectTreeMedia, collectUnlinkedTreeMedia, countTreeGenerations } from "@/lib/tree/display";
+import { formatTreeMeta } from "@/lib/ui-text";
 import type { TreeSnapshot } from "@/lib/types";
 
 const snapshot: TreeSnapshot = {
@@ -288,6 +289,47 @@ describe("tree display helpers", () => {
       type: "person",
       id: "person-2"
     });
+  });
+
+  it("counts generations from the longest parent-child chain in the snapshot graph", () => {
+    const generationCount = countTreeGenerations({
+      people: [
+        ...snapshot.people,
+        {
+          id: "person-3",
+          tree_id: "tree-1",
+          full_name: "Grandchild Person",
+          gender: "male",
+          birth_date: "2010-07-20",
+          death_date: null,
+          birth_place: null,
+          death_place: null,
+          bio: null,
+          is_living: true,
+          created_by: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ],
+      parentLinks: [
+        ...snapshot.parentLinks,
+        {
+          id: "link-2",
+          tree_id: "tree-1",
+          parent_person_id: "person-2",
+          child_person_id: "person-3",
+          relation_type: "biological",
+          created_at: new Date().toISOString()
+        }
+      ]
+    });
+
+    expect(generationCount).toBe(3);
+  });
+
+  it("formats tree overlay meta from derived people and generation counts", () => {
+    expect(formatTreeMeta(20, 5)).toBe("20 человек • 5 поколений");
+    expect(formatTreeMeta(1, 1)).toBe("1 человек • 1 поколение");
   });
 
   it("collects media for a given person", () => {

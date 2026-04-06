@@ -90,6 +90,26 @@ export function formatTreeVisibility(visibility: TreeVisibility) {
   return treeVisibilityLabels[visibility];
 }
 
+export function formatPeopleCount(count: number) {
+  const absCount = Math.abs(count);
+  const mod100 = absCount % 100;
+  const mod10 = absCount % 10;
+  const noun = mod100 >= 11 && mod100 <= 14 ? "человек" : mod10 === 1 ? "человек" : mod10 >= 2 && mod10 <= 4 ? "человека" : "человек";
+  return `${count} ${noun}`;
+}
+
+export function formatGenerationCount(count: number) {
+  const absCount = Math.abs(count);
+  const mod100 = absCount % 100;
+  const mod10 = absCount % 10;
+  const noun = mod100 >= 11 && mod100 <= 14 ? "поколений" : mod10 === 1 ? "поколение" : mod10 >= 2 && mod10 <= 4 ? "поколения" : "поколений";
+  return `${count} ${noun}`;
+}
+
+export function formatTreeMeta(peopleCount: number, generationCount: number) {
+  return `${formatPeopleCount(peopleCount)} • ${formatGenerationCount(generationCount)}`;
+}
+
 export function formatMediaVisibility(visibility: MediaVisibility) {
   return mediaVisibilityLabels[visibility];
 }

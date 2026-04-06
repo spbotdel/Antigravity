@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type SetStateAction } from "react";
 import { ArrowUpRight, CalendarDays, Camera, Pencil } from "lucide-react";
 import { format as formatDateFn, parseISO } from "date-fns";
 
@@ -25,16 +25,18 @@ import {
   FamilyTreeCanvas,
   type FamilyTreeCanvasAction
 } from "@/components/tree/family-tree-canvas";
+import { TreeOverlay } from "@/components/tree/tree-overlay";
 import { AvatarCropPreviewImage, BuilderAvatarPickerDialog } from "@/components/tree/builder-avatar-picker-dialog";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
 import { buildPrimaryPersonAvatarCrops, DEFAULT_AVATAR_CROP, getAvatarCropFromRelation } from "@/lib/avatar-crop";
-import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, buildUploaderAlbumSyntheticId, collectPersonMedia } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, buildUploaderAlbumSyntheticId, collectPersonMedia, countTreeGenerations } from "@/lib/tree/display";
 import { formatDate, formatMediaUploadTransportHint, uploadFileWithTransportContract } from "@/lib/utils";
 import type { AvatarCropValue, MediaUploadTargetResponse, ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
 
 interface BuilderWorkspaceProps {
   snapshot: TreeSnapshot;
   mediaLoaded?: boolean;
+  nav?: ReactNode;
 }
 
 type BuilderPanel = "person" | "relations" | "media";
@@ -49,6 +51,7 @@ type CreateContext =
 
 const BUILDER_CANVAS_MIN_HEIGHT = 700;
 const BUILDER_CANVAS_MAX_HEIGHT = 1600;
+const BUILDER_VIEWPORT_STAGE_PARITY_OFFSET = 86;
 const MAX_MEDIA_FILES_PER_BATCH = 36;
 const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
@@ -676,6 +679,13 @@ function getBuilderStorageKey(treeId: string, key: "canvasHeight" | "activePanel
   return `antigravity.builder.${treeId}.${key}`;
 }
 
+function getBuilderViewportParityHeight(viewportHeight: number) {
+  return Math.min(
+    BUILDER_CANVAS_MAX_HEIGHT,
+    Math.max(BUILDER_CANVAS_MIN_HEIGHT, Math.round(viewportHeight - BUILDER_VIEWPORT_STAGE_PARITY_OFFSET))
+  );
+}
+
 function isTemporaryPersonId(personId: string | null) {
   return Boolean(personId && personId.startsWith("temp-person-"));
 }
@@ -722,7 +732,7 @@ function replacePersonIdInSnapshot(snapshot: TreeSnapshot, tempPersonId: string,
   };
 }
 
-export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorkspaceProps) {
+export function BuilderWorkspace({ snapshot, mediaLoaded = true, nav = null }: BuilderWorkspaceProps) {
   const [currentSnapshot, setCurrentSnapshot] = useState(snapshot);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isMediaLoaded, setIsMediaLoaded] = useState(mediaLoaded);
@@ -745,6 +755,9 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [isVideoAddPanelOpen, setIsVideoAddPanelOpen] = useState(false);
   const [isVideoLinkFormOpen, setIsVideoLinkFormOpen] = useState(false);
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
+  const [isEditingTreeTitle, setIsEditingTreeTitle] = useState(false);
+  const [isSavingTreeTitle, setIsSavingTreeTitle] = useState(false);
+  const [treeTitleDraft, setTreeTitleDraft] = useState(snapshot.tree.title);
   const [isEditingPersonName, setIsEditingPersonName] = useState(false);
   const [isSavingPersonName, setIsSavingPersonName] = useState(false);
   const [personNameDraft, setPersonNameDraft] = useState("");
@@ -812,6 +825,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     [renderSnapshot, visualRootPersonId]
   );
   const displayTree = useMemo(() => (isClientReady ? buildBuilderDisplayTree(effectiveSnapshot) : null), [effectiveSnapshot, isClientReady]);
+  const generationCount = useMemo(() => countTreeGenerations(currentSnapshot), [currentSnapshot.people, currentSnapshot.parentLinks]);
   const personPhotoPreviewUrls = useMemo(
     () => (isClientReady ? buildPersonPhotoPreviewUrls(renderSnapshot) : {}),
     [renderSnapshot.media, renderSnapshot.personMedia, isClientReady]
@@ -861,33 +875,57 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       : selectedPerson
       ? null
       : "Сначала выберите человека на схеме или в списке слева.";
+  const canInlineEditTreeTitle = currentSnapshot.actor.canManageSettings;
   const canInlineEditInspectorName = activePanel === "person" && !createModeActive && !selectedPersonPending && Boolean(selectedPerson);
+  const builderTreeTitleSlot = canInlineEditTreeTitle ? (
+    <div className="builder-inspector-name-row tree-overlay-title-row">
+      {isEditingTreeTitle ? (
+        <Input
+          aria-label="Название дерева"
+          className="builder-inspector-name-input tree-overlay-title-input"
+          value={treeTitleDraft}
+          onChange={(event) => setTreeTitleDraft(event.target.value)}
+          onBlur={() => void commitTreeTitleEdit()}
+          onFocus={(event) => event.currentTarget.select()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.blur();
+              return;
+            }
+
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setTreeTitleDraft(currentSnapshot.tree.title);
+              event.currentTarget.blur();
+            }
+          }}
+          autoFocus
+          required
+          suppressHydrationWarning
+        />
+      ) : (
+        <button type="button" className="builder-inspector-name-button tree-overlay-title-button" aria-label="Редактировать название дерева" onClick={startTreeTitleEdit}>
+          <span className="tree-overlay-title builder-inspector-name-text">{currentSnapshot.tree.title}</span>
+          <Pencil className="builder-inspector-name-edit-icon" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  ) : undefined;
   const pendingMediaUploadsSummary = useMemo(
     () => buildBuilderPendingUploadsSummary(pendingMediaUploads),
     [pendingMediaUploads]
   );
-  const stageTitle = expandedGalleryMode
-    ? selectedPerson
-      ? expandedGalleryMode === "photo"
-        ? `Фото: ${selectedPerson.full_name}`
-        : `Видео: ${selectedPerson.full_name}`
-      : expandedGalleryMode === "photo"
-        ? "Фото"
-        : "Видео"
-    : createModeActive
-      ? "Основная схема семьи"
-      : selectedPerson
-        ? selectedPerson.full_name
-        : "Основная схема семьи";
-  const stageNote = expandedGalleryMode
+  const expandedGalleryTitle = selectedPerson
     ? expandedGalleryMode === "photo"
-      ? "Галерея вынесена на основную сцену, чтобы спокойно пролистывать снимки и выбирать аватар без узкой боковой колонки."
-      : "Видео вынесены на основную сцену: здесь удобнее смотреть локальные ролики и переходить к внешним ссылкам."
-    : createModeActive
-      ? "Создайте новый отдельный блок. Для существующих карточек используйте +, чтобы сразу добавлять родственников в схему."
-    : selectedPerson
-        ? "Выберите блок, чтобы он подсветился. Кнопка + открывает меню связей, корзина удаляет выбранного человека."
-        : "Выберите карточку на схеме или добавьте первого человека, чтобы начать собирать структуру семьи.";
+      ? `Фото: ${selectedPerson.full_name}`
+      : `Видео: ${selectedPerson.full_name}`
+    : expandedGalleryMode === "photo"
+      ? "Фото"
+      : "Видео";
+  const expandedGalleryNote = expandedGalleryMode === "photo"
+    ? "Галерея вынесена на основную сцену, чтобы спокойно пролистывать снимки и выбирать аватар без узкой боковой колонки."
+    : "Видео вынесены на основную сцену: здесь удобнее смотреть локальные ролики и переходить к внешним ссылкам.";
 
   useEffect(() => {
     if (!status || status.endsWith("...")) {
@@ -939,6 +977,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   useEffect(() => {
     setIsClientReady(true);
   }, []);
+
+  useEffect(() => {
+    setTreeTitleDraft(currentSnapshot.tree.title);
+    setIsEditingTreeTitle(false);
+    setIsSavingTreeTitle(false);
+  }, [currentSnapshot.tree.id, currentSnapshot.tree.title]);
 
   useEffect(() => {
     if (!selectedPerson) {
@@ -1018,13 +1062,15 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     }
 
     const storedHeight = Number(window.localStorage.getItem(storageKeys.canvasHeight));
+    const viewportParityHeight = getBuilderViewportParityHeight(window.innerHeight);
+
     if (Number.isFinite(storedHeight) && storedHeight >= BUILDER_CANVAS_MIN_HEIGHT && storedHeight <= BUILDER_CANVAS_MAX_HEIGHT) {
-      setCanvasHeight(Math.round(storedHeight));
+      setCanvasHeight(Math.max(Math.round(storedHeight), viewportParityHeight));
       return;
     }
 
     const preferred = Math.round(window.innerHeight * 0.95);
-    setCanvasHeight(Math.min(BUILDER_CANVAS_MAX_HEIGHT, Math.max(BUILDER_CANVAS_MIN_HEIGHT, preferred)));
+    setCanvasHeight(Math.min(BUILDER_CANVAS_MAX_HEIGHT, Math.max(viewportParityHeight, preferred)));
   }, [storageKeys.canvasHeight]);
 
   useEffect(() => {
@@ -2239,6 +2285,60 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     return payload.person as PersonRecord;
   }
 
+  async function saveTreeTitle(title: string) {
+    setStatus(null);
+    setError(null);
+    setIsSavingTreeTitle(true);
+    const payload = await requestJson(`/api/trees/${currentSnapshotRef.current.tree.id}`, "PATCH", { title });
+    setIsSavingTreeTitle(false);
+    if (!payload?.tree) {
+      return null;
+    }
+
+    updateSnapshot((prev) => ({
+      ...prev,
+      tree: payload.tree
+    }));
+    setStatus(payload.message || "Данные дерева обновлены.");
+    return payload.tree as TreeSnapshot["tree"];
+  }
+
+  function startTreeTitleEdit() {
+    if (!canInlineEditTreeTitle) {
+      return;
+    }
+
+    setError(null);
+    setTreeTitleDraft(currentSnapshot.tree.title);
+    setIsEditingTreeTitle(true);
+  }
+
+  async function commitTreeTitleEdit() {
+    if (!canInlineEditTreeTitle || isSavingTreeTitle) {
+      return;
+    }
+
+    const nextTitle = treeTitleDraft.trim();
+    if (nextTitle === currentSnapshotRef.current.tree.title) {
+      setTreeTitleDraft(currentSnapshotRef.current.tree.title);
+      setIsEditingTreeTitle(false);
+      return;
+    }
+
+    if (nextTitle.length < 2) {
+      setError("Название дерева должно быть не короче 2 символов.");
+      return;
+    }
+
+    const updatedTree = await saveTreeTitle(nextTitle);
+    if (!updatedTree) {
+      return;
+    }
+
+    setTreeTitleDraft(updatedTree.title);
+    setIsEditingTreeTitle(false);
+  }
+
   function startPersonNameEdit() {
     if (!selectedPerson || !canInlineEditInspectorName) {
       return;
@@ -2795,11 +2895,20 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
   if (!isClientReady) {
     return (
-      <Card className="builder-loading-state p-6" data-testid="builder-workspace-loading">
-        <p className="eyebrow">Конструктор</p>
-        <h2 className="card-heading">Подготавливаю рабочее пространство</h2>
-        <p className="muted-copy">Схема, связи и карточки загрузятся сразу после инициализации клиента.</p>
-      </Card>
+      <div
+        className="builder-layout builder-layout-reworked builder-layout-canvas"
+        style={{ "--builder-inspector-overlay-width": `${builderInspectorWidth}px` } as CSSProperties}
+        data-testid="builder-workspace-loading"
+        aria-hidden="true"
+      >
+        <main className="builder-main">
+          {expandedGalleryMode && nav ? <div className="tree-page-nav-row builder-page-nav-row">{nav}</div> : null}
+          <Card className="viewer-stage builder-stage builder-stage-canvas builder-stage-loading">
+            {!expandedGalleryMode && nav ? <div className="builder-nav-overlay">{nav}</div> : null}
+            {!expandedGalleryMode ? <div className="builder-canvas-shell builder-canvas-shell-loading" style={{ height: `${canvasHeight}px` }} /> : null}
+          </Card>
+        </main>
+      </div>
     );
   }
 
@@ -2811,21 +2920,23 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         style={{ "--builder-inspector-overlay-width": `${builderInspectorWidth}px` } as CSSProperties}
       >
         <main className="builder-main">
+          {expandedGalleryMode && nav ? <div className="tree-page-nav-row builder-page-nav-row">{nav}</div> : null}
           <Card className="viewer-stage builder-stage builder-stage-canvas">
-            <div className="stage-header builder-stage-header builder-stage-header-overlay">
-              <div className="stage-header-copy">
-                <p className="stage-kicker">{expandedGalleryMode ? "Галерея" : "Схема дерева"}</p>
-                <h2 className="card-heading">{stageTitle}</h2>
-                <p className="builder-stage-note">{stageNote}</p>
-              </div>
-              {expandedGalleryMode ? (
+            {!expandedGalleryMode && nav ? <div className="builder-nav-overlay">{nav}</div> : null}
+            {expandedGalleryMode ? (
+              <div className="stage-header builder-stage-header builder-stage-header-overlay">
+                <div className="stage-header-copy">
+                  <p className="stage-kicker">Галерея</p>
+                  <h2 className="card-heading">{expandedGalleryTitle}</h2>
+                  <p className="builder-stage-note">{expandedGalleryNote}</p>
+                </div>
                 <div className="builder-stage-meta">
                   <Button type="button" variant="ghost" size="sm" onClick={closeExpandedGallery}>
                     Вернуться к дереву
                   </Button>
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
             {expandedGalleryMode ? (
               <div className="builder-stage-gallery-shell">
                 <PersonMediaGallery
@@ -2851,6 +2962,14 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             ) : (
               <>
                 <div className="builder-canvas-shell" style={{ height: `${canvasHeight}px` }}>
+                  <TreeOverlay
+                    className="builder-tree-overlay"
+                    interactive={canInlineEditTreeTitle}
+                    title={currentSnapshot.tree.title}
+                    peopleCount={currentSnapshot.people.length}
+                    generationCount={generationCount}
+                    titleSlot={builderTreeTitleSlot}
+                  />
                   <FamilyTreeCanvas
                     tree={displayTree}
                     selectedPersonId={selectedPersonId}

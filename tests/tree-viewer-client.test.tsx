@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TreeViewerClient } from "@/components/tree/tree-viewer-client";
@@ -87,7 +87,16 @@ function createSnapshot(): TreeSnapshot {
         updated_at: "2026-03-09T00:00:00.000Z",
       },
     ],
-    parentLinks: [],
+    parentLinks: [
+      {
+        id: "link-1",
+        tree_id: "tree-1",
+        parent_person_id: "person-1",
+        child_person_id: "person-2",
+        relation_type: "biological",
+        created_at: "2026-03-09T00:00:00.000Z",
+      },
+    ],
     partnerships: [],
     media: [
       {
@@ -122,6 +131,16 @@ function createSnapshot(): TreeSnapshot {
 }
 
 describe("tree viewer client", () => {
+  it("renders the tree heading overlay with derived people and generation counts", () => {
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const overlay = document.querySelector(".viewer-tree-overlay") as HTMLElement;
+    expect(overlay).not.toBeNull();
+    expect(within(overlay).getByText("Demo Tree")).toBeInTheDocument();
+    expect(within(overlay).getByText("2 человека • 2 поколения")).toBeInTheDocument();
+    expect(within(overlay).queryByRole("button", { name: "Редактировать название дерева" })).not.toBeInTheDocument();
+  });
+
   it("matches the collapsed rail height to the measured info rail height for each selected person", () => {
     const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
     const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {

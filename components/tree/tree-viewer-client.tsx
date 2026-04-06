@@ -6,7 +6,8 @@ import { ArrowLeft, FileText } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { FamilyTreeCanvas } from "@/components/tree/family-tree-canvas";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
-import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, collectPersonMedia } from "@/lib/tree/display";
+import { TreeOverlay } from "@/components/tree/tree-overlay";
+import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, collectPersonMedia, countTreeGenerations } from "@/lib/tree/display";
 import type { TreeSnapshot } from "@/lib/types";
 import { logMediaError } from "@/lib/utils";
 
@@ -162,6 +163,7 @@ export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewe
   const [isResizing, setIsResizing] = useState(false);
   const [collapsedRailHeight, setCollapsedRailHeight] = useState<number | null>(null);
   const displayTree = useMemo(() => buildBuilderDisplayTree(snapshot), [snapshot]);
+  const generationCount = useMemo(() => countTreeGenerations(snapshot), [snapshot.people, snapshot.parentLinks]);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const infoRailRef = useRef<HTMLDivElement | null>(null);
   const infoRailId = useId();
@@ -293,6 +295,12 @@ export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewe
       }
     >
       <Card className="viewer-stage viewer-stage-canvas">
+        <TreeOverlay
+          className="viewer-tree-overlay"
+          title={snapshot.tree.title}
+          peopleCount={snapshot.people.length}
+          generationCount={generationCount}
+        />
         <FamilyTreeCanvas
           tree={displayTree}
           selectedPersonId={selectedPersonId}
