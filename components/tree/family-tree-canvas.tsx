@@ -291,6 +291,22 @@ function getFocusedPersonId(candidate: TreeCanvasSelectionCandidate, selectedPer
   return candidate.id || null;
 }
 
+function getSelectablePersonId(candidate: TreeCanvasSelectionCandidate) {
+  if (candidate.type === "couple") {
+    return candidate.primaryId || candidate.spouseId || null;
+  }
+
+  return candidate.id || null;
+}
+
+function setCanvasNodeInteractionClass(target: EventTarget | null, className: string, active: boolean) {
+  if (!(target instanceof SVGGElement)) {
+    return;
+  }
+
+  d3.select(target).classed(className, active);
+}
+
 export function selectPreferredCanvasItem<T>(
   items: T[],
   selectedPersonId: string | null,
@@ -642,6 +658,14 @@ interface BuilderCanvasLink {
   className: string;
   d: string;
   key: string;
+  childId: string;
+  parentIds: string[];
+}
+
+interface ViewerCanvasLink {
+  className: string;
+  d: string;
+  key: string;
 }
 
 interface BuilderPartnershipLabel {
@@ -676,6 +700,36 @@ function buildHorizontalChildLinkPath(source: { x: number; y: number }, target: 
   const controlX = (fromX + toX) / 2;
 
   return `M ${fromX} ${fromY} C ${controlX} ${fromY}, ${controlX} ${toY}, ${toX} ${toY}`;
+}
+
+type DisplayTreeNodeIdentity = Pick<DisplayTreeNode, "type" | "id" | "primaryId" | "spouseId" | "partnershipId">;
+
+function getDisplayTreeNodeKey(node: DisplayTreeNodeIdentity) {
+  if (node.type === "couple") {
+    if (node.partnershipId) {
+      return `couple:${node.partnershipId}`;
+    }
+
+    return `couple:${node.primaryId || "unknown"}:${node.spouseId || "unknown"}`;
+  }
+
+  return `person:${node.id || "unknown"}`;
+}
+
+function buildViewerLinkKey(source: DisplayTreeNodeIdentity, target: DisplayTreeNodeIdentity) {
+  return `${getDisplayTreeNodeKey(source)}->${getDisplayTreeNodeKey(target)}`;
+}
+
+function getViewerLinkClassName(link: d3.HierarchyPointLink<DisplayTreeNode>) {
+  if (link.target.data.type === "couple") {
+    return "tree-link tree-link-structural tree-partner-link";
+  }
+
+  if (link.source.data.type === "couple") {
+    return "tree-link tree-link-structural tree-shared-child-link";
+  }
+
+  return "tree-link tree-link-structural tree-desc-link";
 }
 
 function getPartnerOffsets(count: number) {
@@ -969,9 +1023,11 @@ function buildBuilderCanvasLayout(
       nodes.push(parentNode);
       positionsById.set(parent.id, { x: parentNode.x, y: parentNode.y });
       links.push({
-        className: "tree-link tree-side-link tree-parent-link",
+        className: "tree-link tree-link-structural tree-side-link tree-parent-link",
         d: buildSideLinkPath(anchor, parentNode),
-        key: `parent:${parent.id}:${personId}`
+        key: `parent:${parent.id}:${personId}`,
+        childId: personId,
+        parentIds: [parent.id]
       });
 
       addPartnersForPerson(parent.id, { x: parentNode.x, y: parentNode.y });
@@ -1055,9 +1111,11 @@ function buildBuilderCanvasLayout(
         nodes.push(parentNode);
         positionsById.set(person.id, { x: parentNode.x, y: parentNode.y });
         links.push({
-          className: "tree-link tree-side-link tree-parent-link",
+          className: "tree-link tree-link-structural tree-side-link tree-parent-link",
           d: buildSideLinkPath(anchor, parentNode),
-          key: `selected-parent:${person.id}:${anchoredChildId}`
+          key: `selected-parent:${person.id}:${anchoredChildId}`,
+          childId: anchoredChildId,
+          parentIds: [person.id]
         });
         addPartnersForPerson(person.id, { x: parentNode.x, y: parentNode.y });
         return;
@@ -1088,9 +1146,11 @@ function buildBuilderCanvasLayout(
         nodes.push(childNode);
         positionsById.set(person.id, { x: childNode.x, y: childNode.y });
         links.push({
-          className: "tree-link tree-desc-link",
+          className: "tree-link tree-link-structural tree-desc-link",
           d: buildHorizontalChildLinkPath(anchor, childNode),
-          key: `selected-child:${anchoredParentId}:${person.id}`
+          key: `selected-child:${anchoredParentId}:${person.id}`,
+          childId: person.id,
+          parentIds: [anchoredParentId]
         });
         addPartnersForPerson(person.id, { x: childNode.x, y: childNode.y });
         addInvisibleParentsForPerson(person.id, { x: childNode.x, y: childNode.y });
@@ -1183,22 +1243,28 @@ function buildBuilderCanvasLayout(
         const partnerPosition = positionsById.get(sharedPartner.partnerId);
         if (partnerPosition) {
           links.push({
-            className: "tree-link tree-shared-child-link",
+            className: "tree-link tree-link-structural tree-shared-child-link",
             d: buildSharedChildLinkPath(anchor, partnerPosition, childPosition),
-            key: `shared-child:${subtreeMeasure.personId}:${sharedPartner.partnerId}:${childMeasure.personId}`
+            key: `shared-child:${subtreeMeasure.personId}:${sharedPartner.partnerId}:${childMeasure.personId}`,
+            childId: childMeasure.personId,
+            parentIds: [subtreeMeasure.personId, sharedPartner.partnerId]
           });
         } else {
           links.push({
-            className: "tree-link tree-desc-link",
+            className: "tree-link tree-link-structural tree-desc-link",
             d: buildHorizontalChildLinkPath(anchor, childPosition),
-            key: `child:${subtreeMeasure.personId}:${childMeasure.personId}`
+            key: `child:${subtreeMeasure.personId}:${childMeasure.personId}`,
+            childId: childMeasure.personId,
+            parentIds: [subtreeMeasure.personId]
           });
         }
       } else {
         links.push({
-          className: "tree-link tree-desc-link",
+          className: "tree-link tree-link-structural tree-desc-link",
           d: buildHorizontalChildLinkPath(anchor, childPosition),
-          key: `child:${subtreeMeasure.personId}:${childMeasure.personId}`
+          key: `child:${subtreeMeasure.personId}:${childMeasure.personId}`,
+          childId: childMeasure.personId,
+          parentIds: [subtreeMeasure.personId]
         });
       }
 
@@ -1396,13 +1462,89 @@ export function FamilyTreeCanvas({
 
       svg.call(zoom);
 
-      graphContent
+      const builderLinkPaths = graphContent
         .selectAll("path.builder-link")
         .data(layout.links)
         .enter()
         .append("path")
         .attr("class", (datum) => datum.className)
-        .attr("d", (datum) => datum.d);
+        .attr("d", (datum) => datum.d)
+        .style("--tree-line-delay", (_datum, index) => `${-(index % 11) * 0.48}s`);
+
+      const childIdsByParent = new Map<string, Set<string>>();
+      const parentIdsByChild = new Map<string, Set<string>>();
+
+      layout.links.forEach((link) => {
+        link.parentIds.forEach((parentId) => {
+          if (!parentId || !link.childId) {
+            return;
+          }
+
+          const nextChildren = childIdsByParent.get(parentId) || new Set<string>();
+          nextChildren.add(link.childId);
+          childIdsByParent.set(parentId, nextChildren);
+
+          const nextParents = parentIdsByChild.get(link.childId) || new Set<string>();
+          nextParents.add(parentId);
+          parentIdsByChild.set(link.childId, nextParents);
+        });
+      });
+
+      function collectBuilderBranchLinkKeys(activePersonId: string | null) {
+        const branchLinkKeys = new Set<string>();
+        if (!activePersonId) {
+          return branchLinkKeys;
+        }
+
+        const branchPersonIds = new Set<string>([activePersonId]);
+        const pendingAncestors = [activePersonId];
+        const pendingDescendants = [activePersonId];
+
+        while (pendingAncestors.length) {
+          const personId = pendingAncestors.pop()!;
+          (parentIdsByChild.get(personId) || []).forEach((parentId) => {
+            if (branchPersonIds.has(parentId)) {
+              return;
+            }
+
+            branchPersonIds.add(parentId);
+            pendingAncestors.push(parentId);
+          });
+        }
+
+        while (pendingDescendants.length) {
+          const personId = pendingDescendants.pop()!;
+          (childIdsByParent.get(personId) || []).forEach((childId) => {
+            if (branchPersonIds.has(childId)) {
+              return;
+            }
+
+            branchPersonIds.add(childId);
+            pendingDescendants.push(childId);
+          });
+        }
+
+        layout.links.forEach((link) => {
+          if (!branchPersonIds.has(link.childId)) {
+            return;
+          }
+
+          if (!link.parentIds.some((parentId) => branchPersonIds.has(parentId))) {
+            return;
+          }
+
+          branchLinkKeys.add(link.key);
+        });
+
+        return branchLinkKeys;
+      }
+
+      function applyBuilderBranchHighlight(activePersonId: string | null, mode: "selected" | "hovered" = "selected") {
+        const branchLinkKeys = collectBuilderBranchLinkKeys(activePersonId);
+        builderLinkPaths
+          .classed("tree-link-branch-active", (datum) => mode === "selected" && branchLinkKeys.has(datum.key))
+          .classed("tree-link-branch-hovered", (datum) => mode === "hovered" && branchLinkKeys.has(datum.key));
+      }
 
       const partnershipLabels = overlayLayer
         .selectAll("g.builder-partnership-label")
@@ -1574,11 +1716,40 @@ export function FamilyTreeCanvas({
         .append("g")
         .attr("class", (datum) => (datum.id === selectedPersonId ? "builder-node tree-node-selected" : "builder-node"))
         .attr("transform", (datum) => `translate(${datum.x},${datum.y})`)
+        .attr("tabindex", (datum) => (datum.id ? 0 : null))
         .style("cursor", "pointer")
         .on("click", (_event, datum) => {
           if (datum.id) {
             onSelectPersonRef.current(datum.id);
           }
+        })
+        .on("keydown", (event: KeyboardEvent, datum) => {
+          if (!datum.id || (event.key !== "Enter" && event.key !== " ")) {
+            return;
+          }
+
+          event.preventDefault();
+          onSelectPersonRef.current(datum.id);
+        })
+        .on("pointerenter", (_event, datum) => {
+          setCanvasNodeInteractionClass(_event.currentTarget, "tree-node-hovered", true);
+          if (datum.id) {
+            applyBuilderBranchHighlight(datum.id, "hovered");
+          }
+        })
+        .on("pointerleave", (event) => {
+          setCanvasNodeInteractionClass(event.currentTarget, "tree-node-hovered", false);
+          applyBuilderBranchHighlight(selectedPersonId, "selected");
+        })
+        .on("focus", (event, datum) => {
+          setCanvasNodeInteractionClass(event.currentTarget, "tree-node-focused", true);
+          if (datum.id) {
+            applyBuilderBranchHighlight(datum.id, "hovered");
+          }
+        })
+        .on("blur", (event) => {
+          setCanvasNodeInteractionClass(event.currentTarget, "tree-node-focused", false);
+          applyBuilderBranchHighlight(selectedPersonId, "selected");
         });
 
       nodes
@@ -1721,6 +1892,8 @@ export function FamilyTreeCanvas({
         }
       }
 
+      applyBuilderBranchHighlight(selectedPersonId, "selected");
+
       const bounds = graph.node()?.getBBox();
 
       if (selectedCanvasNode) {
@@ -1823,19 +1996,55 @@ export function FamilyTreeCanvas({
 
     svg.call(zoom);
 
-    graphContent
+    const viewerLinkGenerator = d3
+      .linkHorizontal<d3.HierarchyPointLink<DisplayTreeNode>, d3.HierarchyPointNode<DisplayTreeNode>>()
+      .x((point) => point.y)
+      .y((point) => point.x);
+
+    const viewerLinks: ViewerCanvasLink[] = root.links().map((link) => ({
+      className: getViewerLinkClassName(link),
+      d: viewerLinkGenerator(link) || "",
+      key: buildViewerLinkKey(link.source.data, link.target.data)
+    }));
+
+    const viewerLinkPaths = graphContent
       .selectAll("path.tree-desc-link")
-      .data(root.links())
+      .data(viewerLinks)
       .enter()
       .append("path")
-      .attr("class", "tree-link tree-desc-link")
-      .attr(
-        "d",
-        d3
-          .linkHorizontal<d3.HierarchyPointLink<DisplayTreeNode>, d3.HierarchyPointNode<DisplayTreeNode>>()
-          .x((point) => point.y)
-          .y((point) => point.x)
-      );
+      .attr("class", (datum) => datum.className)
+      .attr("d", (datum) => datum.d)
+      .style("--tree-line-delay", (_datum, index) => `${-(index % 11) * 0.48}s`);
+
+    function collectViewerBranchLinkKeys(activeNode: d3.HierarchyPointNode<DisplayTreeNode> | null) {
+      const branchLinkKeys = new Set<string>();
+      if (!activeNode) {
+        return branchLinkKeys;
+      }
+
+      let cursor: d3.HierarchyPointNode<DisplayTreeNode> | null = activeNode;
+      while (cursor?.parent) {
+        branchLinkKeys.add(buildViewerLinkKey(cursor.parent.data, cursor.data));
+        cursor = cursor.parent;
+      }
+
+      activeNode.descendants().forEach((node) => {
+        if (!node.parent) {
+          return;
+        }
+
+        branchLinkKeys.add(buildViewerLinkKey(node.parent.data, node.data));
+      });
+
+      return branchLinkKeys;
+    }
+
+    function applyViewerBranchHighlight(activeNode: d3.HierarchyPointNode<DisplayTreeNode> | null, mode: "selected" | "hovered" = "selected") {
+      const branchLinkKeys = collectViewerBranchLinkKeys(activeNode);
+      viewerLinkPaths
+        .classed("tree-link-branch-active", (datum) => mode === "selected" && branchLinkKeys.has(datum.key))
+        .classed("tree-link-branch-hovered", (datum) => mode === "hovered" && branchLinkKeys.has(datum.key));
+    }
 
     const nodes = graphContent
       .selectAll("g.node")
@@ -1844,12 +2053,38 @@ export function FamilyTreeCanvas({
       .append("g")
       .attr("class", (datum) => (datum === selectedNode ? "node tree-node-selected" : "node"))
       .attr("transform", (datum) => `translate(${datum.y},${datum.x})`)
+      .attr("tabindex", (datum) => (getSelectablePersonId(datum.data) ? 0 : null))
       .style("cursor", "pointer")
       .on("click", (_event, datum) => {
         const id = getFocusedPersonId(datum.data, selectedPersonId);
         if (id) {
           onSelectPersonRef.current(id);
         }
+      })
+      .on("keydown", (event: KeyboardEvent, datum) => {
+        const id = getFocusedPersonId(datum.data, selectedPersonId);
+        if (!id || (event.key !== "Enter" && event.key !== " ")) {
+          return;
+        }
+
+        event.preventDefault();
+        onSelectPersonRef.current(id);
+      })
+      .on("pointerenter", (_event, datum) => {
+        setCanvasNodeInteractionClass(_event.currentTarget, "tree-node-hovered", true);
+        applyViewerBranchHighlight(datum, "hovered");
+      })
+      .on("pointerleave", (event) => {
+        setCanvasNodeInteractionClass(event.currentTarget, "tree-node-hovered", false);
+        applyViewerBranchHighlight(selectedNode, "selected");
+      })
+      .on("focus", (event, datum) => {
+        setCanvasNodeInteractionClass(event.currentTarget, "tree-node-focused", true);
+        applyViewerBranchHighlight(datum, "hovered");
+      })
+      .on("blur", (event) => {
+        setCanvasNodeInteractionClass(event.currentTarget, "tree-node-focused", false);
+        applyViewerBranchHighlight(selectedNode, "selected");
       });
 
     nodes
@@ -2068,6 +2303,8 @@ export function FamilyTreeCanvas({
         }
       }
     }
+
+    applyViewerBranchHighlight(selectedNode, "selected");
 
     const bounds = graph.node()?.getBBox();
 

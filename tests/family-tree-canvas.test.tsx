@@ -45,6 +45,256 @@ describe("family tree canvas helpers", () => {
 });
 
 describe("family tree canvas interactions", () => {
+  it("renders viewer links with branch-aware classes", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "root",
+      name: "Root Person",
+      gender: "male",
+      birthDate: "1960-01-01",
+      deathDate: null,
+      children: [
+        {
+          type: "couple",
+          primaryId: "root",
+          spouseId: "partner",
+          partnershipId: "partnership-1",
+          name: "Root Person",
+          spouseName: "Partner Person",
+          gender: "male",
+          spouseGender: "female",
+          birthDate: "1960-01-01",
+          deathDate: null,
+          spouseBirthDate: "1962-01-01",
+          spouseDeathDate: null,
+          children: [
+            {
+              type: "person",
+              id: "shared-child",
+              name: "Shared Child",
+              gender: "female",
+              birthDate: "1990-01-01",
+              deathDate: null,
+              children: []
+            }
+          ]
+        },
+        {
+          type: "person",
+          id: "solo-child",
+          name: "Solo Child",
+          gender: "male",
+          birthDate: "1992-01-01",
+          deathDate: null,
+          children: []
+        }
+      ]
+    };
+
+    const { container } = render(<FamilyTreeCanvas tree={tree} selectedPersonId="root" onSelectPerson={vi.fn()} />);
+
+    expect(container.querySelectorAll(".tree-partner-link")).toHaveLength(1);
+    expect(container.querySelectorAll(".tree-shared-child-link")).toHaveLength(1);
+    expect(container.querySelectorAll(".tree-desc-link")).toHaveLength(1);
+  });
+
+  it("highlights only the focused viewer branch and restores the selected branch after blur", () => {
+    const onSelectPerson = vi.fn();
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "root",
+      name: "Root Person",
+      gender: "male",
+      birthDate: "1960-01-01",
+      deathDate: null,
+      children: [
+        {
+          type: "couple",
+          primaryId: "root",
+          spouseId: "partner",
+          partnershipId: "partnership-1",
+          name: "Root Person",
+          spouseName: "Partner Person",
+          gender: "male",
+          spouseGender: "female",
+          birthDate: "1960-01-01",
+          deathDate: null,
+          spouseBirthDate: "1962-01-01",
+          spouseDeathDate: null,
+          children: [
+            {
+              type: "person",
+              id: "shared-child",
+              name: "Shared Child",
+              gender: "female",
+              birthDate: "1990-01-01",
+              deathDate: null,
+              children: []
+            }
+          ]
+        },
+        {
+          type: "person",
+          id: "solo-child",
+          name: "Solo Child",
+          gender: "male",
+          birthDate: "1992-01-01",
+          deathDate: null,
+          children: []
+        }
+      ]
+    };
+
+    const { container } = render(<FamilyTreeCanvas tree={tree} selectedPersonId="root" onSelectPerson={onSelectPerson} />);
+    const sharedChildGroup = screen.getByText("Shared Child").closest("g");
+
+    expect(sharedChildGroup?.getAttribute("tabindex")).toBe("0");
+    expect(container.querySelectorAll(".tree-link-branch-active")).toHaveLength(3);
+    expect(container.querySelectorAll(".tree-link-branch-hovered")).toHaveLength(0);
+
+    fireEvent.focus(sharedChildGroup!);
+
+    expect(sharedChildGroup).toHaveClass("tree-node-focused");
+    expect(container.querySelectorAll(".tree-link-branch-active")).toHaveLength(0);
+    expect(container.querySelectorAll(".tree-link-branch-hovered")).toHaveLength(2);
+
+    fireEvent.keyDown(sharedChildGroup!, { key: "Enter" });
+
+    expect(onSelectPerson).toHaveBeenCalledWith("shared-child");
+
+    fireEvent.blur(sharedChildGroup!);
+
+    expect(sharedChildGroup).not.toHaveClass("tree-node-focused");
+    expect(container.querySelectorAll(".tree-link-branch-active")).toHaveLength(3);
+    expect(container.querySelectorAll(".tree-link-branch-hovered")).toHaveLength(0);
+  });
+
+  it("keeps builder branch highlight narrower than sibling branches on hover", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "root",
+      name: "Root",
+      gender: "male",
+      birthDate: "1990-01-01",
+      deathDate: null,
+      children: [
+        {
+          type: "person",
+          id: "child-a",
+          name: "Child A",
+          gender: "female",
+          birthDate: "2010-01-01",
+          deathDate: null,
+          children: []
+        },
+        {
+          type: "person",
+          id: "child-b",
+          name: "Child B",
+          gender: "male",
+          birthDate: "2012-01-01",
+          deathDate: null,
+          children: []
+        }
+      ]
+    };
+    const people: PersonRecord[] = [
+      {
+        id: "root",
+        tree_id: "tree-1",
+        full_name: "Root",
+        gender: "male",
+        birth_date: "1990-01-01",
+        death_date: null,
+        birth_place: null,
+        death_place: null,
+        bio: null,
+        is_living: true,
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        id: "child-a",
+        tree_id: "tree-1",
+        full_name: "Child A",
+        gender: "female",
+        birth_date: "2010-01-01",
+        death_date: null,
+        birth_place: null,
+        death_place: null,
+        bio: null,
+        is_living: true,
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        id: "child-b",
+        tree_id: "tree-1",
+        full_name: "Child B",
+        gender: "male",
+        birth_date: "2012-01-01",
+        death_date: null,
+        birth_place: null,
+        death_place: null,
+        bio: null,
+        is_living: true,
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
+    const parentLinks: ParentLinkRecord[] = [
+      {
+        id: "link-1",
+        tree_id: "tree-1",
+        parent_person_id: "root",
+        child_person_id: "child-a",
+        relation_type: "biological",
+        created_at: new Date().toISOString()
+      },
+      {
+        id: "link-2",
+        tree_id: "tree-1",
+        parent_person_id: "root",
+        child_person_id: "child-b",
+        relation_type: "biological",
+        created_at: new Date().toISOString()
+      }
+    ];
+
+    const { container } = render(
+      <FamilyTreeCanvas
+        tree={tree}
+        selectedPersonId="root"
+        onSelectPerson={vi.fn()}
+        displayMode="builder"
+        people={people}
+        parentLinks={parentLinks}
+        partnerships={[]}
+      />
+    );
+
+    const childAGroup = screen.getByText("Child A").closest("g");
+
+    expect(childAGroup?.getAttribute("tabindex")).toBe("0");
+    expect(container.querySelectorAll(".tree-desc-link.tree-link-branch-active")).toHaveLength(2);
+    expect(container.querySelectorAll(".tree-desc-link.tree-link-branch-hovered")).toHaveLength(0);
+
+    fireEvent.pointerEnter(childAGroup!);
+
+    expect(childAGroup).toHaveClass("tree-node-hovered");
+    expect(container.querySelectorAll(".tree-desc-link.tree-link-branch-active")).toHaveLength(0);
+    expect(container.querySelectorAll(".tree-desc-link.tree-link-branch-hovered")).toHaveLength(1);
+
+    fireEvent.pointerLeave(childAGroup!);
+
+    expect(childAGroup).not.toHaveClass("tree-node-hovered");
+    expect(container.querySelectorAll(".tree-desc-link.tree-link-branch-active")).toHaveLength(2);
+    expect(container.querySelectorAll(".tree-desc-link.tree-link-branch-hovered")).toHaveLength(0);
+  });
+
   it("opens and closes the create menu from the selected node", async () => {
     const tree: DisplayTreeNode = {
       type: "person",

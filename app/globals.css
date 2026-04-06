@@ -61,6 +61,15 @@
   --sidebar-accent-foreground: #1c2433;
   --sidebar-border: rgba(28, 36, 51, 0.08);
   --sidebar-ring: #e28c67;
+  --tree-line-color: rgb(132 118 98);
+  --tree-line-width: 1.8px;
+  --tree-line-width-peak: 2px;
+  --tree-line-width-selected: 1.98px;
+  --tree-line-width-hover: 2.12px;
+  --tree-line-opacity: 0.31;
+  --tree-line-opacity-peak: 0.46;
+  --tree-line-opacity-selected: 0.48;
+  --tree-line-opacity-hover: 0.6;
 }
 
 * {
@@ -1592,28 +1601,57 @@ textarea {
 
 .tree-link {
   fill: none;
-  stroke: rgba(24, 33, 48, 0.12);
-  stroke-width: 2.4;
+  stroke: var(--tree-line-color);
   stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tree-link-structural {
+  stroke-width: var(--tree-line-width);
+  opacity: var(--tree-line-opacity);
+  transition: opacity 160ms ease-out, stroke-width 160ms ease-out;
+  animation: tree-line-breathe 6.2s ease-in-out infinite;
+  animation-delay: var(--tree-line-delay, 0s);
 }
 
 .tree-preview-link {
-  stroke: rgba(24, 33, 48, 0.1);
-  stroke-width: 2.4;
+  stroke-width: var(--tree-line-width);
+  opacity: var(--tree-line-opacity);
+  transition: opacity 160ms ease-out, stroke-width 160ms ease-out;
 }
 
-.tree-parent-link {
-  stroke: rgba(24, 33, 48, 0.16);
+.tree-link-branch-active,
+.tree-link-branch-hovered {
+  animation: none;
 }
 
-.tree-partner-link {
-  stroke: rgba(24, 33, 48, 0.16);
-  stroke-width: 2.2;
+.tree-link-branch-active {
+  opacity: var(--tree-line-opacity-selected);
+  stroke-width: var(--tree-line-width-selected);
 }
 
-.tree-shared-child-link {
-  stroke: rgba(24, 33, 48, 0.16);
-  stroke-width: 2.4;
+.tree-link-branch-hovered {
+  opacity: var(--tree-line-opacity-hover);
+  stroke-width: var(--tree-line-width-hover);
+}
+
+@keyframes tree-line-breathe {
+  0%,
+  100% {
+    opacity: var(--tree-line-opacity);
+    stroke-width: var(--tree-line-width);
+  }
+
+  50% {
+    opacity: var(--tree-line-opacity-peak);
+    stroke-width: var(--tree-line-width-peak);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-link-structural {
+    animation: none;
+  }
 }
 
 .builder-partnership-label {
@@ -1702,6 +1740,7 @@ textarea {
   fill: rgba(255, 255, 255, 0.98);
   stroke: rgba(18, 27, 43, 0.12);
   stroke-width: 1.5;
+  transition: fill 160ms ease-out, stroke 160ms ease-out, stroke-width 160ms ease-out, transform 160ms ease-out;
 }
 
 .tree-card-preview {
@@ -1714,6 +1753,14 @@ textarea {
   stroke: var(--accent-primary);
   stroke-width: 2.5;
   fill: rgba(255, 255, 255, 0.98);
+}
+
+.tree-node-hovered .tree-card-person:not(.tree-card-selected),
+.tree-node-focused .tree-card-person:not(.tree-card-selected) {
+  fill: rgba(255, 255, 255, 1);
+  stroke: rgba(28, 36, 51, 0.22);
+  stroke-width: 1.9;
+  transform: translateY(-1px);
 }
 
 .tree-card-couple.tree-card-selected {
@@ -1732,6 +1779,7 @@ textarea {
 
 .tree-node-badge {
   stroke: rgba(24, 33, 48, 0.14);
+  transition: transform 160ms ease-out;
 }
 
 .tree-node-badge-couple {
@@ -1749,6 +1797,7 @@ textarea {
   font-size: 12px;
   font-weight: 700;
   dominant-baseline: middle;
+  transition: transform 160ms ease-out;
 }
 
 .tree-node-label {
@@ -1756,6 +1805,7 @@ textarea {
   font-size: 14px;
   font-weight: 700;
   font-family: var(--font-sans), sans-serif;
+  transition: transform 160ms ease-out;
 }
 
 .tree-node-label-secondary {
@@ -1769,12 +1819,27 @@ textarea {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-family: var(--font-sans), sans-serif;
+  transition: transform 160ms ease-out;
 }
 
 .tree-node-meta {
   fill: rgba(24, 33, 48, 0.74);
   font-size: 11px;
   font-family: var(--font-sans), sans-serif;
+  transition: transform 160ms ease-out;
+}
+
+.tree-node-hovered:not(.tree-node-selected) .tree-node-badge,
+.tree-node-hovered:not(.tree-node-selected) .tree-node-initials,
+.tree-node-hovered:not(.tree-node-selected) .tree-node-label,
+.tree-node-hovered:not(.tree-node-selected) .tree-node-sub,
+.tree-node-hovered:not(.tree-node-selected) .tree-node-meta,
+.tree-node-focused:not(.tree-node-selected) .tree-node-badge,
+.tree-node-focused:not(.tree-node-selected) .tree-node-initials,
+.tree-node-focused:not(.tree-node-selected) .tree-node-label,
+.tree-node-focused:not(.tree-node-selected) .tree-node-sub,
+.tree-node-focused:not(.tree-node-selected) .tree-node-meta {
+  transform: translateY(-1px);
 }
 
 .tree-node-action-handle {
