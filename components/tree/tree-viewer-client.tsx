@@ -159,7 +159,7 @@ export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewe
   const initialSelectedPersonId = snapshot.tree.root_person_id || snapshot.people[0]?.id || null;
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(initialSelectedPersonId);
   const [panelState, setPanelState] = useState<ViewerPanelState>(initialSelectedPersonId ? "collapsed" : "open");
-  const [infoRailWidth, setInfoRailWidth] = useState(420);
+  const [infoRailWidth, setInfoRailWidth] = useState(392);
   const [isResizing, setIsResizing] = useState(false);
   const [collapsedRailHeight, setCollapsedRailHeight] = useState<number | null>(null);
   const displayTree = useMemo(() => buildBuilderDisplayTree(snapshot), [snapshot]);

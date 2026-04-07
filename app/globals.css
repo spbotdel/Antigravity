@@ -1188,8 +1188,8 @@ textarea {
 
 .viewer-nav-overlay {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 14px;
+  right: 14px;
   z-index: 9;
 }
 
@@ -1205,13 +1205,27 @@ textarea {
   pointer-events: auto;
 }
 
+.viewer-nav-overlay .tree-nav-tabs {
+  padding: 3px;
+  gap: 3px;
+  border-color: rgba(18, 27, 43, 0.06);
+  background: rgba(255, 251, 246, 0.58);
+  box-shadow: 0 8px 18px rgba(18, 27, 43, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.viewer-nav-overlay .tree-nav-tabs a {
+  min-height: 34px;
+}
+
 .builder-nav-overlay .tree-nav-shell,
 .builder-nav-overlay .tree-nav-tabs {
   pointer-events: auto;
 }
 
 .viewer-layout-resizable {
-  --viewer-rail-width: 420px;
+  --viewer-rail-width: 392px;
 }
 
 .viewer-layout-resizing {
@@ -1298,22 +1312,22 @@ textarea {
 .viewer-info-rail-tab-icon {
   display: grid;
   place-items: center;
-  width: 20px;
+  width: 18px;
   height: auto;
   flex: 0 0 auto;
   position: absolute;
-  top: 14px;
+  top: 12px;
   left: 50%;
   margin-inline: 0;
   transform: translateX(-50%);
 }
 
 .viewer-info-rail-tab-icon-svg {
-  width: 20px;
-  height: 20px;
-  color: rgba(28, 36, 51, 0.84);
-  stroke-width: 2.45;
-  opacity: 0.84;
+  width: 18px;
+  height: 18px;
+  color: rgba(28, 36, 51, 0.76);
+  stroke-width: 2.25;
+  opacity: 0.72;
   transition:
     opacity 0.15s ease,
     transform 0.18s ease;
@@ -1327,13 +1341,13 @@ textarea {
   align-items: center;
   justify-content: center;
   align-self: center;
-  gap: 2px;
+  gap: 1px;
   margin-inline: auto;
   padding-inline: 0;
   text-align: center;
-  color: rgba(28, 36, 51, 0.82);
-  font-size: 1rem;
-  font-weight: 700;
+  color: rgba(28, 36, 51, 0.74);
+  font-size: 0.92rem;
+  font-weight: 650;
   line-height: 0.98;
   transform: rotate(180deg);
   transform-origin: center;
@@ -1350,15 +1364,15 @@ textarea {
 
 .viewer-info-rail-tab-name-line-primary,
 .viewer-info-rail-tab-name-line-secondary {
-  color: rgba(28, 36, 51, 0.82);
-  font-size: 1rem;
-  font-weight: 700;
+  color: rgba(28, 36, 51, 0.74);
+  font-size: 0.92rem;
+  font-weight: 650;
 }
 
 .person-summary-avatar {
-  width: 76px;
-  height: 76px;
-  border-radius: 18px;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
   overflow: hidden;
   flex-shrink: 0;
   border: 1px solid rgba(18, 27, 43, 0.08);
@@ -1376,13 +1390,13 @@ textarea {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .viewer-person-summary-copy {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 1px;
   flex: 1 1 auto;
 }
 
@@ -1393,17 +1407,22 @@ textarea {
 .viewer-person-summary-dates {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   line-height: 1.35;
 }
 
 .viewer-info-rail {
   position: absolute;
-  top: 88px;
+  top: 84px;
   right: 0;
-  width: min(var(--viewer-rail-width, 420px), calc(100% - 32px));
+  width: min(var(--viewer-rail-width, 392px), calc(100% - 28px));
   max-height: calc(100vh - 160px);
   overflow: auto;
+}
+
+.viewer-person-summary.utility-note-card {
+  padding: 14px 16px;
+  background: rgba(249, 245, 239, 0.7);
 }
 
 .viewer-info-rail-body {
@@ -1412,7 +1431,7 @@ textarea {
 
 @media (min-width: 1181px) {
   .viewer-layout-overlay {
-    --viewer-rail-handle-width: 40px;
+    --viewer-rail-handle-width: 34px;
   }
 
   .viewer-info-rail {
@@ -1421,52 +1440,54 @@ textarea {
       box-shadow 0.16s ease,
       background 0.16s ease;
     will-change: transform;
+    background: linear-gradient(180deg, rgba(255, 253, 249, 0.88), rgba(247, 241, 233, 0.82));
+    box-shadow: 0 14px 28px rgba(18, 27, 43, 0.06);
   }
 
   .viewer-info-rail-body {
     display: grid;
     align-content: start;
-    gap: 20px;
-    padding-left: calc(var(--viewer-rail-handle-width) - 12px);
+    gap: 16px;
+    padding-left: calc(var(--viewer-rail-handle-width) - 6px);
     transition:
       opacity 0.16s ease,
       visibility 0.16s ease;
   }
 
   .viewer-info-rail-header {
-    gap: 12px;
+    gap: 10px;
   }
 
   .viewer-person-detail-list {
-    margin-top: 12px;
+    margin-top: 8px;
   }
 
   .viewer-person-media-strip,
   .viewer-person-documents {
-    margin-top: 8px;
+    margin-top: 4px;
   }
 
   .viewer-info-rail-tab {
     position: absolute;
-    top: 88px;
-    left: calc(100% - var(--viewer-rail-width, 420px));
+    top: 84px;
+    left: calc(100% - var(--viewer-rail-width, 392px));
     height: var(--viewer-collapsed-rail-height, calc(100vh - 160px));
     z-index: 8;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    gap: 12px;
     width: var(--viewer-rail-handle-width);
-    padding: 18px 4px;
+    padding: 16px 3px;
     border: 0;
     border-right: 1px solid rgba(24, 33, 48, 0.03);
     border-radius: 18px 0 0 18px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(247, 241, 233, 0.16));
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(247, 241, 233, 0.12));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.48),
       inset -1px 0 0 rgba(24, 33, 48, 0.02),
-      0 6px 14px rgba(22, 38, 69, 0.025);
+      0 5px 12px rgba(22, 38, 69, 0.02);
     cursor: pointer;
     overflow: hidden;
     transition:
@@ -1482,7 +1503,7 @@ textarea {
     top: 0;
     right: -14px;
     bottom: 0;
-    width: 18px;
+    width: 16px;
     background: linear-gradient(90deg, rgba(250, 245, 238, 0.16), rgba(250, 245, 238, 0));
     pointer-events: none;
   }
@@ -1510,7 +1531,7 @@ textarea {
   }
 
   .viewer-layout-overlay.viewer-panel-collapsed .viewer-info-rail-tab {
-    transform: translateX(calc(var(--viewer-rail-width, 420px) - var(--viewer-rail-handle-width)));
+    transform: translateX(calc(var(--viewer-rail-width, 392px) - var(--viewer-rail-handle-width)));
   }
 
   .viewer-layout-overlay.viewer-panel-collapsed .viewer-info-rail {
@@ -1536,11 +1557,11 @@ textarea {
 
   .viewer-info-rail-tab:hover {
     border-right-color: rgba(24, 33, 48, 0.06);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(249, 244, 237, 0.24));
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(249, 244, 237, 0.18));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.54),
       inset -1px 0 0 rgba(24, 33, 48, 0.03),
-      0 8px 16px rgba(22, 38, 69, 0.035);
+      0 7px 14px rgba(22, 38, 69, 0.028);
   }
 
   .viewer-info-rail-tab:hover .viewer-info-rail-tab-icon-svg {
@@ -2487,8 +2508,8 @@ textarea {
 }
 
 .viewer-info-rail .person-media-thumb-compact .person-media-thumb-visual {
-  min-height: 88px;
-  border-radius: 8px;
+  min-height: 76px;
+  border-radius: 10px;
   background:
     linear-gradient(180deg, rgba(255, 250, 244, 0.72), rgba(244, 237, 228, 0.58));
   box-shadow: inset 0 0 0 1px rgba(18, 27, 43, 0.05);
@@ -2543,11 +2564,11 @@ textarea {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 9px 10px;
   border-radius: 12px;
   border: 1px solid rgba(18, 27, 43, 0.08);
-  background: rgba(255, 255, 255, 0.58);
-  box-shadow: var(--surface-shadow-soft);
+  background: rgba(255, 255, 255, 0.48);
+  box-shadow: none;
   transition:
     border-color 0.18s ease,
     background-color 0.18s ease,
@@ -2605,10 +2626,10 @@ textarea {
 
 .viewer-layout-overlay .viewer-info-rail {
   position: absolute;
-  top: 88px;
+  top: 84px;
   right: 0;
   z-index: 8;
-  width: min(var(--viewer-rail-width, 420px), calc(100% - 32px));
+  width: min(var(--viewer-rail-width, 392px), calc(100% - 28px));
   max-height: calc(100vh - 160px);
   overflow: auto;
 }
@@ -5363,10 +5384,22 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 
 .viewer-tree-overlay {
   position: absolute;
-  top: 28px;
-  left: 16px;
-  z-index: 8;
-  max-width: min(30ch, calc(100% - 220px));
+  top: 22px;
+  left: 18px;
+  z-index: 7;
+  max-width: min(26ch, calc(100% - 206px));
+}
+
+.viewer-tree-overlay .tree-overlay-title {
+  font-size: clamp(1.45rem, 1.75vw, 1.68rem);
+  line-height: 1.12;
+  color: color-mix(in oklab, var(--text) 88%, var(--muted) 12%);
+}
+
+.viewer-tree-overlay .tree-overlay-meta {
+  margin-top: 3px;
+  font-size: 0.8rem;
+  opacity: 0.62;
 }
 
 .builder-inspector-name-input.tree-overlay-title-input[data-slot="input"] {
@@ -7753,14 +7786,14 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
 
   .viewer-layout-overlay {
     display: grid;
-    gap: 14px;
+    gap: 0;
     padding-right: 0;
   }
 
   .viewer-nav-overlay {
     position: static;
     order: 1;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }
 
   .builder-nav-overlay {
@@ -7773,12 +7806,33 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
     position: static;
     order: 3;
     width: auto;
-    max-height: none;
-    overflow: visible;
+    max-height: min(56dvh, 520px);
+    overflow: auto;
+    margin: -18px 8px 0;
+    border-radius: 22px 22px 16px 16px;
+    background: linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(247, 241, 233, 0.94));
+    box-shadow:
+      0 -10px 24px rgba(18, 27, 43, 0.06),
+      0 16px 28px rgba(18, 27, 43, 0.09);
+    z-index: 7;
   }
 
+  .viewer-info-rail-body {
+    gap: 14px;
+  }
+
+  .viewer-info-rail-header {
+    gap: 8px;
+  }
+
+  .viewer-person-summary.utility-note-card {
+    padding: 14px 14px 12px;
+    background: rgba(255, 255, 255, 0.38);
+  }
+    padding-bottom: 10px;
+
   .builder-inspector-overlay {
-    position: static;
+    position: sticky;
     width: auto;
     max-height: none;
     top: auto;
@@ -7793,6 +7847,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
   }
 
   .builder-stage-canvas,
+    bottom: 10px;
   .viewer-stage-canvas {
     overflow: visible;
     padding: 10px;
@@ -7876,6 +7931,16 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
   .builder-form-grid {
     grid-template-columns: 1fr;
   }
+  .viewer-tree-overlay .tree-overlay-title {
+    font-size: clamp(1.32rem, 6.8vw, 1.64rem);
+    line-height: 1.08;
+  }
+
+  .viewer-tree-overlay .tree-overlay-meta {
+    font-size: 0.8rem;
+    opacity: 0.64;
+  }
+
 
   .builder-create-context-card,
   .builder-context-card-split {
