@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import BuilderPage from "@/app/tree/[slug]/builder/page";
@@ -15,6 +16,10 @@ vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
 }));
 
+vi.mock("@/components/layout/app-header", () => ({
+  AppHeader: () => <div data-testid="app-header">header</div>,
+}));
+
 vi.mock("@/components/layout/tree-nav", () => ({
   TreeNav: ({
     shareToken,
@@ -29,10 +34,17 @@ vi.mock("@/components/tree/builder-workspace", () => ({
   BuilderWorkspace: ({
     snapshot,
     mediaLoaded,
+    nav,
   }: {
     snapshot: { tree: { title: string } };
     mediaLoaded?: boolean;
-  }) => <div data-testid="builder-workspace">title:{snapshot.tree.title};mediaLoaded:{String(mediaLoaded)}</div>,
+    nav?: ReactNode;
+  }) => (
+    <div data-testid="builder-workspace">
+      title:{snapshot.tree.title};mediaLoaded:{String(mediaLoaded)}
+      {nav}
+    </div>
+  ),
 }));
 
 vi.mock("@/lib/server/repository", () => ({
@@ -83,7 +95,7 @@ describe("builder page", () => {
     );
 
     expect(mocks.getBuilderSnapshot).toHaveBeenCalledWith("demo-family", { includeMedia: true, shareToken: null });
-    expect(screen.getByRole("heading", { name: "Demo Family" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Demo Family" })).not.toBeInTheDocument();
     expect(screen.getByTestId("tree-nav")).toHaveTextContent("share:none;edit:true");
     expect(screen.getByTestId("builder-workspace")).toHaveTextContent("title:Demo Family;mediaLoaded:true");
   });

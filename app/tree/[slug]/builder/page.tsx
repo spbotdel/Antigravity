@@ -55,25 +55,20 @@ export default async function BuilderPage({ params, searchParams }: BuilderPageP
     <>
       <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
       <main className="page-shell workspace-page workspace-page-canvas">
-        <section className="section-header workspace-header workspace-header-canvas">
-          <div className="workspace-header-main">
-            <div className="workspace-meta-row">
-              <p className="eyebrow">Конструктор</p>
-              <span className="workspace-meta-chip">Редактирование</span>
-            </div>
-            <h1>{snapshot.tree.title}</h1>
-            <p className="muted-copy">Редактируйте людей, связи и медиа прямо рядом со схемой.</p>
-          </div>
-          <TreeNav
-            slug={slug}
-            shareToken={shareToken}
-            canEdit={snapshot.actor.canEdit}
-            canManageMembers={snapshot.actor.canManageMembers}
-            canReadAudit={snapshot.actor.canReadAudit}
-            canManageSettings={snapshot.actor.canManageSettings}
-          />
-        </section>
-        <BuilderWorkspace snapshot={snapshot} mediaLoaded />
+        <BuilderWorkspace
+          snapshot={snapshot}
+          mediaLoaded
+          nav={
+            <TreeNav
+              slug={slug}
+              shareToken={shareToken}
+              canEdit={snapshot.actor.canEdit}
+              canManageMembers={snapshot.actor.canManageMembers}
+              canReadAudit={snapshot.actor.canReadAudit}
+              canManageSettings={snapshot.actor.canManageSettings}
+            />
+          }
+        />
       </main>
     </>
   );
