@@ -2,21 +2,18 @@
 
 *Operational memory only. Not the canonical architecture document.*
 
-*Last updated: 2026-04-05*
+*Last updated: 2026-04-07*
 
 ## Current State
 
 - Framework mode: active
-- Active branch: `feature/ui-design-block`
+- Active branch: `feature/ui-ux-final-polish`
 - Runtime application: `Next.js 16 + React 19 + TypeScript`
 - Backend/data layer: `Supabase` auth, database, RLS + S3-compatible object storage
 - Dev environment: linked to Supabase project `untwxmiqqwepopeepzqe`
 - Legacy static viewer: preserved in `legacy/` and old `index.html`, but no longer the main runtime
 - Current workstream: family archive foundation, uploader/manual albums, variant-aware media delivery, and Cloudflare R2 groundwork are already in the worktree; current effort should focus on stabilizing `smoke:media` and finishing archive/viewer QA
 - Target media platform: `Cloudflare` for the next binary/media delivery stage, while the current Yandex path remains transitional compatibility.
-- Builder normal tree mode now follows the workspace model: no page-level hero block, the tree is the first surface under the header, the nav is mounted inside the stage, and the tree title is rendered as a text-only top-left overlay.
-- Viewer horizontal drag regression is resolved; the collapsed rail no longer expands document width.
-- Demo tree `popovi` no longer depends on legacy Yandex-backed primary avatars: those avatar rows were recreated through the current file-backed flow and now use `cloudflare_r2`.
 
 ## Current Active Task
 
@@ -50,9 +47,6 @@
 - [x] Archive upload review flow exists with batch confirmation and discard guard.
 - [x] Variant-aware media delivery foundation exists for `thumb/small/medium` photo previews.
 - [x] Cloudflare R2 runtime/config foundation is present for the next media storage stage.
-- [x] Builder tree mode now uses the workspace layout: no page-level hero, in-stage nav, and a text-only top-left tree overlay.
-- [x] Viewer collapsed rail no longer introduces horizontal page drag.
-- [x] `popovi` demo-tree primary avatars were remediated through the current storage flow and no longer resolve through legacy Yandex object storage.
 - [ ] Finish the current `family-tree-canvas` interaction and visual pass.
 - [ ] Validate `Участники`, invites and share links as one coherent access-management flow.
 - [ ] QA the reworked builder layout so the tree keeps visual priority on desktop and mobile.
@@ -95,8 +89,6 @@
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
-- Demo/fixture data that still points to legacy `object_storage` should be remediated by data replacement through the current file-backed flow; do not add resolver exceptions for that compatibility case.
-- Builder normal tree mode should keep its controls inside the stage: top-right nav and top-left informational overlay belong to the workspace surface, while expanded gallery mode may keep its separate stage-header/back-action path.
 - "
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
