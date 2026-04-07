@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { ru } from "date-fns/locale"
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 import { DayPicker, getDefaultClassNames } from "react-day-picker"
 
@@ -14,6 +15,7 @@ function Calendar({
   captionLayout = "label",
   buttonVariant = "ghost",
   components,
+  locale = ru,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
@@ -26,6 +28,7 @@ function Calendar({
       showOutsideDays={showOutsideDays}
       className={cn("bg-background p-3 text-foreground", className)}
       captionLayout={captionLayout}
+      locale={locale}
       classNames={{
         root: cn("w-fit", defaultClassNames.root),
         months: cn("flex flex-col gap-4 md:flex-row", defaultClassNames.months),

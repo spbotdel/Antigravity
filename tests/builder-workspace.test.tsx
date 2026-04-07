@@ -730,7 +730,13 @@ describe("builder workspace", () => {
 
     fireEvent.click(within(inspector).getByLabelText("Дата рождения"));
 
-    expect(await screen.findAllByRole("combobox", undefined, { timeout: 3000 })).toHaveLength(2);
+    const [monthDropdown, yearDropdown] = await screen.findAllByRole("combobox", undefined, { timeout: 3000 });
+
+    expect(monthDropdown).toBeInTheDocument();
+    expect(yearDropdown).toBeInTheDocument();
+    expect(Array.from(monthDropdown.querySelectorAll("option")).map((option) => option.textContent)).toEqual(
+      expect.arrayContaining(["январь", "март", "декабрь"])
+    );
 
     fireEvent.click(await screen.findByRole("button", { name: "Очистить" }, { timeout: 3000 }));
 
