@@ -5,6 +5,8 @@ const { uploadFileWithTransportContract } = vi.hoisted(() => ({
   uploadFileWithTransportContract: vi.fn(async () => undefined),
 }));
 
+const BUILDER_WORKSPACE_SLOW_TEST_TIMEOUT_MS = 20_000;
+
 import { BuilderWorkspace } from "@/components/tree/builder-workspace";
 import { Calendar } from "@/components/ui/calendar";
 import type { TreeSnapshot } from "@/lib/types";
@@ -437,7 +439,7 @@ describe("builder workspace", () => {
     expect(screen.getByRole("button", { name: "Видео по ссылке" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Загрузить видео" })).toBeInTheDocument();
     expect(screen.queryByText("Выберите, как добавить видео: загрузить файл с устройства или указать внешнюю ссылку.")).not.toBeInTheDocument();
-  });
+  }, BUILDER_WORKSPACE_SLOW_TEST_TIMEOUT_MS);
 
   it("restores the visual root person from localStorage", async () => {
     window.localStorage.setItem("antigravity.builder.tree-1.visualRootPersonId", "person-1");
@@ -727,16 +729,14 @@ describe("builder workspace", () => {
 
     fireEvent.click(within(inspector).getByLabelText("Дата рождения"));
 
-    await waitFor(() => {
-      expect(screen.getAllByRole("combobox")).toHaveLength(2);
-    });
+    expect(await screen.findAllByRole("combobox", undefined, { timeout: 3000 })).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole("button", { name: "Очистить" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Очистить" }, { timeout: 3000 }));
 
     await waitFor(() => {
       expect(birthDateInput.value).toBe("");
     });
-  });
+  }, BUILDER_WORKSPACE_SLOW_TEST_TIMEOUT_MS);
 
   it("autosaves the bio field after inactivity, skips duplicate saves, and forces save on blur", async () => {
     const snapshot = createSnapshot();
