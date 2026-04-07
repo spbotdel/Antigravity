@@ -3187,18 +3187,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true, nav = null }: B
               </div>
             ) : selectedPerson ? (
               <>
-                {!isSelectedRoot ? (
-                  <div className="action-row builder-form-actions builder-inspector-card-actions">
-                    <Button
-                      className="builder-inspector-secondary-action"
-                      type="button"
-                      variant="ghost"
-                      onClick={() => void setRootPerson(selectedPerson.id)}
-                    >
-                      Сделать корнем
-                    </Button>
-                  </div>
-                ) : null}
                 <form
                   key={`edit-${selectedPersonEditFormKey}`}
                   className="builder-panel-stack"

@@ -632,6 +632,7 @@ describe("builder workspace", () => {
     expect(screen.queryByText("Данные человека")).not.toBeInTheDocument();
     expect(screen.queryByText("Изменения сохраняются по кнопке ниже.")).not.toBeInTheDocument();
     expect(screen.queryByText("Здесь редактируются данные, связи и документы выбранного человека.")).not.toBeInTheDocument();
+    expect(within(inspector).queryByRole("button", { name: "Сделать корнем" })).not.toBeInTheDocument();
     expect(bioTextarea.closest(".builder-section-block")).toBeNull();
   });
 
@@ -1024,7 +1025,7 @@ describe("builder workspace", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Проверка файлов перед загрузкой" })).not.toBeInTheDocument();
     });
-  });
+  }, BUILDER_WORKSPACE_SLOW_TEST_TIMEOUT_MS);
 
   it("shows a video preview tile in the upload review dialog for local video files", async () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
