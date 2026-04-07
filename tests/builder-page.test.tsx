@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import BuilderPage from "@/app/tree/[slug]/builder/page";
@@ -34,15 +33,12 @@ vi.mock("@/components/tree/builder-workspace", () => ({
   BuilderWorkspace: ({
     snapshot,
     mediaLoaded,
-    nav,
   }: {
     snapshot: { tree: { title: string } };
     mediaLoaded?: boolean;
-    nav?: ReactNode;
   }) => (
     <div data-testid="builder-workspace">
       title:{snapshot.tree.title};mediaLoaded:{String(mediaLoaded)}
-      {nav}
     </div>
   ),
 }));

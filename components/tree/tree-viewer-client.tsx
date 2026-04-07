@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, FileText } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,6 @@ import { logMediaError } from "@/lib/utils";
 interface TreeViewerClientProps {
   snapshot: TreeSnapshot;
   shareToken?: string | null;
-  nav?: ReactNode;
 }
 
 type ViewerPanelState = "collapsed" | "open";
@@ -155,7 +154,7 @@ function getCollapsedTabNameParts(name?: string | null) {
   };
 }
 
-export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewerClientProps) {
+export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps) {
   const initialSelectedPersonId = snapshot.tree.root_person_id || snapshot.people[0]?.id || null;
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(initialSelectedPersonId);
   const [panelState, setPanelState] = useState<ViewerPanelState>(initialSelectedPersonId ? "collapsed" : "open");
@@ -312,9 +311,6 @@ export function TreeViewerClient({ snapshot, shareToken, nav = null }: TreeViewe
           personPhotoUrls={personPhotoPreviewUrls}
         />
       </Card>
-
-      {nav ? <div className="viewer-nav-overlay">{nav}</div> : null}
-
       {effectivePanelState === "open" ? (
         <div
           className="viewer-rail-resize-handle"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
 import { ArrowUpRight, CalendarDays, Camera, Pencil } from "lucide-react";
 import { format as formatDateFn, parseISO } from "date-fns";
 
@@ -36,7 +36,6 @@ import type { AvatarCropValue, MediaUploadTargetResponse, ParentLinkRecord, Part
 interface BuilderWorkspaceProps {
   snapshot: TreeSnapshot;
   mediaLoaded?: boolean;
-  nav?: ReactNode;
 }
 
 type BuilderPanel = "person" | "relations" | "media";
@@ -732,7 +731,7 @@ function replacePersonIdInSnapshot(snapshot: TreeSnapshot, tempPersonId: string,
   };
 }
 
-export function BuilderWorkspace({ snapshot, mediaLoaded = true, nav = null }: BuilderWorkspaceProps) {
+export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorkspaceProps) {
   const [currentSnapshot, setCurrentSnapshot] = useState(snapshot);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isMediaLoaded, setIsMediaLoaded] = useState(mediaLoaded);
@@ -2902,9 +2901,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true, nav = null }: B
         aria-hidden="true"
       >
         <main className="builder-main">
-          {expandedGalleryMode && nav ? <div className="tree-page-nav-row builder-page-nav-row">{nav}</div> : null}
           <Card className="viewer-stage builder-stage builder-stage-canvas builder-stage-loading">
-            {!expandedGalleryMode && nav ? <div className="builder-nav-overlay">{nav}</div> : null}
             {!expandedGalleryMode ? <div className="builder-canvas-shell builder-canvas-shell-loading" style={{ height: `${canvasHeight}px` }} /> : null}
           </Card>
         </main>
@@ -2920,9 +2917,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true, nav = null }: B
         style={{ "--builder-inspector-overlay-width": `${builderInspectorWidth}px` } as CSSProperties}
       >
         <main className="builder-main">
-          {expandedGalleryMode && nav ? <div className="tree-page-nav-row builder-page-nav-row">{nav}</div> : null}
           <Card className="viewer-stage builder-stage builder-stage-canvas">
-            {!expandedGalleryMode && nav ? <div className="builder-nav-overlay">{nav}</div> : null}
             {expandedGalleryMode ? (
               <div className="stage-header builder-stage-header builder-stage-header-overlay">
                 <div className="stage-header-copy">

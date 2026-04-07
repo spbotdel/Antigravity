@@ -267,8 +267,8 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   return (
     <>
       <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
-      <main className="page-shell workspace-page utility-page-shell">
-        <div className="tree-page-nav-row utility-page-nav-row">
+      <main className="page-shell tree-page-shell utility-page-shell tree-page-nav-scope">
+        <div className="tree-page-nav-row">
           <TreeNav
             slug={slug}
             shareToken={shareToken}

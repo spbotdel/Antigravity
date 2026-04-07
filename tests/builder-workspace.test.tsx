@@ -381,20 +381,6 @@ describe("builder workspace", () => {
   expect(screen.queryByText("Выберите блок, чтобы он подсветился. Кнопка + открывает меню связей, корзина удаляет выбранного человека.")).not.toBeInTheDocument();
 });
 
-  it("mounts builder navigation as an in-stage overlay in tree mode", async () => {
-    const { container } = render(
-      <BuilderWorkspace snapshot={createSnapshot()} mediaLoaded nav={<div data-testid="builder-nav">nav</div>} />
-    );
-
-    await waitFor(() => {
-      const overlay = container.querySelector(".builder-nav-overlay");
-      expect(overlay).not.toBeNull();
-    });
-
-    const overlay = container.querySelector(".builder-nav-overlay") as HTMLElement;
-    expect(within(overlay).getByTestId("builder-nav")).toBeInTheDocument();
-  });
-
   it("restores the selected inspector panel from localStorage", async () => {
     window.localStorage.setItem("antigravity.builder.tree-1.activePanel", "media");
 

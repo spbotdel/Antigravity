@@ -54,21 +54,18 @@ export default async function BuilderPage({ params, searchParams }: BuilderPageP
   return (
     <>
       <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
-      <main className="page-shell workspace-page workspace-page-canvas">
-        <BuilderWorkspace
-          snapshot={snapshot}
-          mediaLoaded
-          nav={
-            <TreeNav
-              slug={slug}
-              shareToken={shareToken}
-              canEdit={snapshot.actor.canEdit}
-              canManageMembers={snapshot.actor.canManageMembers}
-              canReadAudit={snapshot.actor.canReadAudit}
-              canManageSettings={snapshot.actor.canManageSettings}
-            />
-          }
-        />
+      <main className="page-shell tree-page-shell workspace-page-canvas tree-page-nav-scope">
+        <div className="tree-page-nav-row">
+          <TreeNav
+            slug={slug}
+            shareToken={shareToken}
+            canEdit={snapshot.actor.canEdit}
+            canManageMembers={snapshot.actor.canManageMembers}
+            canReadAudit={snapshot.actor.canReadAudit}
+            canManageSettings={snapshot.actor.canManageSettings}
+          />
+        </div>
+        <BuilderWorkspace snapshot={snapshot} mediaLoaded />
       </main>
     </>
   );

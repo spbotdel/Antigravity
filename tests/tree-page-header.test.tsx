@@ -80,6 +80,7 @@ describe("tree page header wiring", () => {
 
     expect(screen.getByTestId("app-header")).toHaveAttribute("data-mode", "admin");
     expect(screen.getByTestId("app-header")).toHaveAttribute("data-dashboard-link", "true");
+    expect(screen.getByTestId("tree-nav")).toBeInTheDocument();
   });
 
   it("shows participant header for membership viewers", async () => {
