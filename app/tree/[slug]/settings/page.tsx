@@ -56,17 +56,8 @@ export default async function SettingsPage({ params, searchParams }: SettingsPag
   return (
     <>
       <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
-      <main className="page-shell workspace-page">
-        <section className="section-header workspace-header">
-          <div className="workspace-header-main">
-            <div className="workspace-meta-row">
-              <p className="eyebrow">Настройки</p>
-              <span className="workspace-meta-chip">{formatTreeVisibility(pageData.tree.visibility)}</span>
-              <span className="workspace-meta-chip">{pageData.people.length} человек</span>
-            </div>
-            <h1>{pageData.tree.title}</h1>
-            <p className="muted-copy">Название, адрес, корень дерева и режим доступа собраны в один спокойный экран с понятной иерархией.</p>
-          </div>
+      <main className="page-shell workspace-page utility-page-shell">
+        <div className="tree-page-nav-row utility-page-nav-row">
           <TreeNav
             slug={slug}
             shareToken={shareToken}
@@ -75,6 +66,17 @@ export default async function SettingsPage({ params, searchParams }: SettingsPag
             canReadAudit={pageData.actor.canReadAudit}
             canManageSettings={pageData.actor.canManageSettings}
           />
+        </div>
+        <section className="section-header workspace-header utility-page-header">
+          <div className="workspace-header-main">
+            <div className="workspace-meta-row">
+              <p className="eyebrow">Настройки</p>
+              <span className="workspace-meta-chip">{formatTreeVisibility(pageData.tree.visibility)}</span>
+              <span className="workspace-meta-chip">Корень и доступ</span>
+            </div>
+            <h1>{pageData.tree.title}</h1>
+            <p className="muted-copy">Название, адрес, корень дерева и режим доступа собраны в один спокойный экран с понятной иерархией.</p>
+          </div>
         </section>
         <TreeSettingsForm tree={pageData.tree} people={pageData.people} initialBaseUrl={getBaseUrl()} />
       </main>

@@ -800,6 +800,38 @@ textarea {
   max-width: 14ch;
 }
 
+.utility-page-shell {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.utility-page-nav-row {
+  margin-bottom: 0;
+}
+
+.utility-page-header {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.utility-page-header .workspace-header-main {
+  gap: 6px;
+}
+
+.utility-page-header h1 {
+  font-size: clamp(1.72rem, 2.55vw, 2.28rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  max-width: 20ch;
+}
+
+.utility-page-header .muted-copy {
+  max-width: 58ch;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
 .dashboard-page {
   max-width: 1080px;
 }
@@ -8022,6 +8054,10 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
   .archive-upload-panel,
   .archive-album-card {
     padding: 12px;
+  .utility-page-shell {
+    gap: 12px;
+  }
+
   }
 
   .person-media-stage-shell,

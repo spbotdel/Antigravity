@@ -58,18 +58,8 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   return (
     <>
       <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
-      <main className="page-shell workspace-page">
-        <section className="section-header workspace-header">
-          <div className="workspace-header-main">
-            <div className="workspace-meta-row">
-              <p className="eyebrow">Участники</p>
-              <span className="workspace-meta-chip">{activeMemberships.length} активных</span>
-              <span className="workspace-meta-chip">{pendingInvites.length} ждут ответа</span>
-              <span className="workspace-meta-chip">{activeShareLinks.length} семейных ссылок</span>
-            </div>
-            <h1>{pageData.tree.title}</h1>
-            <p className="muted-copy">Роли, приглашения и действующий доступ собраны в одном коротком экране без тяжелой админки.</p>
-          </div>
+      <main className="page-shell workspace-page utility-page-shell">
+        <div className="tree-page-nav-row utility-page-nav-row">
           <TreeNav
             slug={slug}
             shareToken={shareToken}
@@ -78,6 +68,17 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
             canReadAudit={pageData.actor.canReadAudit}
             canManageSettings={pageData.actor.canManageSettings}
           />
+        </div>
+        <section className="section-header workspace-header utility-page-header">
+          <div className="workspace-header-main">
+            <div className="workspace-meta-row">
+              <p className="eyebrow">Участники</p>
+              <span className="workspace-meta-chip">По аккаунту</span>
+              <span className="workspace-meta-chip">Read-only ссылки</span>
+            </div>
+            <h1>{pageData.tree.title}</h1>
+            <p className="muted-copy">Роли, приглашения и действующий доступ собраны в одном коротком экране без тяжелой админки.</p>
+          </div>
         </section>
         <MemberManagementPanel tree={pageData.tree} memberships={memberships} invites={invites} shareLinks={shareLinks} />
       </main>

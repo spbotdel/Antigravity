@@ -16,6 +16,12 @@ vi.mock("next/navigation", () => ({
   redirect: mocks.redirect
 }));
 
+vi.mock("@/components/layout/app-header", () => ({
+  AppHeader: ({ mode, showDashboardLink }: { mode: string; showDashboardLink: boolean }) => (
+    <div data-testid="app-header" data-mode={mode} data-dashboard-link={String(showDashboardLink)} />
+  )
+}));
+
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...props}>
@@ -78,6 +84,7 @@ describe("audit page", () => {
 
     expect(mocks.getTreeAuditPageContext).toHaveBeenCalledWith("demo-family", { shareToken: null });
     expect(mocks.listAudit).toHaveBeenCalledWith("tree-1", { page: 1, pageSize: 50 });
+    expect(screen.getByTestId("app-header")).toHaveAttribute("data-mode", "admin");
     expect(screen.getByRole("heading", { name: "Demo Family" })).toBeInTheDocument();
     expect(screen.getByTestId("audit-log-table")).toHaveTextContent("total:12");
   });

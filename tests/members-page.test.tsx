@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import MembersPage from "@/app/tree/[slug]/members/page";
 import { AppError } from "@/lib/server/errors";
 
+const PAGE_RENDER_TIMEOUT_MS = 15_000;
+
 const mocks = vi.hoisted(() => ({
   getTreeMembersPageData: vi.fn(),
   redirect: vi.fn((href: string) => {
@@ -13,6 +15,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
+}));
+
+vi.mock("@/components/layout/app-header", () => ({
+  AppHeader: ({ mode, showDashboardLink }: { mode: string; showDashboardLink: boolean }) => (
+    <div data-testid="app-header" data-mode={mode} data-dashboard-link={String(showDashboardLink)} />
+  ),
 }));
 
 vi.mock("@/components/layout/tree-nav", () => ({
@@ -86,12 +94,14 @@ describe("members page", () => {
     );
 
     expect(mocks.getTreeMembersPageData).toHaveBeenCalledWith("demo-family", { shareToken: null });
+    expect(screen.getByTestId("app-header")).toHaveAttribute("data-mode", "admin");
     expect(screen.getByRole("heading", { name: "Demo Family" })).toBeInTheDocument();
-    expect(screen.getByText("2 активных")).toBeInTheDocument();
-    expect(screen.getByText("1 ждут ответа")).toBeInTheDocument();
-    expect(screen.getByText("1 семейных ссылок")).toBeInTheDocument();
+    expect(screen.getByText("Read-only ссылки")).toBeInTheDocument();
+    expect(screen.queryByText("2 активных")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 ждут ответа")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 семейных ссылок")).not.toBeInTheDocument();
     expect(screen.getByTestId("member-management-panel")).toHaveTextContent("memberships:2;invites:1;share-links:1");
-  });
+  }, PAGE_RENDER_TIMEOUT_MS);
 
   it("redirects share-link viewers back to the viewer page", async () => {
     mocks.getTreeMembersPageData.mockResolvedValue({

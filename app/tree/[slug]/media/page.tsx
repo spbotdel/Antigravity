@@ -267,20 +267,8 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   return (
     <>
       <AppHeader mode={headerMode} showDashboardLink={headerMode === "admin"} />
-      <main className="page-shell workspace-page">
-        <section className="section-header workspace-header">
-          <div className="workspace-header-main">
-            <div className="workspace-meta-row">
-              <p className="eyebrow">{formatTreeVisibility(pageData.tree.visibility)} дерево</p>
-              <span className="workspace-meta-chip">{photoMedia.length} фото</span>
-              <span className="workspace-meta-chip">{videoMedia.length} видео</span>
-              <span className="workspace-meta-chip">{audioMedia.length} аудио</span>
-              <span className="workspace-meta-chip">{documentMedia.length} док.</span>
-              <span className="workspace-meta-chip">{allAlbumSummaries.length} альбомов</span>
-            </div>
-            <h1>{pageData.tree.title}</h1>
-            <p className="muted-copy">Семейный архив собирает общие фото, видео, аудиозаписи и документы в одной галерее.</p>
-          </div>
+      <main className="page-shell workspace-page utility-page-shell">
+        <div className="tree-page-nav-row utility-page-nav-row">
           <TreeNav
             slug={slug}
             shareToken={shareToken}
@@ -289,6 +277,17 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
             canReadAudit={pageData.actor.canReadAudit}
             canManageSettings={pageData.actor.canManageSettings}
           />
+        </div>
+        <section className="section-header workspace-header utility-page-header">
+          <div className="workspace-header-main">
+            <div className="workspace-meta-row">
+              <p className="eyebrow">Семейный архив</p>
+              <span className="workspace-meta-chip">{formatTreeVisibility(pageData.tree.visibility)}</span>
+              <span className="workspace-meta-chip">{allAlbumSummaries.length} альбомов</span>
+            </div>
+            <h1>{pageData.tree.title}</h1>
+            <p className="muted-copy">Семейный архив собирает общие фото, видео, аудиозаписи и документы в одной галерее.</p>
+          </div>
         </section>
 
         <TreeMediaArchiveClient

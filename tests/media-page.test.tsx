@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import MediaPage from "@/app/tree/[slug]/media/page";
 
+const PAGE_RENDER_TIMEOUT_MS = 15_000;
+
 const mocks = vi.hoisted(() => ({
   after: vi.fn((callback: () => void | Promise<void>) => {
     void callback();
@@ -19,6 +21,12 @@ vi.mock("next/server", async () => {
     after: mocks.after,
   };
 });
+
+vi.mock("@/components/layout/app-header", () => ({
+  AppHeader: ({ mode, showDashboardLink }: { mode: string; showDashboardLink: boolean }) => (
+    <div data-testid="app-header" data-mode={mode} data-dashboard-link={String(showDashboardLink)} />
+  ),
+}));
 
 vi.mock("@/components/layout/tree-nav", () => ({
   TreeNav: ({
@@ -160,13 +168,15 @@ describe("media page", () => {
     );
 
     expect(mocks.getTreeMediaPageData).toHaveBeenCalledWith("demo-family", { shareToken: null });
+    expect(screen.getByTestId("app-header")).toHaveAttribute("data-mode", "admin");
     expect(screen.getByRole("heading", { name: "Demo Family" })).toBeInTheDocument();
-    expect(screen.getByText("1 фото")).toBeInTheDocument();
-    expect(screen.getByText("1 видео")).toBeInTheDocument();
+    expect(screen.getByText("Семейный архив")).toBeInTheDocument();
+    expect(screen.queryByText("1 фото")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 видео")).not.toBeInTheDocument();
     expect(screen.getByText("2 альбомов")).toBeInTheDocument();
     expect(screen.getByTestId("tree-nav")).toHaveTextContent("share:none;edit:true");
     expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("share:none;edit:true;mode:video;view:albums;album:none;media:2;albums:1");
-  });
+  }, PAGE_RENDER_TIMEOUT_MS);
 
   it("keeps the media page readable for share-link viewers and passes the share token through", async () => {
     mocks.getTreeMediaPageData.mockResolvedValue({

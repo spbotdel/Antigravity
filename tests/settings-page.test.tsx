@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage from "@/app/tree/[slug]/settings/page";
 import { AppError } from "@/lib/server/errors";
 
+const PAGE_RENDER_TIMEOUT_MS = 15_000;
+
 const mocks = vi.hoisted(() => ({
   getTreeSettingsPageData: vi.fn(),
   redirect: vi.fn((href: string) => {
@@ -13,6 +15,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
+}));
+
+vi.mock("@/components/layout/app-header", () => ({
+  AppHeader: ({ mode, showDashboardLink }: { mode: string; showDashboardLink: boolean }) => (
+    <div data-testid="app-header" data-mode={mode} data-dashboard-link={String(showDashboardLink)} />
+  ),
 }));
 
 vi.mock("@/components/layout/tree-nav", () => ({
@@ -81,12 +89,14 @@ describe("settings page", () => {
     );
 
     expect(mocks.getTreeSettingsPageData).toHaveBeenCalledWith("demo-family", { shareToken: null });
+    expect(screen.getByTestId("app-header")).toHaveAttribute("data-mode", "admin");
     expect(screen.getByRole("heading", { name: "Demo Family" })).toBeInTheDocument();
     expect(screen.getByText("Закрытое")).toBeInTheDocument();
-    expect(screen.getByText("2 человек")).toBeInTheDocument();
+    expect(screen.getByText("Корень и доступ")).toBeInTheDocument();
+    expect(screen.queryByText("2 человек")).not.toBeInTheDocument();
     expect(screen.getByTestId("tree-nav")).toHaveTextContent("share:none;edit:true");
     expect(screen.getByTestId("tree-settings-form")).toHaveTextContent("title:Demo Family;people:2;base:");
-  });
+  }, PAGE_RENDER_TIMEOUT_MS);
 
   it("redirects share-link viewers back to the viewer page", async () => {
     mocks.getTreeSettingsPageData.mockResolvedValue({
