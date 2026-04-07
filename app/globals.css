@@ -8112,10 +8112,10 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
   .archive-upload-panel,
   .archive-album-card {
     padding: 12px;
-  .utility-page-shell {
-    gap: 12px;
   }
 
+  .utility-page-shell {
+    gap: 12px;
   }
 
   .person-media-stage-shell,
@@ -8290,6 +8290,8 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
 
   .dashboard-primary-cta[data-slot="button"] {
     min-width: 0;
+  }
+
   .audit-table thead {
     display: none;
   }
