@@ -33,10 +33,13 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [currentVisibility, setCurrentVisibility] = useState<TreeRecord["visibility"]>(tree.visibility);
+  const [title, setTitle] = useState(tree.title);
   const [draftSlug, setDraftSlug] = useState(tree.slug);
+  const [description, setDescription] = useState(tree.description || "");
+  const [rootPersonId, setRootPersonId] = useState(tree.root_person_id || "");
   const [resolvedBaseUrl, setResolvedBaseUrl] = useState(() => normalizeBaseUrl(initialBaseUrl || "http://localhost:3000"));
   const [pendingAction, setPendingAction] = useState<"identity" | "public" | "private" | null>(null);
-  const currentRootPerson = people.find((person) => person.id === tree.root_person_id) || null;
+  const currentRootPerson = people.find((person) => person.id === rootPersonId) || null;
   const treeUrl = buildTreeUrl(resolvedBaseUrl, draftSlug || tree.slug);
 
   useEffect(() => {
@@ -46,6 +49,14 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
 
     setResolvedBaseUrl(normalizeBaseUrl(window.location.origin));
   }, []);
+
+  useEffect(() => {
+    setTitle(tree.title);
+    setDraftSlug(tree.slug);
+    setDescription(tree.description || "");
+    setRootPersonId(tree.root_person_id || "");
+    setCurrentVisibility(tree.visibility);
+  }, [tree.description, tree.root_person_id, tree.slug, tree.title, tree.visibility]);
 
   async function send(url: string, body: unknown) {
     const response = await fetch(url, {
@@ -68,12 +79,11 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
   async function updateIdentity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPendingAction("identity");
-    const form = new FormData(event.currentTarget);
     await send(`/api/trees/${tree.id}`, {
-      title: String(form.get("title") || ""),
-      slug: String(form.get("slug") || ""),
-      description: String(form.get("description") || ""),
-      rootPersonId: String(form.get("rootPersonId") || "") || null
+      title: title.trim(),
+      slug: draftSlug.trim(),
+      description: description,
+      rootPersonId: rootPersonId || null
     });
     setPendingAction(null);
   }
@@ -142,27 +152,27 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
             <div className="form-grid form-grid-2">
               <label className="form-field">
                 Название дерева
-                <Input name="title" defaultValue={tree.title} required />
+                <Input name="title" value={title} required onChange={(event) => setTitle(event.target.value)} />
                 <small className="settings-field-note">Так дерево увидят участники и гости по ссылке.</small>
               </label>
 
               <label className="form-field">
                 Адрес страницы
-                <Input name="slug" defaultValue={tree.slug} required onChange={(event) => setDraftSlug(event.target.value)} />
+                <Input name="slug" value={draftSlug} required onChange={(event) => setDraftSlug(event.target.value)} />
                 <small className="settings-field-note">Лучше оставить короткий и читаемый адрес, например `/tree/ivanovy`.</small>
               </label>
             </div>
 
             <label className="form-field">
               Описание
-              <Textarea name="description" rows={4} defaultValue={tree.description || ""} />
+              <Textarea name="description" rows={4} value={description} onChange={(event) => setDescription(event.target.value)} />
               <small className="settings-field-note">Несколько строк о том, что это за дерево и кому оно посвящено.</small>
             </label>
 
             <div className="form-grid form-grid-2">
               <label className="form-field">
                 Корневой человек
-                <SelectField name="rootPersonId" defaultValue={tree.root_person_id || ""}>
+                <SelectField name="rootPersonId" value={rootPersonId} onChange={(event) => setRootPersonId(event.target.value)}>
                   <option value="">Выбрать позже</option>
                   {people.map((person) => (
                     <option key={person.id} value={person.id}>

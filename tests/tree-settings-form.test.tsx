@@ -55,4 +55,92 @@ describe("tree settings form", () => {
 
     expect(screen.getByText("Ссылка на дерево скопирована.")).toBeInTheDocument();
   });
+
+  it("rerenders updated tree fields without the uncontrolled FieldControl warning", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { rerender } = render(
+      <TreeSettingsForm
+        tree={{
+          id: "tree-1",
+          owner_user_id: "user-owner",
+          slug: "demo-family",
+          title: "Demo Family",
+          description: "Initial description",
+          visibility: "private",
+          root_person_id: "person-1",
+          created_at: "2026-03-09T00:00:00.000Z",
+          updated_at: "2026-03-09T00:00:00.000Z",
+        }}
+        people={[
+          {
+            id: "person-1",
+            tree_id: "tree-1",
+            full_name: "Иван Иванов",
+            gender: null,
+            birth_date: null,
+            death_date: null,
+            birth_place: null,
+            death_place: null,
+            bio: null,
+            is_living: true,
+            created_by: null,
+            created_at: "2026-03-09T00:00:00.000Z",
+            updated_at: "2026-03-09T00:00:00.000Z",
+          },
+        ]}
+        initialBaseUrl="http://localhost:3000"
+      />
+    );
+
+    rerender(
+      <TreeSettingsForm
+        tree={{
+          id: "tree-1",
+          owner_user_id: "user-owner",
+          slug: "popovi",
+          title: "Семейное дерево Ивановых",
+          description: "Updated description",
+          visibility: "private",
+          root_person_id: "person-1",
+          created_at: "2026-03-09T00:00:00.000Z",
+          updated_at: "2026-04-05T00:00:00.000Z",
+        }}
+        people={[
+          {
+            id: "person-1",
+            tree_id: "tree-1",
+            full_name: "Иван Иванов",
+            gender: null,
+            birth_date: null,
+            death_date: null,
+            birth_place: null,
+            death_place: null,
+            bio: null,
+            is_living: true,
+            created_by: null,
+            created_at: "2026-03-09T00:00:00.000Z",
+            updated_at: "2026-03-09T00:00:00.000Z",
+          },
+        ]}
+        initialBaseUrl="http://localhost:3000"
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Семейное дерево Ивановых")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("popovi")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("Updated description")).toBeInTheDocument();
+    });
+
+    expect(
+      consoleErrorSpy.mock.calls.some((call) =>
+        call.some(
+          (arg) =>
+            typeof arg === "string" &&
+            arg.includes("changing the default value state of an uncontrolled FieldControl")
+        )
+      )
+    ).toBe(false);
+  });
 });
