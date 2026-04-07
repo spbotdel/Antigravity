@@ -833,12 +833,12 @@ textarea {
 }
 
 .dashboard-page {
-  max-width: 1080px;
+  max-width: 980px;
 }
 
 .dashboard-header {
-  max-width: 780px;
-  margin-bottom: 16px;
+  max-width: 700px;
+  margin-bottom: 10px;
 }
 
 .dashboard-title {
@@ -850,7 +850,7 @@ textarea {
 
 .dashboard-workspace {
   display: grid;
-  gap: 20px;
+  gap: 18px;
 }
 
 .dashboard-primary-card,
@@ -861,21 +861,29 @@ textarea {
 }
 
 .dashboard-primary-card {
+  max-width: 760px;
   padding: 24px;
+  margin: 0 auto;
+  gap: 12px;
 }
 
 .dashboard-primary-topline,
 .dashboard-compact-topline {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
 }
 
+.dashboard-primary-header {
+  display: grid;
+  gap: 14px;
+}
+
 .dashboard-primary-copy {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dashboard-primary-copy h2 {
@@ -891,12 +899,25 @@ textarea {
   line-height: 1.58;
 }
 
-.dashboard-primary-slug {
+.dashboard-primary-utility {
   display: grid;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.dashboard-primary-utility-label {
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
-  font-size: 0.88rem;
-  max-width: min(100%, 52ch);
-  text-align: right;
+}
+
+.dashboard-primary-slug {
+  display: block;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  max-width: min(100%, 60ch);
   overflow-wrap: anywhere;
 }
 
@@ -920,34 +941,6 @@ textarea {
 .dashboard-card-slug {
   color: var(--muted);
   font-size: 0.88rem;
-}
-
-.dashboard-fact-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.dashboard-fact-card {
-  display: grid;
-  gap: 4px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(248, 246, 242, 0.9);
-  border: 1px solid rgba(18, 27, 43, 0.06);
-}
-
-.dashboard-fact-card span {
-  font-size: 0.78rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.dashboard-fact-card strong {
-  font-size: 0.98rem;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
 }
 
 .dashboard-create-card {
@@ -1004,14 +997,20 @@ textarea {
 
 .dashboard-primary-actions {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  align-content: start;
+}
+
+.dashboard-primary-cta[data-slot="button"] {
+  min-width: 210px;
 }
 
 .dashboard-action-note {
   margin: 0;
   color: var(--muted);
-  font-size: 0.92rem;
-  line-height: 1.5;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  max-width: 52ch;
 }
 
 .workspace-header .muted-copy {
@@ -8225,6 +8224,13 @@ body.media-lightbox-open .workspace-page-canvas .viewer-nav-overlay {
     width: 100%;
   }
 
+
+  .dashboard-primary-card {
+    max-width: none;
+  }
+
+  .dashboard-primary-cta[data-slot="button"] {
+    min-width: 0;
   .audit-table thead {
     display: none;
   }

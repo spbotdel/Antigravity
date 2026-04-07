@@ -52,7 +52,7 @@ export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
 
             return (
               <Card className="dashboard-primary-card p-0">
-                <CardHeader className="px-6 pt-6 pb-0">
+                <CardHeader className="dashboard-primary-header px-6 pt-6 pb-0">
                   <div className="dashboard-primary-topline">
                     <div className="meta-row meta-row-tight">
                       <Badge className="meta-pill">{formatRole(dashboard.primaryOwnedItem.membership.role)}</Badge>
@@ -60,36 +60,27 @@ export function DashboardOverview({ dashboard }: DashboardOverviewProps) {
                         {formatTreeVisibility(dashboard.primaryOwnedItem.tree.visibility)}
                       </Badge>
                     </div>
-                    <span className="dashboard-primary-slug" title={treeUrl}>{treeUrl}</span>
                   </div>
                   <div className="dashboard-primary-copy">
                     <p className="card-kicker">Ваше дерево</p>
                     <h2 className="card-heading">{dashboard.primaryOwnedItem.tree.title}</h2>
                     <p className="card-copy">{dashboard.primaryOwnedItem.tree.description || "Описание пока не добавлено."}</p>
                   </div>
-                </CardHeader>
-                <CardContent className="px-6 pt-0 pb-0">
-                  <div className="dashboard-fact-grid">
-                    <div className="dashboard-fact-card">
-                      <span>Доступ</span>
-                      <strong>{formatTreeVisibility(dashboard.primaryOwnedItem.tree.visibility)}</strong>
-                    </div>
-                    <div className="dashboard-fact-card">
-                      <span>Ссылка</span>
-                      <strong title={treeUrl}>{treeUrl}</strong>
-                    </div>
+                  <div className="dashboard-primary-utility">
+                    <span className="dashboard-primary-utility-label">Ссылка на дерево</span>
+                    <span className="dashboard-primary-slug" title={treeUrl}>{treeUrl}</span>
                   </div>
-                </CardContent>
+                </CardHeader>
                 <CardFooter className="dashboard-primary-actions border-0 bg-transparent px-6 pt-0 pb-6">
                   <div className="action-row dashboard-card-actions">
-                    <Link href={`/tree/${dashboard.primaryOwnedItem.tree.slug}/builder`} className={buttonVariants()}>
+                    <Link href={`/tree/${dashboard.primaryOwnedItem.tree.slug}/builder`} className={`${buttonVariants()} dashboard-primary-cta`}>
                       Открыть конструктор
                     </Link>
                     <Link href={`/tree/${dashboard.primaryOwnedItem.tree.slug}`} className={buttonVariants({ variant: "secondary" })}>
                       Открыть просмотр
                     </Link>
                   </div>
-                  <p className="dashboard-action-note">Конструктор для изменений, просмотр для спокойной проверки.</p>
+                  <p className="dashboard-action-note">Конструктор остается основным рабочим входом, просмотр нужен для спокойной проверки результата.</p>
                 </CardFooter>
               </Card>
             );

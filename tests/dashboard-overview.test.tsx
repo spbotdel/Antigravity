@@ -55,6 +55,7 @@ describe("dashboard overview", () => {
 
     render(<DashboardOverview dashboard={dashboard} />);
 
+    expect(screen.getByText("Ссылка на дерево")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Открыть конструктор" })).toHaveAttribute("href", "/tree/slug-tree-owned/builder");
     expect(screen.getByRole("link", { name: "Открыть просмотр" })).toHaveAttribute("href", "/tree/slug-tree-owned");
   });
