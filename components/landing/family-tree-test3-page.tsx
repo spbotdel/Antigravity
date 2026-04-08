@@ -23,6 +23,7 @@ interface LandingRenderState {
 
 interface FamilyTreeTest3PageProps {
   sunVariant: SunVariant;
+  backgroundBaseSrc?: string;
 }
 
 const SCENE_BASE_WIDTH = 1440;
@@ -69,7 +70,7 @@ function getSceneScale(): SceneScale {
   };
 }
 
-export function FamilyTreeTest3Page({ sunVariant }: FamilyTreeTest3PageProps) {
+export function FamilyTreeTest3Page({ sunVariant, backgroundBaseSrc }: FamilyTreeTest3PageProps) {
   const landingConfig = useRef({
     assets: {
       backgroundBase: "/landing/family-tree-scene/prepared-bg-base-scene-v2.png",
@@ -375,7 +376,13 @@ export function FamilyTreeTest3Page({ sunVariant }: FamilyTreeTest3PageProps) {
       style={viewportStyle}
     >
       <div className={styles.backgroundLayers} aria-hidden="true">
-        <img className={styles.backgroundBase} src={landingConfig.assets.backgroundBase} alt="" loading="eager" draggable={false} />
+        <img
+          className={styles.backgroundBase}
+          src={backgroundBaseSrc ?? landingConfig.assets.backgroundBase}
+          alt=""
+          loading="eager"
+          draggable={false}
+        />
 
         <div className={styles.backgroundDecorations}>
           <div
