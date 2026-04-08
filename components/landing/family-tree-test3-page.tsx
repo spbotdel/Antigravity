@@ -1,7 +1,6 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { useSearchParams } from "next/navigation";
 
 import { FamilyTreeScrollStage } from "@/components/landing/family-tree-scroll-stage";
 
@@ -22,45 +21,12 @@ interface LandingRenderState {
   targetProgress: number;
 }
 
+interface FamilyTreeTest3PageProps {
+  sunVariant: SunVariant;
+}
+
 const SCENE_BASE_WIDTH = 1440;
 const SCENE_BASE_HEIGHT = 900;
-
-const sunVariants: Array<{
-  id: SunVariant;
-  label: string;
-  note: string;
-}> = [
-  {
-    id: "none",
-    label: "None",
-    note: "Cloud-only baseline without any sun layers."
-  },
-  {
-    id: "original",
-    label: "Original",
-    note: "Current three-layer sun with blur and screen blending."
-  },
-  {
-    id: "no-blur",
-    label: "No Blur",
-    note: "Same composition, but the halo blur is removed."
-  },
-  {
-    id: "no-blend",
-    label: "No Blend",
-    note: "Halo and sun keep their layers, but blend-heavy effects are removed."
-  },
-  {
-    id: "double",
-    label: "Double",
-    note: "Only outline and gold layers remain; halo is removed."
-  },
-  {
-    id: "single",
-    label: "Single",
-    note: "Only the gold sun layer remains."
-  }
-];
 
 const sunVariantClassNames: Record<SunVariant, string> = {
   none: styles.variantNone,
@@ -103,13 +69,7 @@ function getSceneScale(): SceneScale {
   };
 }
 
-function normalizeSunVariant(value: string | null | undefined): SunVariant {
-  return sunVariants.some((variant) => variant.id === value) ? (value as SunVariant) : "original";
-}
-
-export function FamilyTreeTest3Page() {
-  const searchParams = useSearchParams();
-  const currentSunVariant = normalizeSunVariant(searchParams.get("sunVariant"));
+export function FamilyTreeTest3Page({ sunVariant }: FamilyTreeTest3PageProps) {
   const landingConfig = useRef({
     assets: {
       backgroundBase: "/landing/family-tree-scene/prepared-bg-base-scene-v2.png",
@@ -399,7 +359,6 @@ export function FamilyTreeTest3Page() {
   );
   const sunTranslateX = -61 * sceneScale.x;
   const sunTranslateY = -43 * sceneScale.y;
-  const activeSunVariant = sunVariants.find((variant) => variant.id === currentSunVariant) ?? sunVariants[1];
 
   const viewportStyle = {
     "--landing-sticky-top": `${renderState.stickyTop}px`,
@@ -412,34 +371,9 @@ export function FamilyTreeTest3Page() {
   return (
     <section
       ref={sectionRef}
-      className={[styles.viewport, sunVariantClassNames[currentSunVariant]].filter(Boolean).join(" ")}
+      className={[styles.viewport, sunVariantClassNames[sunVariant]].filter(Boolean).join(" ")}
       style={viewportStyle}
     >
-      <aside className={styles.variantSwitcher}>
-        <strong className={styles.variantTitle}>Test3 Sun Variants</strong>
-        <div className={styles.variantLinks}>
-          {sunVariants.map((variant) => {
-            const href = variant.id === "original" ? "/test3" : `/test3?sunVariant=${variant.id}`;
-
-            return (
-              <a
-                key={variant.id}
-                href={href}
-                className={[
-                  styles.variantLink,
-                  currentSunVariant === variant.id ? styles.variantLinkCurrent : ""
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                {variant.label}
-              </a>
-            );
-          })}
-        </div>
-        <p className={styles.variantNote}>{activeSunVariant.note}</p>
-      </aside>
-
       <div className={styles.backgroundLayers} aria-hidden="true">
         <img className={styles.backgroundBase} src={landingConfig.assets.backgroundBase} alt="" loading="eager" draggable={false} />
 
