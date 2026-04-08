@@ -1,0 +1,85 @@
+.stageShell {
+  --stage-base-progress: 1;
+  --stage-leaves-stage-one-progress: 1;
+  --stage-leaves-progress: 1;
+  --stage-people-stage-one-progress: 1;
+  --stage-people-progress: 1;
+  width: 1024px;
+  height: 1024px;
+  flex-shrink: 0;
+}
+
+.stageInteractive {
+}
+
+.stageStatic {
+}
+
+.stageFrame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  isolation: isolate;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transform-origin: center center;
+  will-change: opacity, transform;
+}
+
+.layer img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.baseLayer {
+  opacity: calc(0.92 + var(--stage-base-progress) * 0.08);
+  transform: none;
+}
+
+.leavesLayer {
+  opacity: calc(var(--stage-leaves-progress) * 0.99);
+  transform: none;
+}
+
+.leavesStageOneLayer {
+  opacity: calc(var(--stage-leaves-stage-one-progress) * 0.99);
+  transform: none;
+}
+
+.peopleStageOneLayer {
+  opacity: calc(var(--stage-people-stage-one-progress) * 0.99);
+  transform: none;
+}
+
+.peopleLayer {
+  opacity: var(--stage-people-progress);
+  transform: none;
+}
+
+@media (max-width: 980px) {
+  .stageShell {
+    width: min(100%, 1024px);
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .stageShell {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layer {
+    will-change: auto;
+  }
+}

@@ -16,6 +16,12 @@ interface AppHeaderProps {
 
 export function AppHeader({ initialUser }: AppHeaderProps) {
   const pathname = usePathname();
+  const isLandingPath =
+    pathname === "/" ||
+    pathname === "/test" ||
+    pathname === "/test2" ||
+    pathname === "/test3" ||
+    pathname === "/landing-reference";
   const [user, setUser] = useState(initialUser);
 
   function normalizeUser(
@@ -42,6 +48,10 @@ export function AppHeader({ initialUser }: AppHeaderProps) {
   }
 
   useEffect(() => {
+    if (isLandingPath) {
+      return;
+    }
+
     const supabase = createBrowserSupabaseClient();
     let active = true;
 
@@ -70,7 +80,11 @@ export function AppHeader({ initialUser }: AppHeaderProps) {
       active = false;
       subscription.unsubscribe();
     };
-  }, [initialUser]);
+  }, [initialUser, isLandingPath]);
+
+  if (isLandingPath) {
+    return null;
+  }
 
   return (
     <header className="app-header">
