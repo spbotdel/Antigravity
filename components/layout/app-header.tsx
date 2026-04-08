@@ -21,6 +21,7 @@ export function AppHeader({ initialUser }: AppHeaderProps) {
     pathname === "/test" ||
     pathname === "/test2" ||
     pathname === "/test3" ||
+    pathname === "/test4" ||
     pathname.startsWith("/test3-") ||
     pathname === "/landing-reference";
   const [user, setUser] = useState(initialUser);

@@ -1,0 +1,120 @@
+.viewport {
+  --landing-sticky-top: 0px;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100svh;
+  overflow: hidden;
+  background: #f8f5ee;
+}
+
+.backgroundLayers {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.backgroundBase,
+.decoration {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
+  transform-origin: center center;
+}
+
+.backgroundBase {
+  opacity: 0.52;
+  transform: scale(1.08);
+}
+
+.backgroundDecorations {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.decoration {
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+.cloudBanks {
+  inset: auto auto -3% -3%;
+  width: 112%;
+  height: auto;
+  opacity: 0.74;
+  animation: cloudBreath 8s ease-in-out infinite alternate;
+}
+
+.cloudBanks {
+  mix-blend-mode: multiply;
+  transform-origin: center center;
+}
+
+@keyframes cloudBreath {
+  0% {
+    opacity: 0.54;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0.84;
+    transform: scale(1.03);
+  }
+}
+
+.layout {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  align-items: stretch;
+}
+
+.copyColumn {
+  min-width: 0;
+}
+
+.sceneColumn {
+  position: relative;
+  height: 100%;
+  display: grid;
+  align-items: start;
+  justify-items: end;
+  padding: 0 24px 0 0;
+}
+
+.sceneColumn > * {
+  margin-top: -13vh;
+  margin-right: -12vw;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .copyColumn {
+    display: none;
+  }
+
+  .sceneColumn {
+    height: 100%;
+    padding: 0 4vw;
+    align-items: center;
+  }
+
+  .sceneColumn > * {
+    margin-top: 0;
+    margin-right: 0;
+  }
+}
