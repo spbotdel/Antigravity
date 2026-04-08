@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { FamilyTreeScrollStage } from "@/components/landing/family-tree-scroll-stage";
 
@@ -19,10 +20,6 @@ interface LandingRenderState {
   renderProgress: number;
   stickyTop: number;
   targetProgress: number;
-}
-
-interface FamilyTreeTest3PageProps {
-  initialSunVariant?: string;
 }
 
 const SCENE_BASE_WIDTH = 1440;
@@ -106,12 +103,13 @@ function getSceneScale(): SceneScale {
   };
 }
 
-function normalizeSunVariant(value: string | undefined): SunVariant {
+function normalizeSunVariant(value: string | null | undefined): SunVariant {
   return sunVariants.some((variant) => variant.id === value) ? (value as SunVariant) : "original";
 }
 
-export function FamilyTreeTest3Page({ initialSunVariant }: FamilyTreeTest3PageProps) {
-  const currentSunVariant = normalizeSunVariant(initialSunVariant);
+export function FamilyTreeTest3Page() {
+  const searchParams = useSearchParams();
+  const currentSunVariant = normalizeSunVariant(searchParams.get("sunVariant"));
   const landingConfig = useRef({
     assets: {
       backgroundBase: "/landing/family-tree-scene/prepared-bg-base-scene-v2.png",
