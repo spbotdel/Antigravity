@@ -1,9 +1,9 @@
 .stageShell {
-  --stage-base-progress: 1;
-  --stage-leaves-stage-one-progress: 1;
-  --stage-leaves-progress: 1;
-  --stage-people-stage-one-progress: 1;
-  --stage-people-progress: 1;
+  --stage-base-progress: 0;
+  --stage-leaves-stage-one-progress: 0;
+  --stage-leaves-progress: 0;
+  --stage-people-stage-one-progress: 0;
+  --stage-people-progress: 0;
   width: 1024px;
   height: 1024px;
   flex-shrink: 0;

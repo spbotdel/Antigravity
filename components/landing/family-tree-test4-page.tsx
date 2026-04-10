@@ -1,12 +1,27 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import Link from "next/link";
+import { Golos_Text, Playfair_Display } from "next/font/google";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
 import { FamilyTreeScrollStage } from "@/components/landing/family-tree-scroll-stage";
 
 import styles from "./family-tree-test4-page.module.css";
 
+const playfairDisplay = Playfair_Display({
+  subsets: ["latin", "cyrillic"],
+  weight: ["600", "700"],
+  display: "swap"
+});
+
+const golosText = Golos_Text({
+  subsets: ["latin", "cyrillic"],
+  weight: ["400", "500"],
+  display: "swap"
+});
+
 type LandingMode = "interactive" | "static";
+type InteractionKind = "hint" | "touch" | "wheel";
 
 interface LandingRenderState {
   mode: LandingMode;
@@ -34,11 +49,14 @@ export function FamilyTreeTest4Page() {
       peopleStageOne: "/landing/family-tree-scene/reference-cloud/prepared-people-layer-stage-1.png",
       people: "/landing/family-tree-scene/reference-cloud/prepared-people-layer-stage-2.png"
     },
-    breakpoints: {
-      interactive: 980
+    autoNudge: {
+      delayMs: 900,
+      holdMs: 260,
+      peakProgress: 0.028
     },
     easingFactor: 0.2,
-    initialMode: "static" as const,
+    hapticDurationMs: 10,
+    initialMode: "interactive" as LandingMode,
     phases: {
       base: {
         end: 0.18,
@@ -71,17 +89,28 @@ export function FamilyTreeTest4Page() {
     wheelSpeed: 0.0011
   }).current;
 
+  const initialProgress = landingConfig.initialMode === "static" ? landingConfig.staticProgress : 0;
+
   const initialRenderState: LandingRenderState = {
     mode: landingConfig.initialMode,
-    renderProgress: landingConfig.staticProgress,
+    renderProgress: initialProgress,
     stickyTop: landingConfig.stickyGap,
-    targetProgress: landingConfig.staticProgress
+    targetProgress: initialProgress
   };
 
   const sectionRef = useRef<HTMLElement | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const renderStateRef = useRef<LandingRenderState>(initialRenderState);
+  const jumpToProgressRef = useRef<((nextTarget: number, source: InteractionKind) => void) | null>(null);
+  const hasAutoNudgedRef = useRef(false);
+  const hasHapticFiredRef = useRef(false);
+  const hasUnlockedPrimaryCtaRef = useRef(false);
+  const hasUserInteractedRef = useRef(false);
+  const isIntroReadyRef = useRef(false);
   const [renderState, setRenderState] = useState<LandingRenderState>(initialRenderState);
+  const [hasUnlockedPrimaryCta, setHasUnlockedPrimaryCta] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [isIntroReady, setIsIntroReady] = useState(false);
 
   const commitRenderState = (nextState: LandingRenderState) => {
     const currentState = renderStateRef.current;
@@ -115,7 +144,43 @@ export function FamilyTreeTest4Page() {
     const previousBodyHeight = bodyElement.style.height;
 
     let animationFrameId = 0;
+    let introReadyFrameId = 0;
+    let autoNudgeDelayId = 0;
+    let autoNudgeReturnId = 0;
     let active = true;
+
+    const clearTimeoutIfNeeded = (timeoutId: number) => {
+      if (timeoutId !== 0) {
+        window.clearTimeout(timeoutId);
+      }
+
+      return 0;
+    };
+
+    const cancelAutoNudge = () => {
+      autoNudgeDelayId = clearTimeoutIfNeeded(autoNudgeDelayId);
+      autoNudgeReturnId = clearTimeoutIfNeeded(autoNudgeReturnId);
+    };
+
+    const markIntroReady = () => {
+      if (!active || isIntroReadyRef.current) {
+        return;
+      }
+
+      isIntroReadyRef.current = true;
+      setIsIntroReady(true);
+    };
+
+    const ensureIntroReady = () => {
+      if (isIntroReadyRef.current || introReadyFrameId !== 0) {
+        return;
+      }
+
+      introReadyFrameId = window.requestAnimationFrame(() => {
+        introReadyFrameId = 0;
+        markIntroReady();
+      });
+    };
 
     const getStickyTop = () => landingConfig.stickyGap;
 
@@ -123,46 +188,182 @@ export function FamilyTreeTest4Page() {
       if (reducedMotionQuery?.matches) {
         return "static" as const;
       }
-      if (window.innerWidth <= landingConfig.breakpoints.interactive) {
-        return "static" as const;
-      }
+
       return "interactive" as const;
     };
 
     const animateToTarget = () => {
       animationFrameId = 0;
-      if (!active) return;
-      const currentState = renderStateRef.current;
-      if (currentState.mode === "static") return;
-      const delta = currentState.targetProgress - currentState.renderProgress;
-      if (Math.abs(delta) <= landingConfig.precision.progress) {
-        commitRenderState({ ...currentState, renderProgress: currentState.targetProgress });
+
+      if (!active) {
         return;
       }
+
+      const currentState = renderStateRef.current;
+      if (currentState.mode === "static") {
+        return;
+      }
+
+      const delta = currentState.targetProgress - currentState.renderProgress;
+      if (Math.abs(delta) <= landingConfig.precision.progress) {
+        commitRenderState({
+          ...currentState,
+          renderProgress: currentState.targetProgress
+        });
+        return;
+      }
+
       commitRenderState({
         ...currentState,
         renderProgress: clamp(currentState.renderProgress + delta * landingConfig.easingFactor, 0, 1)
       });
+
       animationFrameId = window.requestAnimationFrame(animateToTarget);
     };
 
     const scheduleAnimation = () => {
-      if (animationFrameId !== 0 || renderStateRef.current.mode === "static") return;
+      if (animationFrameId !== 0 || renderStateRef.current.mode === "static") {
+        return;
+      }
+
       animationFrameId = window.requestAnimationFrame(animateToTarget);
+    };
+
+    const setSceneTarget = (nextTarget: number) => {
+      const currentState = renderStateRef.current;
+      if (currentState.mode !== "interactive") {
+        return;
+      }
+
+      const clampedTarget = clamp(nextTarget, 0, 1);
+      if (Math.abs(clampedTarget - currentState.targetProgress) <= landingConfig.precision.progress) {
+        return;
+      }
+
+      commitRenderState({
+        ...currentState,
+        targetProgress: clampedTarget
+      });
+      scheduleAnimation();
+    };
+
+    const markUserInteraction = (kind: InteractionKind) => {
+      if (hasUserInteractedRef.current) {
+        return;
+      }
+
+      hasUserInteractedRef.current = true;
+      setHasUserInteracted(true);
+      cancelAutoNudge();
+
+      if (
+        kind === "touch" &&
+        !hasHapticFiredRef.current &&
+        !reducedMotionQuery?.matches &&
+        typeof navigator !== "undefined" &&
+        typeof navigator.vibrate === "function"
+      ) {
+        navigator.vibrate(landingConfig.hapticDurationMs);
+        hasHapticFiredRef.current = true;
+      }
+    };
+
+    const advanceProgress = (delta: number, source: InteractionKind) => {
+      const currentState = renderStateRef.current;
+      if (currentState.mode !== "interactive") {
+        return;
+      }
+
+      const nextTarget = clamp(currentState.targetProgress + delta, 0, 1);
+      if (Math.abs(nextTarget - currentState.targetProgress) <= landingConfig.precision.progress) {
+        return;
+      }
+
+      markUserInteraction(source);
+      commitRenderState({
+        ...currentState,
+        targetProgress: nextTarget
+      });
+      scheduleAnimation();
+    };
+
+    const jumpToProgress = (nextTarget: number, source: InteractionKind) => {
+      const currentState = renderStateRef.current;
+      if (currentState.mode !== "interactive") {
+        return;
+      }
+
+      const clampedTarget = clamp(nextTarget, 0, 1);
+      if (Math.abs(clampedTarget - currentState.targetProgress) <= landingConfig.precision.progress) {
+        return;
+      }
+
+      markUserInteraction(source);
+      commitRenderState({
+        ...currentState,
+        targetProgress: clampedTarget
+      });
+      scheduleAnimation();
+    };
+
+    jumpToProgressRef.current = jumpToProgress;
+
+    const scheduleAutoNudge = () => {
+      if (
+        autoNudgeDelayId !== 0 ||
+        hasAutoNudgedRef.current ||
+        hasUserInteractedRef.current ||
+        reducedMotionQuery?.matches ||
+        renderStateRef.current.mode !== "interactive"
+      ) {
+        return;
+      }
+
+      // Keep the cue tiny so the scene feels alive without faking a visible page scroll.
+      autoNudgeDelayId = window.setTimeout(() => {
+        autoNudgeDelayId = 0;
+
+        if (
+          !active ||
+          hasAutoNudgedRef.current ||
+          hasUserInteractedRef.current ||
+          reducedMotionQuery?.matches ||
+          renderStateRef.current.mode !== "interactive"
+        ) {
+          return;
+        }
+
+        hasAutoNudgedRef.current = true;
+        setSceneTarget(landingConfig.autoNudge.peakProgress);
+
+        autoNudgeReturnId = window.setTimeout(() => {
+          autoNudgeReturnId = 0;
+
+          if (!active || hasUserInteractedRef.current || renderStateRef.current.mode !== "interactive") {
+            return;
+          }
+
+          setSceneTarget(0);
+        }, landingConfig.autoNudge.holdMs);
+      }, landingConfig.autoNudge.delayMs);
     };
 
     const syncViewportState = () => {
       const stickyTop = getStickyTop();
       const nextMode = getNextMode();
+
       if (nextMode === "static") {
+        cancelAutoNudge();
         commitRenderState({
           mode: "static",
           renderProgress: landingConfig.staticProgress,
           stickyTop,
           targetProgress: landingConfig.staticProgress
         });
+        ensureIntroReady();
         return;
       }
+
       const currentState = renderStateRef.current;
       const shouldResetIntoInteractive = currentState.mode === "static" || currentState.renderProgress >= 1;
       commitRenderState({
@@ -171,23 +372,23 @@ export function FamilyTreeTest4Page() {
         stickyTop,
         targetProgress: shouldResetIntoInteractive ? 0 : currentState.targetProgress
       });
+      ensureIntroReady();
       scheduleAnimation();
-    };
-
-    const advanceProgress = (delta: number) => {
-      const currentState = renderStateRef.current;
-      if (currentState.mode !== "interactive") return;
-      commitRenderState({
-        ...currentState,
-        targetProgress: clamp(currentState.targetProgress + delta, 0, 1)
-      });
-      scheduleAnimation();
+      scheduleAutoNudge();
     };
 
     const handleWheel = (event: WheelEvent) => {
-      if (renderStateRef.current.mode !== "interactive") return;
+      if (renderStateRef.current.mode !== "interactive") {
+        return;
+      }
+
+      const delta = event.deltaY * landingConfig.wheelSpeed;
+      if (Math.abs(delta) <= landingConfig.precision.progress) {
+        return;
+      }
+
       event.preventDefault();
-      advanceProgress(event.deltaY * landingConfig.wheelSpeed);
+      advanceProgress(delta, "wheel");
     };
 
     const handleTouchStart = (event: TouchEvent) => {
@@ -195,18 +396,29 @@ export function FamilyTreeTest4Page() {
         touchStartYRef.current = null;
         return;
       }
+
       touchStartYRef.current = event.touches[0]?.clientY ?? null;
     };
 
     const handleTouchMove = (event: TouchEvent) => {
-      if (renderStateRef.current.mode !== "interactive") return;
+      if (renderStateRef.current.mode !== "interactive") {
+        return;
+      }
+
       const currentY = event.touches[0]?.clientY;
-      if (currentY === undefined || touchStartYRef.current === null) return;
+      if (currentY === undefined || touchStartYRef.current === null) {
+        return;
+      }
+
       const deltaY = touchStartYRef.current - currentY;
-      if (Math.abs(deltaY) < 2) return;
+      const progressDelta = deltaY * landingConfig.touchSpeed;
+      if (Math.abs(progressDelta) <= landingConfig.precision.progress) {
+        return;
+      }
+
       event.preventDefault();
       touchStartYRef.current = currentY;
-      advanceProgress(deltaY * landingConfig.touchSpeed);
+      advanceProgress(progressDelta, "touch");
     };
 
     const handleTouchEnd = () => {
@@ -214,8 +426,13 @@ export function FamilyTreeTest4Page() {
     };
 
     const handleMotionPreferenceChange = () => {
+      if (reducedMotionQuery?.matches) {
+        cancelAutoNudge();
+      }
+
       syncViewportState();
       scheduleAnimation();
+      scheduleAutoNudge();
     };
 
     syncViewportState();
@@ -235,6 +452,7 @@ export function FamilyTreeTest4Page() {
         addListener?: (listener: () => void) => void;
         removeListener?: (listener: () => void) => void;
       };
+
       if (typeof reducedMotionQuery.addEventListener === "function") {
         reducedMotionQuery.addEventListener("change", handleMotionPreferenceChange);
       } else if (typeof legacyReducedMotionQuery.addListener === "function") {
@@ -244,21 +462,34 @@ export function FamilyTreeTest4Page() {
 
     return () => {
       active = false;
-      if (animationFrameId !== 0) window.cancelAnimationFrame(animationFrameId);
+      jumpToProgressRef.current = null;
+      cancelAutoNudge();
+
+      if (animationFrameId !== 0) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+
+      if (introReadyFrameId !== 0) {
+        window.cancelAnimationFrame(introReadyFrameId);
+      }
+
       htmlElement.style.overflow = previousHtmlOverflow;
       bodyElement.style.overflow = previousBodyOverflow;
       htmlElement.style.height = previousHtmlHeight;
       bodyElement.style.height = previousBodyHeight;
+
       element.removeEventListener("wheel", handleWheel);
       element.removeEventListener("touchstart", handleTouchStart);
       element.removeEventListener("touchmove", handleTouchMove);
       element.removeEventListener("touchend", handleTouchEnd);
       window.removeEventListener("resize", syncViewportState);
+
       if (reducedMotionQuery) {
         const legacyReducedMotionQuery = reducedMotionQuery as MediaQueryList & {
           addListener?: (listener: () => void) => void;
           removeListener?: (listener: () => void) => void;
         };
+
         if (typeof reducedMotionQuery.removeEventListener === "function") {
           reducedMotionQuery.removeEventListener("change", handleMotionPreferenceChange);
         } else if (typeof legacyReducedMotionQuery.removeListener === "function") {
@@ -266,7 +497,7 @@ export function FamilyTreeTest4Page() {
         }
       }
     };
-  }, []);
+  }, [landingConfig]);
 
   const baseProgress =
     renderState.mode === "static"
@@ -289,6 +520,46 @@ export function FamilyTreeTest4Page() {
       ? landingConfig.staticProgress
       : getPhaseProgress(renderState.renderProgress, landingConfig.phases.peopleStageOne.start, landingConfig.phases.peopleStageOne.end);
 
+  const isReducedMotion = renderState.mode === "static";
+  const sceneProgress = isReducedMotion ? landingConfig.staticProgress : renderState.renderProgress;
+  const uiProgress = isReducedMotion
+    ? landingConfig.staticProgress
+    : Math.max(renderState.renderProgress, renderState.targetProgress);
+  const showHeroTitle = isIntroReady && (isReducedMotion || hasUserInteracted);
+  const showMidSceneText = isIntroReady && (isReducedMotion || uiProgress >= landingConfig.phases.peopleStageOne.start);
+  const showScrollHint = isIntroReady && renderState.mode === "interactive" && !hasUnlockedPrimaryCta;
+  const showPrimaryCta = isIntroReady && (isReducedMotion || hasUnlockedPrimaryCta);
+
+  useEffect(() => {
+    if (hasUnlockedPrimaryCtaRef.current) {
+      return;
+    }
+
+    if (!hasUserInteracted) {
+      return;
+    }
+
+    if (uiProgress >= landingConfig.phases.people.end - landingConfig.precision.progress) {
+      hasUnlockedPrimaryCtaRef.current = true;
+      setHasUnlockedPrimaryCta(true);
+    }
+  }, [hasUserInteracted, landingConfig.phases.people.end, landingConfig.precision.progress, uiProgress]);
+
+  const handleHintClick = () => {
+    const hintStepTargets = [
+      landingConfig.phases.leavesStageOne.end,
+      landingConfig.phases.leaves.end,
+      landingConfig.phases.peopleStageOne.end,
+      landingConfig.phases.people.end
+    ];
+    const currentProgress = Math.max(renderState.renderProgress, renderState.targetProgress);
+    const nextTarget =
+      hintStepTargets.find((target) => currentProgress < target - landingConfig.precision.progress) ??
+      landingConfig.phases.people.end;
+
+    jumpToProgressRef.current?.(nextTarget, "hint");
+  };
+
   const viewportStyle = {
     "--landing-sticky-top": `${renderState.stickyTop}px`
   } as CSSProperties;
@@ -301,8 +572,54 @@ export function FamilyTreeTest4Page() {
           <img className={`${styles.decoration} ${styles.cloudBanks}`.trim()} src={landingConfig.assets.cloudBanks} alt="" loading="eager" draggable={false} />
         </div>
       </div>
+
       <div className={styles.layout}>
-        <div className={styles.copyColumn} aria-hidden="true" />
+        <div className={styles.copyColumn}>
+          <div
+            className={[
+              styles.storyPanel,
+              isReducedMotion ? styles.storyPanelReducedMotion : ""
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <div className={styles.storyCopy}>
+              <h1
+                className={[
+                  styles.storyTitle,
+                  playfairDisplay.className,
+                  showHeroTitle ? styles.storyTitleVisible : "",
+                  isReducedMotion ? styles.storyElementReducedMotion : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                Семейное дерево Русяйкиных
+              </h1>
+              <p
+                className={[
+                  styles.storyLead,
+                  golosText.className,
+                  showMidSceneText ? styles.storyLeadVisible : "",
+                  isReducedMotion ? styles.storyElementReducedMotion : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                История <span className={styles.storyLeadEmphasis}>семьи</span>, собранная в одном месте
+              </p>
+
+              <div className={styles.storyActionSlot}>
+                {showPrimaryCta ? (
+                  <Link href="/dashboard" className={[styles.storyCtaButton, styles.storyCtaButtonVisible, golosText.className].join(" ")}>
+                    <span className={styles.storyCtaTitle}>Открыть дерево</span>
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className={styles.sceneColumn}>
           <FamilyTreeScrollStage
             baseProgress={baseProgress}
@@ -317,6 +634,21 @@ export function FamilyTreeTest4Page() {
             peopleProgress={peopleProgress}
             peopleSrc={landingConfig.assets.people}
           />
+        </div>
+
+        <div
+          className={[
+            styles.scrollHint,
+            showScrollHint ? styles.scrollHintVisible : ""
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          <button type="button" className={styles.scrollHintButton} onClick={handleHintClick} aria-label="Продвинуть сцену дальше">
+            <span className={styles.scrollHintInner}>
+              <span className={styles.scrollHintArrow} aria-hidden="true">↓</span>
+            </span>
+          </button>
         </div>
       </div>
     </section>
