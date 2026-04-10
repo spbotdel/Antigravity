@@ -4,6 +4,7 @@
   --stage-leaves-progress: 0;
   --stage-people-stage-one-progress: 0;
   --stage-people-progress: 0;
+  --stage-overlay-offset-x: 0px;
   width: 1024px;
   height: 1024px;
   flex-shrink: 0;
@@ -46,22 +47,22 @@
 
 .leavesLayer {
   opacity: calc(var(--stage-leaves-progress) * 0.99);
-  transform: none;
+  transform: translate3d(var(--stage-overlay-offset-x), 0, 0);
 }
 
 .leavesStageOneLayer {
   opacity: calc(var(--stage-leaves-stage-one-progress) * 0.99);
-  transform: none;
+  transform: translate3d(var(--stage-overlay-offset-x), 0, 0);
 }
 
 .peopleStageOneLayer {
   opacity: calc(var(--stage-people-stage-one-progress) * 0.99);
-  transform: none;
+  transform: translate3d(var(--stage-overlay-offset-x), 0, 0);
 }
 
 .peopleLayer {
   opacity: var(--stage-people-progress);
-  transform: none;
+  transform: translate3d(var(--stage-overlay-offset-x), 0, 0);
 }
 
 @media (max-width: 980px) {
