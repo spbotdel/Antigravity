@@ -4,7 +4,9 @@ import Link from "next/link";
 import { Golos_Text, Playfair_Display } from "next/font/google";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
+import { LoginForm } from "@/components/auth/login-form";
 import { FamilyTreeScrollStage } from "@/components/landing/family-tree-scroll-stage";
+import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 import styles from "./family-tree-test4-page.module.css";
 
@@ -22,6 +24,7 @@ const golosText = Golos_Text({
 
 type LandingMode = "interactive" | "static";
 type InteractionKind = "hint" | "touch" | "wheel";
+type AuthStatus = "unknown" | "guest" | "signed_in";
 
 interface LandingRenderState {
   mode: LandingMode;
@@ -111,6 +114,8 @@ export function FamilyTreeTest4Page() {
   const [hasUnlockedPrimaryCta, setHasUnlockedPrimaryCta] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [isIntroReady, setIsIntroReady] = useState(false);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("unknown");
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   const commitRenderState = (nextState: LandingRenderState) => {
     const currentState = renderStateRef.current;
@@ -545,6 +550,55 @@ export function FamilyTreeTest4Page() {
     }
   }, [hasUserInteracted, landingConfig.phases.people.end, landingConfig.precision.progress, uiProgress]);
 
+  useEffect(() => {
+    const supabase = createBrowserSupabaseClient();
+    let active = true;
+
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (active) {
+          setAuthStatus(data.user ? "signed_in" : "guest");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAuthStatus("guest");
+        }
+      });
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) {
+        setAuthStatus(session?.user ? "signed_in" : "guest");
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isLoginOpen || typeof window === "undefined") {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsLoginOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isLoginOpen]);
+
   const handleHintClick = () => {
     const hintStepTargets = [
       landingConfig.phases.leavesStageOne.end,
@@ -558,6 +612,36 @@ export function FamilyTreeTest4Page() {
       landingConfig.phases.people.end;
 
     jumpToProgressRef.current?.(nextTarget, "hint");
+  };
+
+  const handlePrimaryCtaClick = async () => {
+    if (authStatus === "signed_in") {
+      window.location.assign("/dashboard");
+      return;
+    }
+
+    if (authStatus === "unknown") {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const { data } = await supabase.auth.getUser();
+        if (data.user) {
+          setAuthStatus("signed_in");
+          window.location.assign("/dashboard");
+          return;
+        }
+      } catch {
+        // Fall through to guest popup.
+      }
+
+      setAuthStatus("guest");
+    }
+
+    setIsLoginOpen(true);
+  };
+
+  const handleLoginSuccess = () => {
+    setAuthStatus("signed_in");
+    setIsLoginOpen(false);
   };
 
   const viewportStyle = {
@@ -611,9 +695,13 @@ export function FamilyTreeTest4Page() {
 
               <div className={styles.storyActionSlot}>
                 {showPrimaryCta ? (
-                  <Link href="/dashboard" className={[styles.storyCtaButton, styles.storyCtaButtonVisible, golosText.className].join(" ")}>
+                  <button
+                    type="button"
+                    className={[styles.storyCtaButton, styles.storyCtaButtonVisible, golosText.className].join(" ")}
+                    onClick={() => void handlePrimaryCtaClick()}
+                  >
                     <span className={styles.storyCtaTitle}>Открыть дерево</span>
-                  </Link>
+                  </button>
                 ) : null}
               </div>
             </div>
@@ -651,6 +739,44 @@ export function FamilyTreeTest4Page() {
           </button>
         </div>
       </div>
+
+      {isLoginOpen ? (
+        <div className={styles.authOverlay} onClick={() => setIsLoginOpen(false)} role="presentation">
+          <div
+            className={styles.authDialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="test4-login-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.authDialogHeader}>
+              <div className={styles.authDialogCopy}>
+                <p className={styles.authDialogEyebrow}>Вход</p>
+                <h2 id="test4-login-title" className={[styles.authDialogTitle, playfairDisplay.className].join(" ")}>
+                  Войти в семейное дерево
+                </h2>
+              </div>
+              <button
+                type="button"
+                className={styles.authDialogClose}
+                aria-label="Закрыть окно входа"
+                onClick={() => setIsLoginOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <LoginForm className={styles.authPopupForm} nextPath="/dashboard" onSuccess={handleLoginSuccess} />
+
+            <p className={[styles.authDialogFooter, golosText.className].join(" ")}>
+              Еще нет аккаунта?{" "}
+              <Link href="/auth/register" className={styles.authDialogLink} onClick={() => setIsLoginOpen(false)}>
+                Создать новый
+              </Link>
+            </p>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
