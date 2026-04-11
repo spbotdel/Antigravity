@@ -6,14 +6,22 @@ import { useState } from "react";
 import { translateAuthError } from "@/lib/auth-error";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
-export function LoginForm() {
+interface LoginFormProps {
+  className?: string;
+  nextPath?: string;
+  onSuccess?: () => void;
+  submitLabel?: string;
+}
+
+export function LoginForm({ className, nextPath, onSuccess, submitLabel = "Войти" }: LoginFormProps) {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const targetPath = nextPath ?? searchParams.get("next") ?? "/dashboard";
 
   return (
     <form
-      className="stack-form"
+      className={["stack-form", className].filter(Boolean).join(" ")}
       onSubmit={async (event) => {
         event.preventDefault();
         setLoading(true);
@@ -33,7 +41,8 @@ export function LoginForm() {
             return;
           }
 
-          window.location.assign(searchParams.get("next") || "/dashboard");
+          onSuccess?.();
+          window.location.assign(targetPath);
         } catch (submitError) {
           setLoading(false);
           setError(translateAuthError(submitError instanceof Error ? submitError.message : "fetch failed"));
@@ -50,7 +59,7 @@ export function LoginForm() {
       </label>
       {error ? <p className="form-error">{error}</p> : null}
       <button className="primary-button" type="submit" disabled={loading}>
-        {loading ? "Входим..." : "Войти"}
+        {loading ? "Входим..." : submitLabel}
       </button>
     </form>
   );
