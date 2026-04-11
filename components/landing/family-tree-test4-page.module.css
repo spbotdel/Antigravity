@@ -390,7 +390,81 @@
   }
 }
 
-@media (max-width: 980px) {
+@media (min-width: 768px) and (max-width: 1199px) {
+  .layout {
+    grid-template-columns: minmax(280px, 34vw) minmax(0, 1fr);
+  }
+
+  .storyPanel {
+    justify-items: start;
+    align-content: start;
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 12svh)
+      22px
+      clamp(88px, 13svh, 128px)
+      clamp(24px, 4vw, 40px);
+  }
+
+  .storyCopy {
+    max-width: min(320px, 28vw);
+    justify-items: start;
+    text-align: left;
+    gap: 18px;
+    transform: none;
+  }
+
+  .storyTitle {
+    font-size: clamp(3rem, 4.9vw, 4.2rem);
+    max-width: 8ch;
+  }
+
+  .storyLead {
+    max-width: 20ch;
+    font-size: clamp(1.02rem, 1.6vw, 1.22rem);
+  }
+
+  .storyActionSlot {
+    min-height: 3.8rem;
+  }
+
+  .storyCtaButton {
+    min-width: min(198px, 100%);
+    padding: 12px 18px 13px;
+  }
+
+  .storyCtaTitle {
+    font-size: 0.96rem;
+  }
+
+  .sceneColumn {
+    padding: 0;
+    align-items: end;
+    justify-items: center;
+    overflow: hidden;
+  }
+
+  .sceneColumn > * {
+    margin-top: 0;
+    margin-right: 0;
+    width: min(60vw, 700px);
+    max-width: none;
+    --stage-overlay-offset-x: 0px;
+    transform: translate3d(0, 5svh, 0);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) and (max-height: 900px) {
+  .storyPanel {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 10svh);
+    padding-bottom: clamp(80px, 12svh, 112px);
+  }
+
+  .sceneColumn > * {
+    transform: translate3d(0, 7svh, 0);
+  }
+}
+
+@media (max-width: 767px) {
   .layout {
     grid-template-columns: 1fr;
   }
@@ -406,41 +480,41 @@
     justify-items: center;
     align-content: start;
     padding:
-      calc(env(safe-area-inset-top, 0px) + 6svh)
-      22px
-      clamp(280px, 34svh, 360px)
-      22px;
+      calc(env(safe-area-inset-top, 0px) + 5svh)
+      18px
+      clamp(300px, 35svh, 370px)
+      18px;
   }
 
   .storyCopy {
-    max-width: min(82vw, 340px);
+    max-width: min(84vw, 320px);
     justify-items: center;
     text-align: center;
-    gap: 16px;
+    gap: 14px;
     transform: none;
   }
 
   .storyTitle {
-    font-size: clamp(2.85rem, 10.8vw, 4.05rem);
-    max-width: 9ch;
+    font-size: clamp(2.55rem, 11vw, 3.6rem);
+    max-width: 8ch;
   }
 
   .storyLead {
-    max-width: 22ch;
-    font-size: clamp(1.12rem, 4.5vw, 1.32rem);
+    max-width: 20ch;
+    font-size: clamp(1rem, 4.4vw, 1.18rem);
   }
 
   .storyActionSlot {
-    min-height: 4rem;
+    min-height: 3.8rem;
   }
 
   .storyCtaButton {
-    min-width: min(206px, 100%);
-    padding: 13px 20px 14px;
+    min-width: min(198px, 100%);
+    padding: 12px 18px 13px;
   }
 
   .storyCtaTitle {
-    font-size: 1rem;
+    font-size: 0.95rem;
   }
 
   .sceneColumn {
@@ -459,106 +533,35 @@
     margin-top: 0;
     margin-right: 0;
     flex: 0 0 auto;
-    width: min(152vw, 640px);
+    width: min(148vw, 620px);
     max-width: none;
-    --stage-overlay-offset-x: 0px;
-    transform: translate3d(0, 3svh, 0);
-  }
-}
-
-@media (max-width: 720px) {
-  .storyPanel {
-    padding:
-      calc(env(safe-area-inset-top, 0px) + 5svh)
-      18px
-      clamp(292px, 36svh, 384px)
-      18px;
-  }
-
-  .storyCopy {
-    max-width: min(84vw, 308px);
-    gap: 14px;
-  }
-
-  .storyTitle {
-    font-size: clamp(2.55rem, 11vw, 3.55rem);
-    max-width: 8ch;
-  }
-
-  .storyLead {
-    font-size: clamp(1.02rem, 4.6vw, 1.2rem);
-    max-width: 20ch;
-  }
-
-  .sceneColumn > * {
-    width: min(158vw, 648px);
     --stage-overlay-offset-x: 0px;
     transform: translate3d(0, 4svh, 0);
   }
 }
 
-@media (max-width: 980px) and (max-height: 900px) {
-  .storyPanel {
-    padding-bottom: clamp(300px, 38svh, 384px);
-  }
-
-  .sceneColumn > * {
-    transform: translate3d(0, 6svh, 0);
-  }
-}
-
-@media (max-width: 980px) and (max-height: 820px) {
-  .storyPanel {
-    padding-bottom: clamp(316px, 42svh, 396px);
-  }
-
-  .sceneColumn > * {
-    transform: translate3d(0, 10svh, 0);
-  }
-}
-
-@media (max-width: 720px) and (max-height: 820px) {
-  .storyPanel {
-    padding-bottom: clamp(324px, 44svh, 404px);
-  }
-
-  .sceneColumn > * {
-    transform: translate3d(0, 12svh, 0);
-  }
-}
-
-@media (max-width: 720px) and (max-height: 760px) {
-  .storyPanel {
-    padding-bottom: clamp(344px, 47svh, 420px);
-  }
-
-  .sceneColumn > * {
-    transform: translate3d(0, 16svh, 0);
-  }
-}
-
-@media (max-width: 480px) and (max-height: 620px) {
+@media (max-width: 767px) and (max-height: 760px) {
   .storyPanel {
     padding:
       calc(env(safe-area-inset-top, 0px) + 4svh)
       16px
-      clamp(352px, 58svh, 420px)
+      clamp(344px, 50svh, 430px)
       16px;
   }
 
   .storyCopy {
-    max-width: min(84vw, 260px);
+    max-width: min(84vw, 268px);
     gap: 8px;
   }
 
   .storyTitle {
-    font-size: clamp(1.95rem, 9.8vw, 2.65rem);
+    font-size: clamp(1.95rem, 10vw, 2.75rem);
     max-width: 8ch;
   }
 
   .storyLead {
-    font-size: clamp(0.86rem, 3.9vw, 0.98rem);
     max-width: 17ch;
+    font-size: clamp(0.88rem, 4vw, 0.98rem);
   }
 
   .storyActionSlot {
@@ -575,8 +578,8 @@
   }
 
   .sceneColumn > * {
-    width: min(150vw, 540px);
-    transform: translate3d(0, 22svh, 0);
+    width: min(146vw, 540px);
+    transform: translate3d(0, 18svh, 0);
   }
 }
 
