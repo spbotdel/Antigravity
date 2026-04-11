@@ -614,28 +614,11 @@ export function FamilyTreeTest4Page() {
     jumpToProgressRef.current?.(nextTarget, "hint");
   };
 
-  const handlePrimaryCtaClick = async () => {
+  const handlePrimaryCtaClick = () => {
     if (authStatus === "signed_in") {
       window.location.assign("/dashboard");
       return;
     }
-
-    if (authStatus === "unknown") {
-      try {
-        const supabase = createBrowserSupabaseClient();
-        const { data } = await supabase.auth.getUser();
-        if (data.user) {
-          setAuthStatus("signed_in");
-          window.location.assign("/dashboard");
-          return;
-        }
-      } catch {
-        // Fall through to guest popup.
-      }
-
-      setAuthStatus("guest");
-    }
-
     setIsLoginOpen(true);
   };
 
@@ -698,7 +681,7 @@ export function FamilyTreeTest4Page() {
                   <button
                     type="button"
                     className={[styles.storyCtaButton, styles.storyCtaButtonVisible, golosText.className].join(" ")}
-                    onClick={() => void handlePrimaryCtaClick()}
+                    onClick={handlePrimaryCtaClick}
                   >
                     <span className={styles.storyCtaTitle}>Открыть дерево</span>
                   </button>
