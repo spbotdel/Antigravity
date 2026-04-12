@@ -3,7 +3,7 @@
 <!-- FRAMEWORK:IMPLEMENTATION:START -->
 ## Current Implementation Sync
 
-- Updated at (UTC): `2026-04-05 07:49:48Z`
+- Updated at (UTC): `2026-04-07 20:41:18Z`
 - Workstreams `A-D` are largely materialized in the repo; the active launch-critical sequence is now rollout + regression + UAT + recovery rehearsal.
 - Active implementation stream: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 - Tree-level archive foundation is present in the repo.

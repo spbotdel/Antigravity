@@ -3,7 +3,7 @@
 <!-- FRAMEWORK:LAUNCH:START -->
 ## Current Launch Sync
 
-- Updated at (UTC): `2026-04-05 07:49:48Z`
+- Updated at (UTC): `2026-04-07 20:41:18Z`
 - Launch is currently blocked until `Cloudflare R2` rollout is activated and confirmed as the steady-state upload path.
 - Current execution order:
 1. Verify gated `Cloudflare R2` readiness: `CF_R2_*`, bucket CORS, upload-intent metadata, `smoke:media`, and `smoke:media:direct`.

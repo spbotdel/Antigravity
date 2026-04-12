@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-04-05 10:08:46Z`
+- Generated at (UTC): `2026-04-07 20:41:18Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -137,10 +137,10 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-04-05 10:08:46Z`
-- Active branch: `feature/ui-design-block`
-- Git status: `STATUS:0 files`
-- Git diff: `DIFF:0 lines`
+- Updated at (UTC): `2026-04-07 20:41:18Z`
+- Active branch: `feature/ui-ux-final-polish`
+- Git status: `STATUS:6 files`
+- Git diff: `DIFF:280 lines`
 
 ### Detected Stack
 
@@ -171,18 +171,23 @@ The display tree is derived and must not be treated as the canonical domain mode
 
 ### Recently Changed Paths
 
-- `<none>`
+- `DECISIONS.md`
+- `app/globals.css`
+- `app/tree/[slug]/audit/page.tsx`
+- `app/tree/[slug]/media/page.tsx`
+- `app/tree/[slug]/members/page.tsx`
+- `app/tree/[slug]/settings/page.tsx`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-04-05 10:08:46Z`
-- Branch: `feature/ui-design-block`
-- Git status summary: `STATUS:0 files`
-- Git diff summary: `DIFF:0 lines`
+- Completed at (UTC): `2026-04-07 20:41:18Z`
+- Branch: `feature/ui-ux-final-polish`
+- Git status summary: `STATUS:6 files`
+- Git diff summary: `DIFF:280 lines`
 
-- Session summary: `0` changed files, `0` diff lines, `0` tracked changed paths.
+- Session summary: `6` changed files, `280` diff lines, `6` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -190,8 +195,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:0 files`)
-- `git_diff`: `success` (`DIFF:0 lines`)
+- `git_status`: `success` (`STATUS:6 files`)
+- `git_diff`: `success` (`DIFF:280 lines`)
 <!-- FRAMEWORK:SESSION:END -->
 
 ## Current Media Architecture
@@ -201,8 +206,6 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Photo delivery already has a variant-aware foundation: preview reads may use `thumb/small/medium`, while originals should remain an explicit full-view path.
 - The binary plane is in transitional mode: current file-backed reads still preserve object-storage compatibility, while Cloudflare R2 foundation is already present in env/runtime config for the next migration stage.
 - Architectural boundary remains unchanged: `app/api/media*` stays thin, repository owns media/archive mutations, and rendering consumes repository snapshots rather than issuing direct DB traversal.
-- Demo avatar remediation is now treated as a data-replacement concern rather than a resolver concern: active `popovi` primary avatars were recreated through the current file-backed flow so they no longer depend on legacy `object_storage` / Yandex reads.
-- Legacy `object_storage` remains only as a compatibility read-path for older rows still present elsewhere in fixture or historic data; active demo-tree avatars should not rely on it.
 - Active architecture-driving task: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 - Server-side Supabase transport is now a first-class runtime rule: native Node fetch is preferred, while the PowerShell bridge remains fallback/debug transport only.
 - Tree runtime now distinguishes between full snapshot consumers and narrow page-data consumers; `audit`, `members`, `media`, and `settings` should stay on specialized loaders instead of drifting back to full snapshots.
@@ -220,8 +223,6 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
-- Viewer collapsed rail containment is handled at the layout container level so rail transforms do not create page-level horizontal drag.
-- Builder/Viewer workspace parity should be maintained through shell/layout composition and fixture-data remediation, not by deepening legacy media resolver branches.
 - "
 - Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
 - Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
