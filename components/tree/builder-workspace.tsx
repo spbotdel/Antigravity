@@ -674,7 +674,7 @@ function getBuilderDefaultRootId(snapshot: TreeSnapshot) {
   return rootCandidate?.id || snapshot.people[0]?.id || null;
 }
 
-function getBuilderStorageKey(treeId: string, key: "canvasHeight" | "activePanel" | "visualRootPersonId" | "selectedPersonId") {
+function getBuilderStorageKey(treeId: string, key: "canvasHeight" | "activePanel") {
   return `antigravity.builder.${treeId}.${key}`;
 }
 
@@ -777,8 +777,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     () => ({
       canvasHeight: getBuilderStorageKey(snapshot.tree.id, "canvasHeight"),
       activePanel: getBuilderStorageKey(snapshot.tree.id, "activePanel"),
-      visualRootPersonId: getBuilderStorageKey(snapshot.tree.id, "visualRootPersonId"),
-      selectedPersonId: getBuilderStorageKey(snapshot.tree.id, "selectedPersonId"),
     }),
     [snapshot.tree.id]
   );
@@ -1077,29 +1075,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       return;
     }
 
-    const storedRootPersonId = window.localStorage.getItem(storageKeys.visualRootPersonId);
-    if (storedRootPersonId && snapshot.people.some((person) => person.id === storedRootPersonId)) {
-      setVisualRootPersonId(storedRootPersonId);
-      setSelectedPersonId((currentSelectedPersonId) => currentSelectedPersonId || storedRootPersonId);
-    }
-  }, [snapshot.people, storageKeys.visualRootPersonId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const storedSelectedPersonId = window.localStorage.getItem(storageKeys.selectedPersonId);
-    if (storedSelectedPersonId && snapshot.people.some((person) => person.id === storedSelectedPersonId)) {
-      setSelectedPersonId(storedSelectedPersonId);
-    }
-  }, [snapshot.people, storageKeys.selectedPersonId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
     window.localStorage.setItem(storageKeys.canvasHeight, String(canvasHeight));
   }, [canvasHeight, storageKeys.canvasHeight]);
 
@@ -1126,32 +1101,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
     window.localStorage.setItem(storageKeys.activePanel, activePanel);
   }, [activePanel, storageKeys.activePanel]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    if (visualRootPersonId) {
-      window.localStorage.setItem(storageKeys.visualRootPersonId, visualRootPersonId);
-      return;
-    }
-
-    window.localStorage.removeItem(storageKeys.visualRootPersonId);
-  }, [storageKeys.visualRootPersonId, visualRootPersonId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    if (selectedPersonId) {
-      window.localStorage.setItem(storageKeys.selectedPersonId, selectedPersonId);
-      return;
-    }
-
-    window.localStorage.removeItem(storageKeys.selectedPersonId);
-  }, [selectedPersonId, storageKeys.selectedPersonId]);
 
   useEffect(() => {
     if (activePanel !== "media") {

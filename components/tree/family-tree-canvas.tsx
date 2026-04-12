@@ -18,8 +18,6 @@ const BUILDER_VIEWPORT_MARGIN_X = 96;
 const BUILDER_VIEWPORT_MARGIN_Y = 84;
 const BUILDER_FOCUS_X_RATIO = 0.46;
 const BUILDER_FOCUS_Y_RATIO = 0.34;
-const VIEWER_FIT_X_RATIO = 0.38;
-const VIEWER_FIT_Y_RATIO = 0.24;
 const BADGE_RADIUS = 26;
 const BADGE_CX = -CARD_WIDTH / 2 + 34;
 const BADGE_CY = -4;
@@ -340,6 +338,7 @@ interface FamilyTreeCanvasProps {
   personPhotoUrls?: Record<string, string>;
   personPhotoCrops?: Record<string, AvatarCropValue>;
   viewportHeightHint?: number;
+  viewportInsetRight?: number;
 }
 
 interface PositionedCanvasNode {
@@ -589,32 +588,83 @@ function formatCanvasDate(value: string) {
   return `${day}.${month}.${year}`;
 }
 
+interface CanvasViewportInsets {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}
+
+function getCanvasViewportFrame(width: number, height: number, insets: CanvasViewportInsets = {}) {
+  const left = Math.max(0, insets.left ?? 0);
+  const top = Math.max(0, insets.top ?? 0);
+  const right = Math.max(0, insets.right ?? 0);
+  const bottom = Math.max(0, insets.bottom ?? 0);
+
+  return {
+    left,
+    top,
+    width: Math.max(1, width - left - right),
+    height: Math.max(1, height - top - bottom)
+  };
+}
+
 function getFocusedTransform(
   width: number,
   height: number,
   point: { x: number; y: number },
   scale: number,
   xRatio = 0.5,
-  yRatio = 0.5
+  yRatio = 0.5,
+  insets: CanvasViewportInsets = {}
 ) {
-  return d3.zoomIdentity.translate(width * xRatio - point.x * scale, height * yRatio - point.y * scale).scale(scale);
+  const frame = getCanvasViewportFrame(width, height, insets);
+  return d3.zoomIdentity
+    .translate(frame.left + frame.width * xRatio - point.x * scale, frame.top + frame.height * yRatio - point.y * scale)
+    .scale(scale);
+}
+
+function getBoundsFitTransform(
+  width: number,
+  height: number,
+  bounds: { x: number; y: number; width: number; height: number } | null | undefined,
+  margins: { x: number; y: number },
+  minScale = 0,
+  insets: CanvasViewportInsets = {}
+) {
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+    return null;
+  }
+
+  const frame = getCanvasViewportFrame(width, height, insets);
+  const availableWidth = Math.max(1, frame.width - margins.x * 2);
+  const availableHeight = Math.max(1, frame.height - margins.y * 2);
+  const scale = Math.max(minScale, Math.min(availableWidth / bounds.width, availableHeight / bounds.height, 1));
+  const boundsCenterX = bounds.x + bounds.width / 2;
+  const boundsCenterY = bounds.y + bounds.height / 2;
+
+  return d3.zoomIdentity
+    .translate(frame.left + frame.width / 2 - boundsCenterX * scale, frame.top + frame.height / 2 - boundsCenterY * scale)
+    .scale(scale);
 }
 
 function isPointComfortablyVisible(
   transform: d3.ZoomTransform,
   point: { x: number; y: number },
   width: number,
-  height: number
+  height: number,
+  insets: CanvasViewportInsets = {}
 ) {
-  const viewportMargins = getBuilderViewportMargins(width);
+  const frame = getCanvasViewportFrame(width, height, insets);
+  const viewportMargins = getBuilderViewportMargins(frame.width);
   const screenX = transform.applyX(point.x);
   const screenY = transform.applyY(point.y);
 
   return (
-    screenX >= viewportMargins.x &&
-    screenX <= width - viewportMargins.x &&
-    screenY >= viewportMargins.y &&
-    screenY <= height - viewportMargins.y
+    screenX >= frame.left + viewportMargins.x &&
+    screenX <= frame.left + frame.width - viewportMargins.x &&
+    screenY >= frame.top + viewportMargins.y &&
+    screenY <= frame.top + frame.height - viewportMargins.y
   );
 }
 
@@ -1297,7 +1347,8 @@ export function FamilyTreeCanvas({
   partnerships = [],
   personPhotoUrls = EMPTY_PERSON_PHOTO_URLS,
   personPhotoCrops = {},
-  viewportHeightHint = 0
+  viewportHeightHint = 0,
+  viewportInsetRight = 0
 }: FamilyTreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onSelectPersonRef = useRef(onSelectPerson);
@@ -1377,6 +1428,9 @@ export function FamilyTreeCanvas({
     container.innerHTML = "";
     const width = container.clientWidth || 960;
     const height = container.clientHeight || 620;
+    const viewportInsets: CanvasViewportInsets = {
+      right: Math.max(0, Math.min(viewportInsetRight, Math.max(width - 120, 0)))
+    };
 
     const svg = d3.select(container).append("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("width", "100%").attr("height", "100%");
     const graph = svg.append("g");
@@ -1439,6 +1493,7 @@ export function FamilyTreeCanvas({
       const selectedChanged = lastSelectedPersonIdRef.current !== selectedPersonId;
       const selectedMinScale = getBuilderSelectedMinScale(width);
       const focusRatios = getBuilderFocusRatios(width);
+      const viewportMargins = getBuilderViewportMargins(width);
       layout.nodes.forEach((node) => {
         if (node.type !== "person" || !node.id) {
           return;
@@ -1900,33 +1955,35 @@ export function FamilyTreeCanvas({
         if (zoomTransformRef.current) {
           if (
             selectedChanged &&
-            (!isPointComfortablyVisible(zoomTransformRef.current, selectedCanvasNode, width, height) ||
+            (!isPointComfortablyVisible(zoomTransformRef.current, selectedCanvasNode, width, height, viewportInsets) ||
               zoomTransformRef.current.k < selectedMinScale)
           ) {
             const nextScale = Math.max(zoomTransformRef.current.k, selectedMinScale);
             svg.call(
               zoom.transform,
-              getFocusedTransform(width, height, selectedCanvasNode, nextScale, focusRatios.x, focusRatios.y)
+              getFocusedTransform(width, height, selectedCanvasNode, nextScale, focusRatios.x, focusRatios.y, viewportInsets)
             );
           } else {
             svg.call(zoom.transform, zoomTransformRef.current);
           }
         } else {
-          const scale = bounds && bounds.width > 0 && bounds.height > 0
-            ? Math.max(Math.min((width - 140) / bounds.width, (height - 120) / bounds.height, 1), selectedMinScale)
-            : selectedMinScale;
-          svg.call(
-            zoom.transform,
-            getFocusedTransform(width, height, selectedCanvasNode, scale, focusRatios.x, focusRatios.y)
-          );
+          const initialTransform = getBoundsFitTransform(width, height, bounds, viewportMargins, selectedMinScale, viewportInsets);
+          if (initialTransform) {
+            svg.call(zoom.transform, initialTransform);
+          } else {
+            svg.call(
+              zoom.transform,
+              getFocusedTransform(width, height, selectedCanvasNode, selectedMinScale, focusRatios.x, focusRatios.y, viewportInsets)
+            );
+          }
         }
       } else if (zoomTransformRef.current) {
         svg.call(zoom.transform, zoomTransformRef.current);
-      } else if (bounds && bounds.width > 0 && bounds.height > 0) {
-        const scale = Math.min((width - 140) / bounds.width, (height - 120) / bounds.height, 1);
-        const x = width * VIEWER_FIT_X_RATIO - bounds.x * scale;
-        const y = height * VIEWER_FIT_Y_RATIO - bounds.y * scale;
-        svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
+      } else {
+        const initialTransform = getBoundsFitTransform(width, height, bounds, viewportMargins, 0, viewportInsets);
+        if (initialTransform) {
+          svg.call(zoom.transform, initialTransform);
+        }
       }
 
       lastSelectedPersonIdRef.current = selectedPersonId;
@@ -2310,13 +2367,13 @@ export function FamilyTreeCanvas({
 
     if (zoomTransformRef.current) {
       svg.call(zoom.transform, zoomTransformRef.current);
-    } else if (bounds && bounds.width > 0 && bounds.height > 0) {
-      const scale = Math.min((width - 140) / bounds.width, (height - 120) / bounds.height, 1);
-      const x = width * VIEWER_FIT_X_RATIO - bounds.x * scale;
-      const y = height * VIEWER_FIT_Y_RATIO - bounds.y * scale;
-      svg.call(zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
+    } else {
+      const initialTransform = getBoundsFitTransform(width, height, bounds, getBuilderViewportMargins(width), 0, viewportInsets);
+      if (initialTransform) {
+        svg.call(zoom.transform, initialTransform);
+      }
     }
-  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoCrops, personPhotoUrls, selectedPersonId, viewportHeightHint]);
+  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoCrops, personPhotoUrls, selectedPersonId, viewportHeightHint, viewportInsetRight]);
 
   if (!tree) {
     return (

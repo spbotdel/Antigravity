@@ -187,7 +187,6 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
             snapshot.media.some((asset) => asset.id === relation.media_id && asset.kind === "photo")
         )?.media_id || null
       : null;
-
   useEffect(() => {
     if (!isResizing) {
       return undefined;
