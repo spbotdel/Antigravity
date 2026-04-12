@@ -346,6 +346,47 @@ function createSnapshotWithRelations(): TreeSnapshot {
   return snapshot;
 }
 
+function createSnapshotWithVideos(count: number): TreeSnapshot {
+  const snapshot = createSnapshot();
+  snapshot.media = Array.from({ length: count }, (_, index) => ({
+    id: `media-video-${index + 1}`,
+    tree_id: "tree-1",
+    kind: "video" as const,
+    provider: "object_storage" as const,
+    visibility: "members" as const,
+    storage_path: `trees/tree-1/media/video/media-video-${index + 1}/video.mp4`,
+    external_url: null,
+    title: `Demo Video ${index + 1}`,
+    caption: null,
+    mime_type: "video/mp4",
+    size_bytes: 2048,
+    preview_status: null,
+    preview_error: null,
+    preview_attempt_count: 0,
+    preview_claimed_at: null,
+    created_by: null,
+    created_at: "2026-03-09T00:00:00.000Z",
+  }));
+  snapshot.personMedia = Array.from({ length: count }, (_, index) => ({
+    id: `person-media-video-${index + 1}`,
+    person_id: "person-1",
+    media_id: `media-video-${index + 1}`,
+    is_primary: false,
+  }));
+  return snapshot;
+}
+
+function createSnapshotWithPhotosAndVideos(photoCount: number, videoCount: number): TreeSnapshot {
+  const photoSnapshot = createSnapshotWithPhotos(photoCount);
+  const videoSnapshot = createSnapshotWithVideos(videoCount);
+
+  return {
+    ...photoSnapshot,
+    media: [...photoSnapshot.media, ...videoSnapshot.media],
+    personMedia: [...photoSnapshot.personMedia, ...videoSnapshot.personMedia],
+  };
+}
+
 describe("builder workspace", () => {
   beforeEach(() => {
     window.localStorage.removeItem("antigravity.builder.tree-1.canvasHeight");
@@ -1428,11 +1469,22 @@ describe("builder workspace", () => {
     expect(screen.getByRole("link", { name: "Перейти к альбому media-photo-1" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
     expect(screen.getByRole("button", { name: "Выбрать несколько media-photo-1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Удалить медиа media-photo-1" })).toBeInTheDocument();
+  });
+
+  it("shows the same shared action set for owner in the builder video gallery", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshotWithVideos(1)} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Видео" })).toBeInTheDocument();
+    });
 
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
 
-    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-delete-enabled", "false");
-    expect(screen.queryByRole("button", { name: "Удалить медиа media-photo-1" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-delete-enabled", "true");
+    expect(screen.getByRole("link", { name: "Скачать media-video-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Перейти к альбому media-video-1" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=video&view=albums");
+    expect(screen.getByRole("button", { name: "Выбрать несколько media-video-1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Удалить медиа media-video-1" })).toBeInTheDocument();
   });
 
   it("deletes a builder photo through the media endpoint and patches the local snapshot without reloading", async () => {
@@ -1515,6 +1567,82 @@ describe("builder workspace", () => {
     expect(screen.queryByLabelText("Выбрать медиа media-photo-3")).not.toBeInTheDocument();
     expect(requests.some((request) => request.url.includes("/api/tree/demo-tree/builder-snapshot"))).toBe(false);
     expect(screen.getAllByRole("status").some((element) => element.textContent?.includes("Удалено 2 фото."))).toBe(true);
+  });
+
+  it("clears builder media selection when switching between photo and video tabs", async () => {
+    render(<BuilderWorkspace snapshot={createSnapshotWithPhotosAndVideos(2, 2)} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Видео" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько media-video-1" }));
+
+    expect(screen.getByRole("region", { name: "Действия с выбранными видео" })).toBeInTheDocument();
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "true");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Действия с выбранными видео" })).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "false");
+    expect(screen.queryByLabelText("Выбрать медиа media-photo-1")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+
+    expect(screen.queryByRole("region", { name: "Действия с выбранными видео" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-select-enabled", "false");
+    expect(screen.queryByLabelText("Выбрать медиа media-video-1")).not.toBeInTheDocument();
+  });
+
+  it("bulk deletes selected builder videos through the existing media endpoint and clears selection", async () => {
+    const requests: Array<{ url: string; method?: string }> = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      requests.push({ url, method: init?.method });
+
+      if (
+        (url.endsWith("/api/media/media-video-1") || url.endsWith("/api/media/media-video-2")) &&
+        init?.method === "DELETE"
+      ) {
+        return Response.json({ message: "Медиа удалено." }, { status: 200 });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    render(<BuilderWorkspace snapshot={createSnapshotWithVideos(3)} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Видео" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько media-video-1" }));
+    fireEvent.click(screen.getByLabelText("Выбрать медиа media-video-2"));
+
+    expect(screen.getByText("Выбрано: 2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    expect(screen.getByRole("dialog", { name: "Удалить выбранные видео?" })).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Удалить выбранные видео?" })).getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.url.endsWith("/api/media/media-video-1") && request.method === "DELETE")).toBe(true);
+      expect(requests.some((request) => request.url.endsWith("/api/media/media-video-2") && request.method === "DELETE")).toBe(true);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-media-count", "1");
+    });
+
+    expect(screen.queryByRole("region", { name: "Действия с выбранными видео" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Выбрать медиа media-video-3")).not.toBeInTheDocument();
+    expect(requests.some((request) => request.url.includes("/api/tree/demo-tree/builder-snapshot"))).toBe(false);
+    expect(screen.getAllByRole("status").some((element) => element.textContent?.includes("Удалено 2 видео."))).toBe(true);
   });
 
   it("resizes the canvas and persists the updated height", async () => {

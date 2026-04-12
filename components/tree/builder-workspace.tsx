@@ -41,6 +41,7 @@ interface BuilderWorkspaceProps {
 
 type BuilderPanel = "person" | "relations" | "media";
 type BuilderMediaMode = "all" | "photo" | "video" | "document" | "external";
+type BuilderSelectableMediaMode = Extract<BuilderMediaMode, "photo" | "video">;
 type BuilderPersonMode = "create" | "edit";
 type BuilderUploadScope = "photo" | "video" | "document";
 type CreateContext =
@@ -211,6 +212,28 @@ function formatMediaUploadBytes(value: number | null) {
 
 function formatPhotoUploadCountLabel(count: number) {
   return `${count} фото загружено`;
+}
+
+function getBuilderSelectableMediaCopy(mode: BuilderSelectableMediaMode) {
+  if (mode === "photo") {
+    return {
+      noun: "фото",
+      regionLabel: "Действия с выбранными фотографиями",
+      deleteTitle: "Удалить выбранные фото?",
+      singleDeletedStatus: "Фото удалено.",
+      singleDeleteError: "Не удалось удалить фото.",
+      bulkDeleteError: "Не удалось удалить выбранные фото.",
+    };
+  }
+
+  return {
+    noun: "видео",
+    regionLabel: "Действия с выбранными видео",
+    deleteTitle: "Удалить выбранные видео?",
+    singleDeletedStatus: "Видео удалено.",
+    singleDeleteError: "Не удалось удалить видео.",
+    bulkDeleteError: "Не удалось удалить выбранные видео.",
+  };
 }
 
 function formatMediaUploadQueueStatus(item: MediaUploadQueueItem) {
@@ -785,10 +808,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [bioDraft, setBioDraft] = useState("");
   const [personInfoAutosaveState, setPersonInfoAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [expandedGalleryMode, setExpandedGalleryMode] = useState<"photo" | "video" | null>(null);
-  const [isPhotoSelectionMode, setIsPhotoSelectionMode] = useState(false);
-  const [selectedPhotoMediaIds, setSelectedPhotoMediaIds] = useState<Set<string>>(() => new Set());
-  const [isBulkPhotoDeleteConfirmOpen, setIsBulkPhotoDeleteConfirmOpen] = useState(false);
-  const [isBulkPhotoDeleting, setIsBulkPhotoDeleting] = useState(false);
+  const [builderMediaSelectionMode, setBuilderMediaSelectionMode] = useState<BuilderSelectableMediaMode | null>(null);
+  const [selectedBuilderMediaIds, setSelectedBuilderMediaIds] = useState<Set<string>>(() => new Set());
+  const [isBulkBuilderMediaDeleteConfirmOpen, setIsBulkBuilderMediaDeleteConfirmOpen] = useState(false);
+  const [isBulkBuilderMediaDeleting, setIsBulkBuilderMediaDeleting] = useState(false);
   const [canvasHeight, setCanvasHeight] = useState(980);
   const [builderInspectorWidth, setBuilderInspectorWidth] = useState(440);
   const [isInspectorResizing, setIsInspectorResizing] = useState(false);
@@ -866,8 +889,21 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
             renderSnapshot.media.some((asset) => asset.id === relation.media_id && asset.kind === "photo")
         )?.media_id || null
       : null;
-  const canDeleteSelectedPhotoMedia = currentSnapshot.actor.role === "owner" || currentSnapshot.actor.role === "admin";
-  const selectedPhotoMediaCount = selectedPhotoMediaIds.size;
+  const canManageSelectedBuilderMedia = currentSnapshot.actor.role === "owner" || currentSnapshot.actor.role === "admin";
+  const currentSelectableMediaMode: BuilderSelectableMediaMode | null = activePanel === "media" ? (mediaMode === "video" ? "video" : "photo") : null;
+  const selectedBuilderMedia =
+    currentSelectableMediaMode === "video"
+      ? selectedVideoMedia
+      : currentSelectableMediaMode === "photo"
+        ? selectedPhotoMedia
+        : [];
+  const isCurrentBuilderMediaSelectionMode = Boolean(currentSelectableMediaMode && builderMediaSelectionMode === currentSelectableMediaMode);
+  const currentBuilderSelectionCopy =
+    currentSelectableMediaMode && isCurrentBuilderMediaSelectionMode
+      ? getBuilderSelectableMediaCopy(currentSelectableMediaMode)
+      : null;
+  const bulkBuilderMediaSelectionCopy = getBuilderSelectableMediaCopy(builderMediaSelectionMode ?? "photo");
+  const selectedBuilderMediaCount = selectedBuilderMediaIds.size;
   const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
   const selectedAvatarCrop = selectedPerson ? personAvatarCrops[selectedPerson.id] || DEFAULT_AVATAR_CROP : DEFAULT_AVATAR_CROP;
   const selectedPersonEditFormKey = selectedPerson ? selectedPerson.id : "edit-none";
@@ -1180,42 +1216,42 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   }, [isInspectorResizing]);
 
   useEffect(() => {
-    setIsPhotoSelectionMode(false);
-    setSelectedPhotoMediaIds(new Set());
-    setIsBulkPhotoDeleteConfirmOpen(false);
-    setIsBulkPhotoDeleting(false);
+    setBuilderMediaSelectionMode(null);
+    setSelectedBuilderMediaIds(new Set());
+    setIsBulkBuilderMediaDeleteConfirmOpen(false);
+    setIsBulkBuilderMediaDeleting(false);
   }, [selectedPersonId, currentBuilderTab]);
 
   useEffect(() => {
-    if (!canDeleteSelectedPhotoMedia) {
-      setIsPhotoSelectionMode(false);
-      setSelectedPhotoMediaIds((currentSelection) => (currentSelection.size ? new Set() : currentSelection));
-      setIsBulkPhotoDeleteConfirmOpen(false);
+    if (!canManageSelectedBuilderMedia) {
+      setBuilderMediaSelectionMode(null);
+      setSelectedBuilderMediaIds((currentSelection) => (currentSelection.size ? new Set() : currentSelection));
+      setIsBulkBuilderMediaDeleteConfirmOpen(false);
       return;
     }
 
-    const availablePhotoIds = new Set(selectedPhotoMedia.map((asset) => asset.id));
-    setSelectedPhotoMediaIds((currentSelection) => {
-      const nextSelection = new Set([...currentSelection].filter((mediaId) => availablePhotoIds.has(mediaId)));
+    const availableMediaIds = new Set(selectedBuilderMedia.map((asset) => asset.id));
+    setSelectedBuilderMediaIds((currentSelection) => {
+      const nextSelection = new Set([...currentSelection].filter((mediaId) => availableMediaIds.has(mediaId)));
       return areStringSetsEqual(currentSelection, nextSelection) ? currentSelection : nextSelection;
     });
-  }, [canDeleteSelectedPhotoMedia, selectedPhotoMedia]);
+  }, [canManageSelectedBuilderMedia, selectedBuilderMedia]);
 
   useEffect(() => {
-    if (!selectedPhotoMediaCount && isBulkPhotoDeleteConfirmOpen) {
-      setIsBulkPhotoDeleteConfirmOpen(false);
+    if (!selectedBuilderMediaCount && isBulkBuilderMediaDeleteConfirmOpen) {
+      setIsBulkBuilderMediaDeleteConfirmOpen(false);
     }
-  }, [isBulkPhotoDeleteConfirmOpen, selectedPhotoMediaCount]);
+  }, [isBulkBuilderMediaDeleteConfirmOpen, selectedBuilderMediaCount]);
 
   useEffect(() => {
-    if (!selectedPhotoMediaCount && isPhotoSelectionMode) {
-      setIsPhotoSelectionMode(false);
+    if (!selectedBuilderMediaCount && builderMediaSelectionMode) {
+      setBuilderMediaSelectionMode(null);
     }
-  }, [isPhotoSelectionMode, selectedPhotoMediaCount]);
+  }, [builderMediaSelectionMode, selectedBuilderMediaCount]);
 
   useEffect(() => {
     function handleKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key !== "Escape" || !isPhotoSelectionMode || !selectedPhotoMediaCount) {
+      if (event.key !== "Escape" || !builderMediaSelectionMode || !selectedBuilderMediaCount) {
         return;
       }
 
@@ -1231,12 +1267,12 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         return;
       }
 
-      clearSelectedPhotoMedia();
+      clearSelectedBuilderMedia();
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isPhotoSelectionMode, selectedPhotoMediaCount]);
+  }, [builderMediaSelectionMode, selectedBuilderMediaCount]);
 
   function startCanvasResize(event: PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -1885,10 +1921,10 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     return true;
   }
 
-  async function requestBuilderPhotoDelete(mediaId: string) {
+  async function requestBuilderMediaDelete(mediaId: string) {
     const { response, payload } = await requestJsonRaw(`/api/media/${mediaId}`, "DELETE", {});
     if (!response.ok) {
-      throw new Error(payload.error || "Не удалось удалить фото.");
+      throw new Error(payload.error || "Не удалось удалить медиа.");
     }
 
     return payload;
@@ -1911,27 +1947,30 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     }));
   }
 
-  async function deleteBuilderPhoto(mediaId: string) {
+  async function deleteBuilderMedia(mediaId: string) {
+    const targetAsset = currentSnapshotRef.current.media.find((asset) => asset.id === mediaId) || null;
+    const targetMode: BuilderSelectableMediaMode = targetAsset?.kind === "video" ? "video" : "photo";
+    const targetCopy = getBuilderSelectableMediaCopy(targetMode);
     setStatus(null);
     setError(null);
 
     try {
-      const payload = await requestBuilderPhotoDelete(mediaId);
+      const payload = await requestBuilderMediaDelete(mediaId);
       patchDeletedMedia([mediaId]);
-      setStatus(payload.message === "Медиа удалено." ? "Фото удалено." : (payload.message || "Фото удалено."));
+      setStatus(payload.message === "Медиа удалено." ? targetCopy.singleDeletedStatus : (payload.message || targetCopy.singleDeletedStatus));
     } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : "Не удалось удалить фото.";
+      const message = deleteError instanceof Error ? deleteError.message : targetCopy.singleDeleteError;
       setError(message);
       throw deleteError;
     }
   }
 
-  function toggleSelectedPhotoMedia(mediaId: string) {
-    if (!canDeleteSelectedPhotoMedia) {
+  function toggleSelectedBuilderMedia(mediaId: string, mode: BuilderSelectableMediaMode) {
+    if (!canManageSelectedBuilderMedia || builderMediaSelectionMode !== mode) {
       return;
     }
 
-    setSelectedPhotoMediaIds((currentSelection) => {
+    setSelectedBuilderMediaIds((currentSelection) => {
       const nextSelection = new Set(currentSelection);
       if (nextSelection.has(mediaId)) {
         nextSelection.delete(mediaId);
@@ -1942,30 +1981,32 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     });
   }
 
-  function startPhotoSelectionMode(mediaId: string) {
-    if (!canDeleteSelectedPhotoMedia) {
+  function startBuilderMediaSelectionMode(mode: BuilderSelectableMediaMode, mediaId: string) {
+    if (!canManageSelectedBuilderMedia) {
       return;
     }
 
-    setIsPhotoSelectionMode(true);
-    setSelectedPhotoMediaIds((currentSelection) => new Set([...currentSelection, mediaId]));
+    setBuilderMediaSelectionMode(mode);
+    setSelectedBuilderMediaIds((currentSelection) => (builderMediaSelectionMode === mode ? new Set([...currentSelection, mediaId]) : new Set([mediaId])));
+    setIsBulkBuilderMediaDeleteConfirmOpen(false);
   }
 
-  function clearSelectedPhotoMedia() {
-    setIsPhotoSelectionMode(false);
-    setSelectedPhotoMediaIds(new Set());
-    setIsBulkPhotoDeleteConfirmOpen(false);
+  function clearSelectedBuilderMedia() {
+    setBuilderMediaSelectionMode(null);
+    setSelectedBuilderMediaIds(new Set());
+    setIsBulkBuilderMediaDeleteConfirmOpen(false);
   }
 
-  async function deleteSelectedBuilderPhotos() {
-    const mediaIdsToDelete = [...selectedPhotoMediaIds];
-    if (!mediaIdsToDelete.length || isBulkPhotoDeleting) {
+  async function deleteSelectedBuilderMedia() {
+    const mediaIdsToDelete = [...selectedBuilderMediaIds];
+    if (!mediaIdsToDelete.length || isBulkBuilderMediaDeleting || !builderMediaSelectionMode) {
       return;
     }
 
+    const selectionCopy = getBuilderSelectableMediaCopy(builderMediaSelectionMode);
     setStatus(null);
     setError(null);
-    setIsBulkPhotoDeleting(true);
+    setIsBulkBuilderMediaDeleting(true);
 
     const deletedMediaIds: string[] = [];
     let firstErrorMessage: string | null = null;
@@ -1973,11 +2014,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     try {
       for (const mediaId of mediaIdsToDelete) {
         try {
-          await requestBuilderPhotoDelete(mediaId);
+          await requestBuilderMediaDelete(mediaId);
           deletedMediaIds.push(mediaId);
         } catch (deleteError) {
           if (!firstErrorMessage) {
-            firstErrorMessage = deleteError instanceof Error ? deleteError.message : "Не удалось удалить выбранные фото.";
+            firstErrorMessage = deleteError instanceof Error ? deleteError.message : selectionCopy.bulkDeleteError;
           }
         }
       }
@@ -1986,19 +2027,19 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
         patchDeletedMedia(deletedMediaIds);
       }
 
-      clearSelectedPhotoMedia();
+      clearSelectedBuilderMedia();
 
       if (deletedMediaIds.length === mediaIdsToDelete.length) {
-        setStatus(`Удалено ${deletedMediaIds.length} ${deletedMediaIds.length === 1 ? "фото" : "фото"}.`);
+        setStatus(`Удалено ${deletedMediaIds.length} ${selectionCopy.noun}.`);
       } else if (deletedMediaIds.length > 0) {
-        setStatus(`Удалено ${deletedMediaIds.length} из ${mediaIdsToDelete.length} фото.`);
+        setStatus(`Удалено ${deletedMediaIds.length} из ${mediaIdsToDelete.length} ${selectionCopy.noun}.`);
       }
 
       if (firstErrorMessage) {
         setError(firstErrorMessage);
       }
     } finally {
-      setIsBulkPhotoDeleting(false);
+      setIsBulkBuilderMediaDeleting(false);
     }
   }
 
@@ -2806,17 +2847,40 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     return `/tree/${currentSnapshot.tree.slug}/media?${params.toString()}`;
   }
 
-  function buildPhotoArchiveHrefForMedia(asset: TreeSnapshot["media"][number]) {
+  function buildBuilderArchiveHrefForMedia(asset: TreeSnapshot["media"][number], mode: BuilderSelectableMediaMode) {
     const params = new URLSearchParams({
-      mode: "photo",
+      mode,
       view: "albums",
     });
 
     if (asset.created_by) {
-      params.set("album", buildUploaderAlbumSyntheticId(asset.created_by, "photo"));
+      params.set("album", buildUploaderAlbumSyntheticId(asset.created_by, mode));
     }
 
     return `/tree/${currentSnapshot.tree.slug}/media?${params.toString()}`;
+  }
+
+  function renderBuilderMediaSelectionBar() {
+    if (!canManageSelectedBuilderMedia || !currentBuilderSelectionCopy || !selectedBuilderMediaCount) {
+      return null;
+    }
+
+    return (
+      <div className="builder-media-selection-bar" role="region" aria-label={currentBuilderSelectionCopy.regionLabel}>
+        <div className="builder-media-selection-copy">
+          <strong>Выбрано: {selectedBuilderMediaCount}</strong>
+          <span>{selectedBuilderMediaCount} {currentBuilderSelectionCopy.noun} {selectedBuilderMediaCount === 1 ? "готово" : "готовы"} к удалению.</span>
+        </div>
+        <div className="archive-action-bar builder-media-selection-actions">
+          <Button type="button" disabled={isBulkBuilderMediaDeleting} onClick={() => setIsBulkBuilderMediaDeleteConfirmOpen(true)}>
+            {isBulkBuilderMediaDeleting ? "Удаляю..." : "Удалить"}
+          </Button>
+          <Button type="button" variant="ghost" disabled={isBulkBuilderMediaDeleting} onClick={clearSelectedBuilderMedia}>
+            Отмена
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   function renderExpandedGalleryFooter(mode: "photo" | "video") {
@@ -3411,42 +3475,27 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         aria-label="Фотографии с устройства"
                         onChange={handleMediaFileSelection}
                       />
-                      {canDeleteSelectedPhotoMedia && selectedPhotoMediaCount ? (
-                        <div className="builder-media-selection-bar" role="region" aria-label="Действия с выбранными фотографиями">
-                          <div className="builder-media-selection-copy">
-                            <strong>Выбрано: {selectedPhotoMediaCount}</strong>
-                            <span>{selectedPhotoMediaCount} {selectedPhotoMediaCount === 1 ? "фото" : "фото"} готово к удалению.</span>
-                          </div>
-                          <div className="archive-action-bar builder-media-selection-actions">
-                            <Button type="button" disabled={isBulkPhotoDeleting} onClick={() => setIsBulkPhotoDeleteConfirmOpen(true)}>
-                              {isBulkPhotoDeleting ? "Удаляю..." : "Удалить"}
-                            </Button>
-                            <Button type="button" variant="ghost" disabled={isBulkPhotoDeleting} onClick={clearSelectedPhotoMedia}>
-                              Отмена
-                            </Button>
-                          </div>
-                        </div>
-                      ) : null}
+                      {renderBuilderMediaSelectionBar()}
                       <PersonMediaGallery
                         media={selectedPhotoMedia}
                         optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                         emptyTitle="Фотографий пока нет"
                         emptyMessage="Для этого человека пока нет фотографий."
                         avatarMediaId={selectedPrimaryPhotoMediaId}
-                        canDeleteMedia={canDeleteSelectedPhotoMedia}
+                        canDeleteMedia={canManageSelectedBuilderMedia}
                         showInlineMediaActions
-                        canManageInlineMediaActions={canDeleteSelectedPhotoMedia}
-                        getInlineMediaAlbumHref={buildPhotoArchiveHrefForMedia}
-                        selectionMode={isPhotoSelectionMode}
-                        canSelectMedia={canDeleteSelectedPhotoMedia}
-                        selectedMediaIds={selectedPhotoMediaIds}
+                        canManageInlineMediaActions={canManageSelectedBuilderMedia}
+                        getInlineMediaAlbumHref={(asset) => buildBuilderArchiveHrefForMedia(asset, "photo")}
+                        selectionMode={builderMediaSelectionMode === "photo"}
+                        canSelectMedia={canManageSelectedBuilderMedia}
+                        selectedMediaIds={selectedBuilderMediaIds}
                         showStickyFooter={false}
                         showStage={false}
                         showViewerAvatarAction
                         appendTile={renderPhotoAddTile()}
-                        onStartMediaSelection={startPhotoSelectionMode}
-                        onToggleMediaSelection={toggleSelectedPhotoMedia}
-                        onDeleteMedia={(mediaId) => deleteBuilderPhoto(mediaId)}
+                        onStartMediaSelection={(mediaId) => startBuilderMediaSelectionMode("photo", mediaId)}
+                        onToggleMediaSelection={(mediaId) => toggleSelectedBuilderMedia(mediaId, "photo")}
+                        onDeleteMedia={(mediaId) => deleteBuilderMedia(mediaId)}
                         onSetAvatar={(mediaId) => {
                           const currentRelation = currentSnapshotRef.current.personMedia.find(
                             (relation) => relation.person_id === selectedPerson.id && relation.media_id === mediaId
@@ -3471,14 +3520,25 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                         aria-label="Видео с устройства"
                         onChange={handleMediaFileSelection}
                       />
+                      {renderBuilderMediaSelectionBar()}
                       <PersonMediaGallery
                         media={selectedVideoMedia}
                         optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
                         emptyTitle="Видео пока нет"
                         emptyMessage="Для этого человека пока нет видео."
+                        canDeleteMedia={canManageSelectedBuilderMedia}
+                        showInlineMediaActions
+                        canManageInlineMediaActions={canManageSelectedBuilderMedia}
+                        getInlineMediaAlbumHref={(asset) => buildBuilderArchiveHrefForMedia(asset, "video")}
+                        selectionMode={builderMediaSelectionMode === "video"}
+                        canSelectMedia={canManageSelectedBuilderMedia}
+                        selectedMediaIds={selectedBuilderMediaIds}
                         showStickyFooter={false}
                         showStage={false}
                         appendTile={renderVideoAddTile()}
+                        onStartMediaSelection={(mediaId) => startBuilderMediaSelectionMode("video", mediaId)}
+                        onToggleMediaSelection={(mediaId) => toggleSelectedBuilderMedia(mediaId, "video")}
+                        onDeleteMedia={(mediaId) => deleteBuilderMedia(mediaId)}
                       />
                     </div>
                   </>
@@ -3612,26 +3672,28 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
       </Dialog>
 
       <Dialog
-        open={isBulkPhotoDeleteConfirmOpen}
+        open={isBulkBuilderMediaDeleteConfirmOpen}
         onOpenChange={(open) => {
-          if (!open && !isBulkPhotoDeleting) {
-            setIsBulkPhotoDeleteConfirmOpen(false);
+          if (!open && !isBulkBuilderMediaDeleting) {
+            setIsBulkBuilderMediaDeleteConfirmOpen(false);
           }
         }}
       >
-        <DialogContent className="archive-confirm-dialog" aria-label="Удалить выбранные фото?" showCloseButton={false}>
+        <DialogContent className="archive-confirm-dialog" aria-label={bulkBuilderMediaSelectionCopy.deleteTitle} showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Удалить выбранные фото?</DialogTitle>
+            <DialogTitle>{bulkBuilderMediaSelectionCopy.deleteTitle}</DialogTitle>
             <DialogDescription>
-              {selectedPhotoMediaCount ? `${selectedPhotoMediaCount} фото будут удалены.` : "Выбранные фото будут удалены."}
+              {selectedBuilderMediaCount
+                ? `${selectedBuilderMediaCount} ${bulkBuilderMediaSelectionCopy.noun} ${selectedBuilderMediaCount === 1 ? "будет удалено" : "будут удалены"}.`
+                : `Выбранные ${bulkBuilderMediaSelectionCopy.noun} будут удалены.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="archive-actions">
-            <Button type="button" variant="ghost" disabled={isBulkPhotoDeleting} onClick={() => setIsBulkPhotoDeleteConfirmOpen(false)}>
+            <Button type="button" variant="ghost" disabled={isBulkBuilderMediaDeleting} onClick={() => setIsBulkBuilderMediaDeleteConfirmOpen(false)}>
               Отмена
             </Button>
-            <Button type="button" disabled={isBulkPhotoDeleting} onClick={() => void deleteSelectedBuilderPhotos()}>
-              {isBulkPhotoDeleting ? "Удаляю..." : "Удалить"}
+            <Button type="button" disabled={isBulkBuilderMediaDeleting} onClick={() => void deleteSelectedBuilderMedia()}>
+              {isBulkBuilderMediaDeleting ? "Удаляю..." : "Удалить"}
             </Button>
           </DialogFooter>
         </DialogContent>
