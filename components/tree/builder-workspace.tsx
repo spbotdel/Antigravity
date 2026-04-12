@@ -7,6 +7,7 @@ import { format as formatDateFn, parseISO } from "date-fns";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
+import { useTreeUploadPanel } from "@/components/upload/tree-upload-panel-provider";
 import {
   Dialog,
   DialogContent,
@@ -161,7 +162,7 @@ function getBuilderUploadScopeFileSizeLimit(scope: BuilderUploadScope) {
   return MAX_PHOTO_FILE_SIZE_BYTES;
 }
 
-function detectMediaUploadKind(file: File): MediaUploadKind {
+export function detectMediaUploadKind(file: File): MediaUploadKind {
   if (file.type.startsWith("image/")) {
     return "photo";
   }
@@ -177,6 +178,7 @@ function detectMediaUploadKind(file: File): MediaUploadKind {
     file.type.includes("officedocument") ||
     file.type.includes("spreadsheet") ||
     file.type.includes("presentation") ||
+    file.type.includes("powerpoint") ||
     file.type === "application/rtf"
   ) {
     return "document";
@@ -229,6 +231,22 @@ function formatMediaUploadQueueStatus(item: MediaUploadQueueItem) {
   }
 
   return "Файл загружается";
+}
+
+function mapBuilderUploadStatus(status: MediaUploadStatus) {
+  if (status === "done") {
+    return "completed" as const;
+  }
+
+  if (status === "error") {
+    return "failed" as const;
+  }
+
+  if (status === "finalizing") {
+    return "processing" as const;
+  }
+
+  return status;
 }
 
 function buildMediaUploadProgress(loadedBytes: number, totalBytes: number, startedAtMs: number): MediaUploadProgressSnapshot {
@@ -732,6 +750,7 @@ function replacePersonIdInSnapshot(snapshot: TreeSnapshot, tempPersonId: string,
 }
 
 export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorkspaceProps) {
+  const { upsertJob } = useTreeUploadPanel();
   const [currentSnapshot, setCurrentSnapshot] = useState(snapshot);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isMediaLoaded, setIsMediaLoaded] = useState(mediaLoaded);
@@ -955,6 +974,21 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   useEffect(() => {
     selectedPersonIdRef.current = selectedPersonId;
   }, [selectedPersonId]);
+
+  useEffect(() => {
+    for (const item of mediaUploadItems) {
+      upsertJob({
+        id: item.id,
+        scope: "builder",
+        fileName: item.name,
+        status: mapBuilderUploadStatus(item.status),
+        uploadedBytes: item.uploadedBytes,
+        totalBytes: item.sizeBytes,
+        progressPercent: item.progressPercent,
+        message: item.message || formatMediaUploadQueueStatus(item),
+      });
+    }
+  }, [mediaUploadItems, upsertJob]);
 
   useEffect(() => {
     if (!selectedPerson || createModeActive) {
@@ -1884,7 +1918,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     try {
       const payload = await requestBuilderPhotoDelete(mediaId);
       patchDeletedMedia([mediaId]);
-      setStatus(payload.message || "Фото удалено.");
+      setStatus(payload.message === "Медиа удалено." ? "Фото удалено." : (payload.message || "Фото удалено."));
     } catch (deleteError) {
       const message = deleteError instanceof Error ? deleteError.message : "Не удалось удалить фото.";
       setError(message);
@@ -2720,14 +2754,6 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
 
       if (uploadedCount > 0) {
         await reloadSnapshot();
-      }
-
-      if (uploadedCount > 0) {
-        setStatus(
-          failedFiles.length
-            ? `Загружено ${uploadedCount} из ${items.length} файлов.`
-            : `Загружено ${uploadedCount} ${uploadedCount === 1 ? "файл" : uploadedCount < 5 ? "файла" : "файлов"}.`
-        );
       }
 
       if (failedFiles.length) {

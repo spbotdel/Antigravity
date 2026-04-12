@@ -14,6 +14,7 @@ vi.mock("@/lib/utils", async () => {
 });
 
 import { TreeMediaArchiveClient } from "@/components/media/tree-media-archive-client";
+import { TreeUploadPanelProvider } from "@/components/upload/tree-upload-panel-provider";
 import type { MediaAssetRecord } from "@/lib/types";
 
 function createMediaAsset(overrides: Partial<MediaAssetRecord>): MediaAssetRecord {
@@ -115,6 +116,49 @@ function renderArchiveClient(options?: {
   );
 }
 
+function renderArchiveClientWithUploadPanel(options?: Parameters<typeof renderArchiveClient>[0]) {
+  const allMedia = options?.allMedia || [
+    createMediaAsset({
+      id: "media-photo",
+      title: "Архивное фото",
+      storage_path: "trees/tree-1/media/photo/media-photo/archive-photo.jpg",
+    }),
+    createMediaAsset({
+      id: "media-video",
+      kind: "video",
+      title: "Архивное видео",
+      mime_type: "video/mp4",
+      storage_path: "trees/tree-1/media/video/media-video/archive-video.mp4",
+    }),
+    createMediaAsset({
+      id: "media-external",
+      kind: "video",
+      provider: "yandex_disk",
+      title: "Внешнее видео архива",
+      storage_path: null,
+      external_url: "https://example.com/archive-video",
+    }),
+  ];
+
+  return render(
+    <TreeUploadPanelProvider>
+      <TreeMediaArchiveClient
+        treeId="tree-1"
+        slug="demo-family"
+        canEdit={options?.canEdit ?? true}
+        initialMode={options?.initialMode ?? "all"}
+        initialView={options?.initialView ?? "all"}
+        initialAlbumId={options?.initialAlbumId ?? null}
+        allMedia={allMedia}
+        allAlbums={(options?.allAlbums || []).map((album) => ({ ...album, kind: album.kind ?? "photo", access: album.access ?? "members" }))}
+        persistedAlbumMediaMap={options?.persistedAlbumMediaMap || {}}
+        initialThumbUrlsByMediaId={options?.initialThumbUrlsByMediaId || {}}
+        uploaderLabels={options?.uploaderLabels || []}
+      />
+    </TreeUploadPanelProvider>
+  );
+}
+
 describe("tree media archive client", () => {
   beforeEach(() => {
     uploadFileWithTransportContract.mockClear();
@@ -130,6 +174,171 @@ describe("tree media archive client", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("uses the shared floating upload panel instead of the inline archive upload block", async () => {
+    let uploadIntentCount = 0;
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+
+      if (url.includes("/api/media/archive/upload-intent")) {
+        uploadIntentCount += 1;
+        return Response.json(
+          {
+            mediaId: `archive-upload-${uploadIntentCount}`,
+            kind: "photo",
+            path: `trees/tree-1/media/photo/archive-upload-${uploadIntentCount}/${body?.filename || `photo-${uploadIntentCount}.jpg`}`,
+            bucket: "bucket-1",
+            signedUrl: `https://example.com/archive-upload-${uploadIntentCount}`,
+            token: null,
+            uploadProvider: "cloudflare_r2",
+            configuredBackend: "cloudflare_r2",
+            resolvedUploadBackend: "cloudflare_r2",
+            rolloutState: "cloudflare_rollout_active",
+            forceProxyUpload: false,
+            uploadMode: "direct",
+            variantUploadMode: "none",
+            variantTargets: [],
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/archive/complete")) {
+        return Response.json(
+          {
+            message: "Материал сохранен в семейный архив.",
+            uploaderAlbumId: null,
+            media: createMediaAsset({
+              id: body?.mediaId || "archive-upload",
+              kind: "photo",
+              title: body?.title || "uploaded-photo.jpg",
+              storage_path: body?.storagePath || "trees/tree-1/media/photo/archive-upload/uploaded-photo.jpg",
+            }),
+          },
+          { status: 201 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    const view = renderArchiveClientWithUploadPanel({
+      allMedia: [],
+      initialMode: "photo",
+      initialView: "all",
+    });
+
+    const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+    const firstFile = new File([new Uint8Array([1, 2, 3])], "one.jpg", { type: "image/jpeg" });
+    const secondFile = new File([new Uint8Array([4, 5, 6])], "two.jpg", { type: "image/jpeg" });
+
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [firstFile, secondFile],
+    });
+
+    fireEvent.change(input);
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить 2" }));
+
+    await waitFor(() => {
+      expect(uploadFileWithTransportContract).toHaveBeenCalledTimes(2);
+    });
+
+    const panel = document.querySelector(".tree-upload-panel");
+    expect(panel).not.toBeNull();
+    expect(document.querySelector(".archive-upload-panel")).toBeNull();
+    expect(
+      within(panel as HTMLElement).queryByText("one.jpg") ||
+      within(panel as HTMLElement).queryByText("Загрузка завершена")
+    ).not.toBeNull();
+  }, 15000);
+
+  it("auto-clears the shared panel after a successful top-level archive upload finishes", async () => {
+    vi.useFakeTimers();
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+
+      if (url.includes("/api/media/archive/upload-intent")) {
+        return Response.json(
+          {
+            mediaId: "archive-upload-finished",
+            kind: "photo",
+            path: `trees/tree-1/media/photo/archive-upload-finished/${body?.filename || "finished.jpg"}`,
+            bucket: "bucket-1",
+            signedUrl: "https://example.com/archive-upload-finished",
+            token: null,
+            uploadProvider: "cloudflare_r2",
+            configuredBackend: "cloudflare_r2",
+            resolvedUploadBackend: "cloudflare_r2",
+            rolloutState: "cloudflare_rollout_active",
+            forceProxyUpload: false,
+            uploadMode: "direct",
+            variantUploadMode: "none",
+            variantTargets: [],
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/archive/complete")) {
+        return Response.json(
+          {
+            message: "Материал сохранен в семейный архив.",
+            uploaderAlbumId: null,
+            media: createMediaAsset({
+              id: body?.mediaId || "archive-upload-finished",
+              kind: "photo",
+              title: body?.title || "finished.jpg",
+              storage_path: body?.storagePath || "trees/tree-1/media/photo/archive-upload-finished/finished.jpg",
+            }),
+          },
+          { status: 201 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    try {
+      const view = renderArchiveClientWithUploadPanel({
+        allMedia: [],
+        initialMode: "photo",
+        initialView: "all",
+      });
+
+      const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File([new Uint8Array([1, 2, 3])], "finished.jpg", { type: "image/jpeg" });
+
+      Object.defineProperty(input, "files", {
+        configurable: true,
+        value: [file],
+      });
+
+      fireEvent.change(input);
+      fireEvent.click(screen.getByRole("button", { name: "Сохранить 1" }));
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(uploadFileWithTransportContract).toHaveBeenCalledTimes(1);
+      expect(document.querySelector(".tree-upload-panel")).not.toBeNull();
+
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      expect(document.querySelector(".tree-upload-panel")).toBeNull();
+    } finally {
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    }
   });
 
   it("opens archive media in a large viewer and navigates to an external video", () => {
@@ -1543,10 +1752,12 @@ describe("tree media archive client", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Аудио" }));
     expect(screen.getByText("Аудио 1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Аудио" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Открыть фото: Фото 1" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Документы" }));
     expect(screen.getByText("Документ 1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Документы" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Открыть видео: Видео 1" })).not.toBeInTheDocument();
   });
 
@@ -1941,7 +2152,32 @@ describe("tree media archive client", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Открыть фото: Архивное фото" })).not.toBeInTheDocument();
     });
-    expect(screen.getByText("Медиа удалено.")).toBeInTheDocument();
+    expect(screen.getByText("Фото удалено.")).toBeInTheDocument();
+  });
+
+  it("uses video-specific copy in the single archive delete dialog", async () => {
+    renderArchiveClient({
+      initialMode: "video",
+      allMedia: [
+        createMediaAsset({
+          id: "media-video",
+          kind: "video",
+          title: "Архивное видео",
+          mime_type: "video/mp4",
+          storage_path: "trees/tree-1/media/video/media-video/archive-video.mp4",
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Архивное видео»" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Удалить" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+
+    expect(screen.getByRole("dialog", { name: "Удалить это видео?" })).toBeInTheDocument();
+    expect(screen.getByText("Видео «Архивное видео» будет удалено.")).toBeInTheDocument();
   });
 
   it("bulk deletes selected archive media from the archive page action bar", async () => {
@@ -1973,9 +2209,9 @@ describe("tree media archive client", () => {
     expect(screen.getByText("Выбрано: 2")).toBeInTheDocument();
 
     fireEvent.click(within(screen.getByRole("region", { name: "Действия с выбранными материалами" })).getByRole("button", { name: "Удалить" }));
-    expect(screen.getByRole("dialog", { name: "Удалить выбранные фото?" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Удалить выбранные материалы?" })).toBeInTheDocument();
 
-    fireEvent.click(within(screen.getByRole("dialog", { name: "Удалить выбранные фото?" })).getByRole("button", { name: "Удалить" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Удалить выбранные материалы?" })).getByRole("button", { name: "Удалить" }));
 
     await waitFor(() => {
       expect(requests.some((request) => request.url.endsWith("/api/media/media-photo") && request.method === "DELETE")).toBe(true);
@@ -1986,6 +2222,40 @@ describe("tree media archive client", () => {
       expect(screen.queryByRole("button", { name: "Открыть видео: Архивное видео" })).not.toBeInTheDocument();
     });
     expect(screen.queryByRole("region", { name: "Действия с выбранными материалами" })).not.toBeInTheDocument();
+  });
+
+  it("uses video-specific bulk delete copy in video mode", async () => {
+    const firstVideo = createMediaAsset({
+      id: "media-video-1",
+      kind: "video",
+      title: "Первое видео",
+      mime_type: "video/mp4",
+      storage_path: "trees/tree-1/media/video/media-video-1/first-video.mp4",
+    });
+    const secondVideo = createMediaAsset({
+      id: "media-video-2",
+      kind: "video",
+      title: "Второе видео",
+      mime_type: "video/mp4",
+      storage_path: "trees/tree-1/media/video/media-video-2/second-video.mp4",
+    });
+
+    renderArchiveClient({
+      initialMode: "video",
+      allMedia: [firstVideo, secondVideo],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть действия для «Первое видео»" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Выбрать несколько" })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать несколько" }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть видео: Второе видео" }));
+
+    fireEvent.click(within(screen.getByRole("region", { name: "Действия с выбранными материалами" })).getByRole("button", { name: "Удалить" }));
+
+    expect(screen.getByRole("dialog", { name: "Удалить выбранные видео?" })).toBeInTheDocument();
+    expect(screen.getByText("2 видео будут удалены.")).toBeInTheDocument();
   });
 
   it("downloads selected archive media as zip from the selection bar", async () => {

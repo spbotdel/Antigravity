@@ -4,6 +4,7 @@ import { useCallback, useId, useRef, useState } from "react";
 import { FilePlus } from "lucide-react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { uploadFileWithTransportContract } from "@/lib/utils";
+import { useTreeUploadPanel } from "@/components/upload/tree-upload-panel-provider";
 import { DocumentPreviewDialog } from "@/components/media/document-preview-dialog";
 import { buildCloudflareOfficeDocumentPublicUrl, isOfficeWordDocumentAsset } from "@/components/media/office-document-preview";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -121,9 +122,9 @@ interface ArchiveUploadTarget {
 }
 
 export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2PublicBaseUrl, canEdit, media, onMediaChange }: DocumentArchiveViewProps) {
+    const { upsertJob, completeJob, failJob } = useTreeUploadPanel();
     const [previewAsset, setPreviewAsset] = useState<MediaAssetRecord | null>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [status, setStatus] = useState<string | null>(null);
     const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -152,11 +153,29 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
         setStatus(null);
 
         const uploaded: MediaAssetRecord[] = [];
+        const queuedJobs = files.map((file) => ({
+            id: crypto.randomUUID(),
+            file,
+        }));
+        let currentJobId: string | null = null;
+
+        queuedJobs.forEach((job) => {
+            upsertJob({
+                id: job.id,
+                scope: "archive-document",
+                fileName: job.file.name,
+                status: "queued",
+                uploadedBytes: 0,
+                totalBytes: job.file.size,
+                progressPercent: 0,
+                message: "Ждёт очереди",
+            });
+        });
 
         try {
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                setUploadProgress(`Загрузка ${i + 1} из ${files.length}: ${file.name}`);
+            for (let i = 0; i < queuedJobs.length; i++) {
+                const { file, id: jobId } = queuedJobs[i];
+                currentJobId = jobId;
 
                 const intent = (await requestJson("/api/media/archive/upload-intent", "POST", {
                     treeId,
@@ -172,7 +191,18 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                 await uploadFileWithTransportContract({
                     target: intent,
                     file,
-                    onProgress: undefined,
+                    onProgress: (progress) => {
+                        upsertJob({
+                            id: jobId,
+                            scope: "archive-document",
+                            fileName: file.name,
+                            status: "uploading",
+                            uploadedBytes: progress.uploadedBytes,
+                            totalBytes: progress.totalBytes || file.size,
+                            progressPercent: progress.percent,
+                            message: "Загружается",
+                        });
+                    },
                     directErrorMessage: "Не удалось отправить файл напрямую в хранилище.",
                     proxyErrorMessage: "Не удалось отправить файл на сервер.",
                     proxyResponseErrorMessage: "Не удалось загрузить файл.",
@@ -180,6 +210,17 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                 });
 
                 if (!mountedRef.current) return;
+
+                upsertJob({
+                    id: jobId,
+                    scope: "archive-document",
+                    fileName: file.name,
+                    status: "processing",
+                    uploadedBytes: file.size,
+                    totalBytes: file.size,
+                    progressPercent: 100,
+                    message: "Сохраняется",
+                });
 
                 const payload = await requestJson("/api/media/archive/complete", "POST", {
                     treeId,
@@ -197,11 +238,20 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
 
                 const created = payload.media as MediaAssetRecord;
                 uploaded.push(created);
+                completeJob(jobId, {
+                    scope: "archive-document",
+                    fileName: file.name,
+                    totalBytes: file.size,
+                    uploadedBytes: file.size,
+                    message: "Готово",
+                });
             }
 
             onMediaChange([...uploaded, ...media]);
-            setStatus(uploaded.length === 1 ? "Документ загружен." : `Загружено документов: ${uploaded.length}.`);
         } catch (uploadError) {
+            if (currentJobId) {
+                failJob(currentJobId, uploadError instanceof Error ? uploadError.message : "Не удалось загрузить документ.");
+            }
             if (uploaded.length) {
                 onMediaChange([...uploaded, ...media]);
             }
@@ -209,7 +259,6 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
             setError(uploadError instanceof Error ? uploadError.message : "Не удалось загрузить документ.");
         } finally {
             setIsUploading(false);
-            setUploadProgress(null);
         }
     }
 
@@ -235,9 +284,9 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
             if (previewAsset?.id === deleteTargetId) {
                 setPreviewAsset(null);
             }
-            setStatus(payload.message || "Документ удалён.");
+            setStatus(payload.message === "Медиа удалено." ? "Документ удалён." : (payload.message || "Документ удалён."));
         } catch (deleteError) {
-            setError(deleteError instanceof Error ? deleteError.message : "Не удалось удалить.");
+            setError(deleteError instanceof Error ? deleteError.message : "Не удалось удалить документ.");
         } finally {
             setDeleteTargetId(null);
         }
@@ -276,13 +325,6 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                 />
             ) : null}
             {error ? <p className="form-error">{error}</p> : null}
-            {status ? <p className="form-success">{status}</p> : null}
-
-            {isUploading && uploadProgress ? (
-                <div className="document-archive-upload-status">
-                    <span>{uploadProgress}</span>
-                </div>
-            ) : null}
 
             {media.length === 0 && !isUploading ? (
                 <div className="document-archive-empty">
@@ -392,6 +434,12 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                     <FilePlus className="media-upload-fab-icon" aria-hidden="true" />
                     <span className="sr-only">Загрузить</span>
                 </label>
+            ) : null}
+
+            {status ? (
+                <div className="builder-status-toast" role="status" aria-live="polite">
+                    {status}
+                </div>
             ) : null}
         </div>
     );

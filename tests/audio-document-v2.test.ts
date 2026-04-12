@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { createElement } from "react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { createElement, type ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 const { uploadFileWithTransportContract } = vi.hoisted(() => ({
@@ -14,15 +14,13 @@ vi.mock("@/lib/utils", async () => {
     };
 });
 
-// --- resolveMediaKindFromMimeType tests ---
-// We can't import the private function directly, so we test the public surface
-// that depends on it: the type system and display helpers.
-
 import { AudioArchiveView } from "@/components/media/audio-archive-view";
 import { DocumentArchiveView } from "@/components/media/document-archive-view";
 import { DocumentPreviewDialog } from "@/components/media/document-preview-dialog";
-import { OfficeDocumentPreview, buildCloudflareOfficeDocumentPublicUrl, buildMicrosoftOfficeViewerUrl } from "@/components/media/office-document-preview";
-import { buildAttachmentContentDisposition } from "@/lib/server/repository";
+import { OfficeDocumentPreview, buildCloudflareOfficeDocumentPublicUrl, buildMicrosoftOfficeViewerUrl, isOfficeWordDocumentAsset } from "@/components/media/office-document-preview";
+import { TreeUploadPanelProvider, useTreeUploadPanel } from "@/components/upload/tree-upload-panel-provider";
+import { detectMediaUploadKind } from "@/components/tree/builder-workspace";
+import { buildAttachmentContentDisposition, resolveMediaKindFromMimeType } from "@/lib/server/repository";
 import type { MediaAssetRecord, MediaKind } from "@/lib/types";
 import { collectTreeMedia } from "@/lib/tree/display";
 import { formatMediaKind } from "@/lib/ui-text";
@@ -160,6 +158,260 @@ function createDocumentAsset(overrides?: Partial<MediaAssetRecord>): MediaAssetR
     } as MediaAssetRecord;
 }
 
+function renderWithTreeUploadPanel(element: ReactElement) {
+    return render(createElement(TreeUploadPanelProvider, null, element));
+}
+
+function UploadPanelLifecycleHarness() {
+    const { upsertJob, completeJob, failJob } = useTreeUploadPanel();
+
+    return createElement(
+        "div",
+        null,
+        createElement(
+            "button",
+            {
+                type: "button",
+                onClick: () =>
+                    upsertJob({
+                        id: "upload-1",
+                        scope: "test",
+                        fileName: "first-video.mp4",
+                        status: "uploading",
+                        uploadedBytes: 25,
+                        totalBytes: 100,
+                        progressPercent: 25,
+                        message: "Загружается",
+                    }),
+            },
+            "Start first upload"
+        ),
+        createElement(
+            "button",
+            {
+                type: "button",
+                onClick: () =>
+                    upsertJob({
+                        id: "upload-2",
+                        scope: "test",
+                        fileName: "second-video.mp4",
+                        status: "uploading",
+                        uploadedBytes: 40,
+                        totalBytes: 100,
+                        progressPercent: 40,
+                        message: "Загружается",
+                    }),
+            },
+            "Start second upload"
+        ),
+        createElement(
+            "button",
+            {
+                type: "button",
+                onClick: () =>
+                    completeJob("upload-1", {
+                        scope: "test",
+                        fileName: "first-video.mp4",
+                        uploadedBytes: 100,
+                        totalBytes: 100,
+                        message: "Готово",
+                    }),
+            },
+            "Complete first upload"
+        ),
+        createElement(
+            "button",
+            {
+                type: "button",
+                onClick: () =>
+                    completeJob("upload-2", {
+                        scope: "test",
+                        fileName: "second-video.mp4",
+                        uploadedBytes: 100,
+                        totalBytes: 100,
+                        message: "Готово",
+                    }),
+            },
+            "Complete second upload"
+        ),
+        createElement(
+            "button",
+            {
+                type: "button",
+                onClick: () => failJob("upload-1", "Не удалось загрузить файл."),
+            },
+            "Fail first upload"
+        )
+    );
+}
+
+describe("TreeUploadPanel lifecycle", () => {
+    it("keeps only active rows visible while another upload is still in progress", async () => {
+        renderWithTreeUploadPanel(createElement(UploadPanelLifecycleHarness));
+
+        fireEvent.click(screen.getByRole("button", { name: "Start first upload" }));
+        fireEvent.click(screen.getByRole("button", { name: "Start second upload" }));
+
+        let panel = document.querySelector(".tree-upload-panel");
+        expect(panel).not.toBeNull();
+        expect(within(panel as HTMLElement).getByText("first-video.mp4")).toBeInTheDocument();
+        expect(within(panel as HTMLElement).getByText("second-video.mp4")).toBeInTheDocument();
+        expect(screen.queryByText("Очистить готовые")).toBeNull();
+
+        fireEvent.click(screen.getByRole("button", { name: "Complete first upload" }));
+
+        panel = document.querySelector(".tree-upload-panel");
+        expect(panel).not.toBeNull();
+        expect(within(panel as HTMLElement).queryByText("first-video.mp4")).toBeNull();
+        expect(within(panel as HTMLElement).getByText("second-video.mp4")).toBeInTheDocument();
+        expect(within(panel as HTMLElement).queryByText("Готово")).toBeNull();
+        expect(within(panel as HTMLElement).getByText("1 файл в работе.")).toBeInTheDocument();
+    });
+
+    it("auto-collapses active uploads after a short delay into a compact summary", async () => {
+        vi.useFakeTimers();
+
+        try {
+            renderWithTreeUploadPanel(createElement(UploadPanelLifecycleHarness));
+
+            fireEvent.click(screen.getByRole("button", { name: "Start first upload" }));
+            fireEvent.click(screen.getByRole("button", { name: "Start second upload" }));
+
+            expect(document.querySelector('.tree-upload-panel-shell[data-collapsed="true"]')).toBeNull();
+            expect(document.querySelector(".tree-upload-panel-list")).not.toBeNull();
+
+            await act(async () => {
+                vi.advanceTimersByTime(1600);
+            });
+
+            const shell = document.querySelector('.tree-upload-panel-shell[data-collapsed="true"]');
+            expect(shell).not.toBeNull();
+            expect(document.querySelector(".tree-upload-panel-list")).toBeNull();
+            expect(screen.getByText("2 файла в работе")).toBeInTheDocument();
+        } finally {
+            vi.runOnlyPendingTimers();
+            vi.useRealTimers();
+        }
+    });
+
+    it("expands the panel manually from collapsed mode and does not auto-collapse again during the same upload session", async () => {
+        vi.useFakeTimers();
+
+        try {
+            renderWithTreeUploadPanel(createElement(UploadPanelLifecycleHarness));
+
+            fireEvent.click(screen.getByRole("button", { name: "Start first upload" }));
+
+            await act(async () => {
+                vi.advanceTimersByTime(1600);
+            });
+
+            const collapsedPanel = document.querySelector(".tree-upload-panel") as HTMLElement | null;
+            expect(collapsedPanel).not.toBeNull();
+            expect(collapsedPanel?.getAttribute("aria-expanded")).toBe("false");
+            expect(document.querySelector(".tree-upload-panel-list")).toBeNull();
+
+            fireEvent.click(collapsedPanel as HTMLElement);
+
+            expect(document.querySelector('.tree-upload-panel-shell[data-collapsed="true"]')).toBeNull();
+            expect(document.querySelector(".tree-upload-panel-list")).not.toBeNull();
+            expect(within(document.querySelector(".tree-upload-panel") as HTMLElement).getByText("first-video.mp4")).toBeInTheDocument();
+
+            fireEvent.click(screen.getByRole("button", { name: "Start first upload" }));
+
+            await act(async () => {
+                vi.advanceTimersByTime(4000);
+            });
+
+            expect(document.querySelector('.tree-upload-panel-shell[data-collapsed="true"]')).toBeNull();
+            expect(document.querySelector(".tree-upload-panel-list")).not.toBeNull();
+        } finally {
+            vi.runOnlyPendingTimers();
+            vi.useRealTimers();
+        }
+    });
+
+    it("auto-hides the panel shortly after the last upload completes", async () => {
+        vi.useFakeTimers();
+
+        try {
+            renderWithTreeUploadPanel(createElement(UploadPanelLifecycleHarness));
+
+            fireEvent.click(screen.getByRole("button", { name: "Start first upload" }));
+            fireEvent.click(screen.getByRole("button", { name: "Complete first upload" }));
+
+            expect(screen.getByText("Загрузка завершена")).toBeInTheDocument();
+            expect(document.querySelector(".tree-upload-panel")).not.toBeNull();
+
+            await act(async () => {
+                vi.advanceTimersByTime(1500);
+            });
+            expect(document.querySelector('.tree-upload-panel-shell[data-closing="true"]')).not.toBeNull();
+
+            await act(async () => {
+                vi.advanceTimersByTime(180);
+            });
+
+            expect(document.querySelector(".tree-upload-panel")).toBeNull();
+        } finally {
+            vi.runOnlyPendingTimers();
+            vi.useRealTimers();
+        }
+    });
+
+    it("auto-hides failed uploads without requiring manual cleanup", async () => {
+        vi.useFakeTimers();
+
+        try {
+            renderWithTreeUploadPanel(createElement(UploadPanelLifecycleHarness));
+
+            fireEvent.click(screen.getByRole("button", { name: "Start first upload" }));
+            fireEvent.click(screen.getByRole("button", { name: "Fail first upload" }));
+
+            expect(screen.getByText("Ошибка загрузки")).toBeInTheDocument();
+            expect(screen.queryByText("Очистить готовые")).toBeNull();
+
+            await act(async () => {
+                vi.advanceTimersByTime(1680);
+            });
+
+            expect(document.querySelector(".tree-upload-panel")).toBeNull();
+        } finally {
+            vi.runOnlyPendingTimers();
+            vi.useRealTimers();
+        }
+    });
+});
+
+describe("PowerPoint document support", () => {
+    it("classifies PowerPoint mime types as document on server and builder paths", () => {
+        expect(resolveMediaKindFromMimeType("application/vnd.ms-powerpoint")).toBe("document");
+        expect(resolveMediaKindFromMimeType("application/vnd.openxmlformats-officedocument.presentationml.presentation")).toBe("document");
+
+        expect(
+            detectMediaUploadKind(new File(["ppt"], "family-slides.ppt", { type: "application/vnd.ms-powerpoint" }))
+        ).toBe("document");
+        expect(
+            detectMediaUploadKind(
+                new File(["pptx"], "family-slides.pptx", { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" })
+            )
+        ).toBe("document");
+    });
+
+    it("treats pptx assets as Office-preview candidates when public Cloudflare urls can be built", () => {
+        const asset = createDocumentAsset({
+            title: "family-history.pptx",
+            storage_path: "trees/tree-1/media/document/document-1/family-history.pptx",
+            mime_type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        });
+
+        expect(isOfficeWordDocumentAsset(asset)).toBe(true);
+        expect(buildCloudflareOfficeDocumentPublicUrl(asset, "https://media.example.com/archive/")).toBe(
+            "https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.pptx"
+        );
+    });
+});
+
 function mockAudioPlayback() {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (this: HTMLMediaElement) {
         this.dispatchEvent(new Event("play"));
@@ -214,7 +466,7 @@ describe("Audio archive player state", () => {
         });
 
         const onMediaChange = vi.fn();
-        const view = render(
+        const view = renderWithTreeUploadPanel(
             createElement(AudioArchiveView, {
                 treeId: "tree-1",
                 slug: "test-tree",
@@ -238,7 +490,9 @@ describe("Audio archive player state", () => {
         });
         fireEvent.change(input as HTMLInputElement);
 
-        expect(await screen.findByText("Аудио загружено.")).toBeInTheDocument();
+        await act(async () => {
+            await Promise.resolve();
+        });
         expect(uploadFileWithTransportContract).toHaveBeenCalled();
         expect(onMediaChange).toHaveBeenCalledWith([
             expect.objectContaining({
@@ -246,6 +500,10 @@ describe("Audio archive player state", () => {
                 kind: "audio",
             }),
         ]);
+        expect(document.querySelector(".audio-archive-upload-status")).toBeNull();
+        const panel = document.querySelector(".tree-upload-panel");
+        expect(panel).not.toBeNull();
+        expect(within(panel as HTMLElement).getByText("voice-note.mp3")).toBeInTheDocument();
     });
 
     it("routes audio row download through explicit attachment mode", () => {
@@ -373,6 +631,93 @@ describe("Audio archive player state", () => {
     });
 });
 
+describe("Document archive upload state", () => {
+    it("uses the shared floating upload panel instead of an inline document status strip", async () => {
+        vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+            const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+            if (url.includes("/api/media/archive/upload-intent")) {
+                return Response.json(
+                    {
+                        mediaId: "document-upload-1",
+                        kind: "document",
+                        path: "trees/tree-1/media/document/document-upload-1/archive-deck.pptx",
+                        bucket: "bucket-1",
+                        signedUrl: "https://example.com/document-upload-1",
+                        token: null,
+                        uploadProvider: "cloudflare_r2",
+                        configuredBackend: "cloudflare_r2",
+                        resolvedUploadBackend: "cloudflare_r2",
+                        rolloutState: "cloudflare_rollout_active",
+                        forceProxyUpload: true,
+                        uploadMode: "proxy",
+                        variantUploadMode: "none",
+                        variantTargets: [],
+                    },
+                    { status: 201 }
+                );
+            }
+
+            if (url.includes("/api/media/archive/complete")) {
+                return Response.json(
+                    {
+                        media: createDocumentAsset({
+                            id: "document-upload-1",
+                            title: "archive-deck.pptx",
+                            storage_path: "trees/tree-1/media/document/document-upload-1/archive-deck.pptx",
+                            mime_type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        }),
+                        uploaderAlbumId: null,
+                        message: "Материал сохранен в семейный архив.",
+                    },
+                    { status: 201 }
+                );
+            }
+
+            return Response.json({}, { status: 200 });
+        });
+
+        const onMediaChange = vi.fn();
+        const view = renderWithTreeUploadPanel(
+            createElement(DocumentArchiveView, {
+                treeId: "tree-1",
+                slug: "test-tree",
+                canEdit: true,
+                media: [] as any,
+                onMediaChange,
+            })
+        );
+
+        const input = view.container.querySelector('input[type="file"][accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf"]') as HTMLInputElement | null;
+        expect(input).not.toBeNull();
+
+        const file = new File([new Uint8Array([1, 2, 3])], "archive-deck.pptx", {
+            type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        });
+        Object.defineProperty(input, "files", {
+            configurable: true,
+            value: [file],
+        });
+        fireEvent.change(input as HTMLInputElement);
+
+        await act(async () => {
+            await Promise.resolve();
+        });
+        expect(uploadFileWithTransportContract).toHaveBeenCalled();
+        expect(onMediaChange).toHaveBeenCalledWith([
+            expect.objectContaining({
+                id: "document-upload-1",
+                kind: "document",
+            }),
+        ]);
+        expect(document.querySelector(".document-archive-upload-status")).toBeNull();
+        const panel = document.querySelector(".tree-upload-panel");
+        expect(panel).not.toBeNull();
+        expect(within(panel as HTMLElement).getByText("Загрузка завершена")).toBeInTheDocument();
+        expect(within(panel as HTMLElement).getByText("1 файл обработано.")).toBeInTheDocument();
+    });
+});
+
 describe("document preview integration", () => {
     it("builds a public Cloudflare Office document url from the configured base url", () => {
         const asset = createDocumentAsset({
@@ -473,27 +818,59 @@ describe("document preview integration", () => {
             buildMicrosoftOfficeViewerUrl("https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.docx")
         );
         expect(screen.getByRole("link", { name: "Скачать" })).toHaveAttribute("href", "/api/media/document-1?download=1");
+        expect(screen.queryByText(/Предпросмотр PowerPoint работает нестабильно\./i)).toBeNull();
+    });
+
+    it("renders the Microsoft Office viewer url for pptx preview", () => {
+        render(
+            createElement(DocumentPreviewDialog, {
+                asset: createDocumentAsset({
+                    title: "family-history.pptx",
+                    mime_type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    storage_path: "trees/tree-1/media/document/document-1/family-history.pptx",
+                }),
+                cloudflareR2PublicBaseUrl: "https://media.example.com/archive",
+                open: true,
+                onClose: () => undefined,
+            })
+        );
+
+        const iframe = document.querySelector(".document-preview-iframe");
+        expect(iframe).not.toBeNull();
+        expect(iframe).toHaveAttribute(
+            "src",
+            buildMicrosoftOfficeViewerUrl("https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.pptx")
+        );
+        expect(screen.getByRole("link", { name: "Скачать" })).toHaveAttribute("href", "/api/media/document-1?download=1");
+        expect(
+            screen.getByText("Предпросмотр PowerPoint работает нестабильно. Для надёжного просмотра рекомендуем сохранить файл в PDF.")
+        ).toBeInTheDocument();
     });
 
     it("falls back when the Office viewer does not finish loading in time", async () => {
         vi.useFakeTimers();
 
-        render(
-            createElement(OfficeDocumentPreview, {
-                publicFileUrl: "https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.docx",
-                title: "family-history.docx",
-                downloadUrl: "/api/media/document-1",
-            })
-        );
+        try {
+            render(
+                createElement(OfficeDocumentPreview, {
+                    publicFileUrl: "https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.docx",
+                    title: "family-history.docx",
+                    downloadUrl: "/api/media/document-1",
+                })
+            );
 
-        expect(screen.getByText("Открываем документ через Microsoft viewer...")).toBeInTheDocument();
+            expect(screen.getByText("Открываем документ через Microsoft viewer...")).toBeInTheDocument();
 
-        await act(async () => {
-            vi.advanceTimersByTime(7000);
-        });
+            await act(async () => {
+                vi.advanceTimersByTime(7000);
+            });
 
-        expect(screen.getByText("Предпросмотр не загрузился")).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: "Скачать файл" })).toHaveAttribute("href", "/api/media/document-1");
+            expect(screen.getByText("Предпросмотр не загрузился")).toBeInTheDocument();
+            expect(screen.getByRole("link", { name: "Скачать файл" })).toHaveAttribute("href", "/api/media/document-1");
+        } finally {
+            vi.runOnlyPendingTimers();
+            vi.useRealTimers();
+        }
     });
 
     it("builds attachment content-disposition with ascii fallback and utf-8 filename*", () => {

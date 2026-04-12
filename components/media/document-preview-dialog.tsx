@@ -3,7 +3,12 @@
 import { useEffect, useRef } from "react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { buildCloudflareOfficeDocumentPublicUrl, isOfficeWordDocumentAsset, OfficeDocumentPreview } from "@/components/media/office-document-preview";
+import {
+    buildCloudflareOfficeDocumentPublicUrl,
+    isOfficePowerPointDocumentAsset,
+    isOfficeWordDocumentAsset,
+    OfficeDocumentPreview
+} from "@/components/media/office-document-preview";
 
 interface DocumentPreviewDialogProps {
     asset: MediaAssetRecord | null;
@@ -70,6 +75,7 @@ export function DocumentPreviewDialog({ asset, shareToken, cloudflareR2PublicBas
         : mediaUrl;
     const previewable = canPreview(asset);
     const officePreviewUrl = buildCloudflareOfficeDocumentPublicUrl(asset, cloudflareR2PublicBaseUrl);
+    const showPowerPointWarning = isOfficePowerPointDocumentAsset(asset);
 
     return (
         <div
@@ -86,7 +92,14 @@ export function DocumentPreviewDialog({ asset, shareToken, cloudflareR2PublicBas
         >
             <div className="document-preview-container">
                 <div className="document-preview-header">
-                    <h3 className="document-preview-title">{asset.title || "Документ"}</h3>
+                    <div className="document-preview-header-copy">
+                        <h3 className="document-preview-title">{asset.title || "Документ"}</h3>
+                        {showPowerPointWarning ? (
+                            <p className="document-preview-warning">
+                                Предпросмотр PowerPoint работает нестабильно. Для надёжного просмотра рекомендуем сохранить файл в PDF.
+                            </p>
+                        ) : null}
+                    </div>
                     <div className="document-preview-header-actions">
                         <a
                             href={downloadUrl}

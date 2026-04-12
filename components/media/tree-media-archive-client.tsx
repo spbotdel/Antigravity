@@ -4,6 +4,7 @@ import { memo, startTransition, useCallback, useEffect, useId, useMemo, useRef, 
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useTreeUploadPanel } from "@/components/upload/tree-upload-panel-provider";
 import {
   Dialog,
   DialogContent,
@@ -85,6 +86,7 @@ const INITIAL_TILE_LIMIT = 18;
 const MAX_PHOTO_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const MAX_VIDEO_FILE_SIZE_BYTES = 200 * 1024 * 1024;
 const MAX_DEFAULT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+const ARCHIVE_UPLOAD_TERMINAL_CLEAR_DELAY_MS = 1800;
 const MEDIA_THUMB_BATCH_REQUEST_LIMIT = 100;
 const ARCHIVE_THUMB_PREFETCH_IDLE_DELAY_MS = 600;
 const CREATE_ALBUM_OPTION_VALUE = "__create_album__";
@@ -336,6 +338,69 @@ function formatCountWithRussianPlural(count: number, forms: { one: string; few: 
   return `${count} ${forms.many}`;
 }
 
+type BulkArchiveDeleteLabel = "photo" | "video" | "audio" | "document" | "material";
+
+function getBulkArchiveDeleteCopy(kind: BulkArchiveDeleteLabel, count: number) {
+  if (kind === "photo") {
+    return {
+      title: "Удалить выбранные фото?",
+      description: count ? `${count} фото будут удалены.` : "Выбранные фото будут удалены.",
+    };
+  }
+
+  if (kind === "video") {
+    return {
+      title: "Удалить выбранные видео?",
+      description: count ? `${count} видео будут удалены.` : "Выбранные видео будут удалены.",
+    };
+  }
+
+  if (kind === "audio") {
+    return {
+      title: "Удалить выбранные аудиозаписи?",
+      description: count
+        ? `${formatCountWithRussianPlural(count, { one: "аудиозапись", few: "аудиозаписи", many: "аудиозаписей" })} будут удалены.`
+        : "Выбранные аудиозаписи будут удалены.",
+    };
+  }
+
+  if (kind === "document") {
+    return {
+      title: "Удалить выбранные документы?",
+      description: count
+        ? `${formatCountWithRussianPlural(count, { one: "документ", few: "документа", many: "документов" })} будут удалены.`
+        : "Выбранные документы будут удалены.",
+    };
+  }
+
+  return {
+    title: "Удалить выбранные материалы?",
+    description: count
+      ? `${formatCountWithRussianPlural(count, { one: "материал", few: "материала", many: "материалов" })} будут удалены.`
+      : "Выбранные материалы будут удалены.",
+  };
+}
+
+function getSingleArchiveDeleteSuccessCopy(kind: MediaAssetRecord["kind"] | null | undefined) {
+  if (kind === "photo") {
+    return "Фото удалено.";
+  }
+
+  if (kind === "video") {
+    return "Видео удалено.";
+  }
+
+  if (kind === "audio") {
+    return "Аудиозапись удалена.";
+  }
+
+  if (kind === "document") {
+    return "Документ удалён.";
+  }
+
+  return "Материал удалён.";
+}
+
 interface ActiveArchiveUploadItem {
   id: string;
   name: string;
@@ -344,6 +409,26 @@ interface ActiveArchiveUploadItem {
   progressPercent: number;
   status: ArchiveUploadStatus;
   message: string | null;
+}
+
+function mapArchiveUploadStatus(status: ArchiveUploadStatus) {
+  if (status === "done") {
+    return "completed" as const;
+  }
+
+  if (status === "error") {
+    return "failed" as const;
+  }
+
+  if (status === "finalizing") {
+    return "processing" as const;
+  }
+
+  return status;
+}
+
+function isActiveArchiveUploadStatus(status: ArchiveUploadStatus) {
+  return status === "queued" || status === "uploading" || status === "finalizing";
 }
 
 interface AlbumPreviewItem {
@@ -795,6 +880,7 @@ export function TreeMediaArchiveClient({
   audioPlaylistItems = [],
   audioPlaylistsAvailable = true,
 }: TreeMediaArchiveClientProps) {
+  const { upsertJob } = useTreeUploadPanel();
   const [mode, setMode] = useState<MediaMode>(initialMode);
   const [view, setView] = useState<ArchiveView>(initialView);
   const [visibleItems, setVisibleItems] = useState(INITIAL_TILE_LIMIT);
@@ -844,6 +930,7 @@ export function TreeMediaArchiveClient({
   const reviewFileInputRef = useRef<HTMLInputElement | null>(null);
   const archiveUploadInputId = useId();
   const [isArchiveDropzoneActive, setIsArchiveDropzoneActive] = useState(false);
+  const activeUploadsResetTimeoutRef = useRef<number | null>(null);
   const pendingUploadsRef = useRef<PendingArchiveUploadItem[]>([]);
   const pendingVideoPreviewPollIdsRef = useRef(new Set<string>());
   const pendingVideoPreviewPollWaitsRef = useRef(new Map<string, { timeoutId: number; resolve: (continued: boolean) => void }>());
@@ -886,6 +973,10 @@ export function TreeMediaArchiveClient({
 
   useEffect(() => {
     return () => {
+      if (activeUploadsResetTimeoutRef.current !== null) {
+        window.clearTimeout(activeUploadsResetTimeoutRef.current);
+        activeUploadsResetTimeoutRef.current = null;
+      }
       for (const cleanup of pendingImageCompletionCleanupsRef.current) {
         cleanup();
       }
@@ -961,6 +1052,45 @@ export function TreeMediaArchiveClient({
   useEffect(() => {
     optimisticVideoPreviewUrlsRef.current = optimisticVideoPreviewUrls;
   }, [optimisticVideoPreviewUrls]);
+
+  const clearActiveUploadsResetTimer = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (activeUploadsResetTimeoutRef.current !== null) {
+      window.clearTimeout(activeUploadsResetTimeoutRef.current);
+      activeUploadsResetTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleActiveUploadsReset = useCallback(() => {
+    if (typeof window === "undefined") {
+      setActiveUploads((current) => (current.some((item) => isActiveArchiveUploadStatus(item.status)) ? current : []));
+      return;
+    }
+
+    clearActiveUploadsResetTimer();
+    activeUploadsResetTimeoutRef.current = window.setTimeout(() => {
+      setActiveUploads((current) => (current.some((item) => isActiveArchiveUploadStatus(item.status)) ? current : []));
+      activeUploadsResetTimeoutRef.current = null;
+    }, ARCHIVE_UPLOAD_TERMINAL_CLEAR_DELAY_MS);
+  }, [clearActiveUploadsResetTimer]);
+
+  useEffect(() => {
+    for (const item of activeUploads) {
+      upsertJob({
+        id: item.id,
+        scope: "archive",
+        fileName: item.name,
+        status: mapArchiveUploadStatus(item.status),
+        uploadedBytes: item.uploadedBytes,
+        totalBytes: item.sizeBytes,
+        progressPercent: item.progressPercent,
+        message: item.message,
+      });
+    }
+  }, [activeUploads, upsertJob]);
 
   useEffect(() => {
     if (!status) {
@@ -1098,15 +1228,30 @@ export function TreeMediaArchiveClient({
     [currentAlbums]
   );
   const selectedArchiveMediaCount = selectedArchiveMediaIds.size;
+  const selectedArchiveMedia = useMemo(
+    () =>
+      [...selectedArchiveMediaIds]
+        .map((mediaId) => archiveMedia.find((asset) => asset.id === mediaId) || null)
+        .filter((asset): asset is MediaAssetRecord => Boolean(asset)),
+    [archiveMedia, selectedArchiveMediaIds]
+  );
   const selectedArchiveAlbumKind = useMemo(
     () =>
       resolveSingleAlbumKind(
-        [...selectedArchiveMediaIds]
-          .map((mediaId) => archiveMedia.find((asset) => asset.id === mediaId) || null)
-          .filter((asset): asset is MediaAssetRecord => Boolean(asset))
+        selectedArchiveMedia
           .map((asset) => getAlbumCompatibleKindForAsset(asset))
       ),
-    [archiveMedia, selectedArchiveMediaIds]
+    [selectedArchiveMedia]
+  );
+  const selectedArchiveDeleteLabel = useMemo<BulkArchiveDeleteLabel>(() => {
+    const uniqueKinds = [...new Set(selectedArchiveMedia.map((asset) => asset.kind))];
+    return uniqueKinds.length === 1
+      ? uniqueKinds[0]
+      : "material";
+  }, [selectedArchiveMedia]);
+  const bulkArchiveDeleteCopy = useMemo(
+    () => getBulkArchiveDeleteCopy(selectedArchiveDeleteLabel, selectedArchiveMediaCount),
+    [selectedArchiveDeleteLabel, selectedArchiveMediaCount]
   );
   const manualAlbums = useMemo(
     () =>
@@ -1130,9 +1275,17 @@ export function TreeMediaArchiveClient({
   );
 
   const visibleMedia = currentMedia.slice(0, visibleItems);
-  const modeLabel = mode === "photo" ? "Фото" : mode === "video" ? "Видео" : "Все медиа";
+  const modeLabel =
+    mode === "photo"
+      ? "Фото"
+      : mode === "video"
+        ? "Видео"
+        : mode === "audio"
+          ? "Аудио"
+          : mode === "document"
+            ? "Документы"
+            : "Все медиа";
   const itemLabel = mode === "photo" ? "фото" : mode === "video" ? "видео" : "материалов";
-  const activeUpload = activeUploads.find((item) => item.status === "uploading" || item.status === "finalizing") || null;
   const selectedAlbum = selectedAlbumId ? currentAlbums.find((album) => album.id === selectedAlbumId) || null : null;
   const activeContextAlbum = view === "albums" ? selectedAlbum : null;
   const editingAlbum = editingAlbumId ? persistedAllAlbums.find((album) => album.id === editingAlbumId) || null : null;
@@ -2060,16 +2213,6 @@ export function TreeMediaArchiveClient({
   );
   const deleteTargetAsset = deleteTargetMediaId ? archiveMedia.find((asset) => asset.id === deleteTargetMediaId) || null : null;
   const pendingUploadsSummary = useMemo(() => buildPendingUploadSummary(pendingUploads), [pendingUploads]);
-  const activeUploadCompletedCount = activeUploads.filter((item) => item.status === "done").length;
-  const activeUploadPosition = activeUpload ? activeUploads.findIndex((item) => item.id === activeUpload.id) + 1 : 0;
-  const activeUploadSummary =
-    activeUploads.length > 1 && activeUpload
-      ? `Файл ${activeUploadPosition} из ${activeUploads.length}. Готово ${activeUploadCompletedCount} из ${activeUploads.length}.`
-      : activeUpload
-        ? activeUpload.name
-        : activeUploads.length
-          ? `Готово ${activeUploadCompletedCount} из ${activeUploads.length}.`
-          : null;
 
   function storeOptimisticVideoPreview(mediaId: string, previewUrl: string) {
     setOptimisticVideoPreviewUrls((current) => {
@@ -2304,12 +2447,13 @@ export function TreeMediaArchiveClient({
     setStatus(null);
     setError(null);
     setIsDeletingArchiveMedia(true);
+    const deletedAsset = deleteTargetAsset;
 
     try {
       const payload = await requestArchiveMediaDelete(deleteTargetMediaId);
       patchDeletedArchiveMedia([deleteTargetMediaId]);
       setDeleteTargetMediaId(null);
-      setStatus(payload.message || "Медиа удалено.");
+      setStatus(payload.message === "Медиа удалено." ? getSingleArchiveDeleteSuccessCopy(deletedAsset?.kind) : (payload.message || getSingleArchiveDeleteSuccessCopy(deletedAsset?.kind)));
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Не удалось удалить материал.");
     } finally {
@@ -2909,7 +3053,7 @@ export function TreeMediaArchiveClient({
         setSelectedAlbumId(null);
       }
       setDeleteTargetAlbumId(null);
-      setStatus(payload.message || "Альбом удален.");
+      setStatus(payload.message === "Альбом удален." ? "Альбом удалён." : (payload.message || "Альбом удалён."));
       setError(null);
     } catch (albumError) {
       setError(albumError instanceof Error ? albumError.message : "Не удалось удалить альбом.");
@@ -3076,7 +3220,6 @@ export function TreeMediaArchiveClient({
       return;
     }
 
-    setStatus(files.length === 1 ? "Материал сохранен в семейный архив." : `Материалы сохранены: ${files.length}.`);
   }
 
   async function handleArchiveFileSelection(event: ChangeEvent<HTMLInputElement>) {
@@ -3144,6 +3287,7 @@ export function TreeMediaArchiveClient({
 
     try {
       setIsSavingUploads(true);
+      clearActiveUploadsResetTimer();
       const uploads = pendingUploads.map((item) => ({
         id: item.id,
         file: item.file,
@@ -3177,15 +3321,27 @@ export function TreeMediaArchiveClient({
           return;
         }
 
+        const message = uploadError instanceof Error ? uploadError.message : "Не удалось загрузить материалы в архив.";
         setStatus(null);
-        setError(uploadError instanceof Error ? uploadError.message : "Не удалось загрузить материалы в архив.");
+        setActiveUploads((current) =>
+          current.map((item) =>
+            isActiveArchiveUploadStatus(item.status)
+              ? {
+                ...item,
+                status: "error",
+                message,
+              }
+              : item
+          )
+        );
+        setError(message);
       }).finally(() => {
         if (!isArchiveClientMountedRef.current) {
           return;
         }
 
         setIsSavingUploads(false);
-        setActiveUploads([]);
+        scheduleActiveUploadsReset();
       });
     } catch (uploadError) {
       setStatus(null);
@@ -3327,24 +3483,6 @@ export function TreeMediaArchiveClient({
       </div>
 
       {error ? <p className="form-error">{error}</p> : null}
-      {activeUploads.length ? (
-        <div className="archive-upload-panel">
-          <div className="archive-upload-panel-copy">
-            <strong>{activeUpload ? `Загрузка ${activeUpload.progressPercent}%` : "Загрузка завершена"}</strong>
-            {activeUploadSummary ? <span>{activeUploadSummary}</span> : null}
-            {activeUpload?.message ? <small>{activeUpload.message}</small> : null}
-          </div>
-          <div className="builder-upload-progress-bar">
-            <span
-              style={{
-                width: `${Math.round(
-                  activeUploads.reduce((sum, item) => sum + item.progressPercent, 0) / Math.max(activeUploads.length, 1)
-                )}%`
-              }}
-            />
-          </div>
-        </div>
-      ) : null}
 
       <Tabs value={mode} onValueChange={(value) => switchMode(value as MediaMode)}>
         <TabsList variant="line" aria-label="Режим архива">
@@ -3740,8 +3878,8 @@ export function TreeMediaArchiveClient({
             <DialogTitle>Удалить альбом?</DialogTitle>
             <DialogDescription>
               {deleteTargetAlbum
-                ? `Альбом «${deleteTargetAlbum.title}» будет удален. Файлы и видео останутся в семейном архиве.`
-                : "Альбом будет удален. Файлы и видео останутся в семейном архиве."}
+                ? `Альбом «${deleteTargetAlbum.title}» будет удалён. Файлы и видео останутся в семейном архиве.`
+                : "Альбом будет удалён. Файлы и видео останутся в семейном архиве."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="archive-actions">
@@ -3954,13 +4092,31 @@ export function TreeMediaArchiveClient({
           }
         }}
       >
-        <DialogContent className="archive-confirm-dialog" aria-label="Удалить этот материал?" showCloseButton={false}>
+        <DialogContent
+          className="archive-confirm-dialog"
+          aria-label={
+            deleteTargetAsset?.kind === "photo"
+              ? "Удалить это фото?"
+              : deleteTargetAsset?.kind === "video"
+                ? "Удалить это видео?"
+                : deleteTargetAsset?.kind === "audio"
+                  ? "Удалить эту аудиозапись?"
+                  : deleteTargetAsset?.kind === "document"
+                    ? "Удалить этот документ?"
+                : "Удалить этот материал?"
+          }
+          showCloseButton={false}
+        >
           <DialogHeader>
             <DialogTitle>
               {deleteTargetAsset?.kind === "photo"
                 ? "Удалить это фото?"
                 : deleteTargetAsset?.kind === "video"
                   ? "Удалить это видео?"
+                  : deleteTargetAsset?.kind === "audio"
+                    ? "Удалить эту аудиозапись?"
+                    : deleteTargetAsset?.kind === "document"
+                      ? "Удалить этот документ?"
                   : "Удалить этот материал?"}
             </DialogTitle>
             <DialogDescription>
@@ -3968,9 +4124,21 @@ export function TreeMediaArchiveClient({
                 ? deleteTargetAsset
                   ? `Фото «${deleteTargetAsset.title}» будет удалено.`
                   : "Фото будет удалено."
-                : deleteTargetAsset
-                  ? `Материал «${deleteTargetAsset.title}» будет удален.`
-                  : "Материал будет удален."}
+                : deleteTargetAsset?.kind === "video"
+                  ? deleteTargetAsset
+                    ? `Видео «${deleteTargetAsset.title}» будет удалено.`
+                    : "Видео будет удалено."
+                  : deleteTargetAsset?.kind === "audio"
+                    ? deleteTargetAsset
+                      ? `Аудиозапись «${deleteTargetAsset.title}» будет удалена.`
+                      : "Аудиозапись будет удалена."
+                  : deleteTargetAsset?.kind === "document"
+                      ? deleteTargetAsset
+                        ? `Документ «${deleteTargetAsset.title}» будет удалён.`
+                        : "Документ будет удалён."
+                  : deleteTargetAsset
+                    ? `Материал «${deleteTargetAsset.title}» будет удалён.`
+                    : "Материал будет удалён."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="archive-actions">
@@ -3992,12 +4160,10 @@ export function TreeMediaArchiveClient({
           }
         }}
       >
-        <DialogContent className="archive-confirm-dialog" aria-label="Удалить выбранные фото?" showCloseButton={false}>
+        <DialogContent className="archive-confirm-dialog" aria-label={bulkArchiveDeleteCopy.title} showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Удалить выбранные фото?</DialogTitle>
-            <DialogDescription>
-              {selectedArchiveMediaCount ? `${selectedArchiveMediaCount} фото будут удалены.` : "Выбранные фото будут удалены."}
-            </DialogDescription>
+            <DialogTitle>{bulkArchiveDeleteCopy.title}</DialogTitle>
+            <DialogDescription>{bulkArchiveDeleteCopy.description}</DialogDescription>
           </DialogHeader>
           <DialogFooter className="archive-actions">
             <Button type="button" variant="ghost" disabled={isDeletingArchiveMedia} onClick={() => setIsBulkArchiveDeleteConfirmOpen(false)}>

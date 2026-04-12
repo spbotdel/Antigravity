@@ -7,9 +7,13 @@ import { Button } from "@/components/ui/button";
 
 const OFFICE_DOCUMENT_PREVIEW_TIMEOUT_MS = 7000;
 const MICROSOFT_OFFICE_VIEWER_BASE_URL = "https://view.officeapps.live.com/op/view.aspx?src=";
-const WORD_DOCUMENT_MIME_TYPES = new Set([
+const OFFICE_DOCUMENT_MIME_TYPES = new Set([
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+const POWERPOINT_DOCUMENT_MIME_TYPES = new Set([
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ]);
 
 function getFileExtension(value: string | null | undefined) {
@@ -36,17 +40,45 @@ function encodeStoragePath(storagePath: string) {
 
 export function isOfficeWordDocumentAsset(asset: Pick<MediaAssetRecord, "mime_type" | "storage_path" | "title">) {
   const mimeType = asset.mime_type?.trim().toLowerCase() || "";
-  if (WORD_DOCUMENT_MIME_TYPES.has(mimeType)) {
+  if (
+    OFFICE_DOCUMENT_MIME_TYPES.has(mimeType) ||
+    mimeType.includes("presentation") ||
+    mimeType.includes("powerpoint")
+  ) {
     return true;
   }
 
   const titleExtension = getFileExtension(asset.title);
-  if (titleExtension === ".doc" || titleExtension === ".docx") {
+  if (titleExtension === ".doc" || titleExtension === ".docx" || titleExtension === ".ppt" || titleExtension === ".pptx") {
     return true;
   }
 
   const storagePathExtension = getFileExtension(asset.storage_path);
-  return storagePathExtension === ".doc" || storagePathExtension === ".docx";
+  return (
+    storagePathExtension === ".doc" ||
+    storagePathExtension === ".docx" ||
+    storagePathExtension === ".ppt" ||
+    storagePathExtension === ".pptx"
+  );
+}
+
+export function isOfficePowerPointDocumentAsset(asset: Pick<MediaAssetRecord, "mime_type" | "storage_path" | "title">) {
+  const mimeType = asset.mime_type?.trim().toLowerCase() || "";
+  if (
+    POWERPOINT_DOCUMENT_MIME_TYPES.has(mimeType) ||
+    mimeType.includes("presentation") ||
+    mimeType.includes("powerpoint")
+  ) {
+    return true;
+  }
+
+  const titleExtension = getFileExtension(asset.title);
+  if (titleExtension === ".ppt" || titleExtension === ".pptx") {
+    return true;
+  }
+
+  const storagePathExtension = getFileExtension(asset.storage_path);
+  return storagePathExtension === ".ppt" || storagePathExtension === ".pptx";
 }
 
 export function buildCloudflareOfficeDocumentPublicUrl(

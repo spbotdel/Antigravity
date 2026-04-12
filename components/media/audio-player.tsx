@@ -21,6 +21,7 @@ interface AudioPlayerProps {
     onPlayingChange: (isPlaying: boolean) => void;
     onPlaybackSourceSelect: (source: AudioPlaybackSource) => void;
     onOpenPlaylists?: (() => void) | null;
+    onHeightChange?: ((height: number) => void) | null;
 }
 
 function isSamePlaybackSource(left: AudioPlaybackSource, right: AudioPlaybackSource) {
@@ -74,8 +75,10 @@ export function AudioPlayer({
     onPlayingChange,
     onPlaybackSourceSelect,
     onOpenPlaylists,
+    onHeightChange,
 }: AudioPlayerProps) {
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const rootRef = useRef<HTMLDivElement | null>(null);
     const loadedTrackUrlRef = useRef<string | null>(null);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -186,6 +189,35 @@ export function AudioPlayer({
         };
     }, [activeIndex, onPlayingChange, onTrackChange, tracks]);
 
+    useEffect(() => {
+        const root = rootRef.current;
+        if (!root || !onHeightChange) {
+            return;
+        }
+
+        const reportHeight = () => {
+            onHeightChange(Math.round(root.getBoundingClientRect().height));
+        };
+
+        reportHeight();
+
+        const resizeObserver =
+            typeof ResizeObserver === "undefined"
+                ? null
+                : new ResizeObserver(() => {
+                    reportHeight();
+                });
+
+        resizeObserver?.observe(root);
+        window.addEventListener("resize", reportHeight);
+
+        return () => {
+            resizeObserver?.disconnect();
+            window.removeEventListener("resize", reportHeight);
+            onHeightChange(0);
+        };
+    }, [onHeightChange]);
+
     const togglePlayPause = useCallback(() => {
         onPlayingChange(!isPlaying);
     }, [isPlaying, onPlayingChange]);
@@ -220,7 +252,7 @@ export function AudioPlayer({
     const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
     return (
-        <div className="audio-player" role="region" aria-label="Аудиоплеер">
+        <div ref={rootRef} className="audio-player" role="region" aria-label="Аудиоплеер">
             <audio ref={audioRef} preload="metadata" />
 
             <div className="audio-player-main">

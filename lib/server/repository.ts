@@ -564,7 +564,7 @@ async function getTreeReadAccess(tree: TreeRecord, shareToken?: string | null, r
   };
 }
 
-function resolveMediaKindFromMimeType(mimeType: string): MediaAssetRecord["kind"] {
+export function resolveMediaKindFromMimeType(mimeType: string): MediaAssetRecord["kind"] {
   const normalized = mimeType.trim().toLowerCase();
 
   if (normalized.startsWith("image/")) {
@@ -586,6 +586,7 @@ function resolveMediaKindFromMimeType(mimeType: string): MediaAssetRecord["kind"
     normalized.includes("officedocument") ||
     normalized.includes("spreadsheet") ||
     normalized.includes("presentation") ||
+    normalized.includes("powerpoint") ||
     normalized === "application/rtf"
   ) {
     return "document";

@@ -5585,6 +5585,199 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
   pointer-events: none;
 }
 
+.tree-upload-panel-shell {
+  position: fixed;
+  inset: auto 24px calc(var(--tree-upload-panel-bottom, 96px) + env(safe-area-inset-bottom, 0px)) auto;
+  z-index: 70;
+  width: min(calc(100vw - 24px), 420px);
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.tree-upload-panel {
+  pointer-events: auto;
+  width: min(360px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(18, 27, 43, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.9), rgba(247, 241, 233, 0.84));
+  box-shadow: 0 16px 34px rgba(18, 27, 43, 0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.tree-upload-panel-collapsed {
+  gap: 9px;
+  width: min(300px, 100%);
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.tree-upload-panel-shell[data-closing="true"] .tree-upload-panel {
+  opacity: 0;
+  transform: translateY(10px) scale(0.98);
+}
+
+.tree-upload-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.tree-upload-panel-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tree-upload-panel-copy strong {
+  color: var(--text);
+  font-size: 0.96rem;
+  line-height: 1.25;
+}
+
+.tree-upload-panel-copy span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.tree-upload-panel-collapsed-summary {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tree-upload-panel-collapsed-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tree-upload-panel-collapsed-copy strong {
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-upload-panel-collapsed-copy span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-upload-panel-collapsed-progress {
+  margin-top: 0;
+}
+
+.tree-upload-panel-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(356px, calc(100vh - var(--tree-upload-panel-bottom, 96px) - 72px));
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.tree-upload-job {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(18, 27, 43, 0.08);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.tree-upload-job-top,
+.tree-upload-job-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tree-upload-job-top strong {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.tree-upload-job-status,
+.tree-upload-job-meta span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.tree-upload-job-meta span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tree-upload-job-progress {
+  position: relative;
+  overflow: hidden;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(24, 33, 48, 0.08);
+}
+
+.tree-upload-job-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(240, 109, 61, 0.94), rgba(220, 90, 43, 0.88));
+}
+
+.tree-upload-job-completed .tree-upload-job-progress span {
+  background: rgba(31, 130, 92, 0.9);
+}
+
+.tree-upload-job-failed .tree-upload-job-progress span {
+  background: rgba(201, 74, 66, 0.86);
+}
+
+@media (max-width: 840px) {
+  .tree-upload-panel-shell {
+    inset: auto 12px calc(var(--tree-upload-panel-bottom, 96px) + env(safe-area-inset-bottom, 0px)) 12px;
+    width: auto;
+    justify-content: stretch;
+  }
+
+  .tree-upload-panel {
+    width: 100%;
+    padding: 13px;
+  }
+
+  .tree-upload-panel-collapsed {
+    width: 100%;
+    padding: 12px 13px;
+  }
+
+  .tree-upload-panel-list {
+    max-height: min(272px, calc(100vh - var(--tree-upload-panel-bottom, 96px) - 54px));
+  }
+}
+
 .builder-person-summary {
   display: grid;
   gap: 10px;
@@ -9662,11 +9855,19 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
 
 .document-preview-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 12px 20px;
   border-bottom: 1px solid var(--border-secondary, #e5ddd4);
   flex-shrink: 0;
+  gap: 16px;
+}
+
+.document-preview-header-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .document-preview-title {
@@ -9678,6 +9879,14 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
   white-space: nowrap;
   margin: 0;
   min-width: 0;
+}
+
+.document-preview-warning {
+  margin: 0;
+  max-width: 72ch;
+  color: rgba(120, 73, 34, 0.96);
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
 
 .document-preview-header-actions {

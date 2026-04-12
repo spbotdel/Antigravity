@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { uploadFileWithTransportContract } = vi.hoisted(() => ({
   uploadFileWithTransportContract: vi.fn(async () => undefined),
@@ -7,6 +7,7 @@ const { uploadFileWithTransportContract } = vi.hoisted(() => ({
 
 const BUILDER_WORKSPACE_SLOW_TEST_TIMEOUT_MS = 20_000;
 
+import { TreeUploadPanelProvider } from "@/components/upload/tree-upload-panel-provider";
 import { BuilderWorkspace } from "@/components/tree/builder-workspace";
 import { Calendar } from "@/components/ui/calendar";
 import type { TreeSnapshot } from "@/lib/types";
@@ -104,6 +105,17 @@ vi.mock("@/lib/utils", async () => {
   };
 });
 
+afterEach(() => {
+  cleanup();
+  try {
+    vi.runOnlyPendingTimers();
+    vi.clearAllTimers();
+  } catch {
+    // Some focused runs stay on real timers only.
+  }
+  vi.useRealTimers();
+});
+
 function createSnapshot(): TreeSnapshot {
   return {
     tree: {
@@ -177,6 +189,14 @@ function createSnapshot(): TreeSnapshot {
       },
     ],
   };
+}
+
+function renderBuilderWorkspaceWithUploadPanel(snapshot: TreeSnapshot) {
+  return render(
+    <TreeUploadPanelProvider>
+      <BuilderWorkspace snapshot={snapshot} mediaLoaded />
+    </TreeUploadPanelProvider>
+  );
 }
 
 function createSnapshotWithPhoto(): TreeSnapshot {
@@ -989,6 +1009,96 @@ describe("builder workspace", () => {
     expect(screen.queryByText("Cloudflare R2 активен, но этот запуск принудительно использует серверный proxy upload.")).not.toBeInTheDocument();
   });
 
+  it("shows builder uploads in the shared floating panel", async () => {
+    const snapshot = createSnapshot();
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+
+      if (url.includes("/api/media/upload-intent")) {
+        return Response.json(
+          {
+            mediaId: "media-upload-1",
+            kind: "photo",
+            path: "trees/tree-1/media/photo/media-upload-1/family-photo.png",
+            bucket: "bucket-1",
+            signedUrl: "https://example.com/original",
+            token: null,
+            uploadProvider: "cloudflare_r2",
+            configuredBackend: "cloudflare_r2",
+            resolvedUploadBackend: "cloudflare_r2",
+            rolloutState: "cloudflare_rollout_active",
+            forceProxyUpload: false,
+            uploadMode: "direct",
+            variantUploadMode: "none",
+            variantTargets: [],
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/complete")) {
+        return Response.json(
+          {
+            message: "Файл сохранен.",
+            media: {
+              id: "media-upload-1",
+              tree_id: "tree-1",
+              kind: "photo",
+              provider: "cloudflare_r2",
+              visibility: "members",
+              storage_path: "trees/tree-1/media/photo/media-upload-1/family-photo.png",
+              external_url: null,
+              title: "family-photo.png",
+              caption: "",
+              mime_type: "image/png",
+              size_bytes: 3,
+              preview_status: null,
+              preview_error: null,
+              preview_attempt_count: 0,
+              preview_claimed_at: null,
+              created_by: "user-1",
+              created_at: "2026-03-28T00:00:00.000Z",
+            }
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/tree/demo-tree/builder-snapshot?includeMedia=1")) {
+        return Response.json(snapshot, { status: 200 });
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    renderBuilderWorkspaceWithUploadPanel(snapshot);
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Фото" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
+
+    const input = screen.getByLabelText("Фотографии с устройства") as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], "family-photo.png", { type: "image/png" });
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+    fireEvent.change(input);
+
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить 1" }));
+
+    await waitFor(() => {
+      expect(uploadFileWithTransportContract).toHaveBeenCalled();
+    });
+
+    const panel = document.querySelector(".tree-upload-panel");
+    expect(panel).not.toBeNull();
+    expect(within(panel as HTMLElement).getByText("family-photo.png")).toBeInTheDocument();
+  }, BUILDER_WORKSPACE_SLOW_TEST_TIMEOUT_MS);
+
   it("asks for confirmation before discarding a pending upload batch", async () => {
     render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
 
@@ -1356,7 +1466,7 @@ describe("builder workspace", () => {
     });
 
     expect(requests.some((request) => request.url.includes("/api/tree/demo-tree/builder-snapshot"))).toBe(false);
-    expect(screen.getAllByRole("status").some((element) => element.textContent?.includes("Медиа удалено."))).toBe(true);
+    expect(screen.getAllByRole("status").some((element) => element.textContent?.includes("Фото удалено."))).toBe(true);
   });
 
   it("bulk deletes selected builder photos through the existing media endpoint and clears selection", async () => {

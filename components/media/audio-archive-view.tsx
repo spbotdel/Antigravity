@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { FilePlus, Pause, Play } from "lucide-react";
 
 import { AudioPlayer } from "@/components/media/audio-player";
+import { useTreeUploadPanel } from "@/components/upload/tree-upload-panel-provider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -147,6 +148,7 @@ export function AudioArchiveView({
     playlistsAvailable = true,
     onMediaChange,
 }: AudioArchiveViewProps) {
+    const { upsertJob, completeJob, failJob, setBottomInset, clearBottomInset } = useTreeUploadPanel();
     const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [sectionView, setSectionView] = useState<AudioSectionView>("all");
@@ -165,7 +167,6 @@ export function AudioArchiveView({
     const [isDeletingPlaylist, setIsDeletingPlaylist] = useState(false);
     const [isRemovingPlaylistItem, setIsRemovingPlaylistItem] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [status, setStatus] = useState<string | null>(null);
     const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -237,6 +238,15 @@ export function AudioArchiveView({
         return "Все аудио";
     }, [playbackSource, playlistsState]);
 
+    const handleAudioPlayerHeightChange = useCallback((height: number) => {
+        if (height > 0) {
+            setBottomInset(height + 20);
+            return;
+        }
+
+        clearBottomInset();
+    }, [clearBottomInset, setBottomInset]);
+
     useEffect(() => {
         mountedRef.current = true;
         return () => {
@@ -270,6 +280,16 @@ export function AudioArchiveView({
             setIsPlaying(false);
         }
     }, [activeTrackId, playbackTracks]);
+
+    useEffect(() => {
+        if (!activeTrackId) {
+            clearBottomInset();
+        }
+
+        return () => {
+            clearBottomInset();
+        };
+    }, [activeTrackId, clearBottomInset]);
 
     useEffect(() => {
         if (!status || typeof window === "undefined") {
@@ -394,11 +414,29 @@ export function AudioArchiveView({
         setStatus(null);
 
         const uploaded: MediaAssetRecord[] = [];
+        const queuedJobs = audioFiles.map((file) => ({
+            id: crypto.randomUUID(),
+            file,
+        }));
+        let currentJobId: string | null = null;
+
+        queuedJobs.forEach((job) => {
+            upsertJob({
+                id: job.id,
+                scope: "archive-audio",
+                fileName: job.file.name,
+                status: "queued",
+                uploadedBytes: 0,
+                totalBytes: job.file.size,
+                progressPercent: 0,
+                message: "Ждёт очереди",
+            });
+        });
 
         try {
-            for (let index = 0; index < audioFiles.length; index += 1) {
-                const file = audioFiles[index];
-                setUploadProgress(`Загрузка ${index + 1} из ${audioFiles.length}: ${file.name}`);
+            for (let index = 0; index < queuedJobs.length; index += 1) {
+                const { file, id: jobId } = queuedJobs[index];
+                currentJobId = jobId;
 
                 const intent = (await requestJson("/api/media/archive/upload-intent", "POST", {
                     treeId,
@@ -416,7 +454,18 @@ export function AudioArchiveView({
                 await uploadFileWithTransportContract({
                     target: intent,
                     file,
-                    onProgress: undefined,
+                    onProgress: (progress) => {
+                        upsertJob({
+                            id: jobId,
+                            scope: "archive-audio",
+                            fileName: file.name,
+                            status: "uploading",
+                            uploadedBytes: progress.uploadedBytes,
+                            totalBytes: progress.totalBytes || file.size,
+                            progressPercent: progress.percent,
+                            message: "Загружается",
+                        });
+                    },
                     directErrorMessage: "Не удалось отправить файл напрямую в хранилище.",
                     proxyErrorMessage: "Не удалось отправить файл на сервер.",
                     proxyResponseErrorMessage: "Не удалось загрузить файл.",
@@ -426,6 +475,17 @@ export function AudioArchiveView({
                 if (!mountedRef.current) {
                     return;
                 }
+
+                upsertJob({
+                    id: jobId,
+                    scope: "archive-audio",
+                    fileName: file.name,
+                    status: "processing",
+                    uploadedBytes: file.size,
+                    totalBytes: file.size,
+                    progressPercent: 100,
+                    message: "Сохраняется",
+                });
 
                 const payload = await requestJson("/api/media/archive/complete", "POST", {
                     treeId,
@@ -444,11 +504,20 @@ export function AudioArchiveView({
                 }
 
                 uploaded.push(payload.media as MediaAssetRecord);
+                completeJob(jobId, {
+                    scope: "archive-audio",
+                    fileName: file.name,
+                    totalBytes: file.size,
+                    uploadedBytes: file.size,
+                    message: "Готово",
+                });
             }
 
             onMediaChange([...uploaded, ...media]);
-            setStatus(uploaded.length === 1 ? "Аудио загружено." : `Загружено аудио: ${uploaded.length}.`);
         } catch (uploadError) {
+            if (currentJobId) {
+                failJob(currentJobId, uploadError instanceof Error ? uploadError.message : "Не удалось загрузить аудио.");
+            }
             if (uploaded.length) {
                 onMediaChange([...uploaded, ...media]);
             }
@@ -456,7 +525,6 @@ export function AudioArchiveView({
             setError(uploadError instanceof Error ? uploadError.message : "Не удалось загрузить аудио.");
         } finally {
             setIsUploading(false);
-            setUploadProgress(null);
         }
     }
 
@@ -485,9 +553,9 @@ export function AudioArchiveView({
             if (activeTrackId === deleteTargetId) {
                 setIsPlaying(false);
             }
-            setStatus(payload.message || "Аудио удалено.");
+            setStatus(payload.message === "Медиа удалено." ? "Аудиозапись удалена." : (payload.message || "Аудиозапись удалена."));
         } catch (deleteError) {
-            setError(deleteError instanceof Error ? deleteError.message : "Не удалось удалить.");
+            setError(deleteError instanceof Error ? deleteError.message : "Не удалось удалить аудиозапись.");
         } finally {
             setDeleteTargetId(null);
         }
@@ -868,12 +936,6 @@ export function AudioArchiveView({
             ) : null}
             {error ? <p className="form-error">{error}</p> : null}
 
-            {isUploading && uploadProgress ? (
-                <div className="audio-archive-upload-status">
-                    <span>{uploadProgress}</span>
-                </div>
-            ) : null}
-
             {!playlistsAvailable ? (
                 <div className="audio-archive-upload-status" role="status" aria-live="polite">
                     <span>Плейлисты пока недоступны: миграция базы данных еще не применена.</span>
@@ -1055,6 +1117,7 @@ export function AudioArchiveView({
                 onPlayingChange={handlePlayingChange}
                 onPlaybackSourceSelect={handlePlaybackSourceSelect}
                 onOpenPlaylists={playlistsAvailable ? openPlaylistsOverview : null}
+                onHeightChange={handleAudioPlayerHeightChange}
             />
 
             {deletePlaylistId ? (
