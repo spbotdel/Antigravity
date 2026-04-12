@@ -69,12 +69,12 @@ export default async function SettingsPage({ params, searchParams }: SettingsPag
         </div>
         <section className="section-header workspace-header utility-page-header">
           <div className="workspace-header-main">
+            <h1>{pageData.tree.title}</h1>
             <div className="workspace-meta-row">
               <p className="eyebrow">Настройки</p>
               <span className="workspace-meta-chip">{formatTreeVisibility(pageData.tree.visibility)}</span>
               <span className="workspace-meta-chip">Корень и доступ</span>
             </div>
-            <h1>{pageData.tree.title}</h1>
             <p className="muted-copy">Название, адрес, корень дерева и режим доступа собраны в один спокойный экран с понятной иерархией.</p>
           </div>
         </section>

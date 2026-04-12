@@ -82,12 +82,12 @@ export default async function AuditPage({ params, searchParams }: AuditPageProps
         </div>
         <section className="section-header workspace-header utility-page-header">
           <div className="workspace-header-main">
+            <h1>{treeContext.tree.title}</h1>
             <div className="workspace-meta-row">
               <p className="eyebrow">Журнал владельца</p>
               <span className="workspace-meta-chip">{audit.total} событий</span>
               <span className="workspace-meta-chip">Страница {audit.page}</span>
             </div>
-            <h1>{treeContext.tree.title}</h1>
             <p className="muted-copy">История действий по дереву собрана в одну спокойную ленту без технического шума и лишних полей.</p>
           </div>
         </section>

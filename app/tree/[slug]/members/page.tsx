@@ -71,12 +71,12 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
         </div>
         <section className="section-header workspace-header utility-page-header">
           <div className="workspace-header-main">
+            <h1>{pageData.tree.title}</h1>
             <div className="workspace-meta-row">
               <p className="eyebrow">Участники</p>
               <span className="workspace-meta-chip">По аккаунту</span>
               <span className="workspace-meta-chip">Read-only ссылки</span>
             </div>
-            <h1>{pageData.tree.title}</h1>
             <p className="muted-copy">Роли, приглашения и действующий доступ собраны в одном коротком экране без тяжелой админки.</p>
           </div>
         </section>

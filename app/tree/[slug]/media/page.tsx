@@ -280,12 +280,12 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
         </div>
         <section className="section-header workspace-header utility-page-header">
           <div className="workspace-header-main">
+            <h1>{pageData.tree.title}</h1>
             <div className="workspace-meta-row">
               <p className="eyebrow">Семейный архив</p>
               <span className="workspace-meta-chip">{formatTreeVisibility(pageData.tree.visibility)}</span>
               <span className="workspace-meta-chip">{allAlbumSummaries.length} альбомов</span>
             </div>
-            <h1>{pageData.tree.title}</h1>
             <p className="muted-copy">Семейный архив собирает общие фото, видео, аудиозаписи и документы в одной галерее.</p>
           </div>
         </section>

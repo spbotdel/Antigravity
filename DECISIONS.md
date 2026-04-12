@@ -1022,6 +1022,49 @@ Future Builder work should preserve this rule:
 
 ---
 
+# 2026-04-07 — Constructor is the canonical normal-flow internal page header pattern
+
+### Decision
+
+For tree-scoped pages that remain normal flow documents, the canonical header pattern is now the one established by `Конструктор`, not the old utility-page hero treatment and not the `Просмотр` overlay.
+
+This applies to pages such as:
+
+- `Медиа`
+- `Настройки`
+- `Участники`
+- `Журнал`
+
+The shared internal header recipe is:
+
+- tree title as the primary first anchor
+- service row as a secondary meta layer below the title
+- helper copy as a normal paragraph below the service row
+
+`Просмотр` remains a separate overlay-mode header and must not be used as the reference for normal-flow internal pages.
+
+### Why
+
+The previous utility-page header drifted into a separate product language:
+
+- title started from a different anchor
+- service chips could dominate the first screen
+- switching between `Конструктор` and utility pages felt like switching between different systems
+
+`Конструктор` already provided the calmer internal-page rhythm the product wants for editable and service tree surfaces.
+
+### Consequence
+
+Future work on normal-flow tree pages should preserve these rules:
+
+- use the shared constructor-like internal header recipe
+- keep the title as the first and strongest anchor
+- keep the service row secondary
+- do not reintroduce hero-style utility headers above the content
+- do not use `Просмотр` overlay logic as the reference for non-overlay page headers
+
+---
+
 # 2026-04-05 — Demo-tree legacy avatars must be fixed by data replacement, not resolver exceptions
 
 ### Decision
