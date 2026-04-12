@@ -3268,30 +3268,32 @@ textarea {
 }
 
 .archive-grid {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 220px));
   align-items: stretch;
+  justify-content: start;
 }
 
 .archive-grid-album {
-  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 220px));
   align-items: start;
   gap: 16px;
+  justify-content: start;
 }
 
 .archive-tile-shell {
   position: relative;
   min-width: 0;
-  width: 100%;
+  width: 220px;
   display: grid;
-  justify-self: stretch;
+  justify-self: start;
   align-self: stretch;
 }
 
 .archive-album-card-shell {
   min-width: 0;
-  width: 100%;
+  width: 220px;
   display: grid;
-  justify-self: stretch;
+  justify-self: start;
   align-self: stretch;
 }
 
@@ -4094,8 +4096,9 @@ textarea {
 }
 
 .archive-album-grid {
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 220px));
   align-items: stretch;
+  justify-content: start;
 }
 
 .archive-album-card {
@@ -8362,15 +8365,15 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
   }
 
   .archive-grid {
-    grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(152px, 152px));
   }
 
   .archive-grid-album {
-    grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(156px, 156px));
   }
 
   .archive-album-grid {
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(190px, 190px));
   }
 
   .builder-stage-gallery-shell {
@@ -8653,7 +8656,8 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
   .person-media-thumb-strip,
   .media-lightbox-strip,
   .archive-viewer-strip {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(152px, 152px));
+    justify-content: start;
   }
 
   .person-media-thumb-strip,

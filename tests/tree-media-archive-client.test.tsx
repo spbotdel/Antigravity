@@ -72,8 +72,13 @@ function renderArchiveClient(options?: {
   canEdit?: boolean;
   uploaderLabels?: Array<{ userId: string; label: string }>;
   initialMode?: "photo" | "video" | "audio" | "document" | "all";
-  initialView?: "all" | "albums";
+  initialView?: "all" | "albums" | "person" | "people";
   initialAlbumId?: string | null;
+  initialPersonId?: string | null;
+  initialPersonName?: string | null;
+  initialPersonMediaIds?: string[];
+  initialPeopleWithMedia?: Array<{ id: string; fullName: string }>;
+  initialPersonMediaLinks?: Array<{ personId: string; mediaId: string; isPrimary?: boolean }>;
   initialThumbUrlsByMediaId?: Record<string, string>;
 }) {
   const allMedia = options?.allMedia || [
@@ -107,11 +112,15 @@ function renderArchiveClient(options?: {
       initialMode={options?.initialMode ?? "all"}
       initialView={options?.initialView ?? "all"}
       initialAlbumId={options?.initialAlbumId ?? null}
+      initialPersonId={options?.initialPersonId ?? null}
+      initialPersonName={options?.initialPersonName ?? null}
+      initialPersonMediaIds={options?.initialPersonMediaIds ?? []}
+      initialPeopleWithMedia={options?.initialPeopleWithMedia ?? []}
+      initialPersonMediaLinks={options?.initialPersonMediaLinks ?? []}
       allMedia={allMedia}
       allAlbums={(options?.allAlbums || []).map((album) => ({ ...album, kind: album.kind ?? "photo", access: album.access ?? "members" }))}
       persistedAlbumMediaMap={options?.persistedAlbumMediaMap || {}}
       initialThumbUrlsByMediaId={options?.initialThumbUrlsByMediaId || {}}
-      uploaderLabels={options?.uploaderLabels || []}
     />
   );
 }
@@ -149,11 +158,15 @@ function renderArchiveClientWithUploadPanel(options?: Parameters<typeof renderAr
         initialMode={options?.initialMode ?? "all"}
         initialView={options?.initialView ?? "all"}
         initialAlbumId={options?.initialAlbumId ?? null}
+        initialPersonId={options?.initialPersonId ?? null}
+        initialPersonName={options?.initialPersonName ?? null}
+        initialPersonMediaIds={options?.initialPersonMediaIds ?? []}
+        initialPeopleWithMedia={options?.initialPeopleWithMedia ?? []}
+        initialPersonMediaLinks={options?.initialPersonMediaLinks ?? []}
         allMedia={allMedia}
         allAlbums={(options?.allAlbums || []).map((album) => ({ ...album, kind: album.kind ?? "photo", access: album.access ?? "members" }))}
         persistedAlbumMediaMap={options?.persistedAlbumMediaMap || {}}
         initialThumbUrlsByMediaId={options?.initialThumbUrlsByMediaId || {}}
-        uploaderLabels={options?.uploaderLabels || []}
       />
     </TreeUploadPanelProvider>
   );
@@ -1759,6 +1772,366 @@ describe("tree media archive client", () => {
     expect(screen.getByText("Документ 1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Документы" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Открыть видео: Видео 1" })).not.toBeInTheDocument();
+  });
+
+  it("keeps person-scoped media context across photo and video modes and clears it in ordinary archive mode", () => {
+    const personPhoto = createMediaAsset({
+      id: "person-photo",
+      title: "Фото Бориса",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/person-photo/photo.jpg",
+    });
+    const personVideo = createMediaAsset({
+      id: "person-video",
+      title: "Видео Бориса",
+      kind: "video",
+      mime_type: "video/mp4",
+      storage_path: "trees/tree-1/media/video/person-video/video.mp4",
+    });
+    const otherPhoto = createMediaAsset({
+      id: "other-photo",
+      title: "Чужое фото",
+      kind: "photo",
+      created_by: "user-2",
+      storage_path: "trees/tree-1/media/photo/other-photo/photo.jpg",
+    });
+
+    renderArchiveClient({
+      initialMode: "photo",
+      initialView: "person",
+      initialPersonId: "person-1",
+      initialPersonName: "Борис Соколов",
+      initialPersonMediaIds: ["person-photo", "person-video"],
+      allMedia: [personPhoto, personVideo, otherPhoto],
+    });
+
+    expect(screen.getByRole("heading", { name: "Фото Борис Соколов" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть фото: Фото Бориса" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть фото: Чужое фото" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
+
+    expect(screen.getByRole("heading", { name: "Видео Борис Соколов" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть видео: Видео Бориса" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть фото: Чужое фото" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Все медиа" }));
+
+    expect(screen.getByRole("heading", { name: "Все медиа" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть фото: Фото Бориса" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть фото: Чужое фото" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть видео: Видео Бориса" })).toBeInTheDocument();
+  });
+
+  it("keeps archive navigation visible in person-scoped view and exits to ordinary photo state through Все", () => {
+    const personPhoto = createMediaAsset({
+      id: "person-photo",
+      title: "Фото Бориса",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/person-photo/photo.jpg",
+    });
+    const otherPhoto = createMediaAsset({
+      id: "other-photo",
+      title: "Чужое фото",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/other-photo/photo.jpg",
+    });
+
+    window.history.replaceState({}, "", "/tree/demo-family/media?mode=photo&view=person&personId=person-1");
+
+    renderArchiveClient({
+      initialMode: "photo",
+      initialView: "person",
+      initialPersonId: "person-1",
+      initialPersonName: "Борис Соколов",
+      initialPersonMediaIds: ["person-photo"],
+      allMedia: [personPhoto, otherPhoto],
+    });
+
+    expect(screen.queryByRole("button", { name: "← Ко всем фото" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Все" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Альбомы" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "По людям" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "По людям" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Все" })).toHaveAttribute("aria-selected", "false");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Все" }));
+
+    expect(screen.getByRole("heading", { name: "Фото" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть фото: Фото Бориса" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть фото: Чужое фото" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?mode=photo");
+  });
+
+  it("exits current person into people grid through По людям", () => {
+    const personPhoto = createMediaAsset({
+      id: "person-photo",
+      title: "Фото Бориса",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/person-photo/photo.jpg",
+    });
+
+    window.history.replaceState({}, "", "/tree/demo-family/media?mode=photo&view=person&personId=person-1");
+
+    renderArchiveClient({
+      initialMode: "photo",
+      initialView: "person",
+      initialPersonId: "person-1",
+      initialPersonName: "Борис Соколов",
+      initialPersonMediaIds: ["person-photo"],
+      initialPeopleWithMedia: [{ id: "person-1", fullName: "Борис Соколов" }],
+      initialPersonMediaLinks: [{ personId: "person-1", mediaId: "person-photo", isPrimary: true }],
+      allMedia: [personPhoto],
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "По людям" }));
+
+    expect(screen.getByRole("button", { name: /Борис Соколов/ })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Фото Борис Соколов" })).not.toBeInTheDocument();
+    expect(window.location.search).toBe("?mode=photo&view=people");
+  });
+
+  it("resets person-scoped state when new ordinary archive props arrive", () => {
+    const personPhoto = createMediaAsset({
+      id: "person-photo",
+      title: "Фото Бориса",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/person-photo/photo.jpg",
+    });
+    const otherPhoto = createMediaAsset({
+      id: "other-photo",
+      title: "Чужое фото",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/other-photo/photo.jpg",
+    });
+
+    const view = renderArchiveClient({
+      initialMode: "photo",
+      initialView: "person",
+      initialPersonId: "person-1",
+      initialPersonName: "Борис Соколов",
+      initialPersonMediaIds: ["person-photo"],
+      allMedia: [personPhoto, otherPhoto],
+      initialPeopleWithMedia: [{ id: "person-1", fullName: "Борис Соколов" }],
+      initialPersonMediaLinks: [{ personId: "person-1", mediaId: "person-photo", isPrimary: true }],
+    });
+
+    expect(screen.getByRole("heading", { name: "Фото Борис Соколов" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть фото: Чужое фото" })).not.toBeInTheDocument();
+
+    view.rerender(
+      <TreeMediaArchiveClient
+        treeId="tree-1"
+        slug="demo-family"
+        canEdit
+        initialMode="photo"
+        initialView="all"
+        initialAlbumId={null}
+        initialPersonId={null}
+        initialPersonName={null}
+        initialPersonMediaIds={[]}
+        initialPeopleWithMedia={[]}
+        initialPersonMediaLinks={[]}
+        allMedia={[personPhoto, otherPhoto]}
+        allAlbums={[]}
+        persistedAlbumMediaMap={{}}
+        initialThumbUrlsByMediaId={{}}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Фото" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть фото: Фото Бориса" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть фото: Чужое фото" })).toBeInTheDocument();
+  });
+
+  it("renders a people view from person-media links and opens the existing person-scoped archive view", () => {
+    const photoOne = createMediaAsset({
+      id: "person-photo-1",
+      title: "Фото Бориса",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/person-photo-1/photo.jpg",
+    });
+    const photoTwo = createMediaAsset({
+      id: "other-photo-1",
+      title: "Фото Анны",
+      kind: "photo",
+      storage_path: "trees/tree-1/media/photo/other-photo-1/photo.jpg",
+    });
+
+    renderArchiveClient({
+      initialMode: "photo",
+      initialView: "people",
+      allMedia: [photoOne, photoTwo],
+      initialPeopleWithMedia: [
+        { id: "person-1", fullName: "Борис Соколов" },
+        { id: "person-2", fullName: "Анна Соколова" },
+      ],
+      initialPersonMediaLinks: [
+        { personId: "person-1", mediaId: "person-photo-1", isPrimary: true },
+        { personId: "person-2", mediaId: "other-photo-1", isPrimary: true },
+      ],
+    });
+
+    expect(screen.getByRole("tab", { name: "По людям" })).toHaveAttribute("aria-selected", "true");
+    const borisCard = screen.getByRole("button", { name: /Борис Соколов/ });
+    expect(borisCard).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Анна Соколова/ })).toBeInTheDocument();
+    expect(borisCard.querySelector(".archive-album-cover")).not.toBeNull();
+
+    fireEvent.click(borisCard);
+
+    expect(screen.getByRole("heading", { name: "Фото Борис Соколов" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Открыть фото: Фото Бориса" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть фото: Фото Анны" })).not.toBeInTheDocument();
+  });
+
+  it("does not render uploader albums in archive organization", () => {
+    renderArchiveClient({
+      initialMode: "photo",
+      initialView: "albums",
+      allMedia: [
+        createMediaAsset({
+          id: "media-photo-1",
+          title: "Фото 1",
+          created_by: "user-1",
+          storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg",
+        }),
+      ],
+      allAlbums: [
+        {
+          id: "album-uploader-photo",
+          title: "От Вячеслава",
+          description: null,
+          kind: "photo",
+          albumKind: "uploader",
+          uploaderUserId: "user-1",
+          count: 1,
+          coverMediaId: "media-photo-1",
+        },
+      ],
+      persistedAlbumMediaMap: {
+        "album-uploader-photo": [
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            created_by: "user-1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg",
+          }),
+        ],
+      },
+      uploaderLabels: [{ userId: "user-1", label: "От Вячеслава" }],
+    });
+
+    expect(screen.queryByRole("button", { name: /От Вячеслава/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Создать альбом")).toBeInTheDocument();
+  });
+
+  it("fails soft when starting with a stale uploader album id and stays in ordinary albums view", () => {
+    renderArchiveClient({
+      initialMode: "photo",
+      initialView: "albums",
+      initialAlbumId: "uploader-user-1-photo",
+      allMedia: [
+        createMediaAsset({
+          id: "media-photo-1",
+          title: "Фото 1",
+          created_by: "user-1",
+          storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg",
+        }),
+      ],
+      allAlbums: [],
+      persistedAlbumMediaMap: {},
+    });
+
+    expect(document.querySelector(".archive-album-grid")).not.toBeNull();
+    expect(screen.queryByText("От Вячеслава")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть фото: Фото 1" })).not.toBeInTheDocument();
+  });
+
+  it("passes personId when uploading from person-scoped archive view and keeps the new media in that view", async () => {
+    const requests: Array<{ url: string; method?: string; body?: unknown }> = [];
+
+    vi.spyOn(global, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      requests.push({ url, method: init?.method, body });
+
+      if (url.includes("/api/media/archive/upload-intent")) {
+        return Response.json(
+          {
+            mediaId: "person-upload-1",
+            kind: "photo",
+            path: "trees/tree-1/media/photo/person-upload-1/boris.jpg",
+            bucket: "bucket-1",
+            signedUrl: "https://example.com/person-upload-1",
+            token: null,
+            uploadProvider: "cloudflare_r2",
+            configuredBackend: "cloudflare_r2",
+            resolvedUploadBackend: "cloudflare_r2",
+            rolloutState: "cloudflare_rollout_active",
+            forceProxyUpload: false,
+            uploadMode: "direct",
+            variantUploadMode: "none",
+            variantTargets: [],
+          },
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/api/media/archive/complete")) {
+        return Response.json(
+          {
+            message: "Материал сохранен в семейный архив.",
+            uploaderAlbumId: null,
+            media: createMediaAsset({
+              id: body?.mediaId || "person-upload-1",
+              title: body?.title || "boris.jpg",
+              kind: "photo",
+              storage_path: body?.storagePath || "trees/tree-1/media/photo/person-upload-1/boris.jpg",
+            }),
+          },
+          { status: 201 }
+        );
+      }
+
+      return Response.json({}, { status: 200 });
+    });
+
+    const view = renderArchiveClientWithUploadPanel({
+      allMedia: [],
+      initialMode: "photo",
+      initialView: "person",
+      initialPersonId: "person-1",
+      initialPersonName: "Борис Соколов",
+      initialPersonMediaIds: [],
+    });
+
+    const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([new Uint8Array([1, 2, 3])], "boris.jpg", { type: "image/jpeg" });
+
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+
+    fireEvent.change(input);
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить 1" }));
+
+    await waitFor(() => {
+      expect(
+        requests.some(
+          (request) =>
+            request.url.includes("/api/media/archive/complete") &&
+            request.method === "POST" &&
+            (request.body as { personId?: string } | undefined)?.personId === "person-1"
+        )
+      ).toBe(true);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Открыть фото: boris.jpg" })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("heading", { name: "Фото Борис Соколов" })).toBeInTheDocument();
   });
 
   it("opens an edit dialog from the album card menu and updates the manual album", async () => {

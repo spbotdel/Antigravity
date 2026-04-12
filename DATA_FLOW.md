@@ -101,7 +101,7 @@ Path:
 - `app/tree/[slug]/media/page.tsx`
 
 Flow:
-1. route resolves tree slug and optional `share` token
+1. route resolves tree slug, optional `share` token, and optional person-scoped archive query such as `view=person&personId=...`
 2. `getTreeMediaPageData(...)` loads the specialized page context instead of a full tree snapshot
 3. repository returns:
 - tree
@@ -109,9 +109,12 @@ Flow:
 - visible media
 - album summaries
 - album item relations
+ - person-media index for visible media
+ - people with linked media for people-scoped archive entry
+ - optional selected person context plus visible linked media ids for person-scoped archive entry
 4. page builds `albumMediaMap` plus persisted/derived album summaries
 5. page passes the result to `TreeMediaArchiveClient`
-6. archive client renders gallery view, album view, per-card actions, selection mode, bulk album add, and bulk download without a full page reload
+6. archive client renders gallery view, album view, people-scoped view, person-scoped virtual view, per-card actions, selection mode, bulk album add, and bulk download without a full page reload
 
 Important:
 - album summaries now include album-level `access`
@@ -331,8 +334,8 @@ Important:
 - adding a file to a stricter album changes its effective access through repository logic, not by mutating file visibility in UI
 - album-link writes should be idempotent:
   repository code must skip already existing `(album_id, media_id)` pairs instead of re-inserting them
-- uploader album summary semantics are virtual:
-  card count and cover should derive from visible media by `(created_by, kind, tree)`, not from persisted album-item rows
+- uploader identity remains metadata only:
+  archive organization and effective access now use only manual albums plus file visibility
 
 ### 5.5 Archive Download Flow
 
@@ -357,29 +360,14 @@ Flow:
 3. upload review defaults file visibility from that album's `access`
 4. UI may simplify the dialog by hiding the standalone visibility selector for album-targeted upload
 5. completion route still persists authored file visibility and then links the file into:
-- uploader album of the same `kind`
 - selected manual album, when present
+- selected person via `person_media`, when upload started from person-scoped archive view
 
 Important:
 - this is a UX default, not a repository access rule change
 - effective access still remains the strictest of file visibility and every linked album access
-- uploader-album and selected-album linking may overlap in code paths, so repository linking must stay idempotent
-
-### 5.7 Uploader Album Summary And Detail Flow
-
-Flow:
-1. repository/page loads visible archive media for the current actor
-2. uploader album summaries are derived from visible media grouped by:
-- `created_by`
-- `kind`
-3. uploader album detail view resolves from that same grouped visible-media set
-
-Important:
-- persisted uploader album rows may still provide metadata and access behavior
-- uploader album card count must match uploader album detail count because both derive from the same virtual media set
-- this virtual-view rule is specific to uploader albums; manual albums still follow persisted album-item relations
-- in `Все медиа`, uploader album summaries must additionally merge by `created_by` so the UI shows one uploader album per uploader instead of one per kind
-- in `Фото` and `Видео`, uploader album summaries stay split by `kind`
+- manual album linking must stay idempotent
+- person-scoped archive view remains virtual; it is derived from `person_media`, not from persisted album-item rows
 
 ## 6. Invite Flow
 

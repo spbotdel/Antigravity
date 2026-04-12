@@ -30,7 +30,7 @@ import { TreeOverlay } from "@/components/tree/tree-overlay";
 import { AvatarCropPreviewImage, BuilderAvatarPickerDialog } from "@/components/tree/builder-avatar-picker-dialog";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
 import { buildPrimaryPersonAvatarCrops, DEFAULT_AVATAR_CROP, getAvatarCropFromRelation } from "@/lib/avatar-crop";
-import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, buildUploaderAlbumSyntheticId, collectPersonMedia, countTreeGenerations } from "@/lib/tree/display";
+import { buildBuilderDisplayTree, buildMediaOpenRouteUrl, buildPersonPhotoPreviewUrls, buildPhotoPreviewRouteUrl, collectPersonMedia, countTreeGenerations } from "@/lib/tree/display";
 import { formatDate, formatMediaUploadTransportHint, uploadFileWithTransportContract } from "@/lib/utils";
 import type { AvatarCropValue, MediaUploadTargetResponse, ParentLinkRecord, PartnershipRecord, PersonRecord, TreeSnapshot } from "@/lib/types";
 
@@ -2829,19 +2829,13 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   }
 
   function buildSelectedArchiveHref(mode: "photo" | "video") {
-    const selectedMedia = mode === "photo" ? selectedPhotoMedia : selectedVideoMedia;
     const params = new URLSearchParams({
       mode,
-      view: "albums"
+      view: "person"
     });
-    const actorUserId = currentSnapshot.actor.userId;
-    const preferredUploaderUserId =
-      (actorUserId && selectedMedia.some((asset) => asset.created_by === actorUserId) ? actorUserId : null) ||
-      selectedMedia.find((asset) => asset.created_by)?.created_by ||
-      null;
 
-    if (preferredUploaderUserId) {
-      params.set("album", buildUploaderAlbumSyntheticId(preferredUploaderUserId, mode));
+    if (selectedPerson?.id) {
+      params.set("personId", selectedPerson.id);
     }
 
     return `/tree/${currentSnapshot.tree.slug}/media?${params.toString()}`;
@@ -2850,11 +2844,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   function buildBuilderArchiveHrefForMedia(asset: TreeSnapshot["media"][number], mode: BuilderSelectableMediaMode) {
     const params = new URLSearchParams({
       mode,
-      view: "albums",
+      view: "person",
     });
 
-    if (asset.created_by) {
-      params.set("album", buildUploaderAlbumSyntheticId(asset.created_by, mode));
+    if (selectedPerson?.id) {
+      params.set("personId", selectedPerson.id);
     }
 
     return `/tree/${currentSnapshot.tree.slug}/media?${params.toString()}`;

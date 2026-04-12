@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,13 +24,18 @@ function withShareToken(href: string, shareToken?: string | null) {
   return `${href}${separator}share=${encodeURIComponent(shareToken)}`;
 }
 
+function buildMediaRootHref(slug: string, shareToken?: string | null) {
+  return withShareToken(`/tree/${slug}/media`, shareToken);
+}
+
 export function TreeNav({ slug, shareToken, canEdit, canManageMembers, canReadAudit, canManageSettings }: TreeNavProps) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const items = [
     { href: withShareToken(`/tree/${slug}`, shareToken), pathname: `/tree/${slug}`, label: "Просмотр", visible: true },
     { href: withShareToken(`/tree/${slug}/builder`, shareToken), pathname: `/tree/${slug}/builder`, label: "Конструктор", visible: Boolean(canEdit) },
-    { href: withShareToken(`/tree/${slug}/media`, shareToken), pathname: `/tree/${slug}/media`, label: "Медиа", visible: true },
+    { href: buildMediaRootHref(slug, shareToken), pathname: `/tree/${slug}/media`, label: "Медиа", visible: true },
     { href: withShareToken(`/tree/${slug}/members`, shareToken), pathname: `/tree/${slug}/members`, label: "Участники", visible: Boolean(canManageMembers) },
     { href: withShareToken(`/tree/${slug}/settings`, shareToken), pathname: `/tree/${slug}/settings`, label: "Настройки", visible: Boolean(canManageSettings) },
     { href: withShareToken(`/tree/${slug}/audit`, shareToken), pathname: `/tree/${slug}/audit`, label: "Журнал", visible: Boolean(canReadAudit) }
@@ -46,6 +51,14 @@ export function TreeNav({ slug, shareToken, canEdit, canManageMembers, canReadAu
               key={item.href}
               href={item.href}
               prefetch={false}
+              onClick={(event) => {
+                if (item.label !== "Медиа") {
+                  return;
+                }
+
+                event.preventDefault();
+                router.replace(item.href);
+              }}
               className={cn(
                 buttonVariants({
                   variant: pathname === item.pathname ? "secondary" : "ghost",

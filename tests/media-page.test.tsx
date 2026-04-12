@@ -45,6 +45,8 @@ vi.mock("@/components/media/tree-media-archive-client", () => ({
     initialMode,
     initialView,
     initialAlbumId,
+    initialPersonId,
+    initialPeopleWithMedia,
     allMedia,
     allAlbums,
   }: {
@@ -53,11 +55,13 @@ vi.mock("@/components/media/tree-media-archive-client", () => ({
     initialMode: string;
     initialView: string;
     initialAlbumId?: string | null;
+    initialPersonId?: string | null;
+    initialPeopleWithMedia?: Array<{ id: string }>;
     allMedia: Array<{ id: string }>;
     allAlbums: Array<{ id: string }>;
   }) => (
     <div data-testid="tree-media-archive-client">
-      share:{shareToken || "none"};edit:{String(canEdit)};mode:{initialMode};view:{initialView};album:{initialAlbumId || "none"};media:{allMedia.length};albums:{allAlbums.length}
+      share:{shareToken || "none"};edit:{String(canEdit)};mode:{initialMode};view:{initialView};album:{initialAlbumId || "none"};person:{initialPersonId || "none"};people:{initialPeopleWithMedia?.length || 0};media:{allMedia.length};albums:{allAlbums.length}
     </div>
   ),
 }));
@@ -158,6 +162,10 @@ describe("media page", () => {
         },
       ],
       uploaderLabelsById: new Map([["user-1", "От Вячеслава"]]),
+      personMediaLinks: [],
+      peopleWithMedia: [],
+      selectedPerson: null,
+      selectedPersonMediaIds: [],
     });
 
     render(
@@ -167,15 +175,15 @@ describe("media page", () => {
       })
     );
 
-    expect(mocks.getTreeMediaPageData).toHaveBeenCalledWith("demo-family", { shareToken: null });
+    expect(mocks.getTreeMediaPageData).toHaveBeenCalledWith("demo-family", { shareToken: null, personId: null });
     expect(screen.getByTestId("app-header")).toHaveAttribute("data-mode", "admin");
     expect(screen.getByRole("heading", { name: "Demo Family" })).toBeInTheDocument();
     expect(screen.getByText("Семейный архив")).toBeInTheDocument();
     expect(screen.queryByText("1 фото")).not.toBeInTheDocument();
     expect(screen.queryByText("1 видео")).not.toBeInTheDocument();
-    expect(screen.getByText("2 альбомов")).toBeInTheDocument();
+    expect(screen.getByText("1 альбомов")).toBeInTheDocument();
     expect(screen.getByTestId("tree-nav")).toHaveTextContent("share:none;edit:true");
-    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("share:none;edit:true;mode:video;view:albums;album:none;media:2;albums:1");
+    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("share:none;edit:true;mode:video;view:albums;album:none;person:none;people:0;media:2;albums:1");
   }, PAGE_RENDER_TIMEOUT_MS);
 
   it("keeps the media page readable for share-link viewers and passes the share token through", async () => {
@@ -206,6 +214,10 @@ describe("media page", () => {
       albums: [],
       items: [],
       uploaderLabelsById: new Map(),
+      personMediaLinks: [],
+      peopleWithMedia: [],
+      selectedPerson: null,
+      selectedPersonMediaIds: [],
     });
 
     render(
@@ -215,12 +227,12 @@ describe("media page", () => {
       })
     );
 
-    expect(mocks.getTreeMediaPageData).toHaveBeenCalledWith("demo-family", { shareToken: "family-token" });
+    expect(mocks.getTreeMediaPageData).toHaveBeenCalledWith("demo-family", { shareToken: "family-token", personId: null });
     expect(screen.getByTestId("tree-nav")).toHaveTextContent("share:family-token;edit:false");
-    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("share:family-token;edit:false;mode:photo;view:all;album:none;media:0;albums:0");
+    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("share:family-token;edit:false;mode:photo;view:all;album:none;person:none;people:0;media:0;albums:0");
   });
 
-  it("passes the selected album from the query string into the archive client", async () => {
+  it("normalizes stale uploader album urls to ordinary archive state", async () => {
     mocks.getTreeMediaPageData.mockResolvedValue({
       tree: {
         id: "tree-1",
@@ -248,6 +260,10 @@ describe("media page", () => {
       albums: [],
       items: [],
       uploaderLabelsById: new Map(),
+      personMediaLinks: [],
+      peopleWithMedia: [],
+      selectedPerson: null,
+      selectedPersonMediaIds: [],
     });
 
     render(
@@ -257,7 +273,7 @@ describe("media page", () => {
       })
     );
 
-    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("album:uploader-user-1-photo");
+    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("album:none;person:none");
   });
 
   it("passes only photo and video media into the all-media archive dataset", async () => {
@@ -349,6 +365,10 @@ describe("media page", () => {
       albums: [],
       items: [],
       uploaderLabelsById: new Map(),
+      personMediaLinks: [],
+      peopleWithMedia: [],
+      selectedPerson: null,
+      selectedPersonMediaIds: [],
       audioPlaylists: [],
       audioPlaylistItems: [],
       audioPlaylistsAvailable: true,
@@ -361,7 +381,7 @@ describe("media page", () => {
       })
     );
 
-    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("mode:all;view:all;album:none;media:4;albums:0");
+    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("mode:all;view:all;album:none;person:none;people:0;media:4;albums:0");
   });
 
   it("re-triggers visible cloudflare video previews that are still pending or processing", async () => {
@@ -450,6 +470,10 @@ describe("media page", () => {
       albums: [],
       items: [],
       uploaderLabelsById: new Map(),
+      personMediaLinks: [],
+      peopleWithMedia: [],
+      selectedPerson: null,
+      selectedPersonMediaIds: [],
     });
 
     render(
@@ -463,5 +487,103 @@ describe("media page", () => {
     expect(mocks.processCloudflareVideoPreviewJobs).toHaveBeenCalledWith({
       mediaIds: ["video-pending", "video-processing"],
     });
+  });
+
+  it("passes person-scoped archive entry into the archive client for photo and video modes", async () => {
+    mocks.getTreeMediaPageData.mockResolvedValue({
+      tree: {
+        id: "tree-1",
+        owner_user_id: "user-1",
+        slug: "demo-family",
+        title: "Demo Family",
+        description: null,
+        visibility: "private",
+        root_person_id: null,
+        created_at: "2026-03-09T00:00:00.000Z",
+        updated_at: "2026-03-09T00:00:00.000Z",
+      },
+      actor: {
+        userId: "user-1",
+        role: "owner",
+        isAuthenticated: true,
+        accessSource: "membership",
+        shareLinkId: null,
+        canEdit: true,
+        canManageMembers: true,
+        canManageSettings: true,
+        canReadAudit: true,
+      },
+      media: [],
+      albums: [],
+      items: [],
+      uploaderLabelsById: new Map(),
+      personMediaLinks: [
+        { personId: "person-1", mediaId: "photo-1" },
+        { personId: "person-1", mediaId: "video-1" },
+      ],
+      peopleWithMedia: [
+        { id: "person-1", fullName: "Борис Соколов" },
+      ],
+      selectedPerson: {
+        id: "person-1",
+        fullName: "Борис Соколов",
+      },
+      selectedPersonMediaIds: ["photo-1", "video-1"],
+    });
+
+    render(
+      await MediaPage({
+        params: Promise.resolve({ slug: "demo-family" }),
+        searchParams: Promise.resolve({ mode: "photo", view: "person", personId: "person-1" }),
+      })
+    );
+
+    expect(mocks.getTreeMediaPageData).toHaveBeenCalledWith("demo-family", { shareToken: null, personId: "person-1" });
+    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("mode:photo;view:person;album:none;person:person-1;people:1;media:0;albums:0");
+  });
+
+  it("passes people archive entry into the archive client without forcing a selected person", async () => {
+    mocks.getTreeMediaPageData.mockResolvedValue({
+      tree: {
+        id: "tree-1",
+        owner_user_id: "user-1",
+        slug: "demo-family",
+        title: "Demo Family",
+        description: null,
+        visibility: "private",
+        root_person_id: null,
+        created_at: "2026-03-09T00:00:00.000Z",
+        updated_at: "2026-03-09T00:00:00.000Z",
+      },
+      actor: {
+        userId: "user-1",
+        role: "owner",
+        isAuthenticated: true,
+        accessSource: "membership",
+        shareLinkId: null,
+        canEdit: true,
+        canManageMembers: true,
+        canManageSettings: true,
+        canReadAudit: true,
+      },
+      media: [],
+      albums: [],
+      items: [],
+      uploaderLabelsById: new Map(),
+      personMediaLinks: [{ personId: "person-1", mediaId: "photo-1" }],
+      peopleWithMedia: [{ id: "person-1", fullName: "Борис Соколов" }],
+      selectedPerson: null,
+      selectedPersonMediaIds: [],
+    });
+
+    render(
+      await MediaPage({
+        params: Promise.resolve({ slug: "demo-family" }),
+        searchParams: Promise.resolve({ mode: "photo", view: "people" }),
+      })
+    );
+
+    expect(mocks.getTreeMediaPageData).toHaveBeenCalledWith("demo-family", { shareToken: null, personId: null });
+    expect(screen.getByTestId("tree-media-archive-client")).toHaveTextContent("mode:photo;view:people;album:none;person:none;people:1;media:0;albums:0");
   });
 });

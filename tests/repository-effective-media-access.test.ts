@@ -97,7 +97,7 @@ describe("repository effective media access", () => {
 
       if (
         pathWithQuery ===
-        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1"
+        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access,album_kind)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1&tree_media_albums.album_kind=eq.manual"
       ) {
         return [{ media_id: "media-1", tree_media_albums: { tree_id: "tree-1", access: "members" } }];
       }
@@ -108,6 +108,25 @@ describe("repository effective media access", () => {
     await expect(resolveEffectiveMediaAccess("media-1")).resolves.toBe("members");
   });
 
+  it("ignores legacy uploader album links when resolving effective access", async () => {
+    mocks.fetchSupabaseAdminRestJson.mockImplementation(async (pathWithQuery) => {
+      if (pathWithQuery === "media_assets?select=*&id=eq.media-1&limit=1") {
+        return [mediaRow()];
+      }
+
+      if (
+        pathWithQuery ===
+        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access,album_kind)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1&tree_media_albums.album_kind=eq.manual"
+      ) {
+        return [];
+      }
+
+      throw new Error(`Unexpected request: ${pathWithQuery}`);
+    });
+
+    await expect(resolveEffectiveMediaAccess("media-1")).resolves.toBe("public");
+  });
+
   it("returns members for a file with mixed public and members albums", async () => {
     mocks.fetchSupabaseAdminRestJson.mockImplementation(async (pathWithQuery) => {
       if (pathWithQuery === "media_assets?select=*&id=eq.media-1&limit=1") {
@@ -116,7 +135,7 @@ describe("repository effective media access", () => {
 
       if (
         pathWithQuery ===
-        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1"
+        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access,album_kind)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1&tree_media_albums.album_kind=eq.manual"
       ) {
         return [
           { media_id: "media-1", tree_media_albums: { tree_id: "tree-1", access: "public" } },
@@ -142,7 +161,7 @@ describe("repository effective media access", () => {
 
       if (
         pathWithQuery ===
-        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1"
+        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access,album_kind)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1&tree_media_albums.album_kind=eq.manual"
       ) {
         return [{ media_id: "media-1", tree_media_albums: { tree_id: "tree-1", access: "members" } }];
       }
@@ -168,7 +187,7 @@ describe("repository effective media access", () => {
 
       if (
         pathWithQuery ===
-        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1"
+        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access,album_kind)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1&tree_media_albums.album_kind=eq.manual"
       ) {
         return [{ media_id: "media-1", tree_media_albums: { tree_id: "tree-1", access: "public" } }];
       }
@@ -277,7 +296,7 @@ describe("repository effective media access", () => {
 
       if (
         pathWithQuery ===
-        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1"
+        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access,album_kind)&media_id=in.(media-1)&tree_media_albums.tree_id=eq.tree-1&tree_media_albums.album_kind=eq.manual"
       ) {
         return [{ media_id: "media-1", tree_media_albums: { tree_id: "tree-1", access: "members" } }];
       }
@@ -290,6 +309,74 @@ describe("repository effective media access", () => {
     expect(result.media).toHaveLength(0);
     expect(result.albums).toHaveLength(0);
     expect(result.items).toHaveLength(0);
+  });
+
+  it("returns selected person context and visible linked media ids for person-scoped archive entry", async () => {
+    mocks.fetchSupabaseAdminRestJson.mockImplementation(async (pathWithQuery) => {
+      if (pathWithQuery === "trees?select=*&slug=eq.demo-family&limit=1") {
+        return [treeRow()];
+      }
+
+      if (pathWithQuery === "media_assets?select=*&tree_id=eq.tree-1&order=created_at.desc") {
+        return [
+          mediaRow({ id: "media-photo-1", kind: "photo", title: "Фото 1" }),
+          mediaRow({
+            id: "media-video-1",
+            kind: "video",
+            title: "Видео 1",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video-1/original.mp4",
+          }),
+        ];
+      }
+
+      if (pathWithQuery === "tree_audio_playlists?select=*&tree_id=eq.tree-1&order=created_at.desc") {
+        return [];
+      }
+
+      if (pathWithQuery === "tree_media_albums?select=*&tree_id=eq.tree-1&order=created_at.desc") {
+        return [];
+      }
+
+      if (pathWithQuery === "persons?select=id,tree_id,full_name&id=eq.person-1&limit=1") {
+        return [{
+          id: "person-1",
+          tree_id: "tree-1",
+          full_name: "Борис Соколов",
+        }];
+      }
+
+      if (pathWithQuery === "persons?select=id,full_name&tree_id=eq.tree-1&id=in.(person-1)") {
+        return [{
+          id: "person-1",
+          full_name: "Борис Соколов",
+        }];
+      }
+
+      if (pathWithQuery === "person_media?select=person_id,media_id,is_primary&media_id=in.(media-photo-1,media-video-1)") {
+        return [
+          { person_id: "person-1", media_id: "media-photo-1", is_primary: true },
+          { person_id: "person-1", media_id: "media-video-1", is_primary: false },
+        ];
+      }
+
+      if (
+        pathWithQuery ===
+        "tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access,album_kind)&media_id=in.(media-photo-1,media-video-1)&tree_media_albums.tree_id=eq.tree-1&tree_media_albums.album_kind=eq.manual"
+      ) {
+        return [];
+      }
+
+      throw new Error(`Unexpected request: ${pathWithQuery}`);
+    });
+
+    const result = await getTreeMediaPageData("demo-family", { personId: "person-1" });
+
+    expect(result.selectedPerson).toEqual({
+      id: "person-1",
+      fullName: "Борис Соколов",
+    });
+    expect(result.selectedPersonMediaIds).toEqual(["media-photo-1", "media-video-1"]);
   });
 
   it("rejects adding a video file into a photo album", async () => {

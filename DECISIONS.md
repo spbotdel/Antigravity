@@ -852,6 +852,42 @@ Future work must preserve these rules:
 
 ---
 
+# 2026-04-12 — Uploader identity is metadata only, not archive organization
+
+### Decision
+
+Uploader identity remains metadata only.
+
+It may still exist in:
+
+- `created_by`
+- audit/journal context
+- internal diagnostics
+
+Uploader albums must no longer function as active archive organization.
+
+### Why
+
+Treating uploader albums as a real destination for new uploads made archive organization depend on who uploaded the file instead of the actual product collections:
+
+- manual albums
+- person-scoped virtual views derived from `person_media`
+
+That behavior created the wrong default mental model for builder-linked media and left hidden organization semantics even when uploader UI was removed.
+
+### Consequence
+
+Future work must preserve these rules:
+
+- archive UI must not show uploader album cards, titles, or destinations
+- archive and builder routing must not target uploader albums
+- new uploads must not create or link uploader albums as a primary organization rule
+- effective archive access must ignore uploader album links entirely
+- only file visibility and manual album access remain active archive access semantics
+- legacy uploader album rows may remain in the database as inert compatibility data until a later cleanup/migration pass
+
+---
+
 # 2026-03-30 — Archive grid keeps initial next-page thumb prefetch enabled by default
 
 ### Decision

@@ -76,6 +76,7 @@ export const completeMediaSchema = z.object({
 const archiveMediaUploadBaseSchema = {
   treeId: z.string().uuid(),
   mediaId: z.string().uuid(),
+  personId: z.string().uuid().optional(),
   visibility: mediaVisibilitySchema,
   title: z.string().trim().min(1).max(120),
   caption: z.string().trim().max(400).optional().or(z.literal("")),

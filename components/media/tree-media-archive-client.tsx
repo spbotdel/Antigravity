@@ -20,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SelectField } from "@/components/ui/select-field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { buildDerivedUploaderAlbumSummaries, buildTreeMediaAlbumSummaries, buildUploaderAlbumSyntheticId, resolveMediaThumbSource, type MediaThumbSource } from "@/lib/tree/display";
+import { buildTreeMediaAlbumSummaries, resolveMediaThumbSource, type MediaThumbSource } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeAudioPlaylistItemRecord, TreeAudioPlaylistRecord, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
 import { AudioArchiveView } from "@/components/media/audio-archive-view";
@@ -28,7 +28,7 @@ import { DocumentArchiveView } from "@/components/media/document-archive-view";
 import { FilePlus, LockIcon, MoreHorizontalIcon, PlayIcon, PlusIcon } from "lucide-react";
 
 type MediaMode = "photo" | "video" | "audio" | "document" | "all";
-type ArchiveView = "all" | "albums";
+type ArchiveView = "all" | "albums" | "person" | "people";
 
 declare global {
   interface Window {
@@ -59,11 +59,16 @@ interface TreeMediaArchiveClientProps {
   initialMode: MediaMode;
   initialView: ArchiveView;
   initialAlbumId?: string | null;
+  initialPersonId?: string | null;
+  initialPersonName?: string | null;
+  initialPersonMediaIds?: string[];
+  initialPeopleWithMedia?: Array<{ id: string; fullName: string }>;
+  initialPersonMediaLinks?: Array<{ personId: string; mediaId: string; isPrimary?: boolean }>;
   allMedia: MediaAssetRecord[];
   allAlbums: AlbumSummary[];
   persistedAlbumMediaMap: Record<string, MediaAssetRecord[]>;
   initialThumbUrlsByMediaId?: Record<string, string>;
-  uploaderLabels: Array<{ userId: string; label: string }>;
+  uploaderLabels?: Array<{ userId: string; label: string }>;
   audioPlaylists?: TreeAudioPlaylistRecord[];
   audioPlaylistItems?: TreeAudioPlaylistItemRecord[];
   audioPlaylistsAvailable?: boolean;
@@ -80,6 +85,17 @@ type ArchiveTileScope = "grid" | "album";
 interface ArchiveViewerSession {
   mediaIds: string[];
   initialMediaId: string;
+}
+
+interface PersonMediaLink {
+  personId: string;
+  mediaId: string;
+  isPrimary?: boolean;
+}
+
+interface PersonMediaSummary {
+  id: string;
+  fullName: string;
 }
 
 const INITIAL_TILE_LIMIT = 18;
@@ -151,6 +167,27 @@ function scheduleArchiveThumbIdleCallback(callback: () => void) {
   return () => window.clearTimeout(timeoutId);
 }
 
+function buildArchiveRootHref(input: {
+  slug: string;
+  mode: Extract<MediaMode, "photo" | "video" | "all" | "audio" | "document">;
+  view: Extract<ArchiveView, "all" | "albums" | "people">;
+  shareToken?: string | null;
+}) {
+  const params = new URLSearchParams({
+    mode: input.mode,
+  });
+
+  if (input.view !== "all") {
+    params.set("view", input.view);
+  }
+
+  if (input.shareToken) {
+    params.set("share", input.shareToken);
+  }
+
+  return `/tree/${input.slug}/media?${params.toString()}`;
+}
+
 type ArchiveUploadTarget = Pick<
   MediaUploadTargetResponse,
   "mediaId" | "path" | "signedUrl" | "configuredBackend" | "resolvedUploadBackend" | "rolloutState" | "uploadMode" | "variantUploadMode" | "variantTargets"
@@ -183,52 +220,6 @@ function getAlbumCompatibleKindForAsset(asset: MediaAssetRecord): TreeMediaAlbum
 function resolveSingleAlbumKind(kinds: Array<TreeMediaAlbumMediaKind | null>): TreeMediaAlbumMediaKind | null {
   const uniqueKinds = [...new Set(kinds.filter((value): value is TreeMediaAlbumMediaKind => Boolean(value)))];
   return uniqueKinds.length === 1 ? uniqueKinds[0] : null;
-}
-
-function getUploaderAlbumSummaryKey(album: Pick<AlbumSummary, "uploaderUserId" | "kind">) {
-  return album.uploaderUserId ? `${album.uploaderUserId}:${album.kind}` : null;
-}
-
-function mergeUploaderAlbumsForAllMedia(albums: AlbumSummary[], media: MediaAssetRecord[]) {
-  const merged = new Map<string, AlbumSummary>();
-  const ordered: AlbumSummary[] = [];
-
-  for (const album of albums) {
-    if (album.albumKind !== "uploader" || !album.uploaderUserId) {
-      ordered.push(album);
-      continue;
-    }
-
-    const existing = merged.get(album.uploaderUserId);
-    if (existing) {
-      const uploaderMedia = media.filter((asset) => asset.created_by === album.uploaderUserId && (asset.kind === "photo" || asset.kind === "video"));
-      const cover =
-        uploaderMedia.find((asset) => asset.kind === "photo") ||
-        uploaderMedia[0] ||
-        null;
-
-      existing.count = uploaderMedia.length;
-      existing.coverMediaId = cover?.id || null;
-      continue;
-    }
-
-    const uploaderMedia = media.filter((asset) => asset.created_by === album.uploaderUserId && (asset.kind === "photo" || asset.kind === "video"));
-    const cover =
-      uploaderMedia.find((asset) => asset.kind === "photo") ||
-      uploaderMedia[0] ||
-      null;
-
-    const nextAlbum: AlbumSummary = {
-      ...album,
-      kind: "all",
-      count: uploaderMedia.length,
-      coverMediaId: cover?.id || null,
-    };
-    merged.set(album.uploaderUserId, nextAlbum);
-    ordered.push(nextAlbum);
-  }
-
-  return ordered;
 }
 
 function getArchiveMaxMediaFileSizeBytes(file: File) {
@@ -501,12 +492,9 @@ function buildPersistedArchiveAlbumSummaries(input: {
   kind?: Extract<MediaMode, "photo" | "video">;
 }) {
   return input.albums
-    .filter((album) => !input.kind || album.kind === input.kind)
+    .filter((album) => album.albumKind === "manual" && (!input.kind || album.kind === input.kind))
     .map((album) => {
-      const albumAllMedia =
-        album.albumKind === "uploader" && album.uploaderUserId
-          ? input.media.filter((asset) => asset.created_by === album.uploaderUserId && asset.kind === album.kind)
-          : (input.albumMediaMap[album.id] || []).filter((asset) => asset.kind === album.kind);
+      const albumAllMedia = (input.albumMediaMap[album.id] || []).filter((asset) => asset.kind === album.kind);
       const albumMedia = albumAllMedia.filter((asset) => asset.kind === album.kind);
       const cover =
         albumMedia.find((asset) => asset.kind === "photo") ||
@@ -527,13 +515,6 @@ function getArchiveAlbumSourceMedia(
   currentMedia: MediaAssetRecord[],
   currentAlbumMediaMap: Record<string, MediaAssetRecord[]>
 ) {
-  if (album.albumKind === "uploader" && album.uploaderUserId) {
-    return currentMedia.filter((asset) =>
-      asset.created_by === album.uploaderUserId &&
-      (album.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === album.kind)
-    );
-  }
-
   return (currentAlbumMediaMap[album.id] || []).filter((asset) =>
     album.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === album.kind
   );
@@ -871,11 +852,16 @@ export function TreeMediaArchiveClient({
   initialMode,
   initialView,
   initialAlbumId = null,
+  initialPersonId = null,
+  initialPersonName = null,
+  initialPersonMediaIds = [],
+  initialPeopleWithMedia = [],
+  initialPersonMediaLinks = [],
   allMedia,
   allAlbums,
   persistedAlbumMediaMap,
   initialThumbUrlsByMediaId = {},
-  uploaderLabels,
+  uploaderLabels: _uploaderLabels = [],
   audioPlaylists = [],
   audioPlaylistItems = [],
   audioPlaylistsAvailable = true,
@@ -900,8 +886,14 @@ export function TreeMediaArchiveClient({
   const [deleteTargetAlbumId, setDeleteTargetAlbumId] = useState<string | null>(null);
   const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
   const [createAlbumKind, setCreateAlbumKind] = useState<TreeMediaAlbumMediaKind>("photo");
-  const [dismissedUploaderAlbumKeys, setDismissedUploaderAlbumKeys] = useState<Set<string>>(() => new Set());
   const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(initialView === "albums" ? initialAlbumId : null);
+  const [selectedPersonViewId, setSelectedPersonViewId] = useState<string | null>(initialView === "person" ? initialPersonId : null);
+  const [selectedPersonViewName, setSelectedPersonViewName] = useState<string | null>(initialView === "person" ? initialPersonName : null);
+  const [selectedPersonViewMediaIds, setSelectedPersonViewMediaIds] = useState<Set<string>>(
+    () => new Set(initialView === "person" ? initialPersonMediaIds : [])
+  );
+  const [peopleWithMedia, setPeopleWithMedia] = useState<PersonMediaSummary[]>(initialPeopleWithMedia);
+  const [personMediaLinks, setPersonMediaLinks] = useState<PersonMediaLink[]>(initialPersonMediaLinks);
   const [reviewAlbumId, setReviewAlbumId] = useState<string>("");
   const [reviewVisibility, setReviewVisibility] = useState<"public" | "members">("members");
   const [reviewCaption, setReviewCaption] = useState("");
@@ -935,7 +927,6 @@ export function TreeMediaArchiveClient({
   const pendingVideoPreviewPollIdsRef = useRef(new Set<string>());
   const pendingVideoPreviewPollWaitsRef = useRef(new Map<string, { timeoutId: number; resolve: (continued: boolean) => void }>());
   const pendingVideoPreviewPollFetchControllersRef = useRef(new Map<string, AbortController>());
-  const uploaderLabelsById = useMemo(() => new Map(uploaderLabels.map((item) => [item.userId, item.label] as const)), [uploaderLabels]);
   const [albumMediaMap, setAlbumMediaMap] = useState<Record<string, MediaAssetRecord[]>>(persistedAlbumMediaMap);
   const [optimisticVideoPreviewUrls, setOptimisticVideoPreviewUrls] = useState<Record<string, string>>({});
   const optimisticVideoPreviewUrlsRef = useRef<Record<string, string>>({});
@@ -970,6 +961,41 @@ export function TreeMediaArchiveClient({
   useEffect(() => {
     setResolvedThumbUrlsByMediaId((current) => ({ ...initialThumbUrlsByMediaId, ...current }));
   }, [initialThumbUrlsByMediaId]);
+
+  useEffect(() => {
+    setMode(initialMode);
+    setView(initialView);
+    setVisibleItems(INITIAL_TILE_LIMIT);
+    setArchiveMedia(allMedia);
+    setPersistedAllAlbums(allAlbums);
+    setAlbumMediaMap(persistedAlbumMediaMap);
+    setPeopleWithMedia(initialPeopleWithMedia);
+    setPersonMediaLinks(initialPersonMediaLinks);
+    setSelectedAlbumId(initialView === "albums" ? initialAlbumId : null);
+    setSelectedPersonViewId(initialView === "person" ? initialPersonId : null);
+    setSelectedPersonViewName(initialView === "person" ? initialPersonName : null);
+    setSelectedPersonViewMediaIds(new Set(initialView === "person" ? initialPersonMediaIds : []));
+    setArchiveViewerSession(null);
+    setIsArchiveSelectionMode(false);
+    setSelectedArchiveMediaIds(new Set());
+    setIsAddToAlbumPickerOpen(false);
+    setBulkAddAlbumId("");
+    setOpenArchiveActionsMediaId(null);
+    setOpenArchiveAlbumChooserMediaId(null);
+    setOpenArchiveAlbumActionsId(null);
+  }, [
+    allAlbums,
+    allMedia,
+    initialAlbumId,
+    initialMode,
+    initialPeopleWithMedia,
+    initialPersonId,
+    initialPersonMediaIds,
+    initialPersonMediaLinks,
+    initialPersonName,
+    initialView,
+    persistedAlbumMediaMap,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -1114,32 +1140,6 @@ export function TreeMediaArchiveClient({
   );
   const audioMedia = useMemo(() => archiveMedia.filter((asset) => asset.kind === "audio"), [archiveMedia]);
   const documentMedia = useMemo(() => archiveMedia.filter((asset) => asset.kind === "document"), [archiveMedia]);
-  const allDerivedAlbums = useMemo(
-    () =>
-      buildDerivedUploaderAlbumSummaries({
-        media: photoVideoMedia,
-        uploaderLabelsById
-      }),
-    [photoVideoMedia, uploaderLabelsById]
-  );
-  const photoDerivedAlbums = useMemo(
-    () =>
-      buildDerivedUploaderAlbumSummaries({
-        media: photoMedia,
-        kind: "photo",
-        uploaderLabelsById
-      }),
-    [photoMedia, uploaderLabelsById]
-  );
-  const videoDerivedAlbums = useMemo(
-    () =>
-      buildDerivedUploaderAlbumSummaries({
-        media: videoMedia,
-        kind: "video",
-        uploaderLabelsById
-      }),
-    [videoMedia, uploaderLabelsById]
-  );
   const persistedAllAlbumSummaries = useMemo(
     () =>
       buildPersistedArchiveAlbumSummaries({
@@ -1169,31 +1169,9 @@ export function TreeMediaArchiveClient({
       }),
     [albumMediaMap, archiveMedia, persistedAllAlbums]
   );
-
-  function mergeAlbums(persisted: AlbumSummary[], derived: AlbumSummary[]) {
-    const persistedUploaderKeys = new Set(
-      persisted
-        .map((album) => getUploaderAlbumSummaryKey(album))
-        .filter((value): value is string => Boolean(value))
-    );
-    return [
-      ...persisted,
-      ...derived.filter((album) =>
-        !album.uploaderUserId ||
-        (() => {
-          const uploaderKey = getUploaderAlbumSummaryKey(album);
-          return uploaderKey ? !persistedUploaderKeys.has(uploaderKey) && !dismissedUploaderAlbumKeys.has(uploaderKey) : true;
-        })()
-      )
-    ];
-  }
-
-  const allAlbumSummaries = useMemo(
-    () => mergeUploaderAlbumsForAllMedia(mergeAlbums(persistedAllAlbumSummaries, allDerivedAlbums), photoVideoMedia),
-    [persistedAllAlbumSummaries, allDerivedAlbums, dismissedUploaderAlbumKeys, photoVideoMedia]
-  );
-  const photoAlbumSummaries = useMemo(() => mergeAlbums(persistedPhotoAlbumSummaries, photoDerivedAlbums), [persistedPhotoAlbumSummaries, photoDerivedAlbums, dismissedUploaderAlbumKeys]);
-  const videoAlbumSummaries = useMemo(() => mergeAlbums(persistedVideoAlbumSummaries, videoDerivedAlbums), [persistedVideoAlbumSummaries, videoDerivedAlbums, dismissedUploaderAlbumKeys]);
+  const allAlbumSummaries = persistedAllAlbumSummaries;
+  const photoAlbumSummaries = persistedPhotoAlbumSummaries;
+  const videoAlbumSummaries = persistedVideoAlbumSummaries;
 
   const currentMedia = useMemo(() => {
     if (mode === "photo") {
@@ -1210,6 +1188,96 @@ export function TreeMediaArchiveClient({
     }
     return photoVideoMedia;
   }, [audioMedia, documentMedia, mode, photoMedia, photoVideoMedia, videoMedia]);
+  const peopleModeMedia = mode === "all" ? photoVideoMedia : currentMedia;
+  const currentPeopleWithMedia = useMemo(() => {
+    const allowedMediaIds = new Set(peopleModeMedia.map((asset) => asset.id));
+    const personById = new Map(peopleWithMedia.map((person) => [person.id, person] as const));
+    const countsByPersonId = new Map<string, { total: number; photoCount: number; videoCount: number; mediaIds: string[]; primaryMediaId: string | null }>();
+
+    for (const link of personMediaLinks) {
+      if (!allowedMediaIds.has(link.mediaId)) {
+        continue;
+      }
+
+      const asset = archiveMedia.find((item) => item.id === link.mediaId);
+      if (!asset || (asset.kind !== "photo" && asset.kind !== "video")) {
+        continue;
+      }
+
+      const current = countsByPersonId.get(link.personId) || {
+        total: 0,
+        photoCount: 0,
+        videoCount: 0,
+        mediaIds: [] as string[],
+        primaryMediaId: null,
+      };
+
+      if (current.mediaIds.includes(link.mediaId)) {
+        continue;
+      }
+
+      current.total += 1;
+      current.mediaIds.push(link.mediaId);
+      if (asset.kind === "photo") {
+        current.photoCount += 1;
+      } else if (asset.kind === "video") {
+        current.videoCount += 1;
+      }
+      if (link.isPrimary && !current.primaryMediaId) {
+        current.primaryMediaId = link.mediaId;
+      }
+      countsByPersonId.set(link.personId, current);
+    }
+
+    return [...countsByPersonId.entries()]
+      .map(([personId, stats]) => {
+        const person = personById.get(personId);
+        if (!person) {
+          return null;
+        }
+
+        const orderedMedia = peopleModeMedia.filter((asset) => stats.mediaIds.includes(asset.id));
+        const primaryCover =
+          stats.primaryMediaId
+            ? orderedMedia.find((asset) => asset.id === stats.primaryMediaId) || null
+            : null;
+        const cover = primaryCover || orderedMedia[0] || null;
+
+        return {
+          personId,
+          fullName: person.fullName,
+          total: stats.total,
+          photoCount: stats.photoCount,
+          videoCount: stats.videoCount,
+          mediaIds: stats.mediaIds,
+          coverMediaId: cover?.id || null,
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => {
+        if ((right?.total || 0) !== (left?.total || 0)) {
+          return (right?.total || 0) - (left?.total || 0);
+        }
+
+        return (left?.fullName || "").localeCompare(right?.fullName || "", "ru");
+      }) as Array<{
+      personId: string;
+      fullName: string;
+      total: number;
+      photoCount: number;
+      videoCount: number;
+      mediaIds: string[];
+      coverMediaId: string | null;
+    }>;
+  }, [archiveMedia, peopleModeMedia, peopleWithMedia, personMediaLinks]);
+  const isPersonScopedView = view === "person" && Boolean(selectedPersonViewId) && (mode === "photo" || mode === "video");
+  const currentPersonScopedMedia = useMemo(() => {
+    if (!isPersonScopedView) {
+      return [] as MediaAssetRecord[];
+    }
+
+    return currentMedia.filter((asset) => selectedPersonViewMediaIds.has(asset.id));
+  }, [currentMedia, isPersonScopedView, selectedPersonViewMediaIds]);
 
   const currentAlbums = useMemo(() => {
     if (mode === "photo") {
@@ -1274,19 +1342,22 @@ export function TreeMediaArchiveClient({
     [pendingUploadAlbumKind, persistedAllAlbumSummaries]
   );
 
-  const visibleMedia = currentMedia.slice(0, visibleItems);
+  const activeArchiveMedia = isPersonScopedView ? currentPersonScopedMedia : currentMedia;
+  const visibleMedia = activeArchiveMedia.slice(0, visibleItems);
   const modeLabel =
-    mode === "photo"
-      ? "Фото"
-      : mode === "video"
-        ? "Видео"
+    isPersonScopedView && selectedPersonViewName
+      ? `${mode === "video" ? "Видео" : "Фото"} ${selectedPersonViewName}`
+      : mode === "photo"
+        ? "Фото"
+        : mode === "video"
+          ? "Видео"
         : mode === "audio"
           ? "Аудио"
           : mode === "document"
             ? "Документы"
             : "Все медиа";
   const itemLabel = mode === "photo" ? "фото" : mode === "video" ? "видео" : "материалов";
-  const selectedAlbum = selectedAlbumId ? currentAlbums.find((album) => album.id === selectedAlbumId) || null : null;
+  const selectedAlbum = view === "albums" && selectedAlbumId ? currentAlbums.find((album) => album.id === selectedAlbumId) || null : null;
   const activeContextAlbum = view === "albums" ? selectedAlbum : null;
   const editingAlbum = editingAlbumId ? persistedAllAlbums.find((album) => album.id === editingAlbumId) || null : null;
   const deleteTargetAlbum = deleteTargetAlbumId ? persistedAllAlbums.find((album) => album.id === deleteTargetAlbumId) || null : null;
@@ -1302,13 +1373,6 @@ export function TreeMediaArchiveClient({
   const selectedAlbumMedia = useMemo(() => {
     if (!selectedAlbum) {
       return [];
-    }
-
-    if (selectedAlbum.albumKind === "uploader" && selectedAlbum.uploaderUserId) {
-      return currentMedia.filter((asset) =>
-        asset.created_by === selectedAlbum.uploaderUserId &&
-        (selectedAlbum.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === selectedAlbum.kind)
-      );
     }
 
     return (albumMediaMap[selectedAlbum.id] || []).filter((asset) => asset.kind === selectedAlbum.kind);
@@ -1348,8 +1412,10 @@ export function TreeMediaArchiveClient({
   const visibleThumbMediaIds = useMemo(() => {
     const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
     let nextVisibleThumbMediaIds: string[];
-    if (view === "all") {
+    if (view === "all" || view === "person") {
       nextVisibleThumbMediaIds = [...new Set(visibleMedia.filter((asset) => canBatchResolveArchiveThumb(asset)).map((asset) => asset.id))];
+    } else if (view === "people") {
+      nextVisibleThumbMediaIds = [];
     } else if (selectedAlbum) {
       nextVisibleThumbMediaIds = [...new Set(visibleSelectedAlbumMedia.filter((asset) => canBatchResolveArchiveThumb(asset)).map((asset) => asset.id))];
     } else {
@@ -1372,13 +1438,15 @@ export function TreeMediaArchiveClient({
     const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
     let nextIds: string[] = [];
 
-    if (view === "all" && visibleItems < currentMedia.length) {
+    if ((view === "all" || view === "person") && visibleItems < activeArchiveMedia.length) {
       nextIds = [...new Set(
-        currentMedia
+        activeArchiveMedia
           .slice(visibleItems, visibleItems + INITIAL_TILE_LIMIT)
           .filter((asset) => canBatchResolveArchiveThumb(asset))
           .map((asset) => asset.id)
       )];
+    } else if (view === "people") {
+      nextIds = [];
     } else if (selectedAlbum && visibleItems < selectedAlbumMedia.length) {
       nextIds = [...new Set(
         selectedAlbumMedia
@@ -1399,11 +1467,15 @@ export function TreeMediaArchiveClient({
     });
 
     return nextIds;
-  }, [currentMedia, mode, selectedAlbum, selectedAlbumId, selectedAlbumMedia, view, visibleItems]);
+  }, [activeArchiveMedia, currentMedia, mode, selectedAlbum, selectedAlbumId, selectedAlbumMedia, view, visibleItems]);
 
   const visibleRecoverableVideoPreviewMediaIds = useMemo(() => {
     if (view === "all") {
       return [...new Set(visibleMedia.filter((asset) => isRecoverableArchiveVideoPreview(asset)).map((asset) => asset.id))];
+    }
+
+    if (view === "people") {
+      return [];
     }
 
     if (selectedAlbum) {
@@ -1411,7 +1483,7 @@ export function TreeMediaArchiveClient({
     }
 
     return [...new Set(currentAlbums.flatMap((album) => getAlbumPreviewRecoveryMediaIds(album)))];
-  }, [currentAlbums, selectedAlbum, view, visibleMedia, visibleSelectedAlbumMedia]);
+  }, [activeArchiveMedia, currentAlbums, selectedAlbum, view, visibleMedia, visibleSelectedAlbumMedia]);
 
   useEffect(() => {
     if (!isHydrated || !visibleRecoverableVideoPreviewMediaIds.length) {
@@ -2268,9 +2340,8 @@ export function TreeMediaArchiveClient({
   const openMediaViewer = useCallback((assetId: string, items: MediaAssetRecord[]) => {
     const scopedItems = (() => {
       const isOversizedArchiveGridScope = view === "all";
-      const isMergedUploaderAlbumScope = view === "albums" && selectedAlbum?.albumKind === "uploader" && selectedAlbum.kind === "all";
 
-      if ((!isOversizedArchiveGridScope && !isMergedUploaderAlbumScope) || items.length <= ARCHIVE_VIEWER_WINDOW_LIMIT) {
+      if (!isOversizedArchiveGridScope || items.length <= ARCHIVE_VIEWER_WINDOW_LIMIT) {
         return items;
       }
 
@@ -2359,24 +2430,6 @@ export function TreeMediaArchiveClient({
       });
     }
 
-    if (asset.created_by) {
-      const uploaderAlbumKind = getAlbumCompatibleKindForAsset(asset);
-      const uploaderAlbum =
-        (uploaderAlbumKind
-          ? allAlbumSummaries.find((album) => album.id === buildUploaderAlbumSyntheticId(asset.created_by as string, uploaderAlbumKind)) ||
-          allAlbumSummaries.find((album) => album.albumKind === "uploader" && album.uploaderUserId === asset.created_by && album.kind === uploaderAlbumKind)
-          : null) ||
-        null;
-
-      if (uploaderAlbum) {
-        optionsById.set(uploaderAlbum.id, {
-          id: uploaderAlbum.id,
-          title: uploaderAlbum.title,
-          href: buildArchiveAlbumHrefForAlbum(asset, uploaderAlbum.id),
-        });
-      }
-    }
-
     return [...optionsById.values()].sort((left, right) => left.title.localeCompare(right.title, "ru"));
   }
 
@@ -2430,6 +2483,11 @@ export function TreeMediaArchiveClient({
         initialMediaId: deletedMediaIds.has(currentSession.initialMediaId) ? nextMediaIds[0] : currentSession.initialMediaId,
       };
     });
+    setSelectedPersonViewMediaIds((current) => {
+      const next = new Set([...current].filter((mediaId) => !deletedMediaIds.has(mediaId)));
+      return next.size === current.size ? current : next;
+    });
+    setPersonMediaLinks((current) => current.filter((link) => !deletedMediaIds.has(link.mediaId)));
     for (const mediaId of deletedMediaIds) {
       clearOptimisticVideoPreview(mediaId);
     }
@@ -2676,6 +2734,34 @@ export function TreeMediaArchiveClient({
     return previewItems;
   }
 
+  function getPersonPreviewItems(person: {
+    mediaIds: string[];
+    coverMediaId: string | null;
+  }): AlbumPreviewItem[] {
+    const personMedia = peopleModeMedia.filter((asset) => person.mediaIds.includes(asset.id));
+    const cover = person.coverMediaId ? personMedia.find((asset) => asset.id === person.coverMediaId) || null : null;
+    const orderedMedia = cover ? [cover, ...personMedia.filter((asset) => asset.id !== cover.id)] : personMedia;
+    const previewItems: AlbumPreviewItem[] = [];
+
+    for (const asset of orderedMedia) {
+      const thumbSource = resolveArchiveThumbSource(asset);
+      if (!thumbSource) {
+        continue;
+      }
+
+      previewItems.push({
+        asset,
+        thumbSource,
+      });
+
+      if (previewItems.length === 3) {
+        break;
+      }
+    }
+
+    return previewItems;
+  }
+
   function renderArchiveAlbumPreviewTile(item: AlbumPreviewItem, className: string, mediaStyle: CSSProperties = ARCHIVE_ALBUM_PREVIEW_MEDIA_STYLE) {
     return (
       <MediaThumbVisual
@@ -2754,13 +2840,79 @@ export function TreeMediaArchiveClient({
 
   function switchMode(nextMode: MediaMode) {
     startTransition(() => {
+      if ((nextMode === "all" || nextMode === "audio" || nextMode === "document") && view === "person") {
+        setSelectedPersonViewId(null);
+        setSelectedPersonViewName(null);
+        setSelectedPersonViewMediaIds(new Set());
+        setSelectedAlbumId(null);
+        setView("all");
+      }
+      if ((nextMode === "audio" || nextMode === "document") && view === "people") {
+        setSelectedAlbumId(null);
+        setView("all");
+      }
       setMode(nextMode);
     });
   }
 
   function switchView(nextView: ArchiveView) {
     startTransition(() => {
+      setSelectedPersonViewId(null);
+      setSelectedPersonViewName(null);
+      setSelectedPersonViewMediaIds(new Set());
+      if (nextView !== "albums") {
+        setSelectedAlbumId(null);
+      }
       setView(nextView);
+
+      if (typeof window !== "undefined") {
+        window.history.replaceState(
+          window.history.state,
+          "",
+          buildArchiveRootHref({
+            slug,
+            mode: mode === "video" ? "video" : mode === "audio" ? "audio" : mode === "document" ? "document" : mode === "all" ? "all" : "photo",
+            view: nextView === "person" ? "all" : nextView,
+            shareToken,
+          })
+        );
+      }
+    });
+  }
+
+  function openOrdinaryArchive(nextView: Extract<ArchiveView, "all" | "albums" | "people">) {
+    startTransition(() => {
+      setSelectedPersonViewId(null);
+      setSelectedPersonViewName(null);
+      setSelectedPersonViewMediaIds(new Set());
+      setSelectedAlbumId(null);
+      setView(nextView);
+
+      if (typeof window !== "undefined") {
+        window.history.replaceState(
+          window.history.state,
+          "",
+          buildArchiveRootHref({
+            slug,
+            mode: mode === "video" ? "video" : mode === "audio" ? "audio" : mode === "document" ? "document" : mode === "all" ? "all" : "photo",
+            view: nextView,
+            shareToken,
+          })
+        );
+      }
+    });
+  }
+
+  function openPersonScopedArchive(personId: string, fullName: string, mediaIds: string[]) {
+    startTransition(() => {
+      if (mode === "all") {
+        setMode("photo");
+      }
+      setSelectedAlbumId(null);
+      setSelectedPersonViewId(personId);
+      setSelectedPersonViewName(fullName);
+      setSelectedPersonViewMediaIds(new Set(mediaIds));
+      setView("person");
     });
   }
 
@@ -2780,47 +2932,7 @@ export function TreeMediaArchiveClient({
       return persisted;
     }
 
-    if (album.albumKind !== "uploader" || !album.uploaderUserId) {
-      return album;
-    }
-
-    const payload = await requestJson("/api/media/albums", "POST", {
-      treeId,
-      title: album.title,
-      description: album.description || "",
-      kind: album.kind,
-      access: album.access,
-      albumKind: "uploader",
-      uploaderUserId: album.uploaderUserId
-    });
-    const created = payload.album as TreeMediaAlbumRecord;
-    const summary: AlbumSummary = {
-      id: created.id,
-      title: created.title,
-      description: created.description,
-      kind: created.kind,
-      access: created.access,
-      albumKind: created.album_kind,
-      uploaderUserId: created.uploader_user_id,
-      count: album.count,
-      coverMediaId: album.coverMediaId
-    };
-
-    setPersistedAllAlbums((current) => {
-      const next = current.filter((item) => getUploaderAlbumSummaryKey(item) !== getUploaderAlbumSummaryKey(summary));
-      return [summary, ...next];
-    });
-    setDismissedUploaderAlbumKeys((current) => {
-      const uploaderKey = getUploaderAlbumSummaryKey(summary);
-      if (!uploaderKey) {
-        return current;
-      }
-      const next = new Set(current);
-      next.delete(uploaderKey);
-      return next;
-    });
-
-    return summary;
+    return album;
   }
 
   async function openEditAlbumDialog(album: AlbumSummary) {
@@ -3039,16 +3151,6 @@ export function TreeMediaArchiveClient({
         delete next[deleteTargetAlbum.id];
         return next;
       });
-      if (deleteTargetAlbum.albumKind === "uploader" && deleteTargetAlbum.uploaderUserId) {
-        const uploaderKey = getUploaderAlbumSummaryKey(deleteTargetAlbum);
-        if (uploaderKey) {
-          setDismissedUploaderAlbumKeys((current) => {
-            const next = new Set(current);
-            next.add(uploaderKey);
-            return next;
-          });
-        }
-      }
       if (selectedAlbumId === deleteTargetAlbum.id) {
         setSelectedAlbumId(null);
       }
@@ -3065,7 +3167,8 @@ export function TreeMediaArchiveClient({
   async function uploadArchiveFiles(
     files: PendingArchiveUploadItem[],
     manualAlbumId?: string | null,
-    uploadOptions?: { visibility: "public" | "members"; caption: string }
+    uploadOptions?: { visibility: "public" | "members"; caption: string },
+    personId?: string | null
   ) {
     const shouldStopUploadFlow = (previewUrl: string | null) => {
       if (isArchiveClientMountedRef.current) {
@@ -3148,6 +3251,7 @@ export function TreeMediaArchiveClient({
       const completePayload = await requestJson("/api/media/archive/complete", "POST", {
         treeId,
         mediaId: intent.mediaId,
+        personId: personId || undefined,
         albumId: manualAlbumId || undefined,
         storagePath: intent.path,
         variantPaths: intent.variantTargets?.map((item: { variant: "thumb" | "small" | "medium"; path: string }) => ({
@@ -3165,13 +3269,30 @@ export function TreeMediaArchiveClient({
       }
 
       const createdMedia = completePayload.media as MediaAssetRecord;
-      const uploaderAlbumId =
-        completePayload && typeof completePayload === "object" && "uploaderAlbumId" in completePayload && typeof completePayload.uploaderAlbumId === "string"
-          ? completePayload.uploaderAlbumId
-          : null;
-      const albumIdsToUpdate = [...new Set([uploaderAlbumId, manualAlbumId].filter((value): value is string => Boolean(value)))];
+      const albumIdsToUpdate = [...new Set([manualAlbumId].filter((value): value is string => Boolean(value)))];
 
       setArchiveMedia((current) => [createdMedia, ...current]);
+      if (personId && selectedPersonViewId === personId) {
+        setSelectedPersonViewMediaIds((current) => {
+          const next = new Set(current);
+          next.add(createdMedia.id);
+          return next;
+        });
+      }
+      if (personId) {
+        setPersonMediaLinks((current) =>
+          current.some((link) => link.personId === personId && link.mediaId === createdMedia.id)
+            ? current
+            : [...current, { personId, mediaId: createdMedia.id }]
+        );
+        if (selectedPersonViewName) {
+          setPeopleWithMedia((current) =>
+            current.some((person) => person.id === personId)
+              ? current
+              : [...current, { id: personId, fullName: selectedPersonViewName }]
+          );
+        }
+      }
       if (albumIdsToUpdate.length) {
         setAlbumMediaMap((current) => {
           const nextMap = { ...current };
@@ -3316,7 +3437,7 @@ export function TreeMediaArchiveClient({
       setIsDiscardConfirmOpen(false);
       setStatus(null);
       setError(null);
-      void uploadArchiveFiles(uploads, reviewTargetAlbumId, uploadOptions).catch((uploadError) => {
+      void uploadArchiveFiles(uploads, reviewTargetAlbumId, uploadOptions, isPersonScopedView ? selectedPersonViewId : null).catch((uploadError) => {
         if (!isArchiveClientMountedRef.current) {
           return;
         }
@@ -3539,9 +3660,17 @@ export function TreeMediaArchiveClient({
       ) : (
         <>
 
-          <Tabs value={view} onValueChange={(value) => switchView(value as ArchiveView)}>
+          <Tabs value={view === "person" ? "people" : view} onValueChange={(value) => switchView(value as ArchiveView)}>
             <TabsList variant="line" aria-label="Режим просмотра архива">
-              <TabsTrigger className={`pill-link${view === "all" ? " pill-link-active" : ""}`} value="all">
+              <TabsTrigger
+                className={`pill-link${view === "all" ? " pill-link-active" : ""}`}
+                value="all"
+                onClick={() => {
+                  if (view === "person") {
+                    openOrdinaryArchive("all");
+                  }
+                }}
+              >
                 Все
               </TabsTrigger>
               <TabsTrigger
@@ -3555,8 +3684,30 @@ export function TreeMediaArchiveClient({
               >
                 Альбомы
               </TabsTrigger>
+              {mode === "photo" || mode === "video" || mode === "all" ? (
+                <TabsTrigger
+                  className={`pill-link${(view === "people" || view === "person") ? " pill-link-active" : ""}`}
+                  value="people"
+                  onClick={() => {
+                    if (view === "person") {
+                      openOrdinaryArchive("people");
+                    }
+                  }}
+                >
+                  По людям
+                </TabsTrigger>
+              ) : null}
             </TabsList>
           </Tabs>
+
+          {view === "person" && isPersonScopedView ? (
+            <div className="archive-subheader">
+              <div className="archive-subheader-copy">
+                <strong>{selectedPersonViewName}</strong>
+                <span>{activeArchiveMedia.length} {itemLabel}</span>
+              </div>
+            </div>
+          ) : null}
 
           {canEdit && isArchiveSelectionMode && selectedArchiveMediaCount ? (
             <div className="archive-selection-bar" role="region" aria-label="Действия с выбранными материалами">
@@ -3622,7 +3773,122 @@ export function TreeMediaArchiveClient({
             </div>
           ) : null}
 
-          {view === "all" ? (
+          {view === "person" && isPersonScopedView ? (
+            activeArchiveMedia.length ? (
+              <>
+                <div className="archive-grid">
+                  {visibleMedia.map((asset) => renderArchiveTile(asset, visibleMedia))}
+                </div>
+
+                {renderArchiveLoadMore(activeArchiveMedia.length, itemLabel)}
+              </>
+            ) : (
+              renderArchiveEmptyState({
+                title: mode === "photo" ? "У этого человека пока нет фотографий" : "У этого человека пока нет видео",
+                description: canEdit
+                  ? "Загрузите файлы в карточку человека или прямо здесь в архиве, чтобы собрать его персональную подборку."
+                  : "Когда материалы появятся, они соберутся здесь в спокойной галерее.",
+                actions: null
+              })
+            )
+          ) : view === "people" ? (
+            currentPeopleWithMedia.length ? (
+              <div className="archive-album-grid">
+                {currentPeopleWithMedia.map((person) => {
+                  const summaryLabel =
+                    mode === "photo"
+                      ? `${person.photoCount} фото`
+                      : mode === "video"
+                        ? `${person.videoCount} видео`
+                        : `${person.photoCount} фото · ${person.videoCount} видео`;
+                  const previewItems = getPersonPreviewItems(person);
+                  const hasVideoIdentity =
+                    mode === "video" || (mode === "all" && person.videoCount > 0 && person.photoCount === 0);
+
+                  return (
+                    <div key={person.personId} className="archive-album-card-shell">
+                      <div
+                        className="archive-album-card"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openPersonScopedArchive(person.personId, person.fullName, person.mediaIds)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            openPersonScopedArchive(person.personId, person.fullName, person.mediaIds);
+                          }
+                        }}
+                      >
+                        <div className={`archive-album-cover${hasVideoIdentity ? " archive-album-cover-video" : ""}`}>
+                          {previewItems.length ? (
+                            previewItems.length === 1 ? (
+                              <MediaThumbVisual
+                                asset={previewItems[0].asset}
+                                thumbSource={previewItems[0].thumbSource}
+                                shareToken={shareToken}
+                                containerClassName="archive-album-cover-visual"
+                                mediaClassName={previewItems[0].thumbSource.kind === "image" ? "archive-album-image" : "archive-album-image archive-tile-video"}
+                                placeholder={null}
+                                showVideoChrome={false}
+                                disableDurationProbe
+                              />
+                            ) : previewItems.length === 2 ? (
+                              <div
+                                className="archive-album-cover-layout archive-album-cover-layout-two"
+                                data-preview-count="2"
+                                style={ARCHIVE_ALBUM_LAYOUT_TWO_STYLE}
+                              >
+                                {previewItems.map((item) => renderArchiveAlbumPreviewTile(item, "archive-album-preview-tile"))}
+                                <span className="archive-album-cover-tone" aria-hidden="true" style={ARCHIVE_ALBUM_PREVIEW_OVERLAY_STYLE} />
+                              </div>
+                            ) : (
+                              <div
+                                className="archive-album-cover-layout archive-album-cover-layout-three"
+                                data-preview-count="3"
+                                style={ARCHIVE_ALBUM_LAYOUT_THREE_STYLE}
+                              >
+                                {renderArchiveAlbumPreviewTile(previewItems[0], "archive-album-preview-tile archive-album-preview-tile-primary")}
+                                <div className="archive-album-preview-column" style={ARCHIVE_ALBUM_PREVIEW_COLUMN_STYLE}>
+                                  {previewItems
+                                    .slice(1, 3)
+                                    .map((item) => renderArchiveAlbumPreviewTile(item, "archive-album-preview-tile", ARCHIVE_ALBUM_PREVIEW_MEDIA_SECONDARY_STYLE))}
+                                </div>
+                                <span className="archive-album-cover-tone" aria-hidden="true" style={ARCHIVE_ALBUM_PREVIEW_OVERLAY_STYLE} />
+                              </div>
+                            )
+                          ) : hasVideoIdentity ? (
+                            <div className="archive-album-empty-placeholder archive-album-empty-placeholder-video" aria-hidden="true" />
+                          ) : (
+                            renderArchivePlaceholder("photo")
+                          )}
+                          {hasVideoIdentity ? (
+                            <span className="archive-album-video-indicator" aria-hidden="true">
+                              <PlayIcon className="archive-album-video-indicator-icon" />
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="archive-album-copy">
+                          <div className="archive-album-title-row">
+                            <strong>{person.fullName}</strong>
+                          </div>
+                          <span>{summaryLabel}</span>
+                          <small>Открыть персональную подборку</small>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              renderArchiveEmptyState({
+                title: "Для этого раздела пока нет персональных подборок",
+                description: canEdit
+                  ? "Свяжите фото или видео с людьми в дереве, и они появятся здесь."
+                  : "Когда у людей появятся связанные фото или видео, они соберутся здесь.",
+                actions: null
+              })
+            )
+          ) : view === "all" ? (
             currentMedia.length ? (
               <>
                 <div className="archive-grid">
@@ -3768,7 +4034,7 @@ export function TreeMediaArchiveClient({
                           ) : null}
                         </div>
                         <span>{albumContentLabel}</span>
-                        <small>{album.description?.trim() || (album.albumKind === "uploader" ? "Автоальбом загрузившего" : "Пользовательский альбом")}</small>
+                        <small>{album.description?.trim() || "Пользовательский альбом"}</small>
                       </div>
                     </div>
                   </div>
@@ -3959,9 +4225,13 @@ export function TreeMediaArchiveClient({
           <DialogHeader>
             <DialogTitle>Подготовка загрузки</DialogTitle>
             <DialogDescription>
-              {reviewTargetAlbum
-                ? `Новые материалы попадут в альбом «${reviewTargetAlbum.title}».`
-                : "Выберите, что именно сохранить в семейный архив."}
+              {isPersonScopedView && selectedPersonViewName
+                ? reviewTargetAlbum
+                  ? `Новые материалы будут привязаны к «${selectedPersonViewName}» и попадут в альбом «${reviewTargetAlbum.title}».`
+                  : `Новые материалы будут привязаны к «${selectedPersonViewName}» и останутся в этой персональной подборке.`
+                : reviewTargetAlbum
+                  ? `Новые материалы попадут в альбом «${reviewTargetAlbum.title}».`
+                  : "Выберите, что именно сохранить в семейный архив."}
             </DialogDescription>
           </DialogHeader>
           <div className="archive-review-layout">

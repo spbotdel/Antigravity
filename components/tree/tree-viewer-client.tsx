@@ -3,6 +3,7 @@
 import { type CSSProperties, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, FileText } from "lucide-react";
 
+import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FamilyTreeCanvas } from "@/components/tree/family-tree-canvas";
 import { PersonMediaGallery } from "@/components/tree/person-media-gallery";
@@ -152,6 +153,20 @@ function getCollapsedTabNameParts(name?: string | null) {
     firstName: parts[0],
     lastName: parts[parts.length - 1],
   };
+}
+
+function buildViewerPersonMediaHref(treeSlug: string, personId: string, shareToken?: string | null) {
+  const params = new URLSearchParams({
+    mode: "photo",
+    view: "person",
+    personId,
+  });
+
+  if (shareToken) {
+    params.set("share", shareToken);
+  }
+
+  return `/tree/${treeSlug}/media?${params.toString()}`;
 }
 
 export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps) {
@@ -360,6 +375,14 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
                     emptyTitle="Материалы еще не добавлены"
                     emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
                   />
+                  <div className="action-row">
+                    <a
+                      href={buildViewerPersonMediaHref(snapshot.tree.slug, selectedPerson.id, shareToken)}
+                      className={buttonVariants({ variant: "ghost", size: "sm" })}
+                    >
+                      Посмотреть медиа
+                    </a>
+                  </div>
                 </div>
               ) : selectedDocuments.length ? null : (
                 <div className="media-strip viewer-person-media-strip">

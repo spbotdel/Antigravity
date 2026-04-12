@@ -241,37 +241,35 @@ Implications:
 
 ---
 
-### 12.3 Uploader albums are virtual views over uploader media
+### 12.3 Uploader identity is metadata only
 
-If an album has uploader semantics:
+Uploader identity may remain in:
 
-- its count must derive from all visible media matching `(tree_id, created_by, kind)`
-- its cover must derive from that same media set
-- its detail contents must derive from that same media set
+- `created_by`
+- audit context
+- internal diagnostics
+
+But uploader albums must not function as active archive organization.
 
 Implications:
 
-- uploader album summary semantics must not depend on persisted `tree_media_album_items`
-- persisted uploader album rows may still carry metadata, access behavior, and stable UI identity
-- manual album semantics remain relation-based, uploader album semantics remain virtual-view-based
+- archive organization uses only manual albums plus person-scoped virtual views derived from `person_media`
+- uploader album links must not affect effective access
+- uploader album rows may remain in the database as inert legacy data until a later cleanup pass
 
 ---
 
-### 12.4 In `All media`, uploader albums merge by uploader identity
+### 12.4 Manual albums are the only persisted archive album organization
 
-When archive UI is in combined mode:
+If an archive album is part of active runtime behavior:
 
-- uploader albums must merge by `uploader_user_id`
-
-When archive UI is in kind-specific mode:
-
-- uploader albums remain split by `kind`
+- it must be a manual album
 
 Implications:
 
-- `Все медиа` must not show duplicate uploader albums with the same title
-- merged uploader album count, cover, and detail contents must derive from the same combined visible uploader media set
-- this merge rule applies only to uploader albums, never to manual albums
+- archive UI must not surface uploader album cards or destinations
+- new uploads must not create or rely on uploader album assignment
+- effective archive access may be narrowed only by manual album access, not by uploader album links
 
 ---
 

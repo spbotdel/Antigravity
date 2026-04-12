@@ -1328,7 +1328,7 @@ describe("builder workspace", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Фото" }));
 
-    expect(screen.getByRole("link", { name: "Перейти в альбом" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
+    expect(screen.getByRole("link", { name: "Перейти в альбом" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=person&personId=person-1");
     expect(screen.getByRole("button", { name: "Добавить фото" })).toBeInTheDocument();
     expect(screen.queryByText("1 фото загружено")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Загрузить фото" })).not.toBeInTheDocument();
@@ -1466,7 +1466,7 @@ describe("builder workspace", () => {
 
     expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-delete-enabled", "true");
     expect(screen.getByRole("link", { name: "Скачать media-photo-1" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Перейти к альбому media-photo-1" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=albums");
+    expect(screen.getByRole("link", { name: "Перейти к альбому media-photo-1" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=person&personId=person-1");
     expect(screen.getByRole("button", { name: "Выбрать несколько media-photo-1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Удалить медиа media-photo-1" })).toBeInTheDocument();
   });
@@ -1482,7 +1482,7 @@ describe("builder workspace", () => {
 
     expect(screen.getByTestId("person-media-gallery")).toHaveAttribute("data-delete-enabled", "true");
     expect(screen.getByRole("link", { name: "Скачать media-video-1" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Перейти к альбому media-video-1" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=video&view=albums");
+    expect(screen.getByRole("link", { name: "Перейти к альбому media-video-1" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=video&view=person&personId=person-1");
     expect(screen.getByRole("button", { name: "Выбрать несколько media-video-1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Удалить медиа media-video-1" })).toBeInTheDocument();
   });

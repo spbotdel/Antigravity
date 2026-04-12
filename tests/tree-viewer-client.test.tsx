@@ -229,6 +229,7 @@ describe("tree viewer client", () => {
 
     expect(screen.getByAltText("Портрет: Demo Person")).toHaveAttribute("src", "/api/media/media-1?variant=thumb");
     expect(screen.getByTestId("person-media-gallery")).toHaveTextContent("avatar:media-1; media:Portrait");
+    expect(screen.getByRole("link", { name: "Посмотреть медиа" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=person&personId=person-1");
     expect(screen.getByText("1990")).toBeInTheDocument();
     expect(screen.queryByText("1990 — ?")).not.toBeInTheDocument();
   });

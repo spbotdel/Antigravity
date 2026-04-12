@@ -144,6 +144,7 @@ type MediaAlbumAccessRow = {
   media_id: string;
   tree_media_albums?: {
     access: MediaVisibility;
+    album_kind?: TreeMediaAlbumRecord["album_kind"];
     tree_id: string;
   } | null;
 };
@@ -156,7 +157,7 @@ async function listAlbumAccessRowsForMediaIds(treeId: string, mediaIds: string[]
 
   try {
     return await fetchAdminRows<MediaAlbumAccessRow>(
-      `tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access)&media_id=in.${buildUuidInFilter(uniqueMediaIds)}&tree_media_albums.tree_id=eq.${encodeURIComponent(treeId)}`,
+      `tree_media_album_items?select=media_id,tree_media_albums!inner(tree_id,access,album_kind)&media_id=in.${buildUuidInFilter(uniqueMediaIds)}&tree_media_albums.tree_id=eq.${encodeURIComponent(treeId)}&tree_media_albums.album_kind=eq.manual`,
       "Не удалось загрузить доступ альбомов для медиа."
     );
   } catch (error) {
@@ -1757,7 +1758,7 @@ export async function listTreeMediaUploaderLabels(treeId: string, userIds: strin
   return listTreeMediaUploaderLabelsForUserIds(userIds);
 }
 
-export async function getTreeMediaPageData(slug: string, options?: { shareToken?: string | null }) {
+export async function getTreeMediaPageData(slug: string, options?: { shareToken?: string | null; personId?: string | null }) {
   const { tree, actor, hasShareLinkAccess } = await getTreeAccessContext(slug, options?.shareToken);
   const [allMedia, albumData, audioPlaylistData] = await Promise.all([
     fetchAdminRows<MediaAssetRecord>(
@@ -1771,12 +1772,35 @@ export async function getTreeMediaPageData(slug: string, options?: { shareToken?
   const media = allMedia.filter((item) =>
     canSeeMedia(actor.role, effectiveMediaVisibilityById.get(item.id) || item.visibility, hasShareLinkAccess)
   );
-  const albums = albumData.albums.filter((album) => canSeeMedia(actor.role, album.access, hasShareLinkAccess));
+  const albums = albumData.albums.filter((album) => album.album_kind === "manual" && canSeeMedia(actor.role, album.access, hasShareLinkAccess));
   const visibleAlbumIds = new Set(albums.map((album) => album.id));
   const items = albumData.items.filter((item) => visibleAlbumIds.has(item.album_id));
-  const uploaderLabelsById = await listTreeMediaUploaderLabelsForUserIds(
-    media.map((asset) => asset.created_by).filter((value): value is string => Boolean(value))
-  );
+  const personMediaLinks =
+    media.length
+      ? await fetchAdminRows<Pick<PersonMediaRecord, "person_id" | "media_id" | "is_primary">>(
+        `person_media?select=person_id,media_id,is_primary&media_id=in.${buildUuidInFilter(media.map((asset) => asset.id))}`,
+        "Не удалось загрузить связи людей с медиа."
+      )
+      : [];
+  const relatedPersonIds = [...new Set(personMediaLinks.map((item) => item.person_id).filter(Boolean))];
+  const peopleWithMedia =
+    relatedPersonIds.length
+      ? await fetchAdminRows<Pick<PersonRecord, "id" | "full_name">>(
+        `persons?select=id,full_name&tree_id=eq.${encodeURIComponent(tree.id)}&id=in.${buildUuidInFilter(relatedPersonIds)}`,
+        "Не удалось загрузить людей для медиапредставления."
+      )
+      : [];
+  const selectedPerson =
+    options?.personId
+      ? await fetchAdminFirst<Pick<PersonRecord, "id" | "tree_id" | "full_name">>(
+        `persons?select=id,tree_id,full_name&id=eq.${encodeURIComponent(options.personId)}`,
+        "Не удалось загрузить человека для персонального медиапредставления."
+      )
+      : null;
+  const selectedPersonMediaIds =
+    selectedPerson && selectedPerson.tree_id === tree.id
+      ? personMediaLinks.filter((item) => item.person_id === selectedPerson.id).map((item) => item.media_id)
+      : [];
 
   return {
     tree,
@@ -1784,7 +1808,23 @@ export async function getTreeMediaPageData(slug: string, options?: { shareToken?
     media,
     albums,
     items,
-    uploaderLabelsById,
+    personMediaLinks: personMediaLinks.map((item) => ({
+      personId: item.person_id,
+      mediaId: item.media_id,
+      isPrimary: item.is_primary
+    })),
+    peopleWithMedia: peopleWithMedia.map((person) => ({
+      id: person.id,
+      fullName: person.full_name
+    })),
+    selectedPerson:
+      selectedPerson && selectedPerson.tree_id === tree.id
+        ? {
+          id: selectedPerson.id,
+          fullName: selectedPerson.full_name
+        }
+        : null,
+    selectedPersonMediaIds,
     audioPlaylists: audioPlaylistData.playlists,
     audioPlaylistItems: audioPlaylistData.items,
     audioPlaylistsAvailable: audioPlaylistData.isAvailable,
@@ -3167,6 +3207,34 @@ export async function createArchiveMediaUploadTarget(input: {
   return buildMediaUploadTarget(input);
 }
 
+async function ensurePersonMediaLink(personId: string, mediaId: string) {
+  const existingRelation = await fetchAdminFirst<PersonMediaRecord>(
+    `person_media?select=*&person_id=eq.${encodeURIComponent(personId)}&media_id=eq.${encodeURIComponent(mediaId)}`,
+    "Не удалось загрузить связь человека с медиа."
+  );
+
+  if (existingRelation) {
+    return existingRelation;
+  }
+
+  const createdRelation = await mutateAdminFirst<PersonMediaRecord>(
+    "person_media",
+    "POST",
+    {
+      person_id: personId,
+      media_id: mediaId,
+      is_primary: false
+    },
+    "Не удалось привязать медиа к человеку."
+  );
+
+  if (!createdRelation) {
+    throw new AppError(400, "Не удалось привязать медиа к человеку.");
+  }
+
+  return createdRelation;
+}
+
 async function claimCloudflareVideoPreviewJobs(input?: {
   limit?: number;
   mediaIds?: string[];
@@ -3373,6 +3441,7 @@ function isExternalVideoCompletionInput(
 type CompletedStoredArchiveMediaInput = {
   treeId: string;
   mediaId: string;
+  personId?: string;
   albumId?: string;
   storagePath: string;
   variantPaths?: Array<{
@@ -3390,6 +3459,7 @@ type CompletedStoredArchiveMediaInput = {
 type CompletedExternalArchiveVideoInput = {
   treeId: string;
   mediaId: string;
+  personId?: string;
   albumId?: string;
   title: string;
   caption?: string | null;
@@ -3493,16 +3563,7 @@ export async function completeMediaUpload(input: {
   }
 
   try {
-    await mutateAdminRows<never>(
-      "person_media",
-      "POST",
-      {
-        person_id: input.personId,
-        media_id: input.mediaId,
-        is_primary: false
-      },
-      "Не удалось привязать медиа к человеку."
-    );
+    await ensurePersonMediaLink(input.personId, input.mediaId);
   } catch (error) {
     throw toRepositoryReadError(error, "Не удалось привязать медиа к человеку.");
   }
@@ -3521,7 +3582,6 @@ export async function completeMediaUpload(input: {
 }
 
 export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMediaInput | CompletedExternalArchiveVideoInput) {
-  const user = await getCurrentUser();
   const { userId } = await requireTreeRole(input.treeId, ["owner", "admin"]);
   const kind = isExternalArchiveVideoCompletionInput(input) ? "video" : resolveMediaKindFromMimeType(input.mimeType);
   const provider = isExternalArchiveVideoCompletionInput(input) ? "yandex_disk" : getFileBackedMediaProvider();
@@ -3585,15 +3645,20 @@ export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMe
     }
   }
 
-  const uploaderAlbum = isTreeMediaAlbumMediaKind(kind)
-    ? await ensureUploaderTreeMediaAlbum(input.treeId, userId, user?.email || null, kind)
-    : null;
-  const albumIds = [...new Set([uploaderAlbum?.id || null, "albumId" in input ? input.albumId || null : null].filter((value): value is string => Boolean(value)))];
+  const albumIds = [...new Set([input.albumId || null].filter((value): value is string => Boolean(value)))];
 
   try {
     await addMediaToTreeMediaAlbums(input.treeId, albumIds, input.mediaId);
   } catch (error) {
     throw toRepositoryReadError(error, "Не удалось добавить материал в семейный архив.");
+  }
+
+  if (input.personId) {
+    try {
+      await ensurePersonMediaLink(input.personId, input.mediaId);
+    } catch (error) {
+      throw toRepositoryReadError(error, "Не удалось привязать материал к человеку.");
+    }
   }
 
   await insertAuditLog({
@@ -3607,8 +3672,7 @@ export async function completeArchiveMediaUpload(input: CompletedStoredArchiveMe
   });
 
   return {
-    media: data,
-    uploaderAlbumId: uploaderAlbum?.id || null
+    media: data
   };
 }
 

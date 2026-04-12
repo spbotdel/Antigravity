@@ -4,7 +4,7 @@ import { AppHeader } from "@/components/layout/app-header";
 import { TreeMediaArchiveClient } from "@/components/media/tree-media-archive-client";
 import { TreeNav } from "@/components/layout/tree-nav";
 import { resolveHeaderModeFromActor } from "@/lib/permissions";
-import { buildDerivedUploaderAlbumSummaries, buildPersistedTreeMediaAlbumMediaMap, buildTreeMediaAlbumSummaries, collectArchiveGalleryMedia, collectTreeMedia } from "@/lib/tree/display";
+import { buildPersistedTreeMediaAlbumMediaMap, buildTreeMediaAlbumSummaries, collectArchiveGalleryMedia, collectTreeMedia } from "@/lib/tree/display";
 import type { MediaAssetRecord } from "@/lib/types";
 import { getCloudflareR2PublicBaseUrl } from "@/lib/env";
 import { getTreeMediaPageData, processCloudflareVideoPreviewJobs, resolveMediaThumbUrlsForVisibleMedia } from "@/lib/server/repository";
@@ -20,7 +20,7 @@ interface MediaPageProps {
 }
 
 type MediaMode = "photo" | "video" | "audio" | "document" | "all";
-type ArchiveView = "all" | "albums";
+type ArchiveView = "all" | "albums" | "person" | "people";
 type AlbumSummary = {
   id: string;
   title: string;
@@ -32,45 +32,6 @@ type AlbumSummary = {
   count: number;
   coverMediaId: string | null;
 };
-
-function mergeUploaderAlbumsForAllMedia(
-  albums: AlbumSummary[],
-  media: Array<{ id: string; created_by: string | null; kind: "photo" | "video" | "document" | "audio" }>
-) {
-  const merged = new Map<string, AlbumSummary>();
-  const ordered: AlbumSummary[] = [];
-
-  for (const album of albums) {
-    if (album.albumKind !== "uploader" || !album.uploaderUserId) {
-      ordered.push(album);
-      continue;
-    }
-
-    if (merged.has(album.uploaderUserId)) {
-      continue;
-    }
-
-    const uploaderMedia = media.filter(
-      (asset) => asset.created_by === album.uploaderUserId && (asset.kind === "photo" || asset.kind === "video")
-    );
-    const cover =
-      uploaderMedia.find((asset) => asset.kind === "photo") ||
-      uploaderMedia[0] ||
-      null;
-
-    const mergedAlbum: AlbumSummary = {
-      ...album,
-      kind: "all",
-      count: uploaderMedia.length,
-      coverMediaId: cover?.id || null
-    };
-
-    merged.set(album.uploaderUserId, mergedAlbum);
-    ordered.push(mergedAlbum);
-  }
-
-  return ordered;
-}
 
 function getSearchParam(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -101,6 +62,14 @@ function resolveMediaMode(value: string | null): MediaMode {
 }
 
 function resolveArchiveView(value: string | null): ArchiveView {
+  if (value === "person") {
+    return "person";
+  }
+
+  if (value === "people") {
+    return "people";
+  }
+
   return value === "albums" ? "albums" : "all";
 }
 
@@ -109,13 +78,6 @@ function getArchiveAlbumSourceMedia(
   currentMedia: MediaAssetRecord[],
   persistedAlbumMediaMap: Record<string, MediaAssetRecord[]>
 ) {
-  if (album.albumKind === "uploader" && album.uploaderUserId) {
-    return currentMedia.filter((asset) =>
-      asset.created_by === album.uploaderUserId &&
-      (album.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === album.kind)
-    );
-  }
-
   return (persistedAlbumMediaMap[album.id] || []).filter((asset) =>
     album.kind === "all" ? asset.kind === "photo" || asset.kind === "video" : asset.kind === album.kind
   );
@@ -136,8 +98,13 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
   const mode = resolveMediaMode(getSearchParam(resolvedSearchParams.mode));
   const view = resolveArchiveView(getSearchParam(resolvedSearchParams.view));
   const albumId = getSearchParam(resolvedSearchParams.album);
-  const pageData = await getTreeMediaPageData(slug, { shareToken });
-  const { albums, items, uploaderLabelsById } = pageData;
+  const personId = getSearchParam(resolvedSearchParams.personId);
+  const requestedPersonView =
+    view === "person" && personId && (mode === "photo" || mode === "video")
+      ? personId
+      : null;
+  const pageData = await getTreeMediaPageData(slug, { shareToken, personId: requestedPersonView });
+  const { albums, items, personMediaLinks, peopleWithMedia } = pageData;
   const audioPlaylists = pageData.audioPlaylists || [];
   const audioPlaylistItems = pageData.audioPlaylistItems || [];
   const audioPlaylistsAvailable = pageData.audioPlaylistsAvailable !== false;
@@ -172,43 +139,9 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
     albumMediaMap: persistedAlbumMediaMap,
     kind: "video"
   });
-  const derivedAllAlbumSummaries = buildDerivedUploaderAlbumSummaries({
-    media: allMedia,
-    uploaderLabelsById
-  });
-  const derivedPhotoAlbumSummaries = buildDerivedUploaderAlbumSummaries({
-    media: photoMedia,
-    kind: "photo",
-    uploaderLabelsById
-  });
-  const derivedVideoAlbumSummaries = buildDerivedUploaderAlbumSummaries({
-    media: videoMedia,
-    kind: "video",
-    uploaderLabelsById
-  });
-
-  function mergeAlbumSummaries(
-    persisted: AlbumSummary[],
-    derived: AlbumSummary[]
-  ): AlbumSummary[] {
-    const persistedUploaderIds = new Set(
-      persisted
-        .filter((album): album is AlbumSummary & { uploaderUserId: string } => Boolean(album.uploaderUserId))
-        .map((album) => `${album.uploaderUserId}:${album.kind}`)
-    );
-
-    return [
-      ...persisted,
-      ...derived.filter((album) => !album.uploaderUserId || !persistedUploaderIds.has(`${album.uploaderUserId}:${album.kind}`))
-    ];
-  }
-
-  const allAlbumSummaries = mergeUploaderAlbumsForAllMedia(
-    mergeAlbumSummaries(persistedAllAlbumSummaries, derivedAllAlbumSummaries),
-    allMedia
-  );
-  const photoAlbumSummaries = mergeAlbumSummaries(persistedPhotoAlbumSummaries, derivedPhotoAlbumSummaries);
-  const videoAlbumSummaries = mergeAlbumSummaries(persistedVideoAlbumSummaries, derivedVideoAlbumSummaries);
+  const allAlbumSummaries = persistedAllAlbumSummaries;
+  const photoAlbumSummaries = persistedPhotoAlbumSummaries;
+  const videoAlbumSummaries = persistedVideoAlbumSummaries;
   const currentMedia =
     mode === "photo"
       ? photoMedia
@@ -227,13 +160,38 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
         : mode === "all"
           ? allAlbumSummaries
           : [];
-  const initialSelectedAlbum = view === "albums" && albumId ? currentAlbums.find((album) => album.id === albumId) || null : null;
+  const initialPersonView =
+    requestedPersonView && pageData.selectedPerson
+      ? {
+        id: pageData.selectedPerson.id,
+        fullName: pageData.selectedPerson.fullName,
+        mediaIds: new Set(pageData.selectedPersonMediaIds || [])
+      }
+      : null;
+  const normalizedInitialView: ArchiveView =
+    initialPersonView
+      ? "person"
+      : view === "people" && (mode === "photo" || mode === "video" || mode === "all")
+        ? "people"
+        : view === "albums"
+          ? "albums"
+          : "all";
+  const initialSelectedAlbum = normalizedInitialView === "albums" && albumId ? currentAlbums.find((album) => album.id === albumId) || null : null;
+  const normalizedInitialAlbumId = initialSelectedAlbum?.id || null;
+  const currentPersonMedia =
+    initialPersonView
+      ? currentMedia.filter((asset) => initialPersonView.mediaIds.has(asset.id))
+      : currentMedia;
   const initialSelectedAlbumMedia = initialSelectedAlbum
     ? getArchiveAlbumSourceMedia(initialSelectedAlbum, currentMedia, persistedAlbumMediaMap)
     : [];
   const initialThumbMediaIds = new Set(
-    view === "all"
+    normalizedInitialView === "all"
       ? currentMedia.slice(0, INITIAL_ARCHIVE_TILE_LIMIT).map((asset) => asset.id)
+      : normalizedInitialView === "people"
+        ? []
+      : normalizedInitialView === "person"
+        ? currentPersonMedia.slice(0, INITIAL_ARCHIVE_TILE_LIMIT).map((asset) => asset.id)
       : initialSelectedAlbum
         ? initialSelectedAlbumMedia.slice(0, INITIAL_ARCHIVE_TILE_LIMIT).map((asset) => asset.id)
         : currentAlbums.flatMap((album) => {
@@ -297,13 +255,17 @@ export default async function MediaPage({ params, searchParams }: MediaPageProps
           cloudflareR2PublicBaseUrl={getCloudflareR2PublicBaseUrl()}
           canEdit={pageData.actor.canEdit}
           initialMode={mode}
-          initialView={view}
-          initialAlbumId={albumId}
+          initialView={normalizedInitialView}
+          initialAlbumId={normalizedInitialView === "albums" ? normalizedInitialAlbumId : null}
+          initialPersonId={initialPersonView?.id || null}
+          initialPersonName={initialPersonView?.fullName || null}
+          initialPersonMediaIds={initialPersonView ? [...initialPersonView.mediaIds] : []}
+          initialPeopleWithMedia={peopleWithMedia}
+          initialPersonMediaLinks={personMediaLinks}
           allMedia={fullMedia}
           allAlbums={persistedAllAlbumSummaries}
           persistedAlbumMediaMap={persistedAlbumMediaMap}
           initialThumbUrlsByMediaId={initialThumbUrlsByMediaId}
-          uploaderLabels={Array.from(uploaderLabelsById.entries()).map(([userId, label]) => ({ userId, label }))}
           audioPlaylists={audioPlaylists}
           audioPlaylistItems={audioPlaylistItems}
           audioPlaylistsAvailable={audioPlaylistsAvailable}
