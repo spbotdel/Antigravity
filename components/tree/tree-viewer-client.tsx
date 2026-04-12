@@ -17,7 +17,35 @@ interface TreeViewerClientProps {
   shareToken?: string | null;
 }
 
-type ViewerPanelState = "collapsed" | "open";
+type ViewerViewportMode = "desktop" | "tablet" | "phone";
+type ViewerPanelState = "hidden" | "peek" | "collapsed" | "open";
+
+const PHONE_VIEWER_MAX_WIDTH = 767;
+const TABLET_VIEWER_MAX_WIDTH = 1180;
+
+function getViewerViewportMode(width: number): ViewerViewportMode {
+  if (width <= PHONE_VIEWER_MAX_WIDTH) {
+    return "phone";
+  }
+
+  if (width <= TABLET_VIEWER_MAX_WIDTH) {
+    return "tablet";
+  }
+
+  return "desktop";
+}
+
+function normalizeViewerPanelState(currentState: ViewerPanelState, hasSelection: boolean, viewportMode: ViewerViewportMode): ViewerPanelState {
+  if (!hasSelection) {
+    return viewportMode === "phone" ? "hidden" : "open";
+  }
+
+  if (viewportMode === "phone") {
+    return currentState === "open" ? "open" : "peek";
+  }
+
+  return currentState === "open" ? "open" : "collapsed";
+}
 
 function withShareToken(url: string, shareToken?: string | null) {
   if (!shareToken) {
@@ -172,6 +200,7 @@ function buildViewerPersonMediaHref(treeSlug: string, personId: string, shareTok
 export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps) {
   const initialSelectedPersonId = snapshot.tree.root_person_id || snapshot.people[0]?.id || null;
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(initialSelectedPersonId);
+  const [viewportMode, setViewportMode] = useState<ViewerViewportMode>("desktop");
   const [panelState, setPanelState] = useState<ViewerPanelState>(initialSelectedPersonId ? "collapsed" : "open");
   const [infoRailWidth, setInfoRailWidth] = useState(392);
   const [isResizing, setIsResizing] = useState(false);
@@ -186,7 +215,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
     return Object.fromEntries(Object.entries(rawUrls).map(([personId, url]) => [personId, withShareToken(url, shareToken)]));
   }, [shareToken, snapshot.media, snapshot.personMedia]);
   const selectedPerson = snapshot.people.find((person) => person.id === selectedPersonId) || null;
-  const effectivePanelState: ViewerPanelState = selectedPerson && panelState === "collapsed" ? "collapsed" : "open";
+  const effectivePanelState = normalizeViewerPanelState(panelState, Boolean(selectedPerson), viewportMode);
   const selectedMedia = selectedPerson ? collectPersonMedia(snapshot, selectedPerson.id) : [];
   const selectedVisualMedia = selectedMedia.filter((asset) => asset.kind !== "document");
   const selectedDocuments = selectedMedia.filter((asset) => asset.kind === "document");
@@ -202,6 +231,28 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
             snapshot.media.some((asset) => asset.id === relation.media_id && asset.kind === "photo")
         )?.media_id || null
       : null;
+  const shouldRenderInfoRail = Boolean(selectedPerson) || viewportMode !== "phone";
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const syncViewportMode = () => {
+      setViewportMode(getViewerViewportMode(window.innerWidth));
+    };
+
+    syncViewportMode();
+    window.addEventListener("resize", syncViewportMode);
+
+    return () => {
+      window.removeEventListener("resize", syncViewportMode);
+    };
+  }, []);
+
+  useEffect(() => {
+    setPanelState((currentState) => normalizeViewerPanelState(currentState, Boolean(selectedPerson), viewportMode));
+  }, [selectedPerson, viewportMode]);
+
   useEffect(() => {
     if (!isResizing) {
       return undefined;
@@ -284,22 +335,35 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
 
   function handleSelectPerson(personId: string) {
     setSelectedPersonId(personId);
-    setPanelState("open");
+    setPanelState(viewportMode === "phone" ? "peek" : "open");
   }
 
   function handleTogglePanel() {
-    setPanelState((currentState) => (currentState === "open" ? "collapsed" : "open"));
+    setPanelState((currentState) => {
+      const normalizedState = normalizeViewerPanelState(currentState, Boolean(selectedPerson), viewportMode);
+
+      if (viewportMode === "phone") {
+        return normalizedState === "open" ? "peek" : "open";
+      }
+
+      return normalizedState === "open" ? "collapsed" : "open";
+    });
   }
 
+  const canResizeRail = viewportMode === "desktop" && effectivePanelState === "open";
   const toggleLabel =
     effectivePanelState === "open"
       ? `Свернуть карточку человека: ${selectedPerson?.full_name || ""}`
-      : `Открыть карточку человека: ${selectedPerson?.full_name || ""}`;
+      : viewportMode === "phone"
+        ? `Развернуть карточку человека: ${selectedPerson?.full_name || ""}`
+        : `Открыть карточку человека: ${selectedPerson?.full_name || ""}`;
 
   return (
     <div
       ref={layoutRef}
       className={`viewer-layout viewer-layout-overlay viewer-layout-resizable viewer-panel-${effectivePanelState}${isResizing ? " viewer-layout-resizing" : ""}`}
+      data-viewport-mode={viewportMode}
+      data-panel-state={effectivePanelState}
       style={
         {
           "--viewer-rail-width": `${infoRailWidth}px`,
@@ -325,7 +389,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
           personPhotoUrls={personPhotoPreviewUrls}
         />
       </Card>
-      {effectivePanelState === "open" ? (
+      {canResizeRail ? (
         <div
           className="viewer-rail-resize-handle"
           aria-label="Изменить ширину карточки человека"
@@ -337,98 +401,111 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
         />
       ) : null}
 
-      <Card ref={infoRailRef} id={infoRailId} className="info-rail viewer-info-rail utility-section-card p-6">
-        {selectedPerson ? (
-          <>
-            <div className="viewer-info-rail-body">
-              <div className="viewer-info-rail-header">
-                <div className="viewer-person-summary utility-note-card">
-                  <div className="viewer-person-summary-copy">
-                    <h2 className="card-heading">{selectedPerson.full_name}</h2>
-                    {selectedPersonLifeRange ? <p className="viewer-person-summary-dates">{selectedPersonLifeRange}</p> : null}
-                  </div>
-                  {selectedAvatarUrl && selectedAvatarMediaId ? (
-                    <SummaryAvatar
-                      mediaId={selectedAvatarMediaId}
-                      src={selectedAvatarUrl}
-                      alt={`Портрет: ${selectedPerson.full_name}`}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            {selectedPerson.bio ? (
-              <div className="detail-list viewer-person-detail-list">
-                <div className="viewer-person-bio-block">
-                  <span className="viewer-person-bio">{selectedPerson.bio}</span>
-                </div>
-              </div>
-            ) : null}
-
-              {selectedVisualMedia.length ? (
-                <div className="media-strip viewer-person-media-strip">
-                  <PersonMediaGallery
-                    media={selectedVisualMedia}
-                    shareToken={shareToken}
-                    avatarMediaId={selectedAvatarMediaId}
-                    showStage={false}
-                    showStickyFooter={false}
-                    emptyTitle="Материалы еще не добавлены"
-                    emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
-                  />
-                  <div className="action-row">
-                    <a
-                      href={buildViewerPersonMediaHref(snapshot.tree.slug, selectedPerson.id, shareToken)}
-                      className={buttonVariants({ variant: "ghost", size: "sm" })}
-                    >
-                      Посмотреть медиа
-                    </a>
+      {shouldRenderInfoRail ? (
+        <Card
+          ref={infoRailRef}
+          id={infoRailId}
+          className="info-rail viewer-info-rail utility-section-card p-6"
+          data-viewport-mode={viewportMode}
+          data-panel-state={effectivePanelState}
+        >
+          {viewportMode === "phone" && selectedPerson ? (
+            <button type="button" className="viewer-phone-sheet-handle" aria-label={toggleLabel} onClick={handleTogglePanel}>
+              <span className="viewer-phone-sheet-grip" aria-hidden="true" />
+            </button>
+          ) : null}
+          {selectedPerson ? (
+            <>
+              <div className="viewer-info-rail-body">
+                <div className="viewer-info-rail-header">
+                  <div className="viewer-person-summary utility-note-card">
+                    <div className="viewer-person-summary-copy">
+                      <h2 className="card-heading">{selectedPerson.full_name}</h2>
+                      {selectedPersonLifeRange ? <p className="viewer-person-summary-dates">{selectedPersonLifeRange}</p> : null}
+                    </div>
+                    {selectedAvatarUrl && selectedAvatarMediaId ? (
+                      <SummaryAvatar
+                        mediaId={selectedAvatarMediaId}
+                        src={selectedAvatarUrl}
+                        alt={`Портрет: ${selectedPerson.full_name}`}
+                      />
+                    ) : null}
                   </div>
                 </div>
-              ) : selectedDocuments.length ? null : (
-                <div className="media-strip viewer-person-media-strip">
-                  <PersonMediaGallery
-                    media={selectedVisualMedia}
-                    shareToken={shareToken}
-                    avatarMediaId={selectedAvatarMediaId}
-                    showStage={false}
-                    showStickyFooter={false}
-                    emptyTitle="Материалы еще не добавлены"
-                    emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
-                  />
-                </div>
-              )}
-
-              {selectedDocuments.length ? (
-                <section className="viewer-person-documents" aria-label="Документы">
-                  <h3 className="viewer-person-documents-title">Документы</h3>
-                  <div className="viewer-person-document-list">
-                    {selectedDocuments.map((asset) => (
-                      <a
-                        key={asset.id}
-                        href={buildMediaOpenRouteUrl(asset, shareToken)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="viewer-person-document-link"
-                      >
-                        <span className="viewer-person-document-icon" aria-hidden="true">
-                          <FileText className="viewer-person-document-icon-svg" />
-                        </span>
-                        <span className="viewer-person-document-copy">
-                          <strong>{asset.title}</strong>
-                          <span>{formatDocumentMeta(asset)}</span>
-                        </span>
-                      </a>
-                    ))}
+              {selectedPerson.bio ? (
+                <div className="detail-list viewer-person-detail-list">
+                  <div className="viewer-person-bio-block">
+                    <span className="viewer-person-bio">{selectedPerson.bio}</span>
                   </div>
-                </section>
+                </div>
               ) : null}
-            </div>
-          </>
-        ) : (
-          <div className="empty-state">Выберите человека, чтобы посмотреть его данные.</div>
-        )}
-      </Card>
-      {selectedPerson ? (
+
+                {selectedVisualMedia.length ? (
+                  <div className="media-strip viewer-person-media-strip">
+                    <PersonMediaGallery
+                      media={selectedVisualMedia}
+                      shareToken={shareToken}
+                      avatarMediaId={selectedAvatarMediaId}
+                      showStage={false}
+                      showStickyFooter={false}
+                      emptyTitle="Материалы еще не добавлены"
+                      emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
+                    />
+                    <div className="action-row">
+                      <a
+                        href={buildViewerPersonMediaHref(snapshot.tree.slug, selectedPerson.id, shareToken)}
+                        className={buttonVariants({ variant: "ghost", size: "sm" })}
+                      >
+                        Посмотреть медиа
+                      </a>
+                    </div>
+                  </div>
+                ) : selectedDocuments.length ? null : (
+                  <div className="media-strip viewer-person-media-strip">
+                    <PersonMediaGallery
+                      media={selectedVisualMedia}
+                      shareToken={shareToken}
+                      avatarMediaId={selectedAvatarMediaId}
+                      showStage={false}
+                      showStickyFooter={false}
+                      emptyTitle="Материалы еще не добавлены"
+                      emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
+                    />
+                  </div>
+                )}
+
+                {selectedDocuments.length ? (
+                  <section className="viewer-person-documents" aria-label="Документы">
+                    <h3 className="viewer-person-documents-title">Документы</h3>
+                    <div className="viewer-person-document-list">
+                      {selectedDocuments.map((asset) => (
+                        <a
+                          key={asset.id}
+                          href={buildMediaOpenRouteUrl(asset, shareToken)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="viewer-person-document-link"
+                        >
+                          <span className="viewer-person-document-icon" aria-hidden="true">
+                            <FileText className="viewer-person-document-icon-svg" />
+                          </span>
+                          <span className="viewer-person-document-copy">
+                            <strong>{asset.title}</strong>
+                            <span>{formatDocumentMeta(asset)}</span>
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <div className="empty-state">Выберите человека, чтобы посмотреть его данные.</div>
+          )}
+        </Card>
+      ) : null}
+      {selectedPerson && viewportMode !== "phone" ? (
         <button
           type="button"
           className="viewer-info-rail-tab"
@@ -446,8 +523,8 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
               <span className="viewer-info-rail-tab-name-line viewer-info-rail-tab-name-line-secondary">{collapsedTabName.lastName}</span>
             ) : null}
           </span>
-        </button>
-      ) : null}
+          </button>
+        ) : null}
     </div>
   );
 }

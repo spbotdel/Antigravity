@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TreeViewerClient } from "@/components/tree/tree-viewer-client";
 import type { TreeSnapshot } from "@/lib/types";
@@ -130,7 +130,22 @@ function createSnapshot(): TreeSnapshot {
   };
 }
 
+const initialInnerWidth = window.innerWidth;
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
 describe("tree viewer client", () => {
+  afterEach(() => {
+    setViewportWidth(initialInnerWidth);
+  });
+
   it("renders the tree heading overlay with derived people and generation counts", () => {
     render(<TreeViewerClient snapshot={createSnapshot()} />);
 
@@ -207,6 +222,39 @@ describe("tree viewer client", () => {
     expect(layout).toHaveClass("viewer-panel-open");
     expect(screen.getByText("Bio")).toBeInTheDocument();
     expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-1");
+  });
+
+  it("uses peek as the default phone sheet state and preserves selection when collapsing it", () => {
+    setViewportWidth(390);
+
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
+    expect(layout).toHaveAttribute("data-viewport-mode", "phone");
+    expect(layout).toHaveClass("viewer-panel-peek");
+
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть карточку человека: Demo Person" }));
+    expect(layout).toHaveClass("viewer-panel-open");
+    expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Свернуть карточку человека: Demo Person" }));
+    expect(layout).toHaveClass("viewer-panel-peek");
+    expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-1");
+  });
+
+  it("returns to peek on phone when a different person is selected from the tree", () => {
+    setViewportWidth(390);
+
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть карточку человека: Demo Person" }));
+    expect(layout).toHaveClass("viewer-panel-open");
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Second Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-peek");
+    expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-2");
   });
 
   it("does not render an empty collapsed tab when no selected person exists", () => {

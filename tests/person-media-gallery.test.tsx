@@ -983,6 +983,49 @@ describe("person media gallery", () => {
     expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" })).toBeInTheDocument();
   });
 
+  it("fails soft on swipe and button navigation at the lightbox edges", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          })
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать все" }));
+
+    const firstDialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" });
+    const previousButton = within(firstDialog).getByRole("button", { name: "Предыдущее медиа" });
+    expect(previousButton).toBeDisabled();
+
+    swipeElement(firstDialog, { startX: 120, startY: 180, endX: 244, endY: 188 });
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" })).toBeInTheDocument();
+
+    fireEvent.click(previousButton);
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 1" })).toBeInTheDocument();
+
+    fireEvent.click(within(firstDialog).getByRole("button", { name: "Следующее медиа" }));
+
+    const lastDialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 2" });
+    const nextButton = within(lastDialog).getByRole("button", { name: "Следующее медиа" });
+    expect(nextButton).toBeDisabled();
+
+    swipeElement(lastDialog, { startX: 244, startY: 180, endX: 120, endY: 188 });
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 2" })).toBeInTheDocument();
+
+    fireEvent.click(nextButton);
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Фото 2" })).toBeInTheDocument();
+  });
+
   it("ignores swipe navigation when touch starts on the strip or controls", () => {
     render(
       <PersonMediaGallery
@@ -1132,22 +1175,21 @@ describe("person media gallery", () => {
       mockScrollableThumb(thumb, strip as HTMLDivElement, { contentLeft: index * 96, width: 80, height: 56 });
     });
 
-    const nextButton = within(dialog).getByRole("button", { name: "Следующее медиа" });
-    const previousButton = within(dialog).getByRole("button", { name: "Предыдущее медиа" });
-
     for (let step = 0; step < 10; step += 1) {
-      fireEvent.click(nextButton);
+      const currentDialog = screen.getByRole("dialog", { name: /Просмотр медиа:/ });
+      fireEvent.click(within(currentDialog).getByRole("button", { name: "Следующее медиа" }));
     }
 
-    for (let step = 0; step < 5; step += 1) {
-      fireEvent.click(previousButton);
+    for (let step = 0; step < 2; step += 1) {
+      const currentDialog = screen.getByRole("dialog", { name: /Просмотр медиа:/ });
+      fireEvent.click(within(currentDialog).getByRole("button", { name: "Предыдущее медиа" }));
     }
 
-    const finalDialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 6" });
+    const finalDialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 4" });
     const finalStrip = finalDialog.querySelector(".media-lightbox-strip-fixed");
     expect(finalStrip).not.toBeNull();
 
-    const activeThumb = within(finalDialog).getByRole("button", { name: "Показать медиа 6: Фото 6" });
+    const activeThumb = within(finalDialog).getByRole("button", { name: "Показать медиа 4: Фото 4" });
     const activeRect = activeThumb.getBoundingClientRect();
     const stripRect = (finalStrip as HTMLDivElement).getBoundingClientRect();
     const activeCenter = activeRect.left + activeRect.width / 2;

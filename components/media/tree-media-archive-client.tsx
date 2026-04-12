@@ -3606,7 +3606,7 @@ export function TreeMediaArchiveClient({
       {error ? <p className="form-error">{error}</p> : null}
 
       <Tabs value={mode} onValueChange={(value) => switchMode(value as MediaMode)}>
-        <TabsList variant="line" aria-label="Режим архива">
+        <TabsList className="archive-mode-tabs" variant="line" aria-label="Режим архива">
           <TabsTrigger className={`pill-link${mode === "photo" ? " pill-link-active" : ""}`} value="photo">
             Фото
           </TabsTrigger>
@@ -3661,7 +3661,7 @@ export function TreeMediaArchiveClient({
         <>
 
           <Tabs value={view === "person" ? "people" : view} onValueChange={(value) => switchView(value as ArchiveView)}>
-            <TabsList variant="line" aria-label="Режим просмотра архива">
+            <TabsList className="archive-view-tabs" variant="line" aria-label="Режим просмотра архива">
               <TabsTrigger
                 className={`pill-link${view === "all" ? " pill-link-active" : ""}`}
                 value="all"

@@ -951,6 +951,8 @@ export function PersonMediaGallery({
   const activeAsset = media[resolvedActiveIndex] ?? null;
   const deleteTargetAsset = deleteTargetMediaId ? media.find((asset) => asset.id === deleteTargetMediaId) ?? null : null;
   const canNavigate = media.length > 1;
+  const hasPreviousMedia = resolvedActiveIndex > 0;
+  const hasNextMedia = resolvedActiveIndex < media.length - 1;
   const canSetAvatar = Boolean(onSetAvatar && activeAsset && isPhotoAsset(activeAsset));
   const canDeleteCurrentMedia = Boolean(canDeleteMedia && onDeleteMedia && activeAsset && isPhotoAsset(activeAsset));
   const canSelectInlineMedia = Boolean(canSelectMedia && !showStage && selectedMediaIds && onToggleMediaSelection);
@@ -981,12 +983,17 @@ export function PersonMediaGallery({
 
   function moveSelection(direction: -1 | 1) {
     if (!media.length) {
-      return;
+      return false;
+    }
+
+    const nextIndex = resolvedActiveIndex + direction;
+    if (nextIndex < 0 || nextIndex >= media.length) {
+      return false;
     }
 
     pauseActiveLightboxVideo();
-    const nextIndex = (resolvedActiveIndex + direction + media.length) % media.length;
     setActiveMediaId(media[nextIndex].id);
+    return true;
   }
 
   async function handleSetAvatar(mediaId: string) {
@@ -1349,6 +1356,7 @@ export function PersonMediaGallery({
               type="button"
               className="media-lightbox-nav media-lightbox-nav-left"
               aria-label="Предыдущее медиа"
+              disabled={!hasPreviousMedia}
               onClick={() => moveSelection(-1)}
               onMouseEnter={pinFullscreenControls}
               onMouseLeave={unpinFullscreenControls}
@@ -1404,6 +1412,7 @@ export function PersonMediaGallery({
               type="button"
               className="media-lightbox-nav media-lightbox-nav-right"
               aria-label="Следующее медиа"
+              disabled={!hasNextMedia}
               onClick={() => moveSelection(1)}
               onMouseEnter={pinFullscreenControls}
               onMouseLeave={unpinFullscreenControls}
@@ -1478,12 +1487,12 @@ export function PersonMediaGallery({
 
               <div className="person-media-stage-actions">
                 {canNavigate ? (
-                  <Button type="button" variant="ghost" size="sm" aria-label="Предыдущее медиа" onClick={() => moveSelection(-1)}>
+                  <Button type="button" variant="ghost" size="sm" aria-label="Предыдущее медиа" disabled={!hasPreviousMedia} onClick={() => moveSelection(-1)}>
                     ‹
                   </Button>
                 ) : null}
                 {canNavigate ? (
-                  <Button type="button" variant="ghost" size="sm" aria-label="Следующее медиа" onClick={() => moveSelection(1)}>
+                  <Button type="button" variant="ghost" size="sm" aria-label="Следующее медиа" disabled={!hasNextMedia} onClick={() => moveSelection(1)}>
                     ›
                   </Button>
                 ) : null}
