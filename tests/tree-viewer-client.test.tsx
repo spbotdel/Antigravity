@@ -328,6 +328,25 @@ describe("tree viewer client", () => {
     rectSpy.mockRestore();
   });
 
+  it("allows collapsing the open sheet by dragging down from the body surface", () => {
+    setViewportWidth(390);
+
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
+    const sheet = document.querySelector(".viewer-info-rail") as HTMLElement;
+    const body = document.querySelector(".viewer-info-rail-body") as HTMLElement;
+
+    fireEvent.click(sheet);
+    expect(layout).toHaveClass("viewer-panel-open");
+
+    fireEvent.touchStart(body, { touches: [{ clientX: 180, clientY: 320 }] });
+    fireEvent.touchMove(body, { touches: [{ clientX: 180, clientY: 620 }] });
+    fireEvent.touchEnd(body, { changedTouches: [{ clientX: 180, clientY: 620 }] });
+
+    expect(layout).toHaveClass("viewer-panel-peek");
+  });
+
   it("does not render an empty collapsed tab when no selected person exists", () => {
     const snapshot = createSnapshot();
     snapshot.tree.root_person_id = null;
