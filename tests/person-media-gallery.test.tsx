@@ -519,6 +519,53 @@ describe("person media gallery", () => {
     expect(within(dialog).getByLabelText("Громкость")).toBeInTheDocument();
   });
 
+  it("uses native controls for archive-style lightbox video on Chrome Android", () => {
+    const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
+
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      get: () =>
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36",
+    });
+
+    try {
+      render(
+        <PersonMediaGallery
+          media={[
+            createMediaAsset({
+              id: "media-video",
+              kind: "video",
+              title: "Архивное видео",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+            })
+          ]}
+          showStage={false}
+          showStickyFooter={false}
+          lightboxOnly
+          openLightboxOnMount
+          initialActiveMediaId="media-video"
+          lightboxAriaLabelPrefix="Просмотр архива"
+        />
+      );
+
+      const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+      const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
+      expect(video).not.toBeNull();
+      expect(video?.hasAttribute("controls")).toBe(true);
+      expect(video?.autoplay).toBe(false);
+      expect(video?.preload).toBe("auto");
+      expect(within(dialog).queryByRole("button", { name: "Воспроизвести видео" })).toBeNull();
+      expect(within(dialog).queryByLabelText("Громкость")).toBeNull();
+    } finally {
+      if (originalUserAgentDescriptor) {
+        Object.defineProperty(window.navigator, "userAgent", originalUserAgentDescriptor);
+      } else {
+        delete (window.navigator as Navigator & { userAgent?: string }).userAgent;
+      }
+    }
+  });
+
   it("can keep archive-style lightbox video in manual-start mode when autoplay is disabled explicitly", () => {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => Promise.resolve());
 

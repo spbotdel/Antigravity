@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MediaThumbVisual } from "@/components/media/media-thumb-visual";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play, Trash2, Volume2, VolumeX, X } from "lucide-react";
-import { type CSSProperties, type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl, resolveMediaThumbSource } from "@/lib/tree/display";
@@ -346,6 +346,17 @@ function playVideoSafely(video: HTMLVideoElement) {
   return Promise.resolve();
 }
 
+function isChromeAndroidVideoQuirkBrowser(userAgent: string) {
+  const normalized = userAgent.toLowerCase();
+  return (
+    normalized.includes("android") &&
+    normalized.includes("chrome/") &&
+    !normalized.includes("opr/") &&
+    !normalized.includes("opera") &&
+    !normalized.includes("edga/")
+  );
+}
+
 function clampPositiveSize(value: number) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
@@ -355,6 +366,7 @@ function LightboxVideoPlayer({
   src,
   poster,
   autoPlay = false,
+  preferNativeControls = false,
   onVideoElementChange,
   onIntrinsicSizeChange,
   onError,
@@ -365,6 +377,7 @@ function LightboxVideoPlayer({
   src: string;
   poster?: string;
   autoPlay?: boolean;
+  preferNativeControls?: boolean;
   onVideoElementChange?: (node: HTMLVideoElement | null) => void;
   onIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
   onError?: (video: HTMLVideoElement | null) => void;
@@ -413,7 +426,7 @@ function LightboxVideoPlayer({
       video.addEventListener(eventName, syncFromVideo);
     }
 
-    if (autoPlay) {
+    if (autoPlay && !preferNativeControls) {
       void playVideoSafely(video);
     }
 
@@ -425,7 +438,7 @@ function LightboxVideoPlayer({
         video.removeEventListener(eventName, syncFromVideo);
       }
     };
-  }, [asset.id, autoPlay, src]);
+  }, [asset.id, autoPlay, preferNativeControls, src]);
 
   async function togglePlayback() {
     const video = videoRef.current;
@@ -496,59 +509,62 @@ function LightboxVideoPlayer({
         poster={poster}
         className="person-media-stage-video person-media-stage-video-surface"
         style={surfaceStyle}
+        controls={preferNativeControls}
         playsInline
-        autoPlay={autoPlay}
-        preload="metadata"
+        autoPlay={preferNativeControls ? false : autoPlay}
+        preload={preferNativeControls ? "auto" : "metadata"}
         onError={() => onError?.(videoRef.current)}
         onClick={() => void togglePlayback()}
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.
       </video>
       </div>
-      <div className="person-media-stage-video-controls-anchor">
-        <div className="person-media-stage-video-controls" role="group" aria-label={`Управление видео: ${asset.title}`}>
-          <button
-            type="button"
-            className="person-media-stage-video-control person-media-stage-video-control-primary"
-            aria-label={isPlaying ? "Пауза" : "Воспроизвести видео"}
-            onClick={() => void togglePlayback()}
-          >
-            {isPlaying ? <Pause className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Play className="person-media-stage-video-control-icon" aria-hidden="true" />}
-          </button>
-          <span className="person-media-stage-video-time" aria-live="off">
-            {formatVideoTime(effectiveCurrentTime)} / {formatVideoTime(effectiveDuration)}
-          </span>
-          <input
-            type="range"
-            className="person-media-stage-video-slider"
-            aria-label="Позиция видео"
-            min={0}
-            max={effectiveDuration || 0}
-            step={0.1}
-            disabled={effectiveDuration <= 0}
-            value={effectiveCurrentTime}
-            onChange={(event) => handleSeek(Number(event.currentTarget.value))}
-          />
-          <button
-            type="button"
-            className="person-media-stage-video-control"
-            aria-label={isMuted || volume === 0 ? "Включить звук" : "Выключить звук"}
-            onClick={toggleMute}
-          >
-            {isMuted || volume === 0 ? <VolumeX className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Volume2 className="person-media-stage-video-control-icon" aria-hidden="true" />}
-          </button>
-          <input
-            type="range"
-            className="person-media-stage-video-slider person-media-stage-video-volume"
-            aria-label="Громкость"
-            min={0}
-            max={1}
-            step={0.05}
-            value={isMuted ? 0 : volume}
-            onChange={(event) => handleVolume(Number(event.currentTarget.value))}
-          />
+      {!preferNativeControls ? (
+        <div className="person-media-stage-video-controls-anchor">
+          <div className="person-media-stage-video-controls" role="group" aria-label={`Управление видео: ${asset.title}`}>
+            <button
+              type="button"
+              className="person-media-stage-video-control person-media-stage-video-control-primary"
+              aria-label={isPlaying ? "Пауза" : "Воспроизвести видео"}
+              onClick={() => void togglePlayback()}
+            >
+              {isPlaying ? <Pause className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Play className="person-media-stage-video-control-icon" aria-hidden="true" />}
+            </button>
+            <span className="person-media-stage-video-time" aria-live="off">
+              {formatVideoTime(effectiveCurrentTime)} / {formatVideoTime(effectiveDuration)}
+            </span>
+            <input
+              type="range"
+              className="person-media-stage-video-slider"
+              aria-label="Позиция видео"
+              min={0}
+              max={effectiveDuration || 0}
+              step={0.1}
+              disabled={effectiveDuration <= 0}
+              value={effectiveCurrentTime}
+              onChange={(event) => handleSeek(Number(event.currentTarget.value))}
+            />
+            <button
+              type="button"
+              className="person-media-stage-video-control"
+              aria-label={isMuted || volume === 0 ? "Включить звук" : "Выключить звук"}
+              onClick={toggleMute}
+            >
+              {isMuted || volume === 0 ? <VolumeX className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Volume2 className="person-media-stage-video-control-icon" aria-hidden="true" />}
+            </button>
+            <input
+              type="range"
+              className="person-media-stage-video-slider person-media-stage-video-volume"
+              aria-label="Громкость"
+              min={0}
+              max={1}
+              step={0.05}
+              value={isMuted ? 0 : volume}
+              onChange={(event) => handleVolume(Number(event.currentTarget.value))}
+            />
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -580,6 +596,7 @@ function MediaPreview({
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const shouldPreferMetadataPreload = expanded && isInlineVideoAsset(asset);
   const [hasLoadError, setHasLoadError] = useState(false);
+  const [preferNativeExpandedVideoControls, setPreferNativeExpandedVideoControls] = useState(false);
   const handleOriginalLoadError = (video?: HTMLVideoElement | null) => {
     logMediaError({
       mediaId: asset.id,
@@ -613,6 +630,15 @@ function MediaPreview({
   useEffect(() => {
     setHasLoadError(false);
   }, [asset.id, expanded, mediaUrl]);
+
+  useLayoutEffect(() => {
+    if (!expanded || !isInlineVideoAsset(asset) || typeof navigator === "undefined") {
+      setPreferNativeExpandedVideoControls(false);
+      return;
+    }
+
+    setPreferNativeExpandedVideoControls(isChromeAndroidVideoQuirkBrowser(navigator.userAgent));
+  }, [asset, expanded]);
 
   if (hasLoadError) {
     return (
@@ -656,6 +682,7 @@ function MediaPreview({
           src={mediaUrl}
           poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
           autoPlay={autoPlayVideo}
+          preferNativeControls={preferNativeExpandedVideoControls}
           onVideoElementChange={onLightboxVideoElementChange}
           onIntrinsicSizeChange={onLightboxMediaIntrinsicSizeChange}
           onError={handleOriginalLoadError}
