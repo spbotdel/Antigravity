@@ -157,3 +157,23 @@ export const processVideoPreviewJobsSchema = z.object({
   forceRetry: z.boolean().optional()
 });
 
+export const mediaClientPlaybackDiagnosticSchema = z.object({
+  event: z.literal("client-original-error"),
+  context: z.string().trim().min(1).max(120),
+  shareToken: z.string().trim().max(512).optional().nullable(),
+  pageUrl: z.string().trim().max(4000).optional().nullable(),
+  src: z.string().trim().max(4000).optional().nullable(),
+  currentSrc: z.string().trim().max(4000).optional().nullable(),
+  poster: z.string().trim().max(4000).optional().nullable(),
+  errorCode: z.number().int().min(1).max(4).optional().nullable(),
+  networkState: z.number().int().min(0).max(3).optional().nullable(),
+  readyState: z.number().int().min(0).max(4).optional().nullable(),
+  currentTime: z.number().min(0).optional().nullable(),
+  duration: z.number().min(0).optional().nullable(),
+  controls: z.boolean().optional().nullable(),
+  playsInline: z.boolean().optional().nullable(),
+  autoPlay: z.boolean().optional().nullable(),
+  muted: z.boolean().optional().nullable(),
+  preload: z.string().trim().max(40).optional().nullable(),
+});
+

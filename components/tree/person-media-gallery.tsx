@@ -18,7 +18,7 @@ import { createPortal } from "react-dom";
 import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl, resolveMediaThumbSource } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import type { TreeSnapshot } from "@/lib/types";
-import { logMediaError } from "@/lib/utils";
+import { logMediaError, reportMediaClientPlaybackIssue } from "@/lib/utils";
 
 type MediaAsset = TreeSnapshot["media"][number];
 type LightboxState = "closed" | "open" | "closing";
@@ -367,7 +367,7 @@ function LightboxVideoPlayer({
   autoPlay?: boolean;
   onVideoElementChange?: (node: HTMLVideoElement | null) => void;
   onIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
-  onError?: () => void;
+  onError?: (video: HTMLVideoElement | null) => void;
   shellStyle?: CSSProperties;
   surfaceStyle?: CSSProperties;
 }) {
@@ -499,7 +499,7 @@ function LightboxVideoPlayer({
         playsInline
         autoPlay={autoPlay}
         preload="metadata"
-        onError={onError}
+        onError={() => onError?.(videoRef.current)}
         onClick={() => void togglePlayback()}
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.
@@ -580,13 +580,33 @@ function MediaPreview({
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const shouldPreferMetadataPreload = expanded && isInlineVideoAsset(asset);
   const [hasLoadError, setHasLoadError] = useState(false);
-  const handleOriginalLoadError = () => {
+  const handleOriginalLoadError = (video?: HTMLVideoElement | null) => {
     logMediaError({
       mediaId: asset.id,
       type: "original",
       context: expanded ? "PersonMediaGallery:lightbox" : "PersonMediaGallery:stage",
       src: mediaUrl,
     });
+    if (asset.kind === "video") {
+      reportMediaClientPlaybackIssue({
+        mediaId: asset.id,
+        context: expanded ? "PersonMediaGallery:lightbox" : "PersonMediaGallery:stage",
+        shareToken,
+        src: mediaUrl,
+        currentSrc: video?.currentSrc || null,
+        poster: video?.poster || (thumbSource?.kind === "image" ? thumbSource.src : null),
+        errorCode: video?.error?.code ?? null,
+        networkState: video?.networkState ?? null,
+        readyState: video?.readyState ?? null,
+        currentTime: Number.isFinite(video?.currentTime) ? video?.currentTime ?? null : null,
+        duration: Number.isFinite(video?.duration) ? video?.duration ?? null : null,
+        controls: video?.controls ?? null,
+        playsInline: video?.playsInline ?? null,
+        autoPlay: video?.autoplay ?? null,
+        muted: video?.muted ?? null,
+        preload: video?.preload ?? null,
+      });
+    }
     setHasLoadError(true);
   };
 
@@ -623,7 +643,7 @@ function MediaPreview({
               }
             : undefined
         }
-        onError={handleOriginalLoadError}
+        onError={() => handleOriginalLoadError()}
       />
     );
   }
@@ -655,7 +675,7 @@ function MediaPreview({
         playsInline
         muted={autoPlayVideo}
         preload={shouldPreferMetadataPreload ? "metadata" : "auto"}
-        onError={handleOriginalLoadError}
+        onError={(event) => handleOriginalLoadError(event.currentTarget)}
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.
       </video>

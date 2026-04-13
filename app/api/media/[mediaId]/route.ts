@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { AppError, toErrorResponse } from "@/lib/server/errors";
 import type { MediaVisibility, ViewerAccessSource } from "@/lib/types";
 import { buildAttachmentContentDisposition, buildMediaDownloadFilename, deleteMedia, getMediaSummary, resolveMediaAccess, setPrimaryPersonMedia } from "@/lib/server/repository";
-import { setPrimaryPersonMediaSchema } from "@/lib/validators/media";
+import { mediaClientPlaybackDiagnosticSchema, setPrimaryPersonMediaSchema } from "@/lib/validators/media";
 
 interface Params {
   params: Promise<{ mediaId: string }>;
@@ -153,7 +153,7 @@ function isPdfDocumentMimeType(mimeType: string | null | undefined) {
   return normalizedMimeType === "application/pdf" || normalizedMimeType.endsWith("/pdf");
 }
 
-function clipDiagnosticHeaderValue(value: string | null, maxLength = 240) {
+function clipDiagnosticHeaderValue(value: string | null | undefined, maxLength = 240) {
   if (!value) {
     return null;
   }
@@ -161,7 +161,7 @@ function clipDiagnosticHeaderValue(value: string | null, maxLength = 240) {
   return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
 }
 
-function normalizeDiagnosticToken(value: string | number | null | undefined) {
+function normalizeDiagnosticToken(value: string | number | boolean | null | undefined) {
   if (value === null || value === undefined || value === "") {
     return "-";
   }
@@ -193,6 +193,41 @@ function classifyVideoClient(request: Request) {
   }
 
   return "unknown";
+}
+
+function logClientPlaybackDiagnostic(
+  request: Request,
+  mediaId: string,
+  payload: ReturnType<typeof mediaClientPlaybackDiagnosticSchema.parse>
+) {
+  if (!VIDEO_DELIVERY_DIAGNOSTICS_ENABLED) {
+    return;
+  }
+
+  console.warn(
+    [
+      "[video-client-debug]",
+      `event=${normalizeDiagnosticToken(payload.event)}`,
+      `mediaId=${normalizeDiagnosticToken(mediaId)}`,
+      `browser=${normalizeDiagnosticToken(classifyVideoClient(request))}`,
+      `context=${normalizeDiagnosticToken(payload.context)}`,
+      `errorCode=${normalizeDiagnosticToken(payload.errorCode)}`,
+      `networkState=${normalizeDiagnosticToken(payload.networkState)}`,
+      `readyState=${normalizeDiagnosticToken(payload.readyState)}`,
+      `currentTime=${normalizeDiagnosticToken(payload.currentTime)}`,
+      `duration=${normalizeDiagnosticToken(payload.duration)}`,
+      `controls=${normalizeDiagnosticToken(payload.controls)}`,
+      `playsInline=${normalizeDiagnosticToken(payload.playsInline)}`,
+      `autoPlay=${normalizeDiagnosticToken(payload.autoPlay)}`,
+      `muted=${normalizeDiagnosticToken(payload.muted)}`,
+      `preload=${normalizeDiagnosticToken(payload.preload)}`,
+      `dest=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-fetch-dest"), 40))}`,
+      `accept=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("accept"), 80))}`,
+      `src=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(payload.src, 120))}`,
+      `currentSrc=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(payload.currentSrc, 120))}`,
+      `page=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(payload.pageUrl, 120))}`,
+    ].join(" ")
+  );
 }
 
 function logOriginalVideoDeliveryDiagnostic(
@@ -474,6 +509,18 @@ export async function HEAD(request: Request, { params }: Params) {
 
     const result = await resolveMediaAccess(mediaId, shareToken, variant, { download });
     return NextResponse.redirect(result.url);
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}
+
+export async function POST(request: Request, { params }: Params) {
+  try {
+    const { mediaId } = await params;
+    const payload = mediaClientPlaybackDiagnosticSchema.parse(await request.json());
+    await getMediaSummary(mediaId, payload.shareToken || undefined);
+    logClientPlaybackDiagnostic(request, mediaId, payload);
+    return Response.json({ ok: true }, { status: 202 });
   } catch (error) {
     return toErrorResponse(error);
   }
