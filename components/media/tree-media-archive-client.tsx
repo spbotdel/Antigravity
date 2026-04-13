@@ -20,7 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { SelectField } from "@/components/ui/select-field";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { buildTreeMediaAlbumSummaries, resolveMediaThumbSource, type MediaThumbSource } from "@/lib/tree/display";
+import { buildTreeMediaAlbumSummaries, resolveMediaThumbSource, type MediaThumbSource, withMediaSourceContext } from "@/lib/tree/display";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import type { MediaAssetRecord, MediaUploadTargetResponse, TreeAudioPlaylistItemRecord, TreeAudioPlaylistRecord, TreeMediaAlbumMediaKind, TreeMediaAlbumRecord } from "@/lib/types";
 import { AudioArchiveView } from "@/components/media/audio-archive-view";
@@ -588,7 +588,7 @@ function buildDownloadUrl(asset: MediaAssetRecord, shareToken?: string | null) {
   if (shareToken) {
     params.set("share", shareToken);
   }
-  return `/api/media/${asset.id}?${params.toString()}`;
+  return withMediaSourceContext(`/api/media/${asset.id}?${params.toString()}`, "archive-download-link");
 }
 
 function areStringSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>) {
@@ -3006,7 +3006,7 @@ export function TreeMediaArchiveClient({
 
         const controller = new AbortController();
         pendingVideoPreviewPollFetchControllersRef.current.set(mediaId, controller);
-        const response = await fetch(`/api/media/${mediaId}?${params.toString()}`, {
+        const response = await fetch(withMediaSourceContext(`/api/media/${mediaId}?${params.toString()}`, "archive-video-summary-poll"), {
           cache: "no-store",
           signal: controller.signal,
         }).catch(() => null);
