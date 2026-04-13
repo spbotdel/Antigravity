@@ -521,14 +521,6 @@ describe("person media gallery", () => {
 
   it("uses native controls for archive-style lightbox video on Chrome Android", async () => {
     const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ url: "https://example.com/direct-video.mp4", kind: "video" }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      })
-    );
 
     Object.defineProperty(window.navigator, "userAgent", {
       configurable: true,
@@ -562,7 +554,7 @@ describe("person media gallery", () => {
       await waitFor(() => {
         const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
         expect(video).not.toBeNull();
-        expect(video).toHaveAttribute("src", "https://example.com/direct-video.mp4");
+        expect(video).toHaveAttribute("src", "/api/media/media-video");
         expect(video?.hasAttribute("controls")).toBe(true);
         expect(video?.autoplay).toBe(false);
         expect(video?.preload).toBe("auto");
@@ -578,65 +570,6 @@ describe("person media gallery", () => {
           get: () => "",
         });
       }
-      fetchSpy.mockRestore();
-    }
-  });
-
-  it("resolves a direct playback url for Chrome Android video surfaces before mounting video", async () => {
-    const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
-    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ url: "https://example.com/direct-video.mp4", kind: "video" }), {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      })
-    );
-
-    Object.defineProperty(window.navigator, "userAgent", {
-      configurable: true,
-      get: () =>
-        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36",
-    });
-
-    try {
-      render(
-        <PersonMediaGallery
-          media={[
-            createMediaAsset({
-              id: "media-video",
-              kind: "video",
-              title: "Архивное видео",
-              mime_type: "video/mp4",
-              storage_path: "trees/tree-1/media/video/media-video/video.mp4"
-            })
-          ]}
-          showStage={false}
-          showStickyFooter={false}
-          lightboxOnly
-          openLightboxOnMount
-          initialActiveMediaId="media-video"
-          lightboxAriaLabelPrefix="Просмотр архива"
-        />
-      );
-
-      await waitFor(() => {
-        const video = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" }).querySelector("video.person-media-stage-video");
-        expect(video).not.toBeNull();
-        expect(video).toHaveAttribute("src", "https://example.com/direct-video.mp4");
-      });
-
-      expect(fetchSpy).toHaveBeenCalledWith("/api/media/media-video?playback=client-url", { cache: "no-store" });
-    } finally {
-      if (originalUserAgentDescriptor) {
-        Object.defineProperty(window.navigator, "userAgent", originalUserAgentDescriptor);
-      } else {
-        Object.defineProperty(window.navigator, "userAgent", {
-          configurable: true,
-          get: () => "",
-        });
-      }
-      fetchSpy.mockRestore();
     }
   });
 

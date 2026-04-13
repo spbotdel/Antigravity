@@ -357,18 +357,6 @@ function isChromeAndroidVideoQuirkBrowser(userAgent: string) {
   );
 }
 
-function buildClientPlaybackResolveUrl(mediaId: string, shareToken?: string | null) {
-  const params = new URLSearchParams({
-    playback: "client-url",
-  });
-
-  if (shareToken) {
-    params.set("share", shareToken);
-  }
-
-  return `/api/media/${mediaId}?${params.toString()}`;
-}
-
 function shouldReportPlaybackTimeline(userAgent: string) {
   const normalized = userAgent.toLowerCase();
   return normalized.includes("android") && (normalized.includes("chrome/") || normalized.includes("opr/") || normalized.includes("opera"));
@@ -673,11 +661,6 @@ function MediaPreview({
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const shouldPreferMetadataPreload = expanded && isInlineVideoAsset(asset);
   const [hasLoadError, setHasLoadError] = useState(false);
-  const [resolvedClientPlaybackUrl, setResolvedClientPlaybackUrl] = useState<string | null>(null);
-  const shouldResolveDirectPlaybackUrl =
-    isInlineVideoAsset(asset) &&
-    typeof navigator !== "undefined" &&
-    isChromeAndroidVideoQuirkBrowser(navigator.userAgent);
   const preferNativeExpandedVideoControls =
     expanded &&
     isInlineVideoAsset(asset) &&
@@ -685,9 +668,7 @@ function MediaPreview({
     isChromeAndroidVideoQuirkBrowser(navigator.userAgent);
   const mediaUrl = isPhotoAsset(asset)
     ? buildPhotoPreviewRouteUrl(asset, expanded ? "medium" : "small", shareToken)
-    : shouldResolveDirectPlaybackUrl
-      ? resolvedClientPlaybackUrl
-      : buildMediaOpenRouteUrl(asset, shareToken);
+    : buildMediaOpenRouteUrl(asset, shareToken);
   const handleOriginalLoadError = (video?: HTMLVideoElement | null) => {
     logMediaError({
       mediaId: asset.id,
@@ -733,41 +714,6 @@ function MediaPreview({
     setHasLoadError(false);
   }, [asset.id, expanded, mediaUrl]);
 
-  useEffect(() => {
-    if (!shouldResolveDirectPlaybackUrl) {
-      setResolvedClientPlaybackUrl(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function resolveDirectPlaybackUrl() {
-      try {
-        const response = await fetch(buildClientPlaybackResolveUrl(asset.id, shareToken), {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          throw new Error(`resolve playback url failed: ${response.status}`);
-        }
-
-        const payload = (await response.json()) as { url?: string | null };
-        if (!cancelled) {
-          setResolvedClientPlaybackUrl(payload.url || null);
-        }
-      } catch {
-        if (!cancelled) {
-          setResolvedClientPlaybackUrl(null);
-        }
-      }
-    }
-
-    void resolveDirectPlaybackUrl();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [asset.id, shareToken, shouldResolveDirectPlaybackUrl]);
-
   if (hasLoadError) {
     return (
       <div className="person-media-placeholder">
@@ -776,15 +722,6 @@ function MediaPreview({
         <a href={buildMediaOpenRouteUrl(asset, shareToken)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "ghost" })}>
           {getMediaOpenLabel(asset)}
         </a>
-      </div>
-    );
-  }
-
-  if (isInlineVideoAsset(asset) && shouldResolveDirectPlaybackUrl && !mediaUrl) {
-    return (
-      <div className="person-media-placeholder">
-        <strong>Подготавливаем видео</strong>
-        <p>Пробуем открыть оригинал в совместимом режиме для этого браузера.</p>
       </div>
     );
   }

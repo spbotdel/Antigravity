@@ -507,16 +507,11 @@ export async function GET(request: Request, { params }: Params) {
     const shareToken = searchParams.get("share");
     const download = searchParams.get("download") === "1";
     const summary = searchParams.get("summary") === "1";
-    const playback = searchParams.get("playback");
     const rawVariant = searchParams.get("variant");
     const variant = !download && (rawVariant === "thumb" || rawVariant === "small" || rawVariant === "medium") ? rawVariant : null;
     if (summary) {
       const media = await getMediaSummary(mediaId, shareToken);
       return Response.json({ media });
-    }
-    if (playback === "client-url") {
-      const result = await resolveMediaAccess(mediaId, shareToken, variant, { download: false });
-      return Response.json({ url: result.url, kind: result.kind });
     }
     if (variant === "thumb") {
       const cachedThumbRedirect = await getCachedThumbRedirectTarget({ mediaId, shareToken });
