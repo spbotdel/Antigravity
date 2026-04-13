@@ -307,20 +307,22 @@ describe("tree viewer client", () => {
 
     const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
     const sheet = document.querySelector(".viewer-info-rail") as HTMLElement;
+    const openButtonLabel = "Развернуть карточку человека: Demo Person";
+    const collapseButtonLabel = "Свернуть карточку человека: Demo Person";
 
     fireEvent.click(sheet);
     expect(layout).toHaveClass("viewer-panel-open");
 
-    fireEvent.touchStart(sheet, { touches: [{ clientX: 160, clientY: 220 }] });
-    fireEvent.touchMove(sheet, { touches: [{ clientX: 164, clientY: 392 }] });
+    fireEvent.touchStart(screen.getByRole("button", { name: collapseButtonLabel }), { touches: [{ clientX: 160, clientY: 220 }] });
+    fireEvent.touchMove(screen.getByRole("button", { name: collapseButtonLabel }), { touches: [{ clientX: 164, clientY: 392 }] });
     expect(sheet.style.transform).toBe("translateY(172px)");
-    fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 166, clientY: 388 }] });
+    fireEvent.touchEnd(screen.getByRole("button", { name: collapseButtonLabel }), { changedTouches: [{ clientX: 166, clientY: 388 }] });
     expect(layout).toHaveClass("viewer-panel-peek");
 
-    fireEvent.touchStart(sheet, { touches: [{ clientX: 164, clientY: 272 }] });
-    fireEvent.touchMove(sheet, { touches: [{ clientX: 160, clientY: 120 }] });
-    expect(sheet.style.transform).toBe("translateY(112px)");
-    fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 160, clientY: 124 }] });
+    fireEvent.touchStart(screen.getByRole("button", { name: openButtonLabel }), { touches: [{ clientX: 164, clientY: 272 }] });
+    fireEvent.touchMove(screen.getByRole("button", { name: openButtonLabel }), { touches: [{ clientX: 160, clientY: 120 }] });
+    expect(sheet.style.transform).toBe("translateY(128px)");
+    fireEvent.touchEnd(screen.getByRole("button", { name: openButtonLabel }), { changedTouches: [{ clientX: 160, clientY: 124 }] });
     expect(layout).toHaveClass("viewer-panel-open");
 
     rectSpy.mockRestore();

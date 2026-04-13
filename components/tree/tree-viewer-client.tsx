@@ -23,7 +23,7 @@ type PhoneSheetGestureAxis = "horizontal" | "vertical";
 
 const PHONE_VIEWER_MAX_WIDTH = 767;
 const TABLET_VIEWER_MAX_WIDTH = 1180;
-const PHONE_VIEWER_PEEK_HEIGHT = 56;
+const PHONE_VIEWER_PEEK_HEIGHT = 40;
 const PHONE_VIEWER_DRAG_START_THRESHOLD = 10;
 const PHONE_VIEWER_SWIPE_THRESHOLD = 30;
 const PHONE_VIEWER_SWIPE_MAX_HORIZONTAL = 44;
@@ -685,24 +685,6 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
               setPanelState("open");
             }
           }}
-          onTouchStart={handlePhoneSheetTouchStart}
-          onTouchMove={handlePhoneSheetTouchMove}
-          onTouchEnd={handlePhoneSheetTouchEnd}
-          onPointerDown={handlePhoneSheetPointerDown}
-          onPointerMove={handlePhoneSheetPointerMove}
-          onPointerUp={handlePhoneSheetPointerUp}
-          onPointerCancel={() => {
-            activePhoneSheetPointerIdRef.current = null;
-            phoneSheetGestureRef.current = null;
-            setIsPhoneSheetDragging(false);
-            setPhoneSheetDragTranslate(null);
-          }}
-          onTouchCancel={() => {
-            activePhoneSheetPointerIdRef.current = null;
-            phoneSheetGestureRef.current = null;
-            setIsPhoneSheetDragging(false);
-            setPhoneSheetDragTranslate(null);
-          }}
         >
           {viewportMode === "phone" && selectedPerson ? (
             <button
@@ -712,7 +694,29 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
               aria-expanded={effectivePanelState === "open"}
               onClick={(event) => {
                 event.stopPropagation();
+                if (ignoreNextPhoneSheetClickRef.current) {
+                  ignoreNextPhoneSheetClickRef.current = false;
+                  return;
+                }
                 handleTogglePanel();
+              }}
+              onTouchStart={handlePhoneSheetTouchStart}
+              onTouchMove={handlePhoneSheetTouchMove}
+              onTouchEnd={handlePhoneSheetTouchEnd}
+              onPointerDown={handlePhoneSheetPointerDown}
+              onPointerMove={handlePhoneSheetPointerMove}
+              onPointerUp={handlePhoneSheetPointerUp}
+              onPointerCancel={() => {
+                activePhoneSheetPointerIdRef.current = null;
+                phoneSheetGestureRef.current = null;
+                setIsPhoneSheetDragging(false);
+                setPhoneSheetDragTranslate(null);
+              }}
+              onTouchCancel={() => {
+                activePhoneSheetPointerIdRef.current = null;
+                phoneSheetGestureRef.current = null;
+                setIsPhoneSheetDragging(false);
+                setPhoneSheetDragTranslate(null);
               }}
             >
               <span className="viewer-phone-sheet-grip" aria-hidden="true" />
