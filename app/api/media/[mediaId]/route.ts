@@ -27,6 +27,7 @@ interface ThumbRedirectCacheEntry {
 
 const MEDIA_THUMB_ROUTE_CACHE_TTL_MS = 30_000;
 const MAX_PDF_PROXY_BYTES = 100 * 1024 * 1024;
+const VIDEO_DELIVERY_DIAGNOSTICS_ENABLED = process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV === "development";
 const thumbRedirectCache = new Map<string, ThumbRedirectCacheEntry>();
 const thumbRedirectInFlight = new Map<string, Promise<ThumbRedirectCacheEntry>>();
 const thumbMediaScopeCache = new Map<string, ThumbMediaScopeCacheEntry>();
@@ -152,6 +153,73 @@ function isPdfDocumentMimeType(mimeType: string | null | undefined) {
   return normalizedMimeType === "application/pdf" || normalizedMimeType.endsWith("/pdf");
 }
 
+function clipDiagnosticHeaderValue(value: string | null, maxLength = 240) {
+  if (!value) {
+    return null;
+  }
+
+  return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
+}
+
+function classifyVideoClient(request: Request) {
+  const userAgent = request.headers.get("user-agent") || "";
+  const secChUa = request.headers.get("sec-ch-ua") || "";
+  const isAndroid = /android/i.test(userAgent);
+  const isOpera = /opr\//i.test(userAgent) || /opera/i.test(secChUa);
+  const isChrome = /chrome\//i.test(userAgent) || /chromium/i.test(secChUa);
+
+  if (isAndroid && isOpera) {
+    return "opera-android";
+  }
+
+  if (isAndroid && isChrome) {
+    return "chrome-android";
+  }
+
+  if (isOpera) {
+    return "opera-other";
+  }
+
+  if (isChrome) {
+    return "chrome-other";
+  }
+
+  return "unknown";
+}
+
+function logOriginalVideoDeliveryDiagnostic(
+  eventName: string,
+  request: Request,
+  input: {
+    mediaId: string;
+    upstreamStatus?: number;
+    proxiedStatus?: number;
+    notes?: string;
+  }
+) {
+  if (!VIDEO_DELIVERY_DIAGNOSTICS_ENABLED) {
+    return;
+  }
+
+  console.warn("[video-delivery-debug]", {
+    event: eventName,
+    mediaId: input.mediaId,
+    browserHint: classifyVideoClient(request),
+    method: request.method,
+    range: clipDiagnosticHeaderValue(request.headers.get("range")),
+    ifRange: clipDiagnosticHeaderValue(request.headers.get("if-range")),
+    accept: clipDiagnosticHeaderValue(request.headers.get("accept")),
+    secFetchDest: clipDiagnosticHeaderValue(request.headers.get("sec-fetch-dest")),
+    secChUa: clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua")),
+    secChUaMobile: clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-mobile")),
+    secChUaPlatform: clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-platform")),
+    userAgent: clipDiagnosticHeaderValue(request.headers.get("user-agent")),
+    upstreamStatus: input.upstreamStatus ?? null,
+    proxiedStatus: input.proxiedStatus ?? null,
+    notes: input.notes ?? null,
+  });
+}
+
 function shouldProxyOriginalVideo(media: Awaited<ReturnType<typeof getMediaSummary>>, variant: string | null, download: boolean) {
   return media.kind === "video" && !variant && !download && !media.external_url && Boolean(media.storage_path);
 }
@@ -233,6 +301,11 @@ async function proxyOriginalVideoResponse(request: Request, context: NonNullable
     upstreamHeaders.set("If-Range", ifRangeHeader);
   }
 
+  logOriginalVideoDeliveryDiagnostic("video-proxy-request", request, {
+    mediaId: context.media.id,
+    notes: rangeHeader ? "range-request" : "full-request",
+  });
+
   const upstreamResponse = await fetch(context.resolvedAccess.url, {
     method: "GET",
     headers: upstreamHeaders,
@@ -245,8 +318,19 @@ async function proxyOriginalVideoResponse(request: Request, context: NonNullable
       status: upstreamResponse.status,
       hasRange: Boolean(rangeHeader),
     });
+    logOriginalVideoDeliveryDiagnostic("video-proxy-upstream-failed", request, {
+      mediaId: context.media.id,
+      upstreamStatus: upstreamResponse.status,
+    });
     throw new AppError(502, "Не удалось получить оригинал видео.");
   }
+
+  logOriginalVideoDeliveryDiagnostic("video-proxy-response", request, {
+    mediaId: context.media.id,
+    upstreamStatus: upstreamResponse.status,
+    proxiedStatus: upstreamResponse.status,
+    notes: upstreamResponse.status === 206 ? "partial-content" : "ok",
+  });
 
   return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
@@ -258,9 +342,17 @@ async function proxyOriginalVideoResponse(request: Request, context: NonNullable
   });
 }
 
-async function buildOriginalVideoHeadResponse(context: NonNullable<Awaited<ReturnType<typeof buildOriginalVideoProxyContext>>>) {
+async function buildOriginalVideoHeadResponse(
+  request: Request,
+  context: NonNullable<Awaited<ReturnType<typeof buildOriginalVideoProxyContext>>>
+) {
   const probeHeaders = new Headers();
   probeHeaders.set("Range", "bytes=0-0");
+
+  logOriginalVideoDeliveryDiagnostic("video-head-request", request, {
+    mediaId: context.media.id,
+    notes: "range-probe-0-0",
+  });
 
   const upstreamResponse = await fetch(context.resolvedAccess.url, {
     method: "GET",
@@ -273,8 +365,18 @@ async function buildOriginalVideoHeadResponse(context: NonNullable<Awaited<Retur
       mediaId: context.media.id,
       status: upstreamResponse.status,
     });
+    logOriginalVideoDeliveryDiagnostic("video-head-upstream-failed", request, {
+      mediaId: context.media.id,
+      upstreamStatus: upstreamResponse.status,
+    });
     throw new AppError(502, "Не удалось проверить оригинал видео.");
   }
+
+  logOriginalVideoDeliveryDiagnostic("video-head-response", request, {
+    mediaId: context.media.id,
+    upstreamStatus: upstreamResponse.status,
+    proxiedStatus: 200,
+  });
 
   return new Response(null, {
     status: 200,
@@ -358,7 +460,7 @@ export async function HEAD(request: Request, { params }: Params) {
 
     const originalVideoProxyContext = await buildOriginalVideoProxyContext(mediaId, shareToken);
     if (originalVideoProxyContext) {
-      return await buildOriginalVideoHeadResponse(originalVideoProxyContext);
+      return await buildOriginalVideoHeadResponse(request, originalVideoProxyContext);
     }
 
     const result = await resolveMediaAccess(mediaId, shareToken, variant, { download });

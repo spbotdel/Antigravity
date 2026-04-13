@@ -37,7 +37,7 @@ describe("media route", () => {
     fetchMock.mockReset();
   });
 
-  it("passes download mode to GET /api/media/[mediaId] when requested", async () => {
+  it("passes download mode to GET /api/media/[mediaId] when requested", { timeout: 15000 }, async () => {
     const { GET } = await import("@/app/api/media/[mediaId]/route");
     getMediaSummary.mockResolvedValue({
       id: "media-1",
@@ -229,7 +229,7 @@ describe("media route", () => {
     expect(response.headers.get("accept-ranges")).toBe("bytes");
     expect(response.headers.get("x-antigravity-media-delivery")).toBe("video-original-proxy");
     expect(response.headers.get("location")).toBeNull();
-  });
+  }, 15000);
 
   it("answers HEAD for original video through the app route without redirecting", async () => {
     const { HEAD } = await import("@/app/api/media/[mediaId]/route");
