@@ -406,6 +406,7 @@ function LightboxVideoPlayer({
   poster,
   autoPlay = false,
   preferNativeControls = false,
+  requireExplicitStart = false,
   shareToken,
   diagnosticContext = "PersonMediaGallery:lightbox",
   onVideoElementChange,
@@ -419,6 +420,7 @@ function LightboxVideoPlayer({
   poster?: string;
   autoPlay?: boolean;
   preferNativeControls?: boolean;
+  requireExplicitStart?: boolean;
   shareToken?: string | null;
   diagnosticContext?: string;
   onVideoElementChange?: (node: HTMLVideoElement | null) => void;
@@ -433,12 +435,18 @@ function LightboxVideoPlayer({
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSourceAttached, setIsSourceAttached] = useState(!requireExplicitStart);
   const emitVideoElementChange = useEffectEvent((node: HTMLVideoElement | null) => {
     onVideoElementChange?.(node);
   });
   const emitIntrinsicSizeChange = useEffectEvent((size: { width: number; height: number } | null) => {
     onIntrinsicSizeChange?.(size);
   });
+  const resolvedVideoSrc = isSourceAttached ? src : undefined;
+
+  useEffect(() => {
+    setIsSourceAttached(!requireExplicitStart);
+  }, [asset.id, requireExplicitStart, src]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -488,7 +496,7 @@ function LightboxVideoPlayer({
       video.addEventListener(eventName, handler);
     }
 
-    if (autoPlay && !preferNativeControls) {
+    if (autoPlay && !preferNativeControls && isSourceAttached) {
       void playVideoSafely(video);
     }
 
@@ -506,7 +514,23 @@ function LightboxVideoPlayer({
         }
       }
     };
-  }, [asset.id, autoPlay, diagnosticContext, poster, preferNativeControls, shareToken, src]);
+  }, [asset.id, autoPlay, diagnosticContext, isSourceAttached, poster, preferNativeControls, shareToken, src]);
+
+  async function handleExplicitStart() {
+    const video = videoRef.current;
+    setIsSourceAttached(true);
+
+    if (!video) {
+      return;
+    }
+
+    if (!video.currentSrc && !video.getAttribute("src")) {
+      video.src = src;
+      video.load();
+    }
+
+    await playVideoSafely(video);
+  }
 
   async function togglePlayback() {
     const video = videoRef.current;
@@ -573,19 +597,43 @@ function LightboxVideoPlayer({
       <video
         ref={videoRef}
         key={`${asset.id}-lightbox`}
-        src={src}
+        src={resolvedVideoSrc}
         poster={poster}
         className="person-media-stage-video person-media-stage-video-surface"
         style={surfaceStyle}
-        controls={preferNativeControls}
+        controls={preferNativeControls && isSourceAttached}
         playsInline
         autoPlay={preferNativeControls ? false : autoPlay}
-        preload={preferNativeControls ? "auto" : "metadata"}
+        preload={preferNativeControls ? "none" : "metadata"}
         onError={() => onError?.(videoRef.current)}
-        onClick={() => void togglePlayback()}
+        onClick={
+          requireExplicitStart && !isSourceAttached
+            ? () => {
+                void handleExplicitStart();
+              }
+            : preferNativeControls
+              ? undefined
+              : () => {
+                  void togglePlayback();
+                }
+        }
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.
       </video>
+      {requireExplicitStart && !isSourceAttached ? (
+        <div className="person-media-stage-video-start-overlay">
+          <button
+            type="button"
+            className="person-media-stage-video-start-button"
+            onClick={() => {
+              void handleExplicitStart();
+            }}
+          >
+            <Play className="person-media-stage-video-control-icon" aria-hidden="true" />
+            Загрузить видео
+          </button>
+        </div>
+      ) : null}
       </div>
       {!preferNativeControls ? (
         <div className="person-media-stage-video-controls-anchor">
@@ -757,6 +805,7 @@ function MediaPreview({
           poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
           autoPlay={autoPlayVideo}
           preferNativeControls={preferNativeExpandedVideoControls}
+          requireExplicitStart={preferNativeExpandedVideoControls}
           shareToken={shareToken}
           diagnosticContext="PersonMediaGallery:lightbox"
           onVideoElementChange={onLightboxVideoElementChange}

@@ -525,6 +525,8 @@ describe("person media gallery", () => {
 
   it("uses native controls for archive-style lightbox video on Chrome Android", async () => {
     const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => Promise.resolve());
+    const loadSpy = vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
 
     Object.defineProperty(window.navigator, "userAgent", {
       configurable: true,
@@ -554,6 +556,14 @@ describe("person media gallery", () => {
       );
 
       const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+      const startButton = within(dialog).getByRole("button", { name: "Загрузить видео" });
+      const initialVideo = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
+      expect(initialVideo).not.toBeNull();
+      expect(initialVideo?.getAttribute("src")).toBeNull();
+      expect(initialVideo?.hasAttribute("controls")).toBe(false);
+      expect(initialVideo?.preload).toBe("none");
+
+      fireEvent.click(startButton);
 
       await waitFor(() => {
         const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
@@ -561,11 +571,15 @@ describe("person media gallery", () => {
         expect(video).toHaveAttribute("src", "/api/media/media-video");
         expect(video?.hasAttribute("controls")).toBe(true);
         expect(video?.autoplay).toBe(false);
-        expect(video?.preload).toBe("auto");
-        expect(within(dialog).queryByRole("button", { name: "Воспроизвести видео" })).toBeNull();
+        expect(video?.preload).toBe("none");
+        expect(within(dialog).queryByRole("button", { name: "Загрузить видео" })).toBeNull();
         expect(within(dialog).queryByLabelText("Громкость")).toBeNull();
       });
+      expect(loadSpy).toHaveBeenCalled();
+      expect(playSpy).toHaveBeenCalled();
     } finally {
+      playSpy.mockRestore();
+      loadSpy.mockRestore();
       if (originalUserAgentDescriptor) {
         Object.defineProperty(window.navigator, "userAgent", originalUserAgentDescriptor);
       } else {
