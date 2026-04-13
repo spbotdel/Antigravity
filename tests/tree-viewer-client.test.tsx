@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TreeViewerClient } from "@/components/tree/tree-viewer-client";
@@ -9,12 +9,29 @@ vi.mock("@/components/tree/family-tree-canvas", () => ({
     people = [],
     onSelectPerson,
     selectedPersonId,
+    viewportInsetTop,
+    viewportInsetBottom,
+    viewportMarginX,
+    viewportMarginY,
+    preferInitialBoundsFit,
   }: {
     people?: Array<{ id: string; full_name: string }>;
     onSelectPerson?: (personId: string) => void;
     selectedPersonId?: string | null;
+    viewportInsetTop?: number;
+    viewportInsetBottom?: number;
+    viewportMarginX?: number;
+    viewportMarginY?: number;
+    preferInitialBoundsFit?: boolean;
   }) => (
-    <div data-testid="family-tree-canvas">
+    <div
+      data-testid="family-tree-canvas"
+      data-viewport-inset-top={viewportInsetTop ?? "none"}
+      data-viewport-inset-bottom={viewportInsetBottom ?? "none"}
+      data-viewport-margin-x={viewportMarginX ?? "none"}
+      data-viewport-margin-y={viewportMarginY ?? "none"}
+      data-prefer-initial-bounds-fit={preferInitialBoundsFit ? "true" : "false"}
+    >
       <div data-testid="canvas-selected-person">{selectedPersonId || "none"}</div>
       {people.map((person) => (
         <button key={person.id} type="button" onClick={() => onSelectPerson?.(person.id)}>
@@ -138,7 +155,9 @@ function setViewportWidth(width: number) {
     writable: true,
     value: width,
   });
-  window.dispatchEvent(new Event("resize"));
+  act(() => {
+    window.dispatchEvent(new Event("resize"));
+  });
 }
 
 describe("tree viewer client", () => {
@@ -232,6 +251,11 @@ describe("tree viewer client", () => {
     const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
     expect(layout).toHaveAttribute("data-viewport-mode", "phone");
     expect(layout).toHaveClass("viewer-panel-peek");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-top", "72");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-bottom", "76");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-x", "10");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-y", "16");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-prefer-initial-bounds-fit", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "Развернуть карточку человека: Demo Person" }));
     expect(layout).toHaveClass("viewer-panel-open");
@@ -255,6 +279,26 @@ describe("tree viewer client", () => {
 
     expect(layout).toHaveClass("viewer-panel-peek");
     expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-2");
+  });
+
+  it("opens the phone sheet from a card tap and supports swipe up/down transitions on the sheet", () => {
+    setViewportWidth(390);
+
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
+    const sheet = document.querySelector(".viewer-info-rail") as HTMLElement;
+
+    fireEvent.click(sheet);
+    expect(layout).toHaveClass("viewer-panel-open");
+
+    fireEvent.touchStart(sheet, { touches: [{ clientX: 160, clientY: 220 }] });
+    fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 166, clientY: 276 }] });
+    expect(layout).toHaveClass("viewer-panel-peek");
+
+    fireEvent.touchStart(sheet, { touches: [{ clientX: 164, clientY: 272 }] });
+    fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 160, clientY: 212 }] });
+    expect(layout).toHaveClass("viewer-panel-open");
   });
 
   it("does not render an empty collapsed tab when no selected person exists", () => {

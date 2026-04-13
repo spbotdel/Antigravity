@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type TouchEvent as ReactTouchEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, FileText } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -22,6 +22,12 @@ type ViewerPanelState = "hidden" | "peek" | "collapsed" | "open";
 
 const PHONE_VIEWER_MAX_WIDTH = 767;
 const TABLET_VIEWER_MAX_WIDTH = 1180;
+const PHONE_VIEWER_SWIPE_THRESHOLD = 38;
+const PHONE_VIEWER_SWIPE_MAX_HORIZONTAL = 56;
+const PHONE_VIEWER_CANVAS_INSET_TOP = 72;
+const PHONE_VIEWER_CANVAS_INSET_BOTTOM = 76;
+const PHONE_VIEWER_CANVAS_MARGIN_X = 10;
+const PHONE_VIEWER_CANVAS_MARGIN_Y = 16;
 
 function getViewerViewportMode(width: number): ViewerViewportMode {
   if (width <= PHONE_VIEWER_MAX_WIDTH) {
@@ -209,6 +215,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   const generationCount = useMemo(() => countTreeGenerations(snapshot), [snapshot.people, snapshot.parentLinks]);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const infoRailRef = useRef<HTMLDivElement | null>(null);
+  const phoneSheetGestureRef = useRef<{ x: number; y: number; scrollTop: number } | null>(null);
   const infoRailId = useId();
   const personPhotoPreviewUrls = useMemo(() => {
     const rawUrls = buildPersonPhotoPreviewUrls(snapshot);
@@ -350,7 +357,68 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
     });
   }
 
+  function handlePhoneSheetTouchStart(event: ReactTouchEvent<HTMLElement>) {
+    if (viewportMode !== "phone" || !selectedPerson) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    if (!touch) {
+      return;
+    }
+
+    phoneSheetGestureRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      scrollTop: infoRailRef.current?.scrollTop ?? 0,
+    };
+  }
+
+  function handlePhoneSheetTouchEnd(event: ReactTouchEvent<HTMLElement>) {
+    if (viewportMode !== "phone" || !selectedPerson) {
+      phoneSheetGestureRef.current = null;
+      return;
+    }
+
+    const gesture = phoneSheetGestureRef.current;
+    phoneSheetGestureRef.current = null;
+
+    const touch = event.changedTouches[0];
+    if (!gesture || !touch) {
+      return;
+    }
+
+    const deltaX = touch.clientX - gesture.x;
+    const deltaY = touch.clientY - gesture.y;
+    const sheetScrollTop = infoRailRef.current?.scrollTop ?? 0;
+    const startedAtTop = gesture.scrollTop <= 4;
+    const endedAtTop = sheetScrollTop <= 4;
+
+    if (Math.abs(deltaX) > PHONE_VIEWER_SWIPE_MAX_HORIZONTAL || Math.abs(deltaY) < PHONE_VIEWER_SWIPE_THRESHOLD) {
+      return;
+    }
+
+    if (deltaY < 0 && effectivePanelState !== "open") {
+      setPanelState("open");
+      return;
+    }
+
+    if (deltaY > 0 && effectivePanelState === "open" && startedAtTop && endedAtTop) {
+      setPanelState("peek");
+    }
+  }
+
   const canResizeRail = viewportMode === "desktop" && effectivePanelState === "open";
+  const phoneSheetBodyStyle =
+    viewportMode === "phone" && effectivePanelState !== "open"
+      ? ({
+          maxHeight: 0,
+          overflow: "hidden",
+          pointerEvents: "none",
+          opacity: 0,
+          paddingTop: 0,
+        } as CSSProperties)
+      : undefined;
   const toggleLabel =
     effectivePanelState === "open"
       ? `Свернуть карточку человека: ${selectedPerson?.full_name || ""}`
@@ -387,6 +455,11 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
           parentLinks={snapshot.parentLinks}
           partnerships={snapshot.partnerships}
           personPhotoUrls={personPhotoPreviewUrls}
+          viewportInsetTop={viewportMode === "phone" ? PHONE_VIEWER_CANVAS_INSET_TOP : 0}
+          viewportInsetBottom={viewportMode === "phone" ? PHONE_VIEWER_CANVAS_INSET_BOTTOM : 0}
+          viewportMarginX={viewportMode === "phone" ? PHONE_VIEWER_CANVAS_MARGIN_X : undefined}
+          viewportMarginY={viewportMode === "phone" ? PHONE_VIEWER_CANVAS_MARGIN_Y : undefined}
+          preferInitialBoundsFit={viewportMode === "phone"}
         />
       </Card>
       {canResizeRail ? (
@@ -408,15 +481,34 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
           className="info-rail viewer-info-rail utility-section-card p-6"
           data-viewport-mode={viewportMode}
           data-panel-state={effectivePanelState}
+          onClick={() => {
+            if (viewportMode === "phone" && selectedPerson && effectivePanelState !== "open") {
+              setPanelState("open");
+            }
+          }}
+          onTouchStart={handlePhoneSheetTouchStart}
+          onTouchEnd={handlePhoneSheetTouchEnd}
         >
           {viewportMode === "phone" && selectedPerson ? (
-            <button type="button" className="viewer-phone-sheet-handle" aria-label={toggleLabel} onClick={handleTogglePanel}>
+            <button
+              type="button"
+              className="viewer-phone-sheet-toggle"
+              aria-label={toggleLabel}
+              aria-expanded={effectivePanelState === "open"}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleTogglePanel();
+              }}
+            >
               <span className="viewer-phone-sheet-grip" aria-hidden="true" />
+              <span className="viewer-phone-sheet-copy">
+                <span className="viewer-phone-sheet-title">{selectedPerson.full_name}</span>
+              </span>
             </button>
           ) : null}
           {selectedPerson ? (
             <>
-              <div className="viewer-info-rail-body">
+              <div className="viewer-info-rail-body" style={phoneSheetBodyStyle}>
                 <div className="viewer-info-rail-header">
                   <div className="viewer-person-summary utility-note-card">
                     <div className="viewer-person-summary-copy">

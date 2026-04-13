@@ -5,7 +5,7 @@
 <!-- FRAMEWORK:ARCHITECTURE:START -->
 ## Current Architecture Snapshot
 
-- Generated at (UTC): `2026-04-07 20:41:18Z`
+- Generated at (UTC): `2026-04-12 20:42:32Z`
 - Primary runtime: `Next.js App Router web application`
 - Application stack: `Next.js 16.1.6 + React 19.2.4 + TypeScript + Supabase`
 - Backend/data layer: `Supabase auth, database, RLS, and storage`
@@ -40,6 +40,8 @@
   - narrower tree pages should use specialized repository page loaders when possible
 - Builder normal tree mode now behaves as a workspace surface rather than a page hero: the page-level hero block is removed, the section nav is mounted in-stage, and the tree heading is rendered as a text-only overlay inside the canvas shell.
 - Expanded Builder gallery mode intentionally keeps its separate stage-header/back-action path; the in-stage overlay pattern applies to normal tree mode only.
+- Viewer person details now use a viewport-specific shell over the same snapshot/canvas state: desktop keeps a resizable side rail, tablet uses an overlay rail, and phone uses a bottom sheet with `peek/open/hidden` states.
+- Shared responsive media behavior must stay context-scoped: fullscreen lightbox, inline gallery, archive controls, and viewer rails should not rely on one generic mobile rule.
 - Keep project-specific architectural decisions here only when they cannot be inferred from repository structure.
 
 ## System Architecture
@@ -137,10 +139,10 @@ The display tree is derived and must not be treated as the canonical domain mode
 <!-- FRAMEWORK:AUTO:START -->
 ## Framework Auto Sync
 
-- Updated at (UTC): `2026-04-07 20:41:18Z`
-- Active branch: `feature/ui-ux-final-polish`
-- Git status: `STATUS:6 files`
-- Git diff: `DIFF:280 lines`
+- Updated at (UTC): `2026-04-12 20:42:32Z`
+- Active branch: `feature/ux-media-update`
+- Git status: `STATUS:9 files`
+- Git diff: `DIFF:188 lines`
 
 ### Detected Stack
 
@@ -171,23 +173,26 @@ The display tree is derived and must not be treated as the canonical domain mode
 
 ### Recently Changed Paths
 
-- `DECISIONS.md`
-- `app/globals.css`
-- `app/tree/[slug]/audit/page.tsx`
-- `app/tree/[slug]/media/page.tsx`
-- `app/tree/[slug]/members/page.tsx`
-- `app/tree/[slug]/settings/page.tsx`
+- `.claude/ARCHITECTURE.md`
+- `.claude/BACKLOG.md`
+- `.claude/SNAPSHOT.md`
+- `docs/research/family-tree-v1-slava-edition-backup-restore-runbook-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-engineering-backlog-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-implementation-plan-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-launch-checklist-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-owner-playbook-2026-03-06.md`
+- `docs/research/family-tree-v1-slava-edition-plan-2026-03-06.md`
 <!-- FRAMEWORK:AUTO:END -->
 
 <!-- FRAMEWORK:SESSION:START -->
 ## Latest Completion Session
 
-- Completed at (UTC): `2026-04-07 20:41:18Z`
-- Branch: `feature/ui-ux-final-polish`
-- Git status summary: `STATUS:6 files`
-- Git diff summary: `DIFF:280 lines`
+- Completed at (UTC): `2026-04-12 20:42:32Z`
+- Branch: `feature/ux-media-update`
+- Git status summary: `STATUS:9 files`
+- Git diff summary: `DIFF:188 lines`
 
-- Session summary: `6` changed files, `280` diff lines, `6` tracked changed paths.
+- Session summary: `9` changed files, `188` diff lines, `9` tracked changed paths.
 
 ### Key Task Statuses
 
@@ -195,8 +200,8 @@ The display tree is derived and must not be treated as the canonical domain mode
 - `project_baseline`: `success` (`BASELINE:created:0:updated:0`)
 - `security_cleanup`: `success` (`SECURITY:skipped:dialogs_disabled`)
 - `dialog_export`: `success` (`EXPORT:skipped:disabled`)
-- `git_status`: `success` (`STATUS:6 files`)
-- `git_diff`: `success` (`DIFF:280 lines`)
+- `git_status`: `success` (`STATUS:9 files`)
+- `git_diff`: `success` (`DIFF:188 lines`)
 <!-- FRAMEWORK:SESSION:END -->
 
 ## Current Media Architecture
@@ -205,26 +210,18 @@ The display tree is derived and must not be treated as the canonical domain mode
 - Archive organization is modeled through `tree_media_albums` and album items, with both manual albums and uploader albums supported.
 - Photo delivery already has a variant-aware foundation: preview reads may use `thumb/small/medium`, while originals should remain an explicit full-view path.
 - The binary plane is in transitional mode: current file-backed reads still preserve object-storage compatibility, while Cloudflare R2 foundation is already present in env/runtime config for the next migration stage.
+- Viewer person/media inspection is now explicitly viewport-specific UI state layered over the same snapshot and selection model: desktop resizable rail, tablet overlay rail, phone bottom sheet.
+- Media/archive responsive polish now includes mobile tab-grid classes, larger coarse-pointer tile actions, and bounded lightbox navigation at list edges instead of wraparound behavior.
 - Architectural boundary remains unchanged: `app/api/media*` stays thin, repository owns media/archive mutations, and rendering consumes repository snapshots rather than issuing direct DB traversal.
 - Active architecture-driving task: `Media Upload Flow V2` from `tasks/active/media-upload-flow-v2` (`in_progress`).
 - Server-side Supabase transport is now a first-class runtime rule: native Node fetch is preferred, while the PowerShell bridge remains fallback/debug transport only.
 - Tree runtime now distinguishes between full snapshot consumers and narrow page-data consumers; `audit`, `members`, `media`, and `settings` should stay on specialized loaders instead of drifting back to full snapshots.
-- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
-- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
-- "
-- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
-- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
-- Custom marker-driven runtime rule should surface in startup memory.\n")
 
 ## Current Runtime Rules
 
 - Server-side Supabase transport is `native-first`: `lib/supabase/admin-rest.ts` and `lib/supabase/server-fetch.ts` should prefer native Node fetch and use the PowerShell bridge only as fallback or explicit override.
 - Tree pages should not default to `getTreeSnapshot(...)`: `audit`, `members`, `media`, and `settings` now rely on specialized repository page-data loaders, while full snapshots remain for real snapshot consumers such as viewer and snapshot APIs.
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
-- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
-- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
-- "
-- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.\n"
-- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.\n"
-- Custom marker-driven runtime rule should surface in startup memory.\n")
+- Shared responsive media classes must stay scoped by context: fullscreen lightbox, inline gallery, archive controls, and viewer rails should not share unsafe global mobile rules.
+- Viewer detail chrome is viewport-specific UI shell behavior: desktop uses a resizable rail, tablet an overlay rail, and phone a bottom sheet; these shell changes must preserve snapshot-driven selection and avoid empty floating controls.
 

@@ -338,7 +338,13 @@ interface FamilyTreeCanvasProps {
   personPhotoUrls?: Record<string, string>;
   personPhotoCrops?: Record<string, AvatarCropValue>;
   viewportHeightHint?: number;
+  viewportInsetTop?: number;
+  viewportInsetBottom?: number;
+  viewportInsetLeft?: number;
   viewportInsetRight?: number;
+  viewportMarginX?: number;
+  viewportMarginY?: number;
+  preferInitialBoundsFit?: boolean;
 }
 
 interface PositionedCanvasNode {
@@ -653,10 +659,10 @@ function isPointComfortablyVisible(
   point: { x: number; y: number },
   width: number,
   height: number,
-  insets: CanvasViewportInsets = {}
+  insets: CanvasViewportInsets = {},
+  viewportMargins = getBuilderViewportMargins(width)
 ) {
   const frame = getCanvasViewportFrame(width, height, insets);
-  const viewportMargins = getBuilderViewportMargins(frame.width);
   const screenX = transform.applyX(point.x);
   const screenY = transform.applyY(point.y);
 
@@ -678,6 +684,18 @@ function getBuilderViewportMargins(width: number) {
   }
 
   return { x: BUILDER_VIEWPORT_MARGIN_X, y: BUILDER_VIEWPORT_MARGIN_Y };
+}
+
+function resolveViewportMargins(width: number, viewportMarginX?: number, viewportMarginY?: number) {
+  if (typeof viewportMarginX === "number" || typeof viewportMarginY === "number") {
+    const fallback = getBuilderViewportMargins(width);
+    return {
+      x: typeof viewportMarginX === "number" ? viewportMarginX : fallback.x,
+      y: typeof viewportMarginY === "number" ? viewportMarginY : fallback.y,
+    };
+  }
+
+  return getBuilderViewportMargins(width);
 }
 
 function getBuilderSelectedMinScale(width: number) {
@@ -1348,7 +1366,13 @@ export function FamilyTreeCanvas({
   personPhotoUrls = EMPTY_PERSON_PHOTO_URLS,
   personPhotoCrops = {},
   viewportHeightHint = 0,
-  viewportInsetRight = 0
+  viewportInsetTop = 0,
+  viewportInsetBottom = 0,
+  viewportInsetLeft = 0,
+  viewportInsetRight = 0,
+  viewportMarginX,
+  viewportMarginY,
+  preferInitialBoundsFit = false,
 }: FamilyTreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onSelectPersonRef = useRef(onSelectPerson);
@@ -1429,8 +1453,12 @@ export function FamilyTreeCanvas({
     const width = container.clientWidth || 960;
     const height = container.clientHeight || 620;
     const viewportInsets: CanvasViewportInsets = {
+      top: Math.max(0, Math.min(viewportInsetTop, Math.max(height - 120, 0))),
+      bottom: Math.max(0, Math.min(viewportInsetBottom, Math.max(height - 120, 0))),
+      left: Math.max(0, Math.min(viewportInsetLeft, Math.max(width - 120, 0))),
       right: Math.max(0, Math.min(viewportInsetRight, Math.max(width - 120, 0)))
     };
+    const viewportMargins = resolveViewportMargins(width, viewportMarginX, viewportMarginY);
 
     const svg = d3.select(container).append("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("width", "100%").attr("height", "100%");
     const graph = svg.append("g");
@@ -1493,7 +1521,6 @@ export function FamilyTreeCanvas({
       const selectedChanged = lastSelectedPersonIdRef.current !== selectedPersonId;
       const selectedMinScale = getBuilderSelectedMinScale(width);
       const focusRatios = getBuilderFocusRatios(width);
-      const viewportMargins = getBuilderViewportMargins(width);
       layout.nodes.forEach((node) => {
         if (node.type !== "person" || !node.id) {
           return;
@@ -1955,7 +1982,7 @@ export function FamilyTreeCanvas({
         if (zoomTransformRef.current) {
           if (
             selectedChanged &&
-            (!isPointComfortablyVisible(zoomTransformRef.current, selectedCanvasNode, width, height, viewportInsets) ||
+            (!isPointComfortablyVisible(zoomTransformRef.current, selectedCanvasNode, width, height, viewportInsets, viewportMargins) ||
               zoomTransformRef.current.k < selectedMinScale)
           ) {
             const nextScale = Math.max(zoomTransformRef.current.k, selectedMinScale);
@@ -1967,7 +1994,14 @@ export function FamilyTreeCanvas({
             svg.call(zoom.transform, zoomTransformRef.current);
           }
         } else {
-          const initialTransform = getBoundsFitTransform(width, height, bounds, viewportMargins, selectedMinScale, viewportInsets);
+          const initialTransform = getBoundsFitTransform(
+            width,
+            height,
+            bounds,
+            viewportMargins,
+            preferInitialBoundsFit ? 0 : selectedMinScale,
+            viewportInsets
+          );
           if (initialTransform) {
             svg.call(zoom.transform, initialTransform);
           } else {
@@ -2368,12 +2402,32 @@ export function FamilyTreeCanvas({
     if (zoomTransformRef.current) {
       svg.call(zoom.transform, zoomTransformRef.current);
     } else {
-      const initialTransform = getBoundsFitTransform(width, height, bounds, getBuilderViewportMargins(width), 0, viewportInsets);
+      const initialTransform = getBoundsFitTransform(width, height, bounds, viewportMargins, 0, viewportInsets);
       if (initialTransform) {
         svg.call(zoom.transform, initialTransform);
       }
     }
-  }, [createMenuOpen, displayMode, editingPartnershipId, hierarchy, interactive, parentLinks, partnerships, people, personPhotoCrops, personPhotoUrls, selectedPersonId, viewportHeightHint, viewportInsetRight]);
+  }, [
+    createMenuOpen,
+    displayMode,
+    editingPartnershipId,
+    hierarchy,
+    interactive,
+    parentLinks,
+    partnerships,
+    people,
+    personPhotoCrops,
+    personPhotoUrls,
+    preferInitialBoundsFit,
+    selectedPersonId,
+    viewportHeightHint,
+    viewportInsetBottom,
+    viewportInsetLeft,
+    viewportInsetRight,
+    viewportInsetTop,
+    viewportMarginX,
+    viewportMarginY,
+  ]);
 
   if (!tree) {
     return (
