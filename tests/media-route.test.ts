@@ -165,6 +165,27 @@ describe("media route", () => {
     expect(response.headers.get("location")).toBe("https://example.com/video-thumb.webp");
   });
 
+  it("returns a direct client playback url payload when explicitly requested", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
+    resolveMediaAccess.mockResolvedValue({
+      url: "https://example.com/direct-video",
+      kind: "video",
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/media/media-1?playback=client-url"),
+      {
+        params: Promise.resolve({ mediaId: "media-1" })
+      }
+    );
+    const payload = await response.json();
+
+    expect(resolveMediaAccess).toHaveBeenCalledWith("media-1", null, null, { download: false });
+    expect(response.status).toBe(200);
+    expect(payload.url).toBe("https://example.com/direct-video");
+    expect(payload.kind).toBe("video");
+  });
+
   it("proxies original video GET requests through the app route instead of redirecting", async () => {
     const { GET } = await import("@/app/api/media/[mediaId]/route");
     getMediaSummary.mockResolvedValue({
