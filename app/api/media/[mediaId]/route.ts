@@ -195,6 +195,31 @@ function classifyVideoClient(request: Request) {
   return "unknown";
 }
 
+function getDiagnosticUrlInfo(value: string | null | undefined, baseUrl: string) {
+  if (!value) {
+    return {
+      kind: "-",
+      path: "-",
+      origin: "-",
+    };
+  }
+
+  try {
+    const parsed = new URL(value, baseUrl);
+    return {
+      kind: parsed.origin === new URL(baseUrl).origin ? "same-origin" : "cross-origin",
+      path: clipDiagnosticHeaderValue(parsed.pathname, 80) || "-",
+      origin: clipDiagnosticHeaderValue(parsed.origin, 80) || "-",
+    };
+  } catch {
+    return {
+      kind: "invalid",
+      path: clipDiagnosticHeaderValue(value, 80) || "-",
+      origin: "-",
+    };
+  }
+}
+
 function logClientPlaybackDiagnostic(
   request: Request,
   mediaId: string,
@@ -204,27 +229,50 @@ function logClientPlaybackDiagnostic(
     return;
   }
 
+  const browser = normalizeDiagnosticToken(classifyVideoClient(request));
+  const requestUrl = request.url;
+  const srcInfo = getDiagnosticUrlInfo(payload.src, requestUrl);
+  const currentSrcInfo = getDiagnosticUrlInfo(payload.currentSrc, payload.pageUrl || requestUrl);
+
   console.warn(
     [
-      "[video-client-debug]",
+      "[video-client-debug-core]",
       `event=${normalizeDiagnosticToken(payload.event)}`,
       `mediaId=${normalizeDiagnosticToken(mediaId)}`,
-      `browser=${normalizeDiagnosticToken(classifyVideoClient(request))}`,
+      `browser=${browser}`,
       `context=${normalizeDiagnosticToken(payload.context)}`,
-      `errorCode=${normalizeDiagnosticToken(payload.errorCode)}`,
-      `networkState=${normalizeDiagnosticToken(payload.networkState)}`,
-      `readyState=${normalizeDiagnosticToken(payload.readyState)}`,
-      `currentTime=${normalizeDiagnosticToken(payload.currentTime)}`,
-      `duration=${normalizeDiagnosticToken(payload.duration)}`,
+      `code=${normalizeDiagnosticToken(payload.errorCode)}`,
+      `net=${normalizeDiagnosticToken(payload.networkState)}`,
+      `ready=${normalizeDiagnosticToken(payload.readyState)}`,
+      `time=${normalizeDiagnosticToken(payload.currentTime)}`,
+      `dur=${normalizeDiagnosticToken(payload.duration)}`,
+    ].join(" ")
+  );
+
+  console.warn(
+    [
+      "[video-client-debug-flags]",
+      `mediaId=${normalizeDiagnosticToken(mediaId)}`,
+      `browser=${browser}`,
       `controls=${normalizeDiagnosticToken(payload.controls)}`,
-      `playsInline=${normalizeDiagnosticToken(payload.playsInline)}`,
-      `autoPlay=${normalizeDiagnosticToken(payload.autoPlay)}`,
+      `inline=${normalizeDiagnosticToken(payload.playsInline)}`,
+      `auto=${normalizeDiagnosticToken(payload.autoPlay)}`,
       `muted=${normalizeDiagnosticToken(payload.muted)}`,
       `preload=${normalizeDiagnosticToken(payload.preload)}`,
       `dest=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-fetch-dest"), 40))}`,
       `accept=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("accept"), 80))}`,
-      `src=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(payload.src, 120))}`,
-      `currentSrc=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(payload.currentSrc, 120))}`,
+    ].join(" ")
+  );
+
+  console.warn(
+    [
+      "[video-client-debug-src]",
+      `mediaId=${normalizeDiagnosticToken(mediaId)}`,
+      `browser=${browser}`,
+      `srcKind=${normalizeDiagnosticToken(srcInfo.kind)}`,
+      `srcPath=${normalizeDiagnosticToken(srcInfo.path)}`,
+      `currentKind=${normalizeDiagnosticToken(currentSrcInfo.kind)}`,
+      `currentPath=${normalizeDiagnosticToken(currentSrcInfo.path)}`,
       `page=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(payload.pageUrl, 120))}`,
     ].join(" ")
   );
