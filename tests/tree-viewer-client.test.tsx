@@ -281,8 +281,27 @@ describe("tree viewer client", () => {
     expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-2");
   });
 
-  it("opens the phone sheet from a card tap and supports swipe up/down transitions on the sheet", () => {
+  it("opens the phone sheet from a card tap and visually follows drag gestures before settling open or peek", () => {
     setViewportWidth(390);
+
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList?.contains("viewer-info-rail")) {
+        return {
+          x: 0,
+          y: 0,
+          top: 480,
+          left: 8,
+          right: 382,
+          bottom: 800,
+          width: 374,
+          height: 320,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+
+      return originalGetBoundingClientRect.call(this);
+    });
 
     render(<TreeViewerClient snapshot={createSnapshot()} />);
 
@@ -293,12 +312,18 @@ describe("tree viewer client", () => {
     expect(layout).toHaveClass("viewer-panel-open");
 
     fireEvent.touchStart(sheet, { touches: [{ clientX: 160, clientY: 220 }] });
-    fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 166, clientY: 276 }] });
+    fireEvent.touchMove(sheet, { touches: [{ clientX: 164, clientY: 392 }] });
+    expect(sheet.style.transform).toBe("translateY(172px)");
+    fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 166, clientY: 388 }] });
     expect(layout).toHaveClass("viewer-panel-peek");
 
     fireEvent.touchStart(sheet, { touches: [{ clientX: 164, clientY: 272 }] });
-    fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 160, clientY: 212 }] });
+    fireEvent.touchMove(sheet, { touches: [{ clientX: 160, clientY: 120 }] });
+    expect(sheet.style.transform).toBe("translateY(112px)");
+    fireEvent.touchEnd(sheet, { changedTouches: [{ clientX: 160, clientY: 124 }] });
     expect(layout).toHaveClass("viewer-panel-open");
+
+    rectSpy.mockRestore();
   });
 
   it("does not render an empty collapsed tab when no selected person exists", () => {

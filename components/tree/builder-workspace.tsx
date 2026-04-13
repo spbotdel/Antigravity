@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type Dispatch, type FormEvent, type KeyboardEvent, type PointerEvent, type SetStateAction } from "react";
 import { ArrowUpRight, CalendarDays, Camera, Pencil } from "lucide-react";
 import { format as formatDateFn, parseISO } from "date-fns";
 
@@ -44,6 +44,7 @@ type BuilderMediaMode = "all" | "photo" | "video" | "document" | "external";
 type BuilderSelectableMediaMode = Extract<BuilderMediaMode, "photo" | "video">;
 type BuilderPersonMode = "create" | "edit";
 type BuilderUploadScope = "photo" | "video" | "document";
+type BuilderViewportMode = "desktop" | "tablet" | "phone";
 type CreateContext =
   | { type: "standalone" }
   | { type: "parent"; anchorPersonId: string }
@@ -60,6 +61,28 @@ const MAX_DOCUMENT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 const BIO_AUTOSAVE_DEBOUNCE_MS = 800;
 const BUILDER_META_DATE_START_MONTH = new Date(1900, 0);
 const BUILDER_META_DATE_END_MONTH = new Date(new Date().getFullYear() + 1, 11);
+const BUILDER_PHONE_MAX_WIDTH = 767;
+const BUILDER_TABLET_MAX_WIDTH = 1180;
+const BUILDER_PHONE_CANVAS_INSET_TOP = 54;
+const BUILDER_PHONE_CANVAS_INSET_BOTTOM = 16;
+const BUILDER_PHONE_CANVAS_MARGIN_X = 6;
+const BUILDER_PHONE_CANVAS_MARGIN_Y = 8;
+const BUILDER_TABLET_CANVAS_INSET_TOP = 48;
+const BUILDER_TABLET_CANVAS_INSET_BOTTOM = 18;
+const BUILDER_TABLET_CANVAS_MARGIN_X = 20;
+const BUILDER_TABLET_CANVAS_MARGIN_Y = 18;
+
+function getBuilderViewportMode(width: number): BuilderViewportMode {
+  if (width <= BUILDER_PHONE_MAX_WIDTH) {
+    return "phone";
+  }
+
+  if (width <= BUILDER_TABLET_MAX_WIDTH) {
+    return "tablet";
+  }
+
+  return "desktop";
+}
 
 type MediaUploadKind = "photo" | "video" | "document" | "unknown";
 type MediaUploadStatus = "queued" | "uploading" | "finalizing" | "done" | "error";
@@ -777,6 +800,7 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
   const [currentSnapshot, setCurrentSnapshot] = useState(snapshot);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isMediaLoaded, setIsMediaLoaded] = useState(mediaLoaded);
+  const [viewportMode, setViewportMode] = useState<BuilderViewportMode>("desktop");
   const [visualRootPersonId, setVisualRootPersonId] = useState<string | null>(getBuilderDefaultRootId(snapshot));
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(getBuilderDefaultRootId(snapshot));
   const [activePanel, setActivePanel] = useState<BuilderPanel>("person");
@@ -852,6 +876,35 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
           },
     [currentSnapshot, isClientReady]
   );
+  const builderCanvasViewportConfig = useMemo(() => {
+    if (viewportMode === "phone") {
+      return {
+        insetTop: BUILDER_PHONE_CANVAS_INSET_TOP,
+        insetBottom: BUILDER_PHONE_CANVAS_INSET_BOTTOM,
+        marginX: BUILDER_PHONE_CANVAS_MARGIN_X,
+        marginY: BUILDER_PHONE_CANVAS_MARGIN_Y,
+        preferInitialBoundsFit: true,
+      };
+    }
+
+    if (viewportMode === "tablet") {
+      return {
+        insetTop: BUILDER_TABLET_CANVAS_INSET_TOP,
+        insetBottom: BUILDER_TABLET_CANVAS_INSET_BOTTOM,
+        marginX: BUILDER_TABLET_CANVAS_MARGIN_X,
+        marginY: BUILDER_TABLET_CANVAS_MARGIN_Y,
+        preferInitialBoundsFit: true,
+      };
+    }
+
+    return {
+      insetTop: 0,
+      insetBottom: 0,
+      marginX: undefined,
+      marginY: undefined,
+      preferInitialBoundsFit: false,
+    };
+  }, [viewportMode]);
   const peopleById = useMemo(() => new Map(renderSnapshot.people.map((person) => [person.id, person])), [renderSnapshot.people]);
   const effectiveSnapshot = useMemo(
     () => ({
@@ -863,6 +916,23 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
     }),
     [renderSnapshot, visualRootPersonId]
   );
+
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const syncViewportMode = () => {
+      setViewportMode(getBuilderViewportMode(window.innerWidth));
+    };
+
+    syncViewportMode();
+    window.addEventListener("resize", syncViewportMode);
+
+    return () => {
+      window.removeEventListener("resize", syncViewportMode);
+    };
+  }, []);
   const displayTree = useMemo(() => (isClientReady ? buildBuilderDisplayTree(effectiveSnapshot) : null), [effectiveSnapshot, isClientReady]);
   const generationCount = useMemo(() => countTreeGenerations(currentSnapshot), [currentSnapshot.people, currentSnapshot.parentLinks]);
   const personPhotoPreviewUrls = useMemo(
@@ -3010,6 +3080,11 @@ export function BuilderWorkspace({ snapshot, mediaLoaded = true }: BuilderWorksp
                     personPhotoUrls={personPhotoPreviewUrls}
                     personPhotoCrops={personAvatarCrops}
                     viewportHeightHint={canvasHeight}
+                    viewportInsetTop={builderCanvasViewportConfig.insetTop}
+                    viewportInsetBottom={builderCanvasViewportConfig.insetBottom}
+                    viewportMarginX={builderCanvasViewportConfig.marginX}
+                    viewportMarginY={builderCanvasViewportConfig.marginY}
+                    preferInitialBoundsFit={builderCanvasViewportConfig.preferInitialBoundsFit}
                     onPartnershipDateChange={savePartnershipDate}
                     onNodeAction={handleCanvasAction}
                     onEmptyAction={startStandaloneCreate}

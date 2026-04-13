@@ -12,8 +12,41 @@ import { BuilderWorkspace } from "@/components/tree/builder-workspace";
 import { Calendar } from "@/components/ui/calendar";
 import type { TreeSnapshot } from "@/lib/types";
 
+const initialInnerWidth = window.innerWidth;
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+
+  window.dispatchEvent(new Event("resize"));
+}
+
 vi.mock("@/components/tree/family-tree-canvas", () => ({
-  FamilyTreeCanvas: () => <div data-testid="family-tree-canvas" />,
+  FamilyTreeCanvas: ({
+    preferInitialBoundsFit,
+    viewportInsetTop,
+    viewportInsetBottom,
+    viewportMarginX,
+    viewportMarginY,
+  }: {
+    preferInitialBoundsFit?: boolean;
+    viewportInsetTop?: number;
+    viewportInsetBottom?: number;
+    viewportMarginX?: number;
+    viewportMarginY?: number;
+  }) => (
+    <div
+      data-testid="family-tree-canvas"
+      data-prefer-initial-bounds-fit={preferInitialBoundsFit ? "true" : "false"}
+      data-viewport-inset-top={viewportInsetTop ?? "none"}
+      data-viewport-inset-bottom={viewportInsetBottom ?? "none"}
+      data-viewport-margin-x={viewportMarginX ?? "none"}
+      data-viewport-margin-y={viewportMarginY ?? "none"}
+    />
+  ),
 }));
 
 vi.mock("@/components/tree/person-media-gallery", () => ({
@@ -107,6 +140,7 @@ vi.mock("@/lib/utils", async () => {
 
 afterEach(() => {
   cleanup();
+  setViewportWidth(initialInnerWidth);
   try {
     vi.runOnlyPendingTimers();
     vi.clearAllTimers();
@@ -424,6 +458,36 @@ describe("builder workspace", () => {
       const shell = container.querySelector(".builder-canvas-shell");
       expect(shell).toHaveStyle({ height: "914px" });
     });
+  });
+
+  it("passes phone bounds-fit props to the builder canvas on initial mobile load", async () => {
+    setViewportWidth(390);
+
+    render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-prefer-initial-bounds-fit", "true");
+    });
+
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-top", "54");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-bottom", "16");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-x", "6");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-y", "8");
+  });
+
+  it("passes tablet bounds-fit props to the builder canvas on initial tablet load", async () => {
+    setViewportWidth(1024);
+
+    render(<BuilderWorkspace snapshot={createSnapshot()} mediaLoaded />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-prefer-initial-bounds-fit", "true");
+    });
+
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-top", "48");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-bottom", "18");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-x", "20");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-y", "18");
   });
 
   it("renders a minimal tree overlay inside the canvas shell in tree mode", async () => {

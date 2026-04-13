@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type TouchEvent as ReactTouchEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, FileText } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -19,9 +19,12 @@ interface TreeViewerClientProps {
 
 type ViewerViewportMode = "desktop" | "tablet" | "phone";
 type ViewerPanelState = "hidden" | "peek" | "collapsed" | "open";
+type PhoneSheetGestureAxis = "horizontal" | "vertical";
 
 const PHONE_VIEWER_MAX_WIDTH = 767;
 const TABLET_VIEWER_MAX_WIDTH = 1180;
+const PHONE_VIEWER_PEEK_HEIGHT = 56;
+const PHONE_VIEWER_DRAG_START_THRESHOLD = 10;
 const PHONE_VIEWER_SWIPE_THRESHOLD = 30;
 const PHONE_VIEWER_SWIPE_MAX_HORIZONTAL = 44;
 const PHONE_VIEWER_CANVAS_INSET_TOP = 56;
@@ -51,6 +54,25 @@ function normalizeViewerPanelState(currentState: ViewerPanelState, hasSelection:
   }
 
   return currentState === "open" ? "open" : "collapsed";
+}
+
+function getPhoneSheetPeekTranslate(height: number | null) {
+  if (!height || height <= PHONE_VIEWER_PEEK_HEIGHT) {
+    return 0;
+  }
+
+  return height - PHONE_VIEWER_PEEK_HEIGHT;
+}
+
+interface PhoneSheetGestureState {
+  x: number;
+  y: number;
+  scrollTop: number;
+  startTranslate: number;
+  currentTranslate: number;
+  peekTranslate: number;
+  axis: PhoneSheetGestureAxis | null;
+  didDrag: boolean;
 }
 
 function withShareToken(url: string, shareToken?: string | null) {
@@ -211,11 +233,16 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   const [infoRailWidth, setInfoRailWidth] = useState(392);
   const [isResizing, setIsResizing] = useState(false);
   const [collapsedRailHeight, setCollapsedRailHeight] = useState<number | null>(null);
+  const [phoneSheetHeight, setPhoneSheetHeight] = useState<number | null>(null);
+  const [phoneSheetDragTranslate, setPhoneSheetDragTranslate] = useState<number | null>(null);
+  const [isPhoneSheetDragging, setIsPhoneSheetDragging] = useState(false);
   const displayTree = useMemo(() => buildBuilderDisplayTree(snapshot), [snapshot]);
   const generationCount = useMemo(() => countTreeGenerations(snapshot), [snapshot.people, snapshot.parentLinks]);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const infoRailRef = useRef<HTMLDivElement | null>(null);
-  const phoneSheetGestureRef = useRef<{ x: number; y: number; scrollTop: number } | null>(null);
+  const phoneSheetGestureRef = useRef<PhoneSheetGestureState | null>(null);
+  const ignoreNextPhoneSheetClickRef = useRef(false);
+  const activePhoneSheetPointerIdRef = useRef<number | null>(null);
   const infoRailId = useId();
   const personPhotoPreviewUrls = useMemo(() => {
     const rawUrls = buildPersonPhotoPreviewUrls(snapshot);
@@ -229,6 +256,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
   const selectedPersonLifeRange = selectedPerson ? formatLifeRange(selectedPerson.birth_date, selectedPerson.death_date) : null;
   const collapsedTabName = getCollapsedTabNameParts(selectedPerson?.full_name);
+  const phoneSheetPeekTranslate = getPhoneSheetPeekTranslate(phoneSheetHeight);
   const selectedAvatarMediaId =
     selectedPerson
       ? snapshot.personMedia.find(
@@ -259,6 +287,14 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   useEffect(() => {
     setPanelState((currentState) => normalizeViewerPanelState(currentState, Boolean(selectedPerson), viewportMode));
   }, [selectedPerson, viewportMode]);
+
+  useEffect(() => {
+    setIsPhoneSheetDragging(false);
+    setPhoneSheetDragTranslate(null);
+    phoneSheetGestureRef.current = null;
+    ignoreNextPhoneSheetClickRef.current = false;
+    activePhoneSheetPointerIdRef.current = null;
+  }, [selectedPersonId, viewportMode]);
 
   useEffect(() => {
     if (!isResizing) {
@@ -301,10 +337,11 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
 
     function updateCollapsedRailHeight() {
       const nextHeight = Math.round(stableInfoRailElement.getBoundingClientRect().height);
+      const normalizedHeight = nextHeight > 0 ? nextHeight : null;
       setCollapsedRailHeight((currentHeight) => {
-        const normalizedHeight = nextHeight > 0 ? nextHeight : null;
         return currentHeight === normalizedHeight ? currentHeight : normalizedHeight;
       });
+      setPhoneSheetHeight((currentHeight) => (currentHeight === normalizedHeight ? currentHeight : normalizedHeight));
     }
 
     function scheduleCollapsedRailHeightUpdate() {
@@ -357,6 +394,116 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
     });
   }
 
+  function beginPhoneSheetGesture(clientX: number, clientY: number) {
+    if (viewportMode !== "phone" || !selectedPerson) {
+      return;
+    }
+
+    const measuredSheetHeight = Math.round(infoRailRef.current?.getBoundingClientRect().height || 0);
+    if (measuredSheetHeight > 0) {
+      setPhoneSheetHeight((currentHeight) => (currentHeight === measuredSheetHeight ? currentHeight : measuredSheetHeight));
+    }
+
+    const peekTranslate = getPhoneSheetPeekTranslate(measuredSheetHeight || phoneSheetHeight);
+    phoneSheetGestureRef.current = {
+      x: clientX,
+      y: clientY,
+      scrollTop: infoRailRef.current?.scrollTop ?? 0,
+      startTranslate: effectivePanelState === "open" ? 0 : peekTranslate,
+      currentTranslate: effectivePanelState === "open" ? 0 : peekTranslate,
+      peekTranslate,
+      axis: null,
+      didDrag: false,
+    };
+  }
+
+  function updatePhoneSheetGesture(clientX: number, clientY: number) {
+    const gesture = phoneSheetGestureRef.current;
+    if (viewportMode !== "phone" || !selectedPerson || !gesture) {
+      return;
+    }
+
+    const deltaX = clientX - gesture.x;
+    const deltaY = clientY - gesture.y;
+
+    if (!gesture.axis) {
+      if (Math.abs(deltaX) < PHONE_VIEWER_DRAG_START_THRESHOLD && Math.abs(deltaY) < PHONE_VIEWER_DRAG_START_THRESHOLD) {
+        return;
+      }
+
+      gesture.axis = Math.abs(deltaY) > Math.abs(deltaX) ? "vertical" : "horizontal";
+    }
+
+    if (gesture.axis !== "vertical" || Math.abs(deltaX) > PHONE_VIEWER_SWIPE_MAX_HORIZONTAL) {
+      return;
+    }
+
+    const sheetScrollTop = infoRailRef.current?.scrollTop ?? 0;
+    if (effectivePanelState === "open" && gesture.scrollTop > 4 && sheetScrollTop > 4 && deltaY > 0) {
+      return;
+    }
+
+    const nextTranslate = Math.max(0, Math.min(gesture.peekTranslate, gesture.startTranslate + deltaY));
+    if (nextTranslate === gesture.startTranslate && Math.abs(deltaY) < PHONE_VIEWER_DRAG_START_THRESHOLD) {
+      return;
+    }
+
+    gesture.didDrag = true;
+    gesture.currentTranslate = nextTranslate;
+    setIsPhoneSheetDragging(true);
+    setPhoneSheetDragTranslate(nextTranslate);
+  }
+
+  function completePhoneSheetGesture(clientX: number, clientY: number) {
+    if (viewportMode !== "phone" || !selectedPerson) {
+      setIsPhoneSheetDragging(false);
+      setPhoneSheetDragTranslate(null);
+      phoneSheetGestureRef.current = null;
+      return;
+    }
+
+    const gesture = phoneSheetGestureRef.current;
+    phoneSheetGestureRef.current = null;
+
+    if (!gesture) {
+      setIsPhoneSheetDragging(false);
+      setPhoneSheetDragTranslate(null);
+      return;
+    }
+
+    const deltaX = clientX - gesture.x;
+    const deltaY = clientY - gesture.y;
+    const sheetScrollTop = infoRailRef.current?.scrollTop ?? 0;
+    const startedAtTop = gesture.scrollTop <= 4;
+    const endedAtTop = sheetScrollTop <= 4;
+
+    if (gesture.didDrag) {
+      ignoreNextPhoneSheetClickRef.current = true;
+      setIsPhoneSheetDragging(false);
+      setPhoneSheetDragTranslate(null);
+      setPanelState(gesture.currentTranslate <= gesture.peekTranslate * 0.5 ? "open" : "peek");
+      return;
+    }
+
+    setIsPhoneSheetDragging(false);
+    setPhoneSheetDragTranslate(null);
+
+    if (Math.abs(deltaX) > PHONE_VIEWER_SWIPE_MAX_HORIZONTAL || Math.abs(deltaY) < PHONE_VIEWER_SWIPE_THRESHOLD) {
+      return;
+    }
+
+    if (deltaY < 0 && effectivePanelState !== "open") {
+      ignoreNextPhoneSheetClickRef.current = true;
+      setPanelState("open");
+      return;
+    }
+
+    if (deltaY > 0 && effectivePanelState === "open" && startedAtTop && endedAtTop) {
+      ignoreNextPhoneSheetClickRef.current = true;
+      setPanelState("peek");
+    }
+  }
+
   function handlePhoneSheetTouchStart(event: ReactTouchEvent<HTMLElement>) {
     if (viewportMode !== "phone" || !selectedPerson) {
       return;
@@ -367,56 +514,101 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
       return;
     }
 
-    phoneSheetGestureRef.current = {
-      x: touch.clientX,
-      y: touch.clientY,
-      scrollTop: infoRailRef.current?.scrollTop ?? 0,
-    };
+    beginPhoneSheetGesture(touch.clientX, touch.clientY);
   }
 
-  function handlePhoneSheetTouchEnd(event: ReactTouchEvent<HTMLElement>) {
+  function handlePhoneSheetTouchMove(event: ReactTouchEvent<HTMLElement>) {
     if (viewportMode !== "phone" || !selectedPerson) {
-      phoneSheetGestureRef.current = null;
       return;
     }
 
     const gesture = phoneSheetGestureRef.current;
-    phoneSheetGestureRef.current = null;
-
-    const touch = event.changedTouches[0];
+    const touch = event.touches[0];
     if (!gesture || !touch) {
       return;
     }
 
-    const deltaX = touch.clientX - gesture.x;
-    const deltaY = touch.clientY - gesture.y;
-    const sheetScrollTop = infoRailRef.current?.scrollTop ?? 0;
-    const startedAtTop = gesture.scrollTop <= 4;
-    const endedAtTop = sheetScrollTop <= 4;
+    updatePhoneSheetGesture(touch.clientX, touch.clientY);
+  }
 
-    if (Math.abs(deltaX) > PHONE_VIEWER_SWIPE_MAX_HORIZONTAL || Math.abs(deltaY) < PHONE_VIEWER_SWIPE_THRESHOLD) {
+  function handlePhoneSheetTouchEnd(event: ReactTouchEvent<HTMLElement>) {
+    if (viewportMode !== "phone" || !selectedPerson) {
       return;
     }
 
-    if (deltaY < 0 && effectivePanelState !== "open") {
-      setPanelState("open");
+    const touch = event.changedTouches[0];
+    if (!touch) {
       return;
     }
 
-    if (deltaY > 0 && effectivePanelState === "open" && startedAtTop && endedAtTop) {
-      setPanelState("peek");
+    completePhoneSheetGesture(touch.clientX, touch.clientY);
+  }
+
+  function handlePhoneSheetPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "touch" || viewportMode !== "phone" || !selectedPerson) {
+      return;
     }
+
+    activePhoneSheetPointerIdRef.current = event.pointerId;
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic browser checks may not create an active pointer capture target.
+    }
+    beginPhoneSheetGesture(event.clientX, event.clientY);
+  }
+
+  function handlePhoneSheetPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (
+      event.pointerType === "touch" ||
+      viewportMode !== "phone" ||
+      !selectedPerson ||
+      activePhoneSheetPointerIdRef.current !== event.pointerId
+    ) {
+      return;
+    }
+
+    updatePhoneSheetGesture(event.clientX, event.clientY);
+  }
+
+  function handlePhoneSheetPointerUp(event: ReactPointerEvent<HTMLElement>) {
+    if (
+      event.pointerType === "touch" ||
+      viewportMode !== "phone" ||
+      !selectedPerson ||
+      activePhoneSheetPointerIdRef.current !== event.pointerId
+    ) {
+      return;
+    }
+
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Synthetic browser checks may not hold pointer capture.
+    }
+    activePhoneSheetPointerIdRef.current = null;
+    completePhoneSheetGesture(event.clientX, event.clientY);
   }
 
   const canResizeRail = viewportMode === "desktop" && effectivePanelState === "open";
-  const phoneSheetBodyStyle =
-    viewportMode === "phone" && effectivePanelState !== "open"
+  const phoneSheetDragProgress =
+    isPhoneSheetDragging && typeof phoneSheetDragTranslate === "number" && phoneSheetPeekTranslate > 0
+      ? 1 - phoneSheetDragTranslate / phoneSheetPeekTranslate
+      : null;
+  const phoneSheetStyle =
+    viewportMode === "phone" && isPhoneSheetDragging && typeof phoneSheetDragTranslate === "number"
       ? ({
-          maxHeight: 0,
+          transform: `translateY(${phoneSheetDragTranslate}px)`,
+          transition: "none",
           overflow: "hidden",
-          pointerEvents: "none",
-          opacity: 0,
-          paddingTop: 0,
+        } as CSSProperties)
+      : undefined;
+  const phoneSheetBodyStyle =
+    viewportMode === "phone" && phoneSheetDragProgress !== null
+      ? ({
+          opacity: phoneSheetDragProgress,
+          visibility: phoneSheetDragProgress <= 0.02 ? "hidden" : "visible",
+          pointerEvents: phoneSheetDragProgress >= 0.98 ? "auto" : "none",
         } as CSSProperties)
       : undefined;
   const toggleLabel =
@@ -481,13 +673,36 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
           className="info-rail viewer-info-rail utility-section-card p-6"
           data-viewport-mode={viewportMode}
           data-panel-state={effectivePanelState}
+          data-dragging={isPhoneSheetDragging ? "true" : "false"}
+          style={phoneSheetStyle}
           onClick={() => {
+            if (ignoreNextPhoneSheetClickRef.current) {
+              ignoreNextPhoneSheetClickRef.current = false;
+              return;
+            }
+
             if (viewportMode === "phone" && selectedPerson && effectivePanelState !== "open") {
               setPanelState("open");
             }
           }}
           onTouchStart={handlePhoneSheetTouchStart}
+          onTouchMove={handlePhoneSheetTouchMove}
           onTouchEnd={handlePhoneSheetTouchEnd}
+          onPointerDown={handlePhoneSheetPointerDown}
+          onPointerMove={handlePhoneSheetPointerMove}
+          onPointerUp={handlePhoneSheetPointerUp}
+          onPointerCancel={() => {
+            activePhoneSheetPointerIdRef.current = null;
+            phoneSheetGestureRef.current = null;
+            setIsPhoneSheetDragging(false);
+            setPhoneSheetDragTranslate(null);
+          }}
+          onTouchCancel={() => {
+            activePhoneSheetPointerIdRef.current = null;
+            phoneSheetGestureRef.current = null;
+            setIsPhoneSheetDragging(false);
+            setPhoneSheetDragTranslate(null);
+          }}
         >
           {viewportMode === "phone" && selectedPerson ? (
             <button
