@@ -320,25 +320,51 @@ function logOriginalVideoDeliveryDiagnostic(
     return;
   }
 
+  const source = normalizeDiagnosticToken(new URL(request.url).searchParams.get("source"));
+  const browser = normalizeDiagnosticToken(classifyVideoClient(request));
+  const method = normalizeDiagnosticToken(request.method);
+  const dest = normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-fetch-dest"), 40));
+  const range = normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("range"), 80));
+  const notes = normalizeDiagnosticToken(input.notes ?? null);
+  const proxied = normalizeDiagnosticToken(input.proxiedStatus ?? null);
+  const upstream = normalizeDiagnosticToken(input.upstreamStatus ?? null);
+
   console.warn(
     [
       "[video-delivery-debug]",
       `event=${normalizeDiagnosticToken(eventName)}`,
       `mediaId=${normalizeDiagnosticToken(input.mediaId)}`,
-      `source=${normalizeDiagnosticToken(new URL(request.url).searchParams.get("source"))}`,
-      `browser=${normalizeDiagnosticToken(classifyVideoClient(request))}`,
-      `method=${normalizeDiagnosticToken(request.method)}`,
-      `range=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("range"), 80))}`,
+      `source=${source}`,
+      `browser=${browser}`,
+      `method=${method}`,
+      `range=${range}`,
       `ifRange=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("if-range"), 80))}`,
       `accept=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("accept"), 80))}`,
-      `dest=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-fetch-dest"), 40))}`,
+      `dest=${dest}`,
       `uaMobile=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-mobile"), 20))}`,
       `uaPlatform=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-platform"), 40))}`,
-      `upstream=${normalizeDiagnosticToken(input.upstreamStatus ?? null)}`,
-      `proxied=${normalizeDiagnosticToken(input.proxiedStatus ?? null)}`,
-      `notes=${normalizeDiagnosticToken(input.notes ?? null)}`,
+      `upstream=${upstream}`,
+      `proxied=${proxied}`,
+      `notes=${notes}`,
     ].join(" ")
   );
+
+  if (eventName === "video-proxy-request" || eventName === "video-proxy-response" || eventName === "video-head-request" || eventName === "video-head-response") {
+    console.warn(
+      [
+        "[video-proxy-brief]",
+        `e=${normalizeDiagnosticToken(eventName)}`,
+        `m=${normalizeDiagnosticToken(input.mediaId)}`,
+        `b=${browser}`,
+        `s=${source}`,
+        `d=${dest}`,
+        `rg=${range}`,
+        `up=${upstream}`,
+        `px=${proxied}`,
+        `n=${notes}`,
+      ].join(" ")
+    );
+  }
 }
 
 function shouldProxyOriginalVideo(media: Awaited<ReturnType<typeof getMediaSummary>>, variant: string | null, download: boolean) {
