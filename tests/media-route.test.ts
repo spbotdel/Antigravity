@@ -165,6 +165,132 @@ describe("media route", () => {
     expect(response.headers.get("location")).toBe("https://example.com/video-thumb.webp");
   });
 
+  it("proxies original video GET requests through the app route instead of redirecting", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
+    getMediaSummary.mockResolvedValue({
+      id: "media-video",
+      tree_id: "tree-1",
+      kind: "video",
+      provider: "cloudflare_r2",
+      visibility: "public",
+      storage_path: "trees/tree-1/media/video/media-video/original.mp4",
+      external_url: null,
+      title: "family-video.mp4",
+      caption: null,
+      mime_type: "video/mp4",
+      size_bytes: 73081327,
+      preview_status: "ready",
+    });
+    resolveMediaAccess.mockResolvedValue({
+      url: "https://example.com/signed-video",
+      kind: "video",
+    });
+    fetchMock.mockResolvedValue(
+      new Response(new Uint8Array([1, 2]), {
+        status: 206,
+        headers: {
+          "content-type": "video/mp4",
+          "content-length": "2",
+          "content-range": "bytes 0-1/73081327",
+          "accept-ranges": "bytes",
+          etag: '"etag-video"',
+          "last-modified": "Mon, 13 Apr 2026 15:36:03 GMT",
+        },
+      })
+    );
+
+    const response = await GET(
+      new Request("http://localhost/api/media/media-video", {
+        headers: {
+          Range: "bytes=0-1",
+        },
+      }),
+      {
+        params: Promise.resolve({ mediaId: "media-video" })
+      }
+    );
+
+    expect(getMediaSummary).toHaveBeenCalledWith("media-video", null);
+    expect(resolveMediaAccess).toHaveBeenCalledWith("media-video", null, null, { download: false });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/signed-video",
+      expect.objectContaining({
+        method: "GET",
+        cache: "no-store",
+        headers: expect.any(Headers),
+      })
+    );
+
+    const upstreamRequest = fetchMock.mock.calls[0]?.[1];
+    expect(upstreamRequest?.headers.get("Range")).toBe("bytes=0-1");
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-type")).toBe("video/mp4");
+    expect(response.headers.get("content-range")).toBe("bytes 0-1/73081327");
+    expect(response.headers.get("accept-ranges")).toBe("bytes");
+    expect(response.headers.get("x-antigravity-media-delivery")).toBe("video-original-proxy");
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("answers HEAD for original video through the app route without redirecting", async () => {
+    const { HEAD } = await import("@/app/api/media/[mediaId]/route");
+    getMediaSummary.mockResolvedValue({
+      id: "media-video",
+      tree_id: "tree-1",
+      kind: "video",
+      provider: "cloudflare_r2",
+      visibility: "public",
+      storage_path: "trees/tree-1/media/video/media-video/original.mp4",
+      external_url: null,
+      title: "family-video.mp4",
+      caption: null,
+      mime_type: "video/mp4",
+      size_bytes: 73081327,
+      preview_status: "ready",
+    });
+    resolveMediaAccess.mockResolvedValue({
+      url: "https://example.com/signed-video",
+      kind: "video",
+    });
+    fetchMock.mockResolvedValue(
+      new Response(new Uint8Array([1]), {
+        status: 206,
+        headers: {
+          "content-type": "video/mp4",
+          "content-length": "1",
+          "content-range": "bytes 0-0/73081327",
+          "accept-ranges": "bytes",
+        },
+      })
+    );
+
+    const response = await HEAD(
+      new Request("http://localhost/api/media/media-video", {
+        method: "HEAD",
+      }),
+      {
+        params: Promise.resolve({ mediaId: "media-video" })
+      }
+    );
+
+    expect(getMediaSummary).toHaveBeenCalledWith("media-video", null);
+    expect(resolveMediaAccess).toHaveBeenCalledWith("media-video", null, null, { download: false });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/signed-video",
+      expect.objectContaining({
+        method: "GET",
+        cache: "no-store",
+      })
+    );
+
+    const upstreamRequest = fetchMock.mock.calls[0]?.[1];
+    expect(upstreamRequest?.headers.get("Range")).toBe("bytes=0-0");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("video/mp4");
+    expect(response.headers.get("content-length")).toBe("73081327");
+    expect(response.headers.get("accept-ranges")).toBe("bytes");
+    expect(response.headers.get("location")).toBeNull();
+  });
+
   it("returns media summary JSON when summary mode is requested", async () => {
     const { GET } = await import("@/app/api/media/[mediaId]/route");
     getMediaSummary.mockResolvedValue({

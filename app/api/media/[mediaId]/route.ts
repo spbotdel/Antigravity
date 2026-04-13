@@ -152,6 +152,140 @@ function isPdfDocumentMimeType(mimeType: string | null | undefined) {
   return normalizedMimeType === "application/pdf" || normalizedMimeType.endsWith("/pdf");
 }
 
+function shouldProxyOriginalVideo(media: Awaited<ReturnType<typeof getMediaSummary>>, variant: string | null, download: boolean) {
+  return media.kind === "video" && !variant && !download && !media.external_url && Boolean(media.storage_path);
+}
+
+function parseContentRangeTotal(contentRange: string | null) {
+  if (!contentRange) {
+    return null;
+  }
+
+  const match = /\/(\d+)$/.exec(contentRange.trim());
+  if (!match) {
+    return null;
+  }
+
+  const parsedValue = Number(match[1]);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
+function buildOriginalVideoProxyHeaders(input: {
+  media: Awaited<ReturnType<typeof getMediaSummary>>;
+  upstreamHeaders: Headers;
+  preserveContentRange?: boolean;
+}) {
+  const headers = new Headers();
+  const upstreamContentType = input.upstreamHeaders.get("content-type");
+  const upstreamAcceptRanges = input.upstreamHeaders.get("accept-ranges");
+  const upstreamContentRange = input.upstreamHeaders.get("content-range");
+  const upstreamContentLength = input.upstreamHeaders.get("content-length");
+  const totalBytes = input.media.size_bytes ?? parseContentRangeTotal(upstreamContentRange);
+
+  headers.set("Content-Type", upstreamContentType || input.media.mime_type || "application/octet-stream");
+  headers.set("Accept-Ranges", upstreamAcceptRanges || "bytes");
+  headers.set("Cache-Control", "private, no-store");
+  headers.set("X-Antigravity-Media-Delivery", "video-original-proxy");
+
+  if (input.preserveContentRange && upstreamContentRange) {
+    headers.set("Content-Range", upstreamContentRange);
+  }
+
+  if (input.upstreamHeaders.has("etag")) {
+    headers.set("ETag", input.upstreamHeaders.get("etag")!);
+  }
+
+  if (input.upstreamHeaders.has("last-modified")) {
+    headers.set("Last-Modified", input.upstreamHeaders.get("last-modified")!);
+  }
+
+  if (input.preserveContentRange) {
+    if (upstreamContentLength) {
+      headers.set("Content-Length", upstreamContentLength);
+    }
+  } else if (totalBytes !== null) {
+    headers.set("Content-Length", String(totalBytes));
+  }
+
+  return headers;
+}
+
+async function buildOriginalVideoProxyContext(mediaId: string, shareToken?: string | null) {
+  const media = await getMediaSummary(mediaId, shareToken);
+  if (!shouldProxyOriginalVideo(media, null, false)) {
+    return null;
+  }
+
+  const resolvedAccess = await resolveMediaAccess(mediaId, shareToken, null, { download: false });
+  return { media, resolvedAccess };
+}
+
+async function proxyOriginalVideoResponse(request: Request, context: NonNullable<Awaited<ReturnType<typeof buildOriginalVideoProxyContext>>>) {
+  const upstreamHeaders = new Headers();
+  const rangeHeader = request.headers.get("range");
+  const ifRangeHeader = request.headers.get("if-range");
+
+  if (rangeHeader) {
+    upstreamHeaders.set("Range", rangeHeader);
+  }
+
+  if (ifRangeHeader) {
+    upstreamHeaders.set("If-Range", ifRangeHeader);
+  }
+
+  const upstreamResponse = await fetch(context.resolvedAccess.url, {
+    method: "GET",
+    headers: upstreamHeaders,
+    cache: "no-store",
+  });
+
+  if (!upstreamResponse.ok) {
+    console.error("[media-route] original video proxy fetch failed", {
+      mediaId: context.media.id,
+      status: upstreamResponse.status,
+      hasRange: Boolean(rangeHeader),
+    });
+    throw new AppError(502, "Не удалось получить оригинал видео.");
+  }
+
+  return new Response(upstreamResponse.body, {
+    status: upstreamResponse.status,
+    headers: buildOriginalVideoProxyHeaders({
+      media: context.media,
+      upstreamHeaders: upstreamResponse.headers,
+      preserveContentRange: upstreamResponse.status === 206,
+    }),
+  });
+}
+
+async function buildOriginalVideoHeadResponse(context: NonNullable<Awaited<ReturnType<typeof buildOriginalVideoProxyContext>>>) {
+  const probeHeaders = new Headers();
+  probeHeaders.set("Range", "bytes=0-0");
+
+  const upstreamResponse = await fetch(context.resolvedAccess.url, {
+    method: "GET",
+    headers: probeHeaders,
+    cache: "no-store",
+  });
+
+  if (!upstreamResponse.ok) {
+    console.error("[media-route] original video HEAD probe failed", {
+      mediaId: context.media.id,
+      status: upstreamResponse.status,
+    });
+    throw new AppError(502, "Не удалось проверить оригинал видео.");
+  }
+
+  return new Response(null, {
+    status: 200,
+    headers: buildOriginalVideoProxyHeaders({
+      media: context.media,
+      upstreamHeaders: upstreamResponse.headers,
+      preserveContentRange: false,
+    }),
+  });
+}
+
 export async function GET(request: Request, { params }: Params) {
   try {
     const { mediaId } = await params;
@@ -200,6 +334,33 @@ export async function GET(request: Request, { params }: Params) {
         });
       }
     }
+
+    const originalVideoProxyContext = await buildOriginalVideoProxyContext(mediaId, shareToken);
+    if (originalVideoProxyContext) {
+      return await proxyOriginalVideoResponse(request, originalVideoProxyContext);
+    }
+
+    const result = await resolveMediaAccess(mediaId, shareToken, variant, { download });
+    return NextResponse.redirect(result.url);
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}
+
+export async function HEAD(request: Request, { params }: Params) {
+  try {
+    const { mediaId } = await params;
+    const searchParams = new URL(request.url).searchParams;
+    const shareToken = searchParams.get("share");
+    const download = searchParams.get("download") === "1";
+    const rawVariant = searchParams.get("variant");
+    const variant = !download && (rawVariant === "thumb" || rawVariant === "small" || rawVariant === "medium") ? rawVariant : null;
+
+    const originalVideoProxyContext = await buildOriginalVideoProxyContext(mediaId, shareToken);
+    if (originalVideoProxyContext) {
+      return await buildOriginalVideoHeadResponse(originalVideoProxyContext);
+    }
+
     const result = await resolveMediaAccess(mediaId, shareToken, variant, { download });
     return NextResponse.redirect(result.url);
   } catch (error) {
