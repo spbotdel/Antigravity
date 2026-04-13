@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MediaThumbVisual } from "@/components/media/media-thumb-visual";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play, Trash2, Volume2, VolumeX, X } from "lucide-react";
-import { type CSSProperties, type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl, resolveMediaThumbSource } from "@/lib/tree/display";
@@ -596,7 +596,11 @@ function MediaPreview({
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const shouldPreferMetadataPreload = expanded && isInlineVideoAsset(asset);
   const [hasLoadError, setHasLoadError] = useState(false);
-  const [preferNativeExpandedVideoControls, setPreferNativeExpandedVideoControls] = useState(false);
+  const preferNativeExpandedVideoControls =
+    expanded &&
+    isInlineVideoAsset(asset) &&
+    typeof navigator !== "undefined" &&
+    isChromeAndroidVideoQuirkBrowser(navigator.userAgent);
   const handleOriginalLoadError = (video?: HTMLVideoElement | null) => {
     logMediaError({
       mediaId: asset.id,
@@ -630,15 +634,6 @@ function MediaPreview({
   useEffect(() => {
     setHasLoadError(false);
   }, [asset.id, expanded, mediaUrl]);
-
-  useLayoutEffect(() => {
-    if (!expanded || !isInlineVideoAsset(asset) || typeof navigator === "undefined") {
-      setPreferNativeExpandedVideoControls(false);
-      return;
-    }
-
-    setPreferNativeExpandedVideoControls(isChromeAndroidVideoQuirkBrowser(navigator.userAgent));
-  }, [asset, expanded]);
 
   if (hasLoadError) {
     return (

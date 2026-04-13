@@ -561,7 +561,10 @@ describe("person media gallery", () => {
       if (originalUserAgentDescriptor) {
         Object.defineProperty(window.navigator, "userAgent", originalUserAgentDescriptor);
       } else {
-        delete (window.navigator as Navigator & { userAgent?: string }).userAgent;
+        Object.defineProperty(window.navigator, "userAgent", {
+          configurable: true,
+          get: () => "",
+        });
       }
     }
   });
