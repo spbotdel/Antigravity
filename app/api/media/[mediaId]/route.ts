@@ -234,6 +234,26 @@ function logClientPlaybackDiagnostic(
   const srcInfo = getDiagnosticUrlInfo(payload.src, requestUrl);
   const currentSrcInfo = getDiagnosticUrlInfo(payload.currentSrc, payload.pageUrl || requestUrl);
 
+  if (payload.event === "client-video-event") {
+    console.warn(
+      [
+        "[video-client-event]",
+        `name=${normalizeDiagnosticToken(payload.eventName)}`,
+        `mediaId=${normalizeDiagnosticToken(mediaId)}`,
+        `browser=${browser}`,
+        `context=${normalizeDiagnosticToken(payload.context)}`,
+        `code=${normalizeDiagnosticToken(payload.errorCode)}`,
+        `net=${normalizeDiagnosticToken(payload.networkState)}`,
+        `ready=${normalizeDiagnosticToken(payload.readyState)}`,
+        `time=${normalizeDiagnosticToken(payload.currentTime)}`,
+        `dur=${normalizeDiagnosticToken(payload.duration)}`,
+        `srcKind=${normalizeDiagnosticToken(srcInfo.kind)}`,
+        `currentKind=${normalizeDiagnosticToken(currentSrcInfo.kind)}`,
+      ].join(" ")
+    );
+    return;
+  }
+
   console.warn(
     [
       "[video-client-debug-core]",

@@ -18,7 +18,7 @@ import { createPortal } from "react-dom";
 import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl, resolveMediaThumbSource } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import type { TreeSnapshot } from "@/lib/types";
-import { logMediaError, reportMediaClientPlaybackIssue } from "@/lib/utils";
+import { logMediaError, reportMediaClientPlaybackEvent, reportMediaClientPlaybackIssue, type MediaClientPlaybackEventDiagnosticInput } from "@/lib/utils";
 
 type MediaAsset = TreeSnapshot["media"][number];
 type LightboxState = "closed" | "open" | "closing";
@@ -369,6 +369,45 @@ function buildClientPlaybackResolveUrl(mediaId: string, shareToken?: string | nu
   return `/api/media/${mediaId}?${params.toString()}`;
 }
 
+function shouldReportPlaybackTimeline(userAgent: string) {
+  const normalized = userAgent.toLowerCase();
+  return normalized.includes("android") && (normalized.includes("chrome/") || normalized.includes("opr/") || normalized.includes("opera"));
+}
+
+function reportPlaybackTimelineEventForVideo(input: {
+  video: HTMLVideoElement;
+  mediaId: string;
+  context: string;
+  shareToken?: string | null;
+  src?: string | null;
+  poster?: string | null;
+  eventName: MediaClientPlaybackEventDiagnosticInput["eventName"];
+}) {
+  if (typeof navigator === "undefined" || !shouldReportPlaybackTimeline(navigator.userAgent)) {
+    return;
+  }
+
+  reportMediaClientPlaybackEvent({
+    mediaId: input.mediaId,
+    context: input.context,
+    shareToken: input.shareToken,
+    src: input.src || null,
+    currentSrc: input.video.currentSrc || null,
+    poster: input.video.poster || input.poster || null,
+    errorCode: input.video.error?.code ?? null,
+    networkState: input.video.networkState,
+    readyState: input.video.readyState,
+    currentTime: Number.isFinite(input.video.currentTime) ? input.video.currentTime : null,
+    duration: Number.isFinite(input.video.duration) ? input.video.duration : null,
+    controls: input.video.controls,
+    playsInline: input.video.playsInline,
+    autoPlay: input.video.autoplay,
+    muted: input.video.muted,
+    preload: input.video.preload,
+    eventName: input.eventName,
+  });
+}
+
 function clampPositiveSize(value: number) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
@@ -379,6 +418,8 @@ function LightboxVideoPlayer({
   poster,
   autoPlay = false,
   preferNativeControls = false,
+  shareToken,
+  diagnosticContext = "PersonMediaGallery:lightbox",
   onVideoElementChange,
   onIntrinsicSizeChange,
   onError,
@@ -390,6 +431,8 @@ function LightboxVideoPlayer({
   poster?: string;
   autoPlay?: boolean;
   preferNativeControls?: boolean;
+  shareToken?: string | null;
+  diagnosticContext?: string;
   onVideoElementChange?: (node: HTMLVideoElement | null) => void;
   onIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
   onError?: (video: HTMLVideoElement | null) => void;
@@ -416,6 +459,10 @@ function LightboxVideoPlayer({
     }
 
     emitVideoElementChange(video);
+    const timelineHandlers = new Map<
+      MediaClientPlaybackEventDiagnosticInput["eventName"],
+      () => void
+    >();
 
     const syncFromVideo = () => {
       setIsPlaying(!video.paused && !video.ended);
@@ -433,9 +480,24 @@ function LightboxVideoPlayer({
 
     syncFromVideo();
 
-    const events = ["play", "pause", "ended", "timeupdate", "loadedmetadata", "durationchange", "volumechange"] as const;
-    for (const eventName of events) {
+    const syncEvents = ["play", "pause", "ended", "timeupdate", "loadedmetadata", "durationchange", "volumechange"] as const;
+    const timelineEvents = ["loadstart", "loadedmetadata", "canplay", "play", "playing", "waiting", "stalled", "suspend", "abort", "error"] as const;
+    for (const eventName of syncEvents) {
       video.addEventListener(eventName, syncFromVideo);
+    }
+    for (const eventName of timelineEvents) {
+      const handler = () =>
+        reportPlaybackTimelineEventForVideo({
+          video,
+          mediaId: asset.id,
+          context: diagnosticContext,
+          shareToken,
+          src,
+          poster,
+          eventName,
+        });
+      timelineHandlers.set(eventName, handler);
+      video.addEventListener(eventName, handler);
     }
 
     if (autoPlay && !preferNativeControls) {
@@ -446,11 +508,17 @@ function LightboxVideoPlayer({
       video.pause();
       emitVideoElementChange(null);
       emitIntrinsicSizeChange(null);
-      for (const eventName of events) {
+      for (const eventName of syncEvents) {
         video.removeEventListener(eventName, syncFromVideo);
       }
+      for (const eventName of timelineEvents) {
+        const handler = timelineHandlers.get(eventName);
+        if (handler) {
+          video.removeEventListener(eventName, handler);
+        }
+      }
     };
-  }, [asset.id, autoPlay, preferNativeControls, src]);
+  }, [asset.id, autoPlay, diagnosticContext, poster, preferNativeControls, shareToken, src]);
 
   async function togglePlayback() {
     const video = videoRef.current;
@@ -628,6 +696,17 @@ function MediaPreview({
       src: mediaUrl,
     });
     if (asset.kind === "video") {
+      if (video) {
+        reportPlaybackTimelineEventForVideo({
+          video,
+          mediaId: asset.id,
+          context: expanded ? "PersonMediaGallery:lightbox" : "PersonMediaGallery:stage",
+          shareToken,
+          src: mediaUrl,
+          poster: video.poster || (thumbSource?.kind === "image" ? thumbSource.src : null),
+          eventName: "error",
+        });
+      }
       reportMediaClientPlaybackIssue({
         mediaId: asset.id,
         context: expanded ? "PersonMediaGallery:lightbox" : "PersonMediaGallery:stage",
@@ -741,6 +820,8 @@ function MediaPreview({
           poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
           autoPlay={autoPlayVideo}
           preferNativeControls={preferNativeExpandedVideoControls}
+          shareToken={shareToken}
+          diagnosticContext="PersonMediaGallery:lightbox"
           onVideoElementChange={onLightboxVideoElementChange}
           onIntrinsicSizeChange={onLightboxMediaIntrinsicSizeChange}
           onError={handleOriginalLoadError}
@@ -760,6 +841,15 @@ function MediaPreview({
         playsInline
         muted={autoPlayVideo}
         preload={shouldPreferMetadataPreload ? "metadata" : "auto"}
+        onLoadStart={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "loadstart" })}
+        onLoadedMetadata={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "loadedmetadata" })}
+        onCanPlay={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "canplay" })}
+        onPlay={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "play" })}
+        onPlaying={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "playing" })}
+        onWaiting={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "waiting" })}
+        onStalled={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "stalled" })}
+        onSuspend={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "suspend" })}
+        onAbort={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "abort" })}
         onError={(event) => handleOriginalLoadError(event.currentTarget)}
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.

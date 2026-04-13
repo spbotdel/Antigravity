@@ -157,8 +157,7 @@ export const processVideoPreviewJobsSchema = z.object({
   forceRetry: z.boolean().optional()
 });
 
-export const mediaClientPlaybackDiagnosticSchema = z.object({
-  event: z.literal("client-original-error"),
+const mediaClientPlaybackDiagnosticBaseSchema = z.object({
   context: z.string().trim().min(1).max(120),
   shareToken: z.string().trim().max(512).optional().nullable(),
   pageUrl: z.string().trim().max(4000).optional().nullable(),
@@ -176,4 +175,14 @@ export const mediaClientPlaybackDiagnosticSchema = z.object({
   muted: z.boolean().optional().nullable(),
   preload: z.string().trim().max(40).optional().nullable(),
 });
+
+export const mediaClientPlaybackDiagnosticSchema = z.discriminatedUnion("event", [
+  mediaClientPlaybackDiagnosticBaseSchema.extend({
+    event: z.literal("client-original-error"),
+  }),
+  mediaClientPlaybackDiagnosticBaseSchema.extend({
+    event: z.literal("client-video-event"),
+    eventName: z.enum(["loadstart", "loadedmetadata", "canplay", "play", "playing", "waiting", "stalled", "suspend", "abort", "error"]),
+  }),
+]);
 
