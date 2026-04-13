@@ -251,10 +251,10 @@ describe("tree viewer client", () => {
     const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
     expect(layout).toHaveAttribute("data-viewport-mode", "phone");
     expect(layout).toHaveClass("viewer-panel-peek");
-    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-top", "72");
-    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-bottom", "76");
-    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-x", "10");
-    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-y", "16");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-top", "56");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-bottom", "64");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-x", "8");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-y", "12");
     expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-prefer-initial-bounds-fit", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "Развернуть карточку человека: Demo Person" }));

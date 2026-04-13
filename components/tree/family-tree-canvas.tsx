@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 
 import { buildAvatarSvgImageAttrs } from "@/lib/avatar-crop";
@@ -1379,9 +1379,12 @@ export function FamilyTreeCanvas({
   const onNodeActionRef = useRef(onNodeAction);
   const onPartnershipDateChangeRef = useRef(onPartnershipDateChange);
   const zoomTransformRef = useRef<d3.ZoomTransform | null>(null);
+  const hasUserAdjustedTransformRef = useRef(false);
+  const lastAutoFitSignatureRef = useRef<string | null>(null);
   const lastSelectedPersonIdRef = useRef<string | null>(selectedPersonId);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [editingPartnershipId, setEditingPartnershipId] = useState<string | null>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const hierarchy = useMemo(() => {
     if (!tree) {
@@ -1410,6 +1413,57 @@ export function FamilyTreeCanvas({
   useEffect(() => {
     onPartnershipDateChangeRef.current = onPartnershipDateChange;
   }, [onPartnershipDateChange]);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || !tree) {
+      return undefined;
+    }
+
+    const stableContainer = container;
+    let frameId: number | null = null;
+
+    function syncContainerSize() {
+      const nextWidth = Math.round(stableContainer.clientWidth);
+      const nextHeight = Math.round(stableContainer.clientHeight);
+      setContainerSize((currentSize) =>
+        currentSize.width === nextWidth && currentSize.height === nextHeight
+          ? currentSize
+          : { width: nextWidth, height: nextHeight }
+      );
+    }
+
+    function scheduleContainerSizeSync() {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        syncContainerSize();
+      });
+    }
+
+    syncContainerSize();
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            scheduleContainerSizeSync();
+          });
+
+    resizeObserver?.observe(stableContainer);
+    window.addEventListener("resize", scheduleContainerSizeSync);
+
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", scheduleContainerSizeSync);
+    };
+  }, [tree]);
 
   useEffect(() => {
     if (!interactive || !createMenuOpen) {
@@ -1450,8 +1504,8 @@ export function FamilyTreeCanvas({
     }
 
     container.innerHTML = "";
-    const width = container.clientWidth || 960;
-    const height = container.clientHeight || 620;
+    const width = containerSize.width || container.clientWidth || 960;
+    const height = containerSize.height || container.clientHeight || 620;
     const viewportInsets: CanvasViewportInsets = {
       top: Math.max(0, Math.min(viewportInsetTop, Math.max(height - 120, 0))),
       bottom: Math.max(0, Math.min(viewportInsetBottom, Math.max(height - 120, 0))),
@@ -1459,6 +1513,24 @@ export function FamilyTreeCanvas({
       right: Math.max(0, Math.min(viewportInsetRight, Math.max(width - 120, 0)))
     };
     const viewportMargins = resolveViewportMargins(width, viewportMarginX, viewportMarginY);
+    const autoFitSignature = preferInitialBoundsFit
+      ? JSON.stringify({
+          displayMode,
+          width,
+          height,
+          top: viewportInsets.top,
+          right: viewportInsets.right,
+          bottom: viewportInsets.bottom,
+          left: viewportInsets.left,
+          marginX: viewportMargins.x,
+          marginY: viewportMargins.y,
+        })
+      : null;
+
+    if (autoFitSignature && lastAutoFitSignatureRef.current !== autoFitSignature && !hasUserAdjustedTransformRef.current) {
+      zoomTransformRef.current = null;
+    }
+    lastAutoFitSignatureRef.current = autoFitSignature;
 
     const svg = d3.select(container).append("svg").attr("viewBox", `0 0 ${width} ${height}`).attr("width", "100%").attr("height", "100%");
     const graph = svg.append("g");
@@ -1538,6 +1610,9 @@ export function FamilyTreeCanvas({
         .zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.25, 2.5])
         .on("zoom", (event) => {
+          if (event.sourceEvent) {
+            hasUserAdjustedTransformRef.current = true;
+          }
           zoomTransformRef.current = event.transform;
           graph.attr("transform", event.transform.toString());
         });
@@ -2081,6 +2156,9 @@ export function FamilyTreeCanvas({
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.25, 2.5])
       .on("zoom", (event) => {
+        if (event.sourceEvent) {
+          hasUserAdjustedTransformRef.current = true;
+        }
         zoomTransformRef.current = event.transform;
         graph.attr("transform", event.transform.toString());
       });
@@ -2427,6 +2505,8 @@ export function FamilyTreeCanvas({
     viewportInsetTop,
     viewportMarginX,
     viewportMarginY,
+    containerSize.height,
+    containerSize.width,
   ]);
 
   if (!tree) {
