@@ -161,6 +161,14 @@ function clipDiagnosticHeaderValue(value: string | null, maxLength = 240) {
   return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
 }
 
+function normalizeDiagnosticToken(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  return String(value).replace(/\s+/g, "_");
+}
+
 function classifyVideoClient(request: Request) {
   const userAgent = request.headers.get("user-agent") || "";
   const secChUa = request.headers.get("sec-ch-ua") || "";
@@ -201,23 +209,24 @@ function logOriginalVideoDeliveryDiagnostic(
     return;
   }
 
-  console.warn("[video-delivery-debug]", {
-    event: eventName,
-    mediaId: input.mediaId,
-    browserHint: classifyVideoClient(request),
-    method: request.method,
-    range: clipDiagnosticHeaderValue(request.headers.get("range")),
-    ifRange: clipDiagnosticHeaderValue(request.headers.get("if-range")),
-    accept: clipDiagnosticHeaderValue(request.headers.get("accept")),
-    secFetchDest: clipDiagnosticHeaderValue(request.headers.get("sec-fetch-dest")),
-    secChUa: clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua")),
-    secChUaMobile: clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-mobile")),
-    secChUaPlatform: clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-platform")),
-    userAgent: clipDiagnosticHeaderValue(request.headers.get("user-agent")),
-    upstreamStatus: input.upstreamStatus ?? null,
-    proxiedStatus: input.proxiedStatus ?? null,
-    notes: input.notes ?? null,
-  });
+  console.warn(
+    [
+      "[video-delivery-debug]",
+      `event=${normalizeDiagnosticToken(eventName)}`,
+      `mediaId=${normalizeDiagnosticToken(input.mediaId)}`,
+      `browser=${normalizeDiagnosticToken(classifyVideoClient(request))}`,
+      `method=${normalizeDiagnosticToken(request.method)}`,
+      `range=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("range"), 80))}`,
+      `ifRange=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("if-range"), 80))}`,
+      `accept=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("accept"), 80))}`,
+      `dest=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-fetch-dest"), 40))}`,
+      `uaMobile=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-mobile"), 20))}`,
+      `uaPlatform=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-platform"), 40))}`,
+      `upstream=${normalizeDiagnosticToken(input.upstreamStatus ?? null)}`,
+      `proxied=${normalizeDiagnosticToken(input.proxiedStatus ?? null)}`,
+      `notes=${normalizeDiagnosticToken(input.notes ?? null)}`,
+    ].join(" ")
+  );
 }
 
 function shouldProxyOriginalVideo(media: Awaited<ReturnType<typeof getMediaSummary>>, variant: string | null, download: boolean) {
