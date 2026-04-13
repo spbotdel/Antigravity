@@ -10,6 +10,17 @@ import { logMediaError } from "@/lib/utils";
 const MAX_DURATION_LABEL_CACHE_SIZE = 200;
 const durationLabelCache = new Map<string, string>();
 
+function isChromeAndroidVideoProbeQuirkBrowser(userAgent: string) {
+  const normalized = userAgent.toLowerCase();
+  return (
+    normalized.includes("android") &&
+    normalized.includes("chrome/") &&
+    !normalized.includes("opr/") &&
+    !normalized.includes("opera") &&
+    !normalized.includes("edga/")
+  );
+}
+
 function setDurationLabelCache(assetId: string, durationLabel: string) {
   durationLabelCache.set(assetId, durationLabel);
   if (durationLabelCache.size <= MAX_DURATION_LABEL_CACHE_SIZE) {
@@ -70,13 +81,22 @@ export function MediaThumbVisual({
 }: MediaThumbVisualProps) {
   const [durationLabel, setDurationLabel] = useState<string | null>(() => durationLabelCache.get(asset.id) || null);
   const [hasLoadError, setHasLoadError] = useState(false);
+  const shouldDisableDurationProbeForBrowser =
+    typeof navigator !== "undefined" && isChromeAndroidVideoProbeQuirkBrowser(navigator.userAgent);
 
   useEffect(() => {
     setHasLoadError(false);
   }, [asset.id, thumbSource?.kind, thumbSource?.src]);
 
   useEffect(() => {
-    if (disableDurationProbe || asset.kind !== "video" || asset.provider === "yandex_disk" || durationLabel || thumbSource?.kind === "video") {
+    if (
+      disableDurationProbe ||
+      shouldDisableDurationProbeForBrowser ||
+      asset.kind !== "video" ||
+      asset.provider === "yandex_disk" ||
+      durationLabel ||
+      thumbSource?.kind === "video"
+    ) {
       return;
     }
 
@@ -120,7 +140,7 @@ export function MediaThumbVisual({
       video.removeEventListener("error", handleError);
       cleanup();
     };
-  }, [asset, disableDurationProbe, durationLabel, shareToken, thumbSource?.kind]);
+  }, [asset, disableDurationProbe, durationLabel, shareToken, shouldDisableDurationProbeForBrowser, thumbSource?.kind]);
 
   if (!thumbSource || hasLoadError) {
     return <>{placeholder}</>;

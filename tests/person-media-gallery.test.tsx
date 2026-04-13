@@ -316,7 +316,9 @@ describe("person media gallery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" }));
 
     expect(screen.getByRole("heading", { name: "Семейное видео" })).toBeInTheDocument();
-    expect(document.querySelector("video.person-media-stage-video-inline")).not.toBeNull();
+    const stageVideo = document.querySelector("video.person-media-stage-video-inline") as HTMLVideoElement | null;
+    expect(stageVideo).not.toBeNull();
+    expect(stageVideo?.preload).toBe("none");
   });
 
   it("uses a generated thumb image for ready cloudflare video previews", () => {
@@ -350,7 +352,9 @@ describe("person media gallery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" }));
 
     expect(document.querySelector(".person-media-thumb-video-placeholder")).toBeNull();
-    expect(document.querySelector("video.person-media-stage-video-inline")).not.toBeNull();
+    const stageVideo = document.querySelector("video.person-media-stage-video-inline") as HTMLVideoElement | null;
+    expect(stageVideo).not.toBeNull();
+    expect(stageVideo?.preload).toBe("none");
   });
 
   it("uses preview variants for fresh photo stage, thumbs, and fullscreen view", () => {

@@ -777,7 +777,7 @@ function MediaPreview({
         controls
         playsInline
         muted={autoPlayVideo}
-        preload={shouldPreferMetadataPreload ? "metadata" : "auto"}
+        preload="none"
         onLoadStart={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "loadstart" })}
         onLoadedMetadata={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "loadedmetadata" })}
         onCanPlay={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "canplay" })}
