@@ -40,6 +40,18 @@ export function withMediaShareToken(url: string, shareToken?: string | null) {
   return nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
 }
 
+export function withMediaSourceContext(url: string, sourceContext?: string | null) {
+  if (!sourceContext) {
+    return url;
+  }
+
+  const [pathname, queryString] = url.split("?");
+  const params = new URLSearchParams(queryString || "");
+  params.set("source", sourceContext);
+  const nextQueryString = params.toString();
+  return nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
+}
+
 export function buildMediaRouteUrl(
   mediaId: string,
   options?: {

@@ -202,6 +202,7 @@ function getDiagnosticUrlInfo(value: string | null | undefined, baseUrl: string)
       kind: "-",
       path: "-",
       origin: "-",
+      source: "-",
     };
   }
 
@@ -211,12 +212,14 @@ function getDiagnosticUrlInfo(value: string | null | undefined, baseUrl: string)
       kind: parsed.origin === new URL(baseUrl).origin ? "same-origin" : "cross-origin",
       path: clipDiagnosticHeaderValue(parsed.pathname, 80) || "-",
       origin: clipDiagnosticHeaderValue(parsed.origin, 80) || "-",
+      source: clipDiagnosticHeaderValue(parsed.searchParams.get("source"), 80) || "-",
     };
   } catch {
     return {
       kind: "invalid",
       path: clipDiagnosticHeaderValue(value, 80) || "-",
       origin: "-",
+      source: "-",
     };
   }
 }
@@ -249,7 +252,9 @@ function logClientPlaybackDiagnostic(
         `time=${normalizeDiagnosticToken(payload.currentTime)}`,
         `dur=${normalizeDiagnosticToken(payload.duration)}`,
         `srcKind=${normalizeDiagnosticToken(srcInfo.kind)}`,
+        `srcSource=${normalizeDiagnosticToken(srcInfo.source)}`,
         `currentKind=${normalizeDiagnosticToken(currentSrcInfo.kind)}`,
+        `currentSource=${normalizeDiagnosticToken(currentSrcInfo.source)}`,
       ].join(" ")
     );
     return;
@@ -292,8 +297,10 @@ function logClientPlaybackDiagnostic(
       `browser=${browser}`,
       `srcKind=${normalizeDiagnosticToken(srcInfo.kind)}`,
       `srcPath=${normalizeDiagnosticToken(srcInfo.path)}`,
+      `srcSource=${normalizeDiagnosticToken(srcInfo.source)}`,
       `currentKind=${normalizeDiagnosticToken(currentSrcInfo.kind)}`,
       `currentPath=${normalizeDiagnosticToken(currentSrcInfo.path)}`,
+      `currentSource=${normalizeDiagnosticToken(currentSrcInfo.source)}`,
       `page=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(payload.pageUrl, 120))}`,
     ].join(" ")
   );
@@ -318,6 +325,7 @@ function logOriginalVideoDeliveryDiagnostic(
       "[video-delivery-debug]",
       `event=${normalizeDiagnosticToken(eventName)}`,
       `mediaId=${normalizeDiagnosticToken(input.mediaId)}`,
+      `source=${normalizeDiagnosticToken(new URL(request.url).searchParams.get("source"))}`,
       `browser=${normalizeDiagnosticToken(classifyVideoClient(request))}`,
       `method=${normalizeDiagnosticToken(request.method)}`,
       `range=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("range"), 80))}`,

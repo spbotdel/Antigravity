@@ -3,7 +3,7 @@
 import { PlayIcon } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 
-import { buildMediaOpenRouteUrl, type MediaThumbSource } from "@/lib/tree/display";
+import { buildMediaOpenRouteUrl, type MediaThumbSource, withMediaSourceContext } from "@/lib/tree/display";
 import type { MediaAssetRecord } from "@/lib/types";
 import { logMediaError } from "@/lib/utils";
 
@@ -132,7 +132,10 @@ export function MediaThumbVisual({
     video.playsInline = true;
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     video.addEventListener("error", handleError);
-    video.src = buildMediaOpenRouteUrl(asset, shareToken);
+    video.src = withMediaSourceContext(
+      buildMediaOpenRouteUrl(asset, shareToken),
+      "media-thumb-duration-probe"
+    );
 
     return () => {
       active = false;

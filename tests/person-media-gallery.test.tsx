@@ -568,7 +568,7 @@ describe("person media gallery", () => {
       await waitFor(() => {
         const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
         expect(video).not.toBeNull();
-        expect(video).toHaveAttribute("src", "/api/media/media-video");
+        expect(video).toHaveAttribute("src", "/api/media/media-video?source=person-media-lightbox-video");
         expect(video?.hasAttribute("controls")).toBe(true);
         expect(video?.autoplay).toBe(false);
         expect(video?.preload).toBe("none");

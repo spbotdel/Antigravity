@@ -15,7 +15,7 @@ import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play, Trash2, V
 import { type CSSProperties, type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl, resolveMediaThumbSource } from "@/lib/tree/display";
+import { buildMediaOpenRouteUrl, buildMediaRouteUrl, buildPhotoPreviewRouteUrl, resolveMediaThumbSource, withMediaSourceContext } from "@/lib/tree/display";
 import { formatMediaKind, formatMediaVisibility } from "@/lib/ui-text";
 import type { TreeSnapshot } from "@/lib/types";
 import { logMediaError, reportMediaClientPlaybackEvent, reportMediaClientPlaybackIssue, type MediaClientPlaybackEventDiagnosticInput } from "@/lib/utils";
@@ -714,9 +714,12 @@ function MediaPreview({
     isInlineVideoAsset(asset) &&
     typeof navigator !== "undefined" &&
     isChromeAndroidVideoQuirkBrowser(navigator.userAgent);
-  const mediaUrl = isPhotoAsset(asset)
+  const baseMediaUrl = isPhotoAsset(asset)
     ? buildPhotoPreviewRouteUrl(asset, expanded ? "medium" : "small", shareToken)
     : buildMediaOpenRouteUrl(asset, shareToken);
+  const mediaUrl = isInlineVideoAsset(asset)
+    ? withMediaSourceContext(baseMediaUrl, expanded ? "person-media-lightbox-video" : "person-media-stage-video")
+    : baseMediaUrl;
   const handleOriginalLoadError = (video?: HTMLVideoElement | null) => {
     logMediaError({
       mediaId: asset.id,
