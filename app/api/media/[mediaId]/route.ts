@@ -27,6 +27,7 @@ interface ThumbRedirectCacheEntry {
 
 const MEDIA_THUMB_ROUTE_CACHE_TTL_MS = 30_000;
 const MAX_PDF_PROXY_BYTES = 100 * 1024 * 1024;
+const CHROME_ANDROID_INITIAL_VIDEO_RANGE_BYTES = 2 * 1024 * 1024;
 const VIDEO_DELIVERY_DIAGNOSTICS_ENABLED = process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV === "development";
 const thumbRedirectCache = new Map<string, ThumbRedirectCacheEntry>();
 const thumbRedirectInFlight = new Map<string, Promise<ThumbRedirectCacheEntry>>();
@@ -336,6 +337,27 @@ function shouldProxyOriginalVideo(media: Awaited<ReturnType<typeof getMediaSumma
   return media.kind === "video" && !variant && !download && !media.external_url && Boolean(media.storage_path);
 }
 
+function buildForcedInitialChromeAndroidRange(
+  request: Request,
+  media: Awaited<ReturnType<typeof getMediaSummary>>
+) {
+  if (request.headers.get("range")) {
+    return null;
+  }
+
+  if (classifyVideoClient(request) !== "chrome-android") {
+    return null;
+  }
+
+  const maxEndByte = CHROME_ANDROID_INITIAL_VIDEO_RANGE_BYTES - 1;
+  const boundedEndByte =
+    typeof media.size_bytes === "number" && media.size_bytes > 0
+      ? Math.max(0, Math.min(media.size_bytes - 1, maxEndByte))
+      : maxEndByte;
+
+  return `bytes=0-${boundedEndByte}`;
+}
+
 function parseContentRangeTotal(contentRange: string | null) {
   if (!contentRange) {
     return null;
@@ -402,7 +424,8 @@ async function buildOriginalVideoProxyContext(mediaId: string, shareToken?: stri
 
 async function proxyOriginalVideoResponse(request: Request, context: NonNullable<Awaited<ReturnType<typeof buildOriginalVideoProxyContext>>>) {
   const upstreamHeaders = new Headers();
-  const rangeHeader = request.headers.get("range");
+  const forcedInitialRangeHeader = buildForcedInitialChromeAndroidRange(request, context.media);
+  const rangeHeader = request.headers.get("range") || forcedInitialRangeHeader;
   const ifRangeHeader = request.headers.get("if-range");
 
   if (rangeHeader) {
@@ -415,7 +438,7 @@ async function proxyOriginalVideoResponse(request: Request, context: NonNullable
 
   logOriginalVideoDeliveryDiagnostic("video-proxy-request", request, {
     mediaId: context.media.id,
-    notes: rangeHeader ? "range-request" : "full-request",
+    notes: forcedInitialRangeHeader ? "forced-initial-range" : rangeHeader ? "range-request" : "full-request",
   });
 
   const upstreamResponse = await fetch(context.resolvedAccess.url, {
