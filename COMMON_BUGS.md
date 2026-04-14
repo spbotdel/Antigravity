@@ -763,6 +763,75 @@ Do not start by adding resolver exceptions for Yandex-backed avatars.
 
 ---
 
+# 21. Chrome Android Video Starts, Shows Duration, Then Falls Into False Fallback
+
+### Symptom
+
+On `Chrome Android` in real product surfaces such as:
+
+- `/tree/[slug]/media?mode=video`
+- person card / viewer lightbox
+
+video may:
+
+- show native controls and correct duration,
+- begin buffering or partially load,
+- then switch to the app fallback like `Оригинал этого медиа сейчас недоступен...`
+
+Historically this could happen more often on repeated opens of the same asset than on the first open.
+
+### Likely Cause
+
+This was previously misclassified as:
+
+- broken video file,
+- signed URL / `HEAD` issue,
+- Cloudflare R2 delivery failure,
+- generic codec incompatibility.
+
+The investigation on `2026-04-14` showed the more accurate pattern:
+
+- `/api/media/:id` could still return `206` and stay viable,
+- the same asset could play on a minimal native debug page,
+- the failure was in the site integration path around `PersonMediaGallery`,
+- especially on `Chrome Android` when the player had already reached a partially playable state and then emitted a late error.
+
+### First Checks
+
+1. Reproduce on a real `Chrome Android` device, not on desktop emulation.
+2. Check whether the failure happens on:
+   - the archive/media surface,
+   - the person-card viewer,
+   - one specific asset only,
+   - or every video.
+3. Confirm whether the player already shows duration / controls before the fallback appears.
+4. Check current preview/prod runtime logs for:
+   - `GET /api/media/:id` with `206`,
+   - late client-side error after metadata/playback start.
+5. Read the historical handoff before changing code:
+   [chrome-android-video-handoff-2026-04-14.md](C:/Antigravity/Antigravity-audio-docs-experiment/docs/research/chrome-android-video-handoff-2026-04-14.md)
+
+### Typical Fix
+
+Do not start by changing storage provider, codec policy, or rebuilding the entire player.
+
+The proven direction was:
+
+- keep the real delivery path through `/api/media/:id`,
+- make the `Chrome Android` expanded path closer to plain native `<video controls playsinline preload="metadata">`,
+- avoid collapsing immediately into placeholder fallback after a late error if the player has already reached playable state,
+- only treat the issue as file-specific after the site integration path is ruled out.
+
+### Relevant Files
+
+- `components/tree/person-media-gallery.tsx`
+- `components/tree/tree-viewer-client.tsx`
+- `components/media/tree-media-archive-client.tsx`
+- `app/api/media/[mediaId]/route.ts`
+- `docs/research/chrome-android-video-handoff-2026-04-14.md`
+
+---
+
 # Practical Rule
 
 Before modifying production code, always determine which category the issue belongs to:

@@ -10,8 +10,6 @@ export function cn(...inputs: ClassValue[]) {
 type MediaErrorLogType = "thumb" | "original";
 
 const loggedMediaErrors = new Set<string>();
-const reportedMediaClientPlaybackIssues = new Set<string>();
-const reportedMediaClientPlaybackEvents = new Set<string>();
 
 function shouldLogMediaErrors() {
   return process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_DEBUG_MEDIA_ERRORS === "1";
@@ -38,122 +36,6 @@ export function logMediaError(input: {
 
 export function __resetLoggedMediaErrorsForTests() {
   loggedMediaErrors.clear();
-  reportedMediaClientPlaybackIssues.clear();
-  reportedMediaClientPlaybackEvents.clear();
-}
-
-export interface MediaClientPlaybackDiagnosticInput {
-  mediaId: string;
-  context: string;
-  shareToken?: string | null;
-  pageUrl?: string | null;
-  src?: string | null;
-  currentSrc?: string | null;
-  poster?: string | null;
-  errorCode?: number | null;
-  networkState?: number | null;
-  readyState?: number | null;
-  currentTime?: number | null;
-  duration?: number | null;
-  controls?: boolean | null;
-  playsInline?: boolean | null;
-  autoPlay?: boolean | null;
-  muted?: boolean | null;
-  preload?: string | null;
-}
-
-export interface MediaClientPlaybackEventDiagnosticInput extends MediaClientPlaybackDiagnosticInput {
-  eventName: "loadstart" | "loadedmetadata" | "canplay" | "play" | "playing" | "waiting" | "stalled" | "suspend" | "abort" | "error";
-}
-
-export function reportMediaClientPlaybackIssue(input: MediaClientPlaybackDiagnosticInput) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const dedupeKey = `${input.mediaId}:${input.context}:${input.errorCode ?? "na"}:${input.currentSrc || input.src || "none"}`;
-  if (reportedMediaClientPlaybackIssues.has(dedupeKey)) {
-    return;
-  }
-
-  reportedMediaClientPlaybackIssues.add(dedupeKey);
-
-  const payload = {
-    event: "client-original-error" as const,
-    context: input.context,
-    shareToken: input.shareToken || null,
-    pageUrl: input.pageUrl || window.location.href,
-    src: input.src || null,
-    currentSrc: input.currentSrc || null,
-    poster: input.poster || null,
-    errorCode: input.errorCode ?? null,
-    networkState: input.networkState ?? null,
-    readyState: input.readyState ?? null,
-    currentTime: input.currentTime ?? null,
-    duration: input.duration ?? null,
-    controls: input.controls ?? null,
-    playsInline: input.playsInline ?? null,
-    autoPlay: input.autoPlay ?? null,
-    muted: input.muted ?? null,
-    preload: input.preload ?? null,
-  };
-
-  const endpoint = `/api/media/${input.mediaId}`;
-  const body = JSON.stringify(payload);
-
-  void fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body,
-    keepalive: true,
-  }).catch(() => undefined);
-}
-
-export function reportMediaClientPlaybackEvent(input: MediaClientPlaybackEventDiagnosticInput) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const dedupeKey = `${input.mediaId}:${input.context}:${input.eventName}:${input.currentSrc || input.src || "none"}:${input.readyState ?? "na"}:${input.networkState ?? "na"}`;
-  if (reportedMediaClientPlaybackEvents.has(dedupeKey)) {
-    return;
-  }
-
-  reportedMediaClientPlaybackEvents.add(dedupeKey);
-
-  const payload = {
-    event: "client-video-event" as const,
-    eventName: input.eventName,
-    context: input.context,
-    shareToken: input.shareToken || null,
-    pageUrl: input.pageUrl || window.location.href,
-    src: input.src || null,
-    currentSrc: input.currentSrc || null,
-    poster: input.poster || null,
-    errorCode: input.errorCode ?? null,
-    networkState: input.networkState ?? null,
-    readyState: input.readyState ?? null,
-    currentTime: input.currentTime ?? null,
-    duration: input.duration ?? null,
-    controls: input.controls ?? null,
-    playsInline: input.playsInline ?? null,
-    autoPlay: input.autoPlay ?? null,
-    muted: input.muted ?? null,
-    preload: input.preload ?? null,
-  };
-
-  const endpoint = `/api/media/${input.mediaId}`;
-
-  void fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(payload),
-    keepalive: true,
-  }).catch(() => undefined);
 }
 
 export function formatDate(date: string | null) {

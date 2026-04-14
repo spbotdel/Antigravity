@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { AppError, toErrorResponse } from "@/lib/server/errors";
 import type { MediaVisibility, ViewerAccessSource } from "@/lib/types";
 import { buildAttachmentContentDisposition, buildMediaDownloadFilename, deleteMedia, getMediaSummary, resolveMediaAccess, setPrimaryPersonMedia } from "@/lib/server/repository";
-import { mediaClientPlaybackDiagnosticSchema, setPrimaryPersonMediaSchema } from "@/lib/validators/media";
+import { setPrimaryPersonMediaSchema } from "@/lib/validators/media";
 
 interface Params {
   params: Promise<{ mediaId: string }>;
@@ -28,7 +28,6 @@ interface ThumbRedirectCacheEntry {
 const MEDIA_THUMB_ROUTE_CACHE_TTL_MS = 30_000;
 const MAX_PDF_PROXY_BYTES = 100 * 1024 * 1024;
 const CHROME_ANDROID_INITIAL_VIDEO_RANGE_BYTES = 2 * 1024 * 1024;
-const VIDEO_DELIVERY_DIAGNOSTICS_ENABLED = process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV === "development";
 const thumbRedirectCache = new Map<string, ThumbRedirectCacheEntry>();
 const thumbRedirectInFlight = new Map<string, Promise<ThumbRedirectCacheEntry>>();
 const thumbMediaScopeCache = new Map<string, ThumbMediaScopeCacheEntry>();
@@ -154,22 +153,6 @@ function isPdfDocumentMimeType(mimeType: string | null | undefined) {
   return normalizedMimeType === "application/pdf" || normalizedMimeType.endsWith("/pdf");
 }
 
-function clipDiagnosticHeaderValue(value: string | null | undefined, maxLength = 240) {
-  if (!value) {
-    return null;
-  }
-
-  return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
-}
-
-function normalizeDiagnosticToken(value: string | number | boolean | null | undefined) {
-  if (value === null || value === undefined || value === "") {
-    return "-";
-  }
-
-  return String(value).replace(/\s+/g, "_");
-}
-
 function classifyVideoClient(request: Request) {
   const userAgent = request.headers.get("user-agent") || "";
   const secChUa = request.headers.get("sec-ch-ua") || "";
@@ -194,177 +177,6 @@ function classifyVideoClient(request: Request) {
   }
 
   return "unknown";
-}
-
-function getDiagnosticUrlInfo(value: string | null | undefined, baseUrl: string) {
-  if (!value) {
-    return {
-      kind: "-",
-      path: "-",
-      origin: "-",
-      source: "-",
-    };
-  }
-
-  try {
-    const parsed = new URL(value, baseUrl);
-    return {
-      kind: parsed.origin === new URL(baseUrl).origin ? "same-origin" : "cross-origin",
-      path: clipDiagnosticHeaderValue(parsed.pathname, 80) || "-",
-      origin: clipDiagnosticHeaderValue(parsed.origin, 80) || "-",
-      source: clipDiagnosticHeaderValue(parsed.searchParams.get("source"), 80) || "-",
-    };
-  } catch {
-    return {
-      kind: "invalid",
-      path: clipDiagnosticHeaderValue(value, 80) || "-",
-      origin: "-",
-      source: "-",
-    };
-  }
-}
-
-function logClientPlaybackDiagnostic(
-  request: Request,
-  mediaId: string,
-  payload: ReturnType<typeof mediaClientPlaybackDiagnosticSchema.parse>
-) {
-  if (!VIDEO_DELIVERY_DIAGNOSTICS_ENABLED) {
-    return;
-  }
-
-  const browser = normalizeDiagnosticToken(classifyVideoClient(request));
-  const requestUrl = request.url;
-  const srcInfo = getDiagnosticUrlInfo(payload.src, requestUrl);
-  const currentSrcInfo = getDiagnosticUrlInfo(payload.currentSrc, payload.pageUrl || requestUrl);
-
-  if (payload.event === "client-video-event") {
-    console.warn(
-      [
-        "[video-client-event]",
-        `name=${normalizeDiagnosticToken(payload.eventName)}`,
-        `mediaId=${normalizeDiagnosticToken(mediaId)}`,
-        `browser=${browser}`,
-        `context=${normalizeDiagnosticToken(payload.context)}`,
-        `code=${normalizeDiagnosticToken(payload.errorCode)}`,
-        `net=${normalizeDiagnosticToken(payload.networkState)}`,
-        `ready=${normalizeDiagnosticToken(payload.readyState)}`,
-        `time=${normalizeDiagnosticToken(payload.currentTime)}`,
-        `dur=${normalizeDiagnosticToken(payload.duration)}`,
-        `srcKind=${normalizeDiagnosticToken(srcInfo.kind)}`,
-        `srcSource=${normalizeDiagnosticToken(srcInfo.source)}`,
-        `currentKind=${normalizeDiagnosticToken(currentSrcInfo.kind)}`,
-        `currentSource=${normalizeDiagnosticToken(currentSrcInfo.source)}`,
-      ].join(" ")
-    );
-    return;
-  }
-
-  console.warn(
-    [
-      "[video-client-debug-core]",
-      `event=${normalizeDiagnosticToken(payload.event)}`,
-      `mediaId=${normalizeDiagnosticToken(mediaId)}`,
-      `browser=${browser}`,
-      `context=${normalizeDiagnosticToken(payload.context)}`,
-      `code=${normalizeDiagnosticToken(payload.errorCode)}`,
-      `net=${normalizeDiagnosticToken(payload.networkState)}`,
-      `ready=${normalizeDiagnosticToken(payload.readyState)}`,
-      `time=${normalizeDiagnosticToken(payload.currentTime)}`,
-      `dur=${normalizeDiagnosticToken(payload.duration)}`,
-    ].join(" ")
-  );
-
-  console.warn(
-    [
-      "[video-client-debug-flags]",
-      `mediaId=${normalizeDiagnosticToken(mediaId)}`,
-      `browser=${browser}`,
-      `controls=${normalizeDiagnosticToken(payload.controls)}`,
-      `inline=${normalizeDiagnosticToken(payload.playsInline)}`,
-      `auto=${normalizeDiagnosticToken(payload.autoPlay)}`,
-      `muted=${normalizeDiagnosticToken(payload.muted)}`,
-      `preload=${normalizeDiagnosticToken(payload.preload)}`,
-      `dest=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-fetch-dest"), 40))}`,
-      `accept=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("accept"), 80))}`,
-    ].join(" ")
-  );
-
-  console.warn(
-    [
-      "[video-client-debug-src]",
-      `mediaId=${normalizeDiagnosticToken(mediaId)}`,
-      `browser=${browser}`,
-      `srcKind=${normalizeDiagnosticToken(srcInfo.kind)}`,
-      `srcPath=${normalizeDiagnosticToken(srcInfo.path)}`,
-      `srcSource=${normalizeDiagnosticToken(srcInfo.source)}`,
-      `currentKind=${normalizeDiagnosticToken(currentSrcInfo.kind)}`,
-      `currentPath=${normalizeDiagnosticToken(currentSrcInfo.path)}`,
-      `currentSource=${normalizeDiagnosticToken(currentSrcInfo.source)}`,
-      `page=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(payload.pageUrl, 120))}`,
-    ].join(" ")
-  );
-}
-
-function logOriginalVideoDeliveryDiagnostic(
-  eventName: string,
-  request: Request,
-  input: {
-    mediaId: string;
-    upstreamStatus?: number;
-    proxiedStatus?: number;
-    notes?: string;
-  }
-) {
-  if (!VIDEO_DELIVERY_DIAGNOSTICS_ENABLED) {
-    return;
-  }
-
-  const source = normalizeDiagnosticToken(new URL(request.url).searchParams.get("source"));
-  const browser = normalizeDiagnosticToken(classifyVideoClient(request));
-  const method = normalizeDiagnosticToken(request.method);
-  const dest = normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-fetch-dest"), 40));
-  const range = normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("range"), 80));
-  const notes = normalizeDiagnosticToken(input.notes ?? null);
-  const proxied = normalizeDiagnosticToken(input.proxiedStatus ?? null);
-  const upstream = normalizeDiagnosticToken(input.upstreamStatus ?? null);
-
-  console.warn(
-    [
-      "[video-delivery-debug]",
-      `event=${normalizeDiagnosticToken(eventName)}`,
-      `mediaId=${normalizeDiagnosticToken(input.mediaId)}`,
-      `source=${source}`,
-      `browser=${browser}`,
-      `method=${method}`,
-      `range=${range}`,
-      `ifRange=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("if-range"), 80))}`,
-      `accept=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("accept"), 80))}`,
-      `dest=${dest}`,
-      `uaMobile=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-mobile"), 20))}`,
-      `uaPlatform=${normalizeDiagnosticToken(clipDiagnosticHeaderValue(request.headers.get("sec-ch-ua-platform"), 40))}`,
-      `upstream=${upstream}`,
-      `proxied=${proxied}`,
-      `notes=${notes}`,
-    ].join(" ")
-  );
-
-  if (eventName === "video-proxy-request" || eventName === "video-proxy-response" || eventName === "video-head-request" || eventName === "video-head-response") {
-    console.warn(
-      [
-        "[video-proxy-brief]",
-        `e=${normalizeDiagnosticToken(eventName)}`,
-        `m=${normalizeDiagnosticToken(input.mediaId)}`,
-        `b=${browser}`,
-        `s=${source}`,
-        `d=${dest}`,
-        `rg=${range}`,
-        `up=${upstream}`,
-        `px=${proxied}`,
-        `n=${notes}`,
-      ].join(" ")
-    );
-  }
 }
 
 function shouldProxyOriginalVideo(media: Awaited<ReturnType<typeof getMediaSummary>>, variant: string | null, download: boolean) {
@@ -470,11 +282,6 @@ async function proxyOriginalVideoResponse(request: Request, context: NonNullable
     upstreamHeaders.set("If-Range", ifRangeHeader);
   }
 
-  logOriginalVideoDeliveryDiagnostic("video-proxy-request", request, {
-    mediaId: context.media.id,
-    notes: forcedInitialRangeHeader ? "forced-initial-range" : rangeHeader ? "range-request" : "full-request",
-  });
-
   const upstreamResponse = await fetch(context.resolvedAccess.url, {
     method: "GET",
     headers: upstreamHeaders,
@@ -487,19 +294,8 @@ async function proxyOriginalVideoResponse(request: Request, context: NonNullable
       status: upstreamResponse.status,
       hasRange: Boolean(rangeHeader),
     });
-    logOriginalVideoDeliveryDiagnostic("video-proxy-upstream-failed", request, {
-      mediaId: context.media.id,
-      upstreamStatus: upstreamResponse.status,
-    });
     throw new AppError(502, "Не удалось получить оригинал видео.");
   }
-
-  logOriginalVideoDeliveryDiagnostic("video-proxy-response", request, {
-    mediaId: context.media.id,
-    upstreamStatus: upstreamResponse.status,
-    proxiedStatus: upstreamResponse.status,
-    notes: upstreamResponse.status === 206 ? "partial-content" : "ok",
-  });
 
   return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
@@ -518,11 +314,6 @@ async function buildOriginalVideoHeadResponse(
   const probeHeaders = new Headers();
   probeHeaders.set("Range", "bytes=0-0");
 
-  logOriginalVideoDeliveryDiagnostic("video-head-request", request, {
-    mediaId: context.media.id,
-    notes: "range-probe-0-0",
-  });
-
   const upstreamResponse = await fetch(context.resolvedAccess.url, {
     method: "GET",
     headers: probeHeaders,
@@ -534,18 +325,8 @@ async function buildOriginalVideoHeadResponse(
       mediaId: context.media.id,
       status: upstreamResponse.status,
     });
-    logOriginalVideoDeliveryDiagnostic("video-head-upstream-failed", request, {
-      mediaId: context.media.id,
-      upstreamStatus: upstreamResponse.status,
-    });
     throw new AppError(502, "Не удалось проверить оригинал видео.");
   }
-
-  logOriginalVideoDeliveryDiagnostic("video-head-response", request, {
-    mediaId: context.media.id,
-    upstreamStatus: upstreamResponse.status,
-    proxiedStatus: 200,
-  });
 
   return new Response(null, {
     status: 200,
@@ -634,18 +415,6 @@ export async function HEAD(request: Request, { params }: Params) {
 
     const result = await resolveMediaAccess(mediaId, shareToken, variant, { download });
     return NextResponse.redirect(result.url);
-  } catch (error) {
-    return toErrorResponse(error);
-  }
-}
-
-export async function POST(request: Request, { params }: Params) {
-  try {
-    const { mediaId } = await params;
-    const payload = mediaClientPlaybackDiagnosticSchema.parse(await request.json());
-    await getMediaSummary(mediaId, payload.shareToken || undefined);
-    logClientPlaybackDiagnostic(request, mediaId, payload);
-    return Response.json({ ok: true }, { status: 202 });
   } catch (error) {
     return toErrorResponse(error);
   }
