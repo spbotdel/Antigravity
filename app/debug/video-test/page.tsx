@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 
 import { buildMediaRouteUrl } from "@/lib/tree/display";
+import { reportMediaClientPlaybackEvent, reportMediaClientPlaybackIssue } from "@/lib/utils";
 
 const DEFAULT_DEBUG_VIDEO = {
   id: "3508fdcf-e2fc-4a34-8586-b2f503a12c7c",
@@ -24,6 +25,16 @@ function formatDuration(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(2)}s` : "-";
 }
 
+function buildVideoStateDetail(video: HTMLVideoElement) {
+  return [
+    `readyState=${formatNumber(video.readyState)}`,
+    `networkState=${formatNumber(video.networkState)}`,
+    `currentTime=${formatDuration(video.currentTime)}`,
+    `duration=${formatDuration(video.duration)}`,
+    `currentSrc=${video.currentSrc || "-"}`,
+  ].join(" ");
+}
+
 export default function DebugVideoTestPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const eventIdRef = useRef(0);
@@ -40,6 +51,7 @@ export default function DebugVideoTestPage() {
   }, [mediaId, shareToken]);
   const [eventLog, setEventLog] = useState<VideoEventEntry[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
+  const diagnosticContext = "DebugVideoTestPage:native-video";
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -70,25 +82,51 @@ export default function DebugVideoTestPage() {
     eventIdRef.current = 0;
   }, [sourceUrl]);
 
+  const reportTimelineEvent = useEffectEvent((eventName: "loadstart" | "loadedmetadata" | "canplay" | "play" | "playing" | "waiting" | "stalled" | "suspend" | "abort" | "error", video: HTMLVideoElement) => {
+    reportMediaClientPlaybackEvent({
+      mediaId,
+      context: diagnosticContext,
+      shareToken,
+      src: sourceUrl || null,
+      currentSrc: video.currentSrc || null,
+      poster: video.poster || null,
+      errorCode: video.error?.code ?? null,
+      networkState: video.networkState,
+      readyState: video.readyState,
+      currentTime: Number.isFinite(video.currentTime) ? video.currentTime : null,
+      duration: Number.isFinite(video.duration) ? video.duration : null,
+      controls: video.controls,
+      playsInline: video.playsInline,
+      autoPlay: video.autoplay,
+      muted: video.muted,
+      preload: video.preload,
+      eventName,
+    });
+  });
+
+  const logTimelineEvent = useEffectEvent((eventName: "loadstart" | "loadedmetadata" | "canplay" | "play" | "playing" | "waiting" | "stalled" | "suspend" | "abort" | "error", video: HTMLVideoElement) => {
+    appendEvent(eventName, buildVideoStateDetail(video));
+    if (mediaId) {
+      reportTimelineEvent(eventName, video);
+    }
+  });
+
   const handleLoadedMetadata = useEffectEvent((video: HTMLVideoElement) => {
     appendEvent(
       "loadedmetadata",
       `duration=${formatDuration(video.duration)} width=${formatNumber(video.videoWidth)} height=${formatNumber(video.videoHeight)} readyState=${formatNumber(video.readyState)}`
     );
+    if (mediaId) {
+      reportTimelineEvent("loadedmetadata", video);
+    }
   });
 
   const handleCanPlay = useEffectEvent((video: HTMLVideoElement) => {
-    appendEvent(
-      "canplay",
-      `readyState=${formatNumber(video.readyState)} networkState=${formatNumber(video.networkState)} currentSrc=${video.currentSrc || "-"}`
-    );
+    logTimelineEvent("canplay", video);
   });
 
   const handlePlay = useEffectEvent((video: HTMLVideoElement) => {
-    appendEvent(
-      "play",
-      `currentTime=${formatDuration(video.currentTime)} paused=${String(video.paused)} currentSrc=${video.currentSrc || "-"}`
-    );
+    logTimelineEvent("play", video);
   });
 
   const handleError = useEffectEvent((video: HTMLVideoElement) => {
@@ -102,6 +140,27 @@ export default function DebugVideoTestPage() {
 
     setLastError(message);
     appendEvent("error", message);
+    if (mediaId) {
+      reportTimelineEvent("error", video);
+      reportMediaClientPlaybackIssue({
+        mediaId,
+        context: diagnosticContext,
+        shareToken,
+        src: sourceUrl || null,
+        currentSrc: video.currentSrc || null,
+        poster: video.poster || null,
+        errorCode: video.error?.code ?? null,
+        networkState: video.networkState,
+        readyState: video.readyState,
+        currentTime: Number.isFinite(video.currentTime) ? video.currentTime : null,
+        duration: Number.isFinite(video.duration) ? video.duration : null,
+        controls: video.controls,
+        playsInline: video.playsInline,
+        autoPlay: video.autoplay,
+        muted: video.muted,
+        preload: video.preload,
+      });
+    }
   });
 
   return (
@@ -227,6 +286,8 @@ export default function DebugVideoTestPage() {
           <dd style={{ margin: 0 }}>{DEFAULT_DEBUG_VIDEO.title}</dd>
           <dt style={{ fontWeight: 600 }}>source</dt>
           <dd style={{ margin: 0, wordBreak: "break-all", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace" }}>{sourceUrl || "-"}</dd>
+          <dt style={{ fontWeight: 600 }}>log context</dt>
+          <dd style={{ margin: 0, fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace" }}>{diagnosticContext}</dd>
           <dt style={{ fontWeight: 600 }}>last error</dt>
           <dd style={{ margin: 0, wordBreak: "break-word", color: lastError ? "#b91c1c" : "#6b7280" }}>{lastError || "No error captured yet."}</dd>
         </dl>
@@ -251,9 +312,15 @@ export default function DebugVideoTestPage() {
             playsInline
             preload="metadata"
             style={{ width: "100%", maxWidth: 720, borderRadius: 12, background: "#000000" }}
+            onLoadStart={(event) => logTimelineEvent("loadstart", event.currentTarget)}
             onLoadedMetadata={(event) => handleLoadedMetadata(event.currentTarget)}
             onCanPlay={(event) => handleCanPlay(event.currentTarget)}
             onPlay={(event) => handlePlay(event.currentTarget)}
+            onPlaying={(event) => logTimelineEvent("playing", event.currentTarget)}
+            onWaiting={(event) => logTimelineEvent("waiting", event.currentTarget)}
+            onStalled={(event) => logTimelineEvent("stalled", event.currentTarget)}
+            onSuspend={(event) => logTimelineEvent("suspend", event.currentTarget)}
+            onAbort={(event) => logTimelineEvent("abort", event.currentTarget)}
             onError={(event) => handleError(event.currentTarget)}
           >
             Your browser does not support HTML5 video.
