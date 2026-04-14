@@ -792,6 +792,9 @@ function MediaPreview({
       }
       return;
     }
+    if (isChromeAndroidVideoBrowser && hasReachedPlayableState) {
+      return;
+    }
     setHasLoadError(true);
   };
 
