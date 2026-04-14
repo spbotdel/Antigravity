@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
-import { useSearchParams } from "next/navigation";
 
 import { buildMediaRouteUrl } from "@/lib/tree/display";
 
@@ -21,11 +20,12 @@ function formatDuration(value: number | null | undefined) {
 }
 
 export default function DebugVideoTestPage() {
-  const searchParams = useSearchParams();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const eventIdRef = useRef(0);
-  const mediaId = (searchParams.get("mediaId") || "").trim();
-  const shareToken = (searchParams.get("share") || "").trim() || null;
+  const [mediaIdInput, setMediaIdInput] = useState("");
+  const [shareInput, setShareInput] = useState("");
+  const mediaId = mediaIdInput.trim();
+  const shareToken = shareInput.trim() || null;
   const sourceUrl = useMemo(() => {
     if (!mediaId) {
       return "";
@@ -35,6 +35,16 @@ export default function DebugVideoTestPage() {
   }, [mediaId, shareToken]);
   const [eventLog, setEventLog] = useState<VideoEventEntry[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setMediaIdInput(params.get("mediaId") || "");
+    setShareInput(params.get("share") || "");
+  }, []);
 
   const appendEvent = useEffectEvent((name: string, detail: string) => {
     eventIdRef.current += 1;
@@ -115,8 +125,9 @@ export default function DebugVideoTestPage() {
             <input
               type="text"
               name="mediaId"
-              defaultValue={mediaId}
+              value={mediaIdInput}
               placeholder="Paste a media id"
+              onChange={(event) => setMediaIdInput(event.currentTarget.value)}
               style={{ border: "1px solid #9ca3af", borderRadius: 10, padding: "10px 12px", font: "inherit" }}
             />
           </label>
@@ -125,8 +136,9 @@ export default function DebugVideoTestPage() {
             <input
               type="text"
               name="share"
-              defaultValue={shareToken || ""}
+              value={shareInput}
               placeholder="Use only if you need share-link access"
+              onChange={(event) => setShareInput(event.currentTarget.value)}
               style={{ border: "1px solid #9ca3af", borderRadius: 10, padding: "10px 12px", font: "inherit" }}
             />
           </label>
