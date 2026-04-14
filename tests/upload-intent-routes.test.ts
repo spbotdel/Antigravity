@@ -112,4 +112,91 @@ describe("media upload-intent routes", () => {
     expect(payload.variantUploadMode).toBe("none");
     expect(payload.variantTargets).toEqual([]);
   });
+
+  it("forces proxy upload on hosted preview origins for /api/media/upload-intent", async () => {
+    const { POST } = await import("@/app/api/media/upload-intent/route");
+    createMediaUploadTarget.mockResolvedValue({
+      mediaId: crypto.randomUUID(),
+      kind: "video",
+      path: "trees/tree-1/media/video/media-1/original.mp4",
+      bucket: "bucket-1",
+      signedUrl: "https://example.com/original",
+      token: null,
+      uploadProvider: "cloudflare_r2",
+      configuredBackend: "cloudflare_r2",
+      resolvedUploadBackend: "cloudflare_r2",
+      rolloutState: "cloudflare_rollout_active",
+      forceProxyUpload: false,
+      uploadMode: "direct",
+      variantUploadMode: "none",
+      variantTargets: [],
+    });
+
+    const request = new Request("https://antigravity-git-feature-ux-media-update-spbotdel-4945s-projects.vercel.app/api/media/upload-intent", {
+      method: "POST",
+      body: JSON.stringify({
+        treeId: crypto.randomUUID(),
+        personId: crypto.randomUUID(),
+        filename: "family-video.mp4",
+        mimeType: "video/mp4",
+        visibility: "members",
+        title: "Видео",
+        caption: "",
+      }),
+      headers: {
+        "content-type": "application/json",
+        origin: "https://antigravity-git-feature-ux-media-update-spbotdel-4945s-projects.vercel.app",
+      },
+    });
+
+    const response = await POST(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.forceProxyUpload).toBe(true);
+    expect(payload.uploadMode).toBe("proxy");
+  });
+
+  it("forces proxy upload on hosted preview origins for /api/media/archive/upload-intent", async () => {
+    const { POST } = await import("@/app/api/media/archive/upload-intent/route");
+    createArchiveMediaUploadTarget.mockResolvedValue({
+      mediaId: crypto.randomUUID(),
+      kind: "video",
+      path: "trees/tree-1/media/video/media-1/original.mp4",
+      bucket: "bucket-1",
+      signedUrl: "https://example.com/original-video",
+      token: null,
+      uploadProvider: "cloudflare_r2",
+      configuredBackend: "cloudflare_r2",
+      resolvedUploadBackend: "cloudflare_r2",
+      rolloutState: "cloudflare_rollout_active",
+      forceProxyUpload: false,
+      uploadMode: "direct",
+      variantUploadMode: "none",
+      variantTargets: [],
+    });
+
+    const request = new Request("https://antigravity-git-feature-ux-media-update-spbotdel-4945s-projects.vercel.app/api/media/archive/upload-intent", {
+      method: "POST",
+      body: JSON.stringify({
+        treeId: crypto.randomUUID(),
+        filename: "family-video.mp4",
+        mimeType: "video/mp4",
+        visibility: "members",
+        title: "Видео",
+        caption: "",
+      }),
+      headers: {
+        "content-type": "application/json",
+        origin: "https://antigravity-git-feature-ux-media-update-spbotdel-4945s-projects.vercel.app",
+      },
+    });
+
+    const response = await POST(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.forceProxyUpload).toBe(true);
+    expect(payload.uploadMode).toBe("proxy");
+  });
 });
