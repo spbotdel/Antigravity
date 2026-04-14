@@ -525,8 +525,6 @@ describe("person media gallery", () => {
 
   it("uses native controls for archive-style lightbox video on Chrome Android", async () => {
     const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
-    const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => Promise.resolve());
-    const loadSpy = vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
 
     Object.defineProperty(window.navigator, "userAgent", {
       configurable: true,
@@ -556,30 +554,70 @@ describe("person media gallery", () => {
       );
 
       const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
-      const startButton = within(dialog).getByRole("button", { name: "Загрузить видео" });
-      const initialVideo = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
-      expect(initialVideo).not.toBeNull();
-      expect(initialVideo?.getAttribute("src")).toBeNull();
-      expect(initialVideo?.hasAttribute("controls")).toBe(false);
-      expect(initialVideo?.preload).toBe("none");
-
-      fireEvent.click(startButton);
-
-      await waitFor(() => {
-        const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
-        expect(video).not.toBeNull();
-        expect(video).toHaveAttribute("src", "/api/media/media-video?source=person-media-lightbox-video");
-        expect(video?.hasAttribute("controls")).toBe(true);
-        expect(video?.autoplay).toBe(false);
-        expect(video?.preload).toBe("none");
-        expect(within(dialog).queryByRole("button", { name: "Загрузить видео" })).toBeNull();
-        expect(within(dialog).queryByLabelText("Громкость")).toBeNull();
-      });
-      expect(loadSpy).toHaveBeenCalled();
-      expect(playSpy).toHaveBeenCalled();
+      const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
+      expect(video).not.toBeNull();
+      expect(video).toHaveAttribute("src", "/api/media/media-video?source=person-media-lightbox-video");
+      expect(video?.hasAttribute("controls")).toBe(true);
+      expect(video?.autoplay).toBe(false);
+      expect(video?.preload).toBe("metadata");
+      expect(within(dialog).queryByRole("button", { name: "Загрузить видео" })).toBeNull();
+      expect(within(dialog).queryByLabelText("Громкость")).toBeNull();
     } finally {
-      playSpy.mockRestore();
-      loadSpy.mockRestore();
+      if (originalUserAgentDescriptor) {
+        Object.defineProperty(window.navigator, "userAgent", originalUserAgentDescriptor);
+      } else {
+        Object.defineProperty(window.navigator, "userAgent", {
+          configurable: true,
+          get: () => "",
+        });
+      }
+    }
+  });
+
+  it("does not fall back immediately on the first Chrome Android video error", () => {
+    vi.useFakeTimers();
+
+    const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      get: () =>
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36",
+    });
+
+    try {
+      render(
+        <PersonMediaGallery
+          media={[
+            createMediaAsset({
+              id: "media-video",
+              kind: "video",
+              title: "Архивное видео",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+            })
+          ]}
+          showStage={false}
+          showStickyFooter={false}
+          lightboxOnly
+          openLightboxOnMount
+          initialActiveMediaId="media-video"
+          lightboxAriaLabelPrefix="Просмотр архива"
+        />
+      );
+
+      const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+      const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement;
+
+      fireEvent.error(video);
+
+      expect(screen.queryByText("Файл временно недоступен")).not.toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(12_000);
+      });
+
+      expect(screen.getByText("Файл временно недоступен")).toBeInTheDocument();
+    } finally {
       if (originalUserAgentDescriptor) {
         Object.defineProperty(window.navigator, "userAgent", originalUserAgentDescriptor);
       } else {

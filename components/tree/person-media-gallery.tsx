@@ -110,6 +110,7 @@ const LIGHTBOX_SWIPE_HORIZONTAL_THRESHOLD_PX = 72;
 const LIGHTBOX_SWIPE_CLOSE_THRESHOLD_PX = 96;
 const LIGHTBOX_SWIPE_AXIS_DOMINANCE_RATIO = 1.2;
 const FULLSCREEN_CONTROLS_IDLE_MS = 2400;
+const CHROME_ANDROID_VIDEO_FALLBACK_DELAY_MS = 12_000;
 
 function createIdleLightboxGestureState() {
   return {
@@ -411,6 +412,7 @@ function LightboxVideoPlayer({
   diagnosticContext = "PersonMediaGallery:lightbox",
   onVideoElementChange,
   onIntrinsicSizeChange,
+  onPlaybackReady,
   onError,
   shellStyle,
   surfaceStyle,
@@ -425,6 +427,7 @@ function LightboxVideoPlayer({
   diagnosticContext?: string;
   onVideoElementChange?: (node: HTMLVideoElement | null) => void;
   onIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
+  onPlaybackReady?: () => void;
   onError?: (video: HTMLVideoElement | null) => void;
   shellStyle?: CSSProperties;
   surfaceStyle?: CSSProperties;
@@ -441,6 +444,9 @@ function LightboxVideoPlayer({
   });
   const emitIntrinsicSizeChange = useEffectEvent((size: { width: number; height: number } | null) => {
     onIntrinsicSizeChange?.(size);
+  });
+  const emitPlaybackReady = useEffectEvent(() => {
+    onPlaybackReady?.();
   });
   const resolvedVideoSrc = isSourceAttached ? src : undefined;
 
@@ -466,6 +472,9 @@ function LightboxVideoPlayer({
       setDuration(Number.isFinite(video.duration) ? video.duration : 0);
       setVolume(Number.isFinite(video.volume) ? video.volume : 1);
       setIsMuted(video.muted);
+      if (video.readyState >= 1 || video.currentTime > 0) {
+        emitPlaybackReady();
+      }
       if (video.videoWidth > 0 && video.videoHeight > 0) {
         emitIntrinsicSizeChange({
           width: video.videoWidth,
@@ -604,7 +613,7 @@ function LightboxVideoPlayer({
         controls={preferNativeControls && isSourceAttached}
         playsInline
         autoPlay={preferNativeControls ? false : autoPlay}
-        preload={preferNativeControls ? "none" : "metadata"}
+        preload="metadata"
         onError={() => onError?.(videoRef.current)}
         onClick={
           requireExplicitStart && !isSourceAttached
@@ -707,19 +716,35 @@ function MediaPreview({
   expandedMediaStyle?: CSSProperties;
 }) {
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
-  const shouldPreferMetadataPreload = expanded && isInlineVideoAsset(asset);
   const [hasLoadError, setHasLoadError] = useState(false);
-  const preferNativeExpandedVideoControls =
-    expanded &&
+  const [hasReachedPlayableState, setHasReachedPlayableState] = useState(false);
+  const delayedFallbackTimeoutRef = useRef<number | null>(null);
+  const isChromeAndroidVideoBrowser =
     isInlineVideoAsset(asset) &&
     typeof navigator !== "undefined" &&
     isChromeAndroidVideoQuirkBrowser(navigator.userAgent);
+  const preferNativeExpandedVideoControls =
+    expanded &&
+    isChromeAndroidVideoBrowser;
   const baseMediaUrl = isPhotoAsset(asset)
     ? buildPhotoPreviewRouteUrl(asset, expanded ? "medium" : "small", shareToken)
     : buildMediaOpenRouteUrl(asset, shareToken);
   const mediaUrl = isInlineVideoAsset(asset)
     ? withMediaSourceContext(baseMediaUrl, expanded ? "person-media-lightbox-video" : "person-media-stage-video")
     : baseMediaUrl;
+
+  function clearDelayedFallbackTimeout() {
+    if (delayedFallbackTimeoutRef.current !== null) {
+      window.clearTimeout(delayedFallbackTimeoutRef.current);
+      delayedFallbackTimeoutRef.current = null;
+    }
+  }
+
+  function markPlaybackReady() {
+    setHasReachedPlayableState(true);
+    clearDelayedFallbackTimeout();
+  }
+
   const handleOriginalLoadError = (video?: HTMLVideoElement | null) => {
     logMediaError({
       mediaId: asset.id,
@@ -758,11 +783,25 @@ function MediaPreview({
         preload: video?.preload ?? null,
       });
     }
+    if (isChromeAndroidVideoBrowser && !hasReachedPlayableState) {
+      if (delayedFallbackTimeoutRef.current === null) {
+        delayedFallbackTimeoutRef.current = window.setTimeout(() => {
+          delayedFallbackTimeoutRef.current = null;
+          setHasLoadError(true);
+        }, CHROME_ANDROID_VIDEO_FALLBACK_DELAY_MS);
+      }
+      return;
+    }
     setHasLoadError(true);
   };
 
   useEffect(() => {
     setHasLoadError(false);
+    setHasReachedPlayableState(false);
+    clearDelayedFallbackTimeout();
+    return () => {
+      clearDelayedFallbackTimeout();
+    };
   }, [asset.id, expanded, mediaUrl]);
 
   if (hasLoadError) {
@@ -808,11 +847,12 @@ function MediaPreview({
           poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
           autoPlay={autoPlayVideo}
           preferNativeControls={preferNativeExpandedVideoControls}
-          requireExplicitStart={preferNativeExpandedVideoControls}
+          requireExplicitStart={false}
           shareToken={shareToken}
           diagnosticContext="PersonMediaGallery:lightbox"
           onVideoElementChange={onLightboxVideoElementChange}
           onIntrinsicSizeChange={onLightboxMediaIntrinsicSizeChange}
+          onPlaybackReady={markPlaybackReady}
           onError={handleOriginalLoadError}
           shellStyle={expandedMediaShellStyle}
           surfaceStyle={expandedMediaStyle}
@@ -829,12 +869,24 @@ function MediaPreview({
         controls
         playsInline
         muted={autoPlayVideo}
-        preload="none"
+        preload={isChromeAndroidVideoBrowser ? "metadata" : "none"}
         onLoadStart={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "loadstart" })}
-        onLoadedMetadata={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "loadedmetadata" })}
-        onCanPlay={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "canplay" })}
-        onPlay={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "play" })}
-        onPlaying={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "playing" })}
+        onLoadedMetadata={(event) => {
+          markPlaybackReady();
+          reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "loadedmetadata" });
+        }}
+        onCanPlay={(event) => {
+          markPlaybackReady();
+          reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "canplay" });
+        }}
+        onPlay={(event) => {
+          markPlaybackReady();
+          reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "play" });
+        }}
+        onPlaying={(event) => {
+          markPlaybackReady();
+          reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "playing" });
+        }}
         onWaiting={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "waiting" })}
         onStalled={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "stalled" })}
         onSuspend={(event) => reportPlaybackTimelineEventForVideo({ video: event.currentTarget, mediaId: asset.id, context: "PersonMediaGallery:stage", shareToken, src: mediaUrl, poster: thumbSource?.kind === "image" ? thumbSource.src : null, eventName: "suspend" })}
