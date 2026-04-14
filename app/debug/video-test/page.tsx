@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 
 import { buildMediaRouteUrl } from "@/lib/tree/display";
 
+const DEFAULT_DEBUG_VIDEO = {
+  id: "3508fdcf-e2fc-4a34-8586-b2f503a12c7c",
+  title: "Урок №1 (Telegram).mp4",
+};
+
 interface VideoEventEntry {
   id: number;
   name: string;
@@ -22,7 +27,7 @@ function formatDuration(value: number | null | undefined) {
 export default function DebugVideoTestPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const eventIdRef = useRef(0);
-  const [mediaIdInput, setMediaIdInput] = useState("");
+  const [mediaIdInput, setMediaIdInput] = useState(DEFAULT_DEBUG_VIDEO.id);
   const [shareInput, setShareInput] = useState("");
   const mediaId = mediaIdInput.trim();
   const shareToken = shareInput.trim() || null;
@@ -42,7 +47,7 @@ export default function DebugVideoTestPage() {
     }
 
     const params = new URLSearchParams(window.location.search);
-    setMediaIdInput(params.get("mediaId") || "");
+    setMediaIdInput(params.get("mediaId") || DEFAULT_DEBUG_VIDEO.id);
     setShareInput(params.get("share") || "");
   }, []);
 
@@ -108,6 +113,9 @@ export default function DebugVideoTestPage() {
           This page isolates one asset behind a plain native HTML5 video element. It keeps the same media route the app uses and removes gallery,
           lightbox, custom controls, and fullscreen shell logic from the test surface.
         </p>
+        <p style={{ margin: "12px 0 0", color: "#374151", lineHeight: 1.6 }}>
+          Default test asset: <strong>{DEFAULT_DEBUG_VIDEO.title}</strong>
+        </p>
       </header>
 
       <section
@@ -126,7 +134,7 @@ export default function DebugVideoTestPage() {
               type="text"
               name="mediaId"
               value={mediaIdInput}
-              placeholder="Paste a media id"
+              placeholder={DEFAULT_DEBUG_VIDEO.id}
               onChange={(event) => setMediaIdInput(event.currentTarget.value)}
               style={{ border: "1px solid #9ca3af", borderRadius: 10, padding: "10px 12px", font: "inherit" }}
             />
@@ -157,6 +165,21 @@ export default function DebugVideoTestPage() {
             >
               Open test
             </button>
+            <a
+              href={`/debug/video-test?mediaId=${encodeURIComponent(DEFAULT_DEBUG_VIDEO.id)}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 999,
+                border: "1px solid #9ca3af",
+                color: "#111827",
+                padding: "10px 16px",
+                textDecoration: "none",
+              }}
+            >
+              Open default video
+            </a>
             {sourceUrl ? (
               <a
                 href={sourceUrl}
@@ -200,6 +223,8 @@ export default function DebugVideoTestPage() {
         >
           <dt style={{ fontWeight: 600 }}>mediaId</dt>
           <dd style={{ margin: 0, fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace" }}>{mediaId || "-"}</dd>
+          <dt style={{ fontWeight: 600 }}>default asset</dt>
+          <dd style={{ margin: 0 }}>{DEFAULT_DEBUG_VIDEO.title}</dd>
           <dt style={{ fontWeight: 600 }}>source</dt>
           <dd style={{ margin: 0, wordBreak: "break-all", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace" }}>{sourceUrl || "-"}</dd>
           <dt style={{ fontWeight: 600 }}>last error</dt>
