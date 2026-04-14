@@ -832,6 +832,63 @@ The proven direction was:
 
 ---
 
+# 22. Hosted Video Upload Reaches 100% Then Hangs Before Final Save
+
+### Symptom
+
+On hosted surfaces such as `*.vercel.app`:
+
+- upload progress reaches full file size,
+- UI stays on `Загружается...` / `Сохраняется...`,
+- the file does not appear in the archive or person card,
+- runtime logs may show `upload-intent` but no matching `complete` request.
+
+### Likely Cause
+
+Browser direct upload to `Cloudflare R2` is blocked by bucket CORS for the current hosted origin.
+
+Typical shape:
+
+- `upload-intent` returns a `direct` upload contract,
+- browser starts PUT to R2,
+- current hosted origin is not allowed in bucket CORS,
+- client never reaches the normal completion step.
+
+### First Checks
+
+1. Inspect current bucket CORS, not just app env.
+2. Compare the browser origin with the allowed origins in:
+   [cloudflare/r2-cors.json](C:/Antigravity/Antigravity-audio-docs-experiment/cloudflare/r2-cors.json)
+3. Confirm whether the failing surface is:
+   - local `http://localhost:3000`,
+   - preview branch alias,
+   - main alias,
+   - production alias,
+   - or a newly attached custom domain.
+4. If `upload-intent` succeeds but `complete` is missing, treat CORS as the first suspect.
+
+### Typical Fix
+
+Do not keep permanent proxy-only workarounds for hosted upload if the product is meant to use browser direct upload.
+
+The correct fix is:
+
+- update `cloudflare/r2-cors.json` with the real allowed browser origins,
+- apply that CORS policy to the actual R2 bucket,
+- only then remove any temporary hosted-proxy workaround from runtime code.
+
+When a new custom domain is added later, update `cloudflare/r2-cors.json` and re-apply the bucket policy before switching traffic.
+
+### Relevant Files
+
+- `cloudflare/r2-cors.json`
+- `README.md`
+- `app/api/media/upload-intent/route.ts`
+- `app/api/media/archive/upload-intent/route.ts`
+- `lib/utils.ts`
+
+---
+
 # Practical Rule
 
 Before modifying production code, always determine which category the issue belongs to:

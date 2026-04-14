@@ -107,6 +107,8 @@ Mandatory `Slava edition` Cloudflare rollout path:
 - `CF_R2_ENDPOINT=https://<CF_ACCOUNT_ID>.r2.cloudflarestorage.com`
 - `CF_R2_ROLLOUT_AT=2026-03-15T00:00:00Z` optional when migration should begin at a controlled time instead of immediately
 - browser direct-upload rollout requires bucket CORS configuration
+- the authoritative repo copy of the current R2 browser CORS policy lives in [`cloudflare/r2-cors.json`](./cloudflare/r2-cors.json)
+- whenever preview/main/prod/custom-domain origins change, update `cloudflare/r2-cors.json` and re-apply it to the bucket before expecting browser direct upload to work from the new origin
 
 For the current project plan, `Cloudflare R2` rollout is part of the `Slava edition` definition of done. Launch should not be called complete while new uploads still depend on the legacy Yandex path.
 
@@ -119,6 +121,7 @@ Mandatory rollout sequence for `Slava edition`:
    - `rolloutState=cloudflare_rollout_gated`
    - existing media reads still work
 3. Enable bucket CORS and validate browser direct-upload prerequisites before changing rollout time.
+   - keep `cloudflare/r2-cors.json` aligned with the actual browser origins in use
 4. Run both smoke paths before activation:
    - `npm run smoke:media`
    - `npm run smoke:media:direct`

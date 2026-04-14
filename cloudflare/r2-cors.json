@@ -3,7 +3,10 @@
     {
       "allowed": {
         "origins": [
-          "http://localhost:3000"
+          "http://localhost:3000",
+          "https://antigravity-git-feature-ux-media-update-spbotdel-4945s-projects.vercel.app",
+          "https://antigravity-git-main-spbotdel-4945s-projects.vercel.app",
+          "https://antigravity-zeta-two.vercel.app"
         ],
         "methods": [
           "GET",
