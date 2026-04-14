@@ -840,6 +840,138 @@ function MediaPreview({
 
   if (isInlineVideoAsset(asset)) {
     if (expanded) {
+      if (preferNativeExpandedVideoControls) {
+        return (
+          <div className="person-media-stage-video-frame">
+            <div className="person-media-stage-video-shell" style={expandedMediaShellStyle}>
+              <video
+                ref={(node) => {
+                  onLightboxVideoElementChange?.(node);
+                }}
+                key={`${asset.id}-lightbox-native`}
+                src={mediaUrl || undefined}
+                poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
+                className="person-media-stage-video person-media-stage-video-surface"
+                style={expandedMediaStyle}
+                controls
+                playsInline
+                preload="metadata"
+                onLoadedMetadata={(event) => {
+                  markPlaybackReady();
+                  onLightboxMediaIntrinsicSizeChange?.({
+                    width: event.currentTarget.videoWidth,
+                    height: event.currentTarget.videoHeight,
+                  });
+                  reportPlaybackTimelineEventForVideo({
+                    video: event.currentTarget,
+                    mediaId: asset.id,
+                    context: "PersonMediaGallery:lightbox",
+                    shareToken,
+                    src: mediaUrl,
+                    poster: thumbSource?.kind === "image" ? thumbSource.src : null,
+                    eventName: "loadedmetadata",
+                  });
+                }}
+                onLoadStart={(event) =>
+                  reportPlaybackTimelineEventForVideo({
+                    video: event.currentTarget,
+                    mediaId: asset.id,
+                    context: "PersonMediaGallery:lightbox",
+                    shareToken,
+                    src: mediaUrl,
+                    poster: thumbSource?.kind === "image" ? thumbSource.src : null,
+                    eventName: "loadstart",
+                  })
+                }
+                onCanPlay={(event) => {
+                  markPlaybackReady();
+                  reportPlaybackTimelineEventForVideo({
+                    video: event.currentTarget,
+                    mediaId: asset.id,
+                    context: "PersonMediaGallery:lightbox",
+                    shareToken,
+                    src: mediaUrl,
+                    poster: thumbSource?.kind === "image" ? thumbSource.src : null,
+                    eventName: "canplay",
+                  });
+                }}
+                onPlay={(event) => {
+                  markPlaybackReady();
+                  reportPlaybackTimelineEventForVideo({
+                    video: event.currentTarget,
+                    mediaId: asset.id,
+                    context: "PersonMediaGallery:lightbox",
+                    shareToken,
+                    src: mediaUrl,
+                    poster: thumbSource?.kind === "image" ? thumbSource.src : null,
+                    eventName: "play",
+                  });
+                }}
+                onPlaying={(event) => {
+                  markPlaybackReady();
+                  reportPlaybackTimelineEventForVideo({
+                    video: event.currentTarget,
+                    mediaId: asset.id,
+                    context: "PersonMediaGallery:lightbox",
+                    shareToken,
+                    src: mediaUrl,
+                    poster: thumbSource?.kind === "image" ? thumbSource.src : null,
+                    eventName: "playing",
+                  });
+                }}
+                onWaiting={(event) =>
+                  reportPlaybackTimelineEventForVideo({
+                    video: event.currentTarget,
+                    mediaId: asset.id,
+                    context: "PersonMediaGallery:lightbox",
+                    shareToken,
+                    src: mediaUrl,
+                    poster: thumbSource?.kind === "image" ? thumbSource.src : null,
+                    eventName: "waiting",
+                  })
+                }
+                onStalled={(event) =>
+                  reportPlaybackTimelineEventForVideo({
+                    video: event.currentTarget,
+                    mediaId: asset.id,
+                    context: "PersonMediaGallery:lightbox",
+                    shareToken,
+                    src: mediaUrl,
+                    poster: thumbSource?.kind === "image" ? thumbSource.src : null,
+                    eventName: "stalled",
+                  })
+                }
+                onSuspend={(event) =>
+                  reportPlaybackTimelineEventForVideo({
+                    video: event.currentTarget,
+                    mediaId: asset.id,
+                    context: "PersonMediaGallery:lightbox",
+                    shareToken,
+                    src: mediaUrl,
+                    poster: thumbSource?.kind === "image" ? thumbSource.src : null,
+                    eventName: "suspend",
+                  })
+                }
+                onAbort={(event) =>
+                  reportPlaybackTimelineEventForVideo({
+                    video: event.currentTarget,
+                    mediaId: asset.id,
+                    context: "PersonMediaGallery:lightbox",
+                    shareToken,
+                    src: mediaUrl,
+                    poster: thumbSource?.kind === "image" ? thumbSource.src : null,
+                    eventName: "abort",
+                  })
+                }
+                onError={(event) => handleOriginalLoadError(event.currentTarget)}
+              >
+                Ваш браузер не поддерживает встроенное воспроизведение видео.
+              </video>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <LightboxVideoPlayer
           asset={asset}
