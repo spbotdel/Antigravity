@@ -1368,7 +1368,13 @@ export function PersonMediaGallery({
   }, [activeAsset, isLightboxOpen, media.length]);
 
   const isThumbnailStripVisible = media.length > 1 && (!isFullscreen || areFullscreenControlsVisible);
-  const lightboxBottomChromeSpacePx = isFullscreen ? (isThumbnailStripVisible ? 148 : 24) : media.length > 1 ? 148 : 24;
+  const isNarrowLightboxViewport = lightboxContentSize.width > 0 && lightboxContentSize.width <= 640;
+  const lightboxStripChromeSpacePx = isNarrowLightboxViewport ? 104 : 128;
+  const lightboxBottomChromeSpacePx = isFullscreen
+    ? (isThumbnailStripVisible ? lightboxStripChromeSpacePx : 24)
+    : media.length > 1
+      ? lightboxStripChromeSpacePx
+      : 24;
   const showLightboxActions =
     Boolean(activeAsset) &&
     (!isInlineRenderableAsset(activeAsset) || (showViewerAvatarAction && canSetAvatar) || canDeleteCurrentMedia);
@@ -1388,18 +1394,25 @@ export function PersonMediaGallery({
       return undefined;
     }
 
-    const maxWidth = activeMediaIntrinsicSize ? Math.min(expandedMediaViewport.width, activeMediaIntrinsicSize.width) : expandedMediaViewport.width;
-    const maxHeight = activeMediaIntrinsicSize ? Math.min(expandedMediaViewport.height, activeMediaIntrinsicSize.height) : expandedMediaViewport.height;
+    const shouldClampToIntrinsicSize = activeAsset?.kind !== "video";
+    const maxWidth =
+      activeMediaIntrinsicSize && shouldClampToIntrinsicSize
+        ? Math.min(expandedMediaViewport.width, activeMediaIntrinsicSize.width)
+        : expandedMediaViewport.width;
+    const maxHeight =
+      activeMediaIntrinsicSize && shouldClampToIntrinsicSize
+        ? Math.min(expandedMediaViewport.height, activeMediaIntrinsicSize.height)
+        : expandedMediaViewport.height;
 
     return {
-      width: "auto",
-      height: "auto",
+      width: activeAsset?.kind === "video" ? "100%" : "auto",
+      height: activeAsset?.kind === "video" ? "100%" : "auto",
       maxWidth: `${maxWidth}px`,
       maxHeight: `${maxHeight}px`,
       objectFit: "contain",
       transition: "max-width 180ms ease, max-height 180ms ease",
     };
-  }, [activeMediaIntrinsicSize, expandedMediaViewport.height, expandedMediaViewport.width]);
+  }, [activeAsset?.kind, activeMediaIntrinsicSize, expandedMediaViewport.height, expandedMediaViewport.width]);
 
   const expandedMediaShellStyle = useMemo<CSSProperties | undefined>(() => {
     if (!expandedMediaViewport.width || !expandedMediaViewport.height) {
@@ -1499,37 +1512,31 @@ export function PersonMediaGallery({
           <div ref={lightboxContentRef} className="media-lightbox-content">
             <div className={`media-lightbox-player-frame${isInlineVideoAsset(activeAsset) ? " media-lightbox-player-frame-video" : ""}`}>
               <div
-                className="media-lightbox-player-toolbar"
-                onMouseEnter={pinFullscreenControls}
-                onMouseLeave={unpinFullscreenControls}
-                onFocus={pinFullscreenControls}
-                onBlur={unpinFullscreenControls}
-              >
-                <button
-                  type="button"
-                  className="media-lightbox-fullscreen-toggle"
-                  aria-label={isFullscreen ? "Выйти из полноэкранного режима" : "Открыть в полноэкранном режиме"}
-                  onClick={() => void toggleFullscreen()}
-                >
-                  {isFullscreen ? <Minimize2 className="media-lightbox-control-icon" aria-hidden="true" /> : <Maximize2 className="media-lightbox-control-icon" aria-hidden="true" />}
-                </button>
-                <button
-                  type="button"
-                  className="media-lightbox-close"
-                  aria-label="Закрыть просмотр"
-                  onClick={closeLightbox}
-                >
-                  <X className="media-lightbox-control-icon" aria-hidden="true" />
-                </button>
-              </div>
-
-              <div
                 className="media-lightbox-player-stage"
                 onMouseEnter={pinFullscreenControls}
                 onMouseLeave={unpinFullscreenControls}
                 onFocus={pinFullscreenControls}
                 onBlur={unpinFullscreenControls}
               >
+                <div className="media-lightbox-player-toolbar">
+                  <button
+                    type="button"
+                    className="media-lightbox-fullscreen-toggle"
+                    aria-label={isFullscreen ? "Выйти из полноэкранного режима" : "Открыть в полноэкранном режиме"}
+                    onClick={() => void toggleFullscreen()}
+                  >
+                    {isFullscreen ? <Minimize2 className="media-lightbox-control-icon" aria-hidden="true" /> : <Maximize2 className="media-lightbox-control-icon" aria-hidden="true" />}
+                  </button>
+                  <button
+                    type="button"
+                    className="media-lightbox-close"
+                    aria-label="Закрыть просмотр"
+                    onClick={closeLightbox}
+                  >
+                    <X className="media-lightbox-control-icon" aria-hidden="true" />
+                  </button>
+                </div>
+
                 {canNavigate ? (
                   <button
                     type="button"
