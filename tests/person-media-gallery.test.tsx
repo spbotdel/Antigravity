@@ -588,6 +588,131 @@ describe("person media gallery", () => {
     }
   });
 
+  it("uses native iPhone video fullscreen on phone-sized Safari when available", async () => {
+    const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
+    const originalInnerWidthDescriptor = Object.getOwnPropertyDescriptor(window, "innerWidth");
+    const requestFullscreen = vi.fn(() => Promise.resolve());
+    const webkitEnterFullscreen = vi.fn();
+
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      get: () =>
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+    });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "webkitEnterFullscreen", {
+      configurable: true,
+      value: webkitEnterFullscreen,
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "webkitSupportsFullscreen", {
+      configurable: true,
+      get: () => true,
+    });
+
+    try {
+      render(
+        <PersonMediaGallery
+          media={[
+            createMediaAsset({
+              id: "media-video",
+              kind: "video",
+              title: "Архивное видео",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+            })
+          ]}
+          showStage={false}
+          showStickyFooter={false}
+          lightboxOnly
+          openLightboxOnMount
+          initialActiveMediaId="media-video"
+          lightboxAriaLabelPrefix="Просмотр архива"
+        />
+      );
+
+      const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole("button", { name: "Открыть в полноэкранном режиме" }));
+      });
+
+      expect(webkitEnterFullscreen).toHaveBeenCalledTimes(1);
+      expect(requestFullscreen).not.toHaveBeenCalled();
+    } finally {
+      if (originalUserAgentDescriptor) {
+        Object.defineProperty(window.navigator, "userAgent", originalUserAgentDescriptor);
+      } else {
+        Object.defineProperty(window.navigator, "userAgent", {
+          configurable: true,
+          get: () => "",
+        });
+      }
+
+      if (originalInnerWidthDescriptor) {
+        Object.defineProperty(window, "innerWidth", originalInnerWidthDescriptor);
+      }
+    }
+  });
+
+  it("hides mobile video chrome after inactivity and restores it on video tap", () => {
+    vi.useFakeTimers();
+
+    const originalInnerWidthDescriptor = Object.getOwnPropertyDescriptor(window, "innerWidth");
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+
+    try {
+      render(
+        <PersonMediaGallery
+          media={[
+            createMediaAsset({
+              id: "media-video",
+              kind: "video",
+              title: "Архивное видео",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+            })
+          ]}
+          showStage={false}
+          showStickyFooter={false}
+          lightboxOnly
+          openLightboxOnMount
+          initialActiveMediaId="media-video"
+          lightboxAriaLabelPrefix="Просмотр архива"
+        />
+      );
+
+      const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+      const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
+      expect(video).not.toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(2400);
+      });
+
+      expect(dialog).toHaveClass("media-lightbox-video-chrome-hidden");
+
+      fireEvent.click(video as HTMLVideoElement);
+      expect(dialog).not.toHaveClass("media-lightbox-video-chrome-hidden");
+
+      fireEvent.click(video as HTMLVideoElement);
+      expect(dialog).toHaveClass("media-lightbox-video-chrome-hidden");
+    } finally {
+      if (originalInnerWidthDescriptor) {
+        Object.defineProperty(window, "innerWidth", originalInnerWidthDescriptor);
+      }
+    }
+  });
+
   it("keeps the inline stage video on Chrome Android in custom-controls mode without native UI", () => {
     const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
     Object.defineProperty(window.navigator, "userAgent", {

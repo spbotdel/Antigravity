@@ -407,6 +407,9 @@ function LightboxVideoPlayer({
   onIntrinsicSizeChange,
   onPlaybackReady,
   onError,
+  onSurfaceTap,
+  onNativeFullscreenChange,
+  surfaceInteractionMode = "playback",
 }: {
   asset: MediaAsset;
   src: string;
@@ -419,6 +422,9 @@ function LightboxVideoPlayer({
   onIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
   onPlaybackReady?: () => void;
   onError?: (video: HTMLVideoElement | null) => void;
+  onSurfaceTap?: () => void;
+  onNativeFullscreenChange?: (fullscreen: boolean) => void;
+  surfaceInteractionMode?: "playback" | "chrome";
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -435,6 +441,9 @@ function LightboxVideoPlayer({
   });
   const emitPlaybackReady = useEffectEvent(() => {
     onPlaybackReady?.();
+  });
+  const emitNativeFullscreenChange = useEffectEvent((fullscreen: boolean) => {
+    onNativeFullscreenChange?.(fullscreen);
   });
   const resolvedVideoSrc = isSourceAttached ? src : undefined;
 
@@ -477,9 +486,17 @@ function LightboxVideoPlayer({
     syncFromVideo();
 
     const syncEvents = ["play", "pause", "ended", "timeupdate", "loadedmetadata", "durationchange", "volumechange", "canplay", "playing"] as const;
+    const handleNativeFullscreenBegin = () => {
+      emitNativeFullscreenChange(true);
+    };
+    const handleNativeFullscreenEnd = () => {
+      emitNativeFullscreenChange(false);
+    };
     for (const eventName of syncEvents) {
       video.addEventListener(eventName, syncFromVideo);
     }
+    video.addEventListener("webkitbeginfullscreen", handleNativeFullscreenBegin as EventListener);
+    video.addEventListener("webkitendfullscreen", handleNativeFullscreenEnd as EventListener);
 
     if (autoPlay && isSourceAttached) {
       void playVideoSafely(video);
@@ -492,6 +509,8 @@ function LightboxVideoPlayer({
       for (const eventName of syncEvents) {
         video.removeEventListener(eventName, syncFromVideo);
       }
+      video.removeEventListener("webkitbeginfullscreen", handleNativeFullscreenBegin as EventListener);
+      video.removeEventListener("webkitendfullscreen", handleNativeFullscreenEnd as EventListener);
     };
   }, [asset.id, autoPlay, isSourceAttached, src]);
 
@@ -588,9 +607,13 @@ function LightboxVideoPlayer({
             ? () => {
                 void handleExplicitStart();
               }
-            : () => {
-                void togglePlayback();
-              }
+            : surfaceInteractionMode === "chrome"
+              ? () => {
+                  onSurfaceTap?.();
+                }
+              : () => {
+                  void togglePlayback();
+                }
         }
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.
@@ -667,6 +690,9 @@ function MediaPreview({
   onLightboxVideoElementChange,
   onLightboxMediaIntrinsicSizeChange,
   expandedMediaStyle,
+  surfaceInteractionMode = "playback",
+  onSurfaceTap,
+  onNativeFullscreenChange,
 }: {
   asset: MediaAsset;
   shareToken?: string | null;
@@ -676,6 +702,9 @@ function MediaPreview({
   onLightboxVideoElementChange?: (node: HTMLVideoElement | null) => void;
   onLightboxMediaIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
   expandedMediaStyle?: CSSProperties;
+  surfaceInteractionMode?: "playback" | "chrome";
+  onSurfaceTap?: () => void;
+  onNativeFullscreenChange?: (fullscreen: boolean) => void;
 }) {
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const [hasLoadError, setHasLoadError] = useState(false);
@@ -787,6 +816,9 @@ function MediaPreview({
           onIntrinsicSizeChange={onLightboxMediaIntrinsicSizeChange}
           onPlaybackReady={markPlaybackReady}
           onError={handleOriginalLoadError}
+          surfaceInteractionMode={surfaceInteractionMode}
+          onSurfaceTap={onSurfaceTap}
+          onNativeFullscreenChange={onNativeFullscreenChange}
         />
       );
     }
@@ -869,6 +901,7 @@ export function PersonMediaGallery({
   const lightboxContainerRef = useRef<HTMLDivElement | null>(null);
   const lightboxContentRef = useRef<HTMLDivElement | null>(null);
   const activeLightboxVideoElementRef = useRef<HTMLVideoElement | null>(null);
+  const shouldAutoHideVideoChromeRef = useRef(false);
   const fullscreenIdleTimeoutRef = useRef<number | null>(null);
   const fullscreenControlsPinnedRef = useRef(false);
   const isLightboxOpen = lightboxState === "open";
@@ -909,7 +942,7 @@ export function PersonMediaGallery({
 
   function scheduleFullscreenControlsHide() {
     clearFullscreenIdleTimeout();
-    if (!isFullscreen || fullscreenControlsPinnedRef.current) {
+    if (!shouldAutoHideVideoChromeRef.current || fullscreenControlsPinnedRef.current) {
       return;
     }
 
@@ -936,6 +969,21 @@ export function PersonMediaGallery({
     scheduleFullscreenControlsHide();
   }
 
+  function toggleLightboxChromeVisibility() {
+    if (!shouldAutoHideVideoChromeRef.current) {
+      return;
+    }
+
+    if (areFullscreenControlsVisible) {
+      fullscreenControlsPinnedRef.current = false;
+      clearFullscreenIdleTimeout();
+      setAreFullscreenControlsVisible(false);
+      return;
+    }
+
+    showFullscreenControls();
+  }
+
   async function toggleFullscreen() {
     const target = lightboxContainerRef.current;
     if (!target) {
@@ -943,8 +991,27 @@ export function PersonMediaGallery({
     }
 
     try {
+      const activeVideo = activeLightboxVideoElementRef.current as (HTMLVideoElement & {
+        webkitSupportsFullscreen?: boolean;
+        webkitEnterFullscreen?: () => void;
+      }) | null;
+      const isPhoneLikeViewport = typeof window !== "undefined" && window.innerWidth <= 720;
+      const isIphoneLikeBrowser =
+        typeof navigator !== "undefined" &&
+        /iPhone|iPod/i.test(navigator.userAgent) &&
+        /AppleWebKit/i.test(navigator.userAgent);
+
       if (document.fullscreenElement === target) {
         await document.exitFullscreen();
+      } else if (
+        isPhoneLikeViewport &&
+        isIphoneLikeBrowser &&
+        activeVideo?.webkitSupportsFullscreen &&
+        typeof activeVideo.webkitEnterFullscreen === "function"
+      ) {
+        setIsFullscreen(true);
+        setAreFullscreenControlsVisible(true);
+        activeVideo.webkitEnterFullscreen();
       } else {
         setIsFullscreen(true);
         setAreFullscreenControlsVisible(true);
@@ -1224,7 +1291,7 @@ export function PersonMediaGallery({
       return;
     }
 
-    if (isFullscreen) {
+    if (isFullscreen && areFullscreenControlsVisible) {
       showFullscreenControls();
     }
 
@@ -1358,14 +1425,21 @@ export function PersonMediaGallery({
     syncLightboxStrip(lightboxStripRef.current, lightboxThumbRefs.current.get(activeAsset.id) ?? null);
   }, [activeAsset, isLightboxOpen, media.length]);
 
-  const isThumbnailStripVisible = media.length > 1 && (!isFullscreen || areFullscreenControlsVisible);
   const effectiveLightboxViewportWidth = lightboxContentSize.width || (typeof window !== "undefined" ? window.innerWidth : 0);
   const isNarrowLightboxViewport = effectiveLightboxViewportWidth > 0 && effectiveLightboxViewportWidth <= 640;
+  const isPhoneLightboxViewport = effectiveLightboxViewportWidth > 0 && effectiveLightboxViewportWidth <= 720;
+  const shouldUseManagedVideoChrome = Boolean(activeAsset && isInlineVideoAsset(activeAsset) && (isFullscreen || isPhoneLightboxViewport));
+  const shouldAutoHideLightboxChrome = isFullscreen || Boolean(activeAsset && isInlineVideoAsset(activeAsset) && isPhoneLightboxViewport);
+  shouldAutoHideVideoChromeRef.current = shouldAutoHideLightboxChrome;
+  const isThumbnailStripVisible = media.length > 1 && (!shouldAutoHideLightboxChrome || areFullscreenControlsVisible);
   const lightboxStripChromeSpacePx = isNarrowLightboxViewport ? 104 : 128;
+  const lightboxActiveStripSpacePx = isThumbnailStripVisible ? lightboxStripChromeSpacePx : 24;
   const lightboxBottomChromeSpacePx = isFullscreen
-    ? (isThumbnailStripVisible ? lightboxStripChromeSpacePx : 24)
-    : media.length > 1
-      ? lightboxStripChromeSpacePx
+    ? lightboxActiveStripSpacePx
+    : shouldAutoHideLightboxChrome
+      ? lightboxActiveStripSpacePx
+      : media.length > 1
+        ? lightboxStripChromeSpacePx
       : 24;
   const showLightboxActions =
     Boolean(activeAsset) &&
@@ -1404,6 +1478,20 @@ export function PersonMediaGallery({
       transition: "max-width 180ms ease, max-height 180ms ease",
     };
   }, [activeAsset?.kind, activeMediaIntrinsicSize, expandedMediaViewport.height, expandedMediaViewport.width]);
+
+  useEffect(() => {
+    if (!shouldAutoHideLightboxChrome) {
+      clearFullscreenIdleTimeout();
+      fullscreenControlsPinnedRef.current = false;
+      setAreFullscreenControlsVisible(true);
+      return;
+    }
+
+    showFullscreenControls();
+    return () => {
+      clearFullscreenIdleTimeout();
+    };
+  }, [activeAsset?.id, isFullscreen, isPhoneLightboxViewport, shouldAutoHideLightboxChrome]);
 
   function openLightboxAtMedia(mediaId: string | null) {
     if (mediaId) {
@@ -1463,9 +1551,10 @@ export function PersonMediaGallery({
     <>
       <div
         ref={lightboxContainerRef}
-        className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}${isFullscreen ? " media-lightbox-fullscreen" : ""}${isFullscreen && !areFullscreenControlsVisible ? " media-lightbox-fullscreen-idle" : ""}`}
+        className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}${isFullscreen ? " media-lightbox-fullscreen" : ""}${isFullscreen && !areFullscreenControlsVisible ? " media-lightbox-fullscreen-idle" : ""}${shouldUseManagedVideoChrome ? " media-lightbox-video-mode" : ""}${shouldUseManagedVideoChrome && !areFullscreenControlsVisible ? " media-lightbox-video-chrome-hidden" : ""}`}
         style={
           {
+            "--media-lightbox-strip-space": `${lightboxActiveStripSpacePx}px`,
             "--media-lightbox-bottom-space": `${lightboxBottomChromeSpacePx}px`,
           } as CSSProperties
         }
@@ -1477,7 +1566,7 @@ export function PersonMediaGallery({
         onTouchEnd={handleLightboxTouchEnd}
         onTouchCancel={resetLightboxGesture}
         onMouseMove={() => {
-          if (isFullscreen) {
+          if (shouldUseManagedVideoChrome || isFullscreen) {
             showFullscreenControls();
           }
         }}
@@ -1538,8 +1627,20 @@ export function PersonMediaGallery({
                     onLightboxVideoElementChange={(node) => {
                       activeLightboxVideoElementRef.current = node;
                     }}
+                    onNativeFullscreenChange={(fullscreen) => {
+                      setIsFullscreen(fullscreen);
+                      setAreFullscreenControlsVisible(true);
+                      fullscreenControlsPinnedRef.current = false;
+                      if (fullscreen) {
+                        scheduleFullscreenControlsHide();
+                      } else {
+                        clearFullscreenIdleTimeout();
+                      }
+                    }}
                     onLightboxMediaIntrinsicSizeChange={setActiveMediaIntrinsicSize}
                     expandedMediaStyle={expandedMediaStyle}
+                    surfaceInteractionMode={shouldUseManagedVideoChrome ? "chrome" : "playback"}
+                    onSurfaceTap={toggleLightboxChromeVisibility}
                   />
                 </div>
 
