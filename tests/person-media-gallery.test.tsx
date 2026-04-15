@@ -437,6 +437,10 @@ describe("person media gallery", () => {
     expect(stageVideo).not.toBeNull();
     expect(stageVideo?.hasAttribute("controls")).toBe(false);
     expect(stageVideo?.getAttribute("playsinline")).not.toBeNull();
+    expect(dialog.querySelector(".media-lightbox-player-toolbar .media-lightbox-close")).not.toBeNull();
+    expect(dialog.querySelector(".media-lightbox-player-toolbar .media-lightbox-fullscreen-toggle")).not.toBeNull();
+    expect(dialog.querySelector(".media-lightbox-player-stage .media-lightbox-nav-left")).not.toBeNull();
+    expect(dialog.querySelector(".media-lightbox-player-stage .media-lightbox-nav-right")).not.toBeNull();
     expect(within(dialog).getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
     expect(within(dialog).getByLabelText("Позиция видео")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Закрыть просмотр" })).toBeInTheDocument();

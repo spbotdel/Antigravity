@@ -1496,62 +1496,80 @@ export function PersonMediaGallery({
         }}
       >
         <div className="media-lightbox-shell">
-          <button
-            type="button"
-            className="media-lightbox-fullscreen-toggle"
-            aria-label={isFullscreen ? "Выйти из полноэкранного режима" : "Открыть в полноэкранном режиме"}
-            onClick={() => void toggleFullscreen()}
-            onMouseEnter={pinFullscreenControls}
-            onMouseLeave={unpinFullscreenControls}
-            onFocus={pinFullscreenControls}
-            onBlur={unpinFullscreenControls}
-          >
-            {isFullscreen ? <Minimize2 className="media-lightbox-control-icon" aria-hidden="true" /> : <Maximize2 className="media-lightbox-control-icon" aria-hidden="true" />}
-          </button>
-          <button
-            type="button"
-            className="media-lightbox-close"
-            aria-label="Закрыть просмотр"
-            onClick={closeLightbox}
-            onMouseEnter={pinFullscreenControls}
-            onMouseLeave={unpinFullscreenControls}
-            onFocus={pinFullscreenControls}
-            onBlur={unpinFullscreenControls}
-          >
-            <X className="media-lightbox-control-icon" aria-hidden="true" />
-          </button>
-
-          {canNavigate ? (
-            <button
-              type="button"
-              className="media-lightbox-nav media-lightbox-nav-left"
-              aria-label="Предыдущее медиа"
-              disabled={!hasPreviousMedia}
-              onClick={() => moveSelection(-1)}
-              onMouseEnter={pinFullscreenControls}
-              onMouseLeave={unpinFullscreenControls}
-              onFocus={pinFullscreenControls}
-              onBlur={unpinFullscreenControls}
-            >
-              <ChevronLeft className="media-lightbox-control-icon" aria-hidden="true" />
-            </button>
-          ) : null}
-
           <div ref={lightboxContentRef} className="media-lightbox-content">
-            <div className={`media-lightbox-stage media-lightbox-stage-minimal${isInlineVideoAsset(activeAsset) ? " media-lightbox-stage-video" : ""}${isFullscreen ? " media-lightbox-stage-fullscreen" : ""}`}>
-              <MediaPreview
-                asset={activeAsset}
-                shareToken={shareToken}
-                optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
-                expanded
-                autoPlayVideo={autoPlayLightboxVideo}
-                onLightboxVideoElementChange={(node) => {
-                  activeLightboxVideoElementRef.current = node;
-                }}
-                onLightboxMediaIntrinsicSizeChange={setActiveMediaIntrinsicSize}
-                expandedMediaShellStyle={expandedMediaShellStyle}
-                expandedMediaStyle={expandedMediaStyle}
-              />
+            <div className={`media-lightbox-player-frame${isInlineVideoAsset(activeAsset) ? " media-lightbox-player-frame-video" : ""}`}>
+              <div
+                className="media-lightbox-player-toolbar"
+                onMouseEnter={pinFullscreenControls}
+                onMouseLeave={unpinFullscreenControls}
+                onFocus={pinFullscreenControls}
+                onBlur={unpinFullscreenControls}
+              >
+                <button
+                  type="button"
+                  className="media-lightbox-fullscreen-toggle"
+                  aria-label={isFullscreen ? "Выйти из полноэкранного режима" : "Открыть в полноэкранном режиме"}
+                  onClick={() => void toggleFullscreen()}
+                >
+                  {isFullscreen ? <Minimize2 className="media-lightbox-control-icon" aria-hidden="true" /> : <Maximize2 className="media-lightbox-control-icon" aria-hidden="true" />}
+                </button>
+                <button
+                  type="button"
+                  className="media-lightbox-close"
+                  aria-label="Закрыть просмотр"
+                  onClick={closeLightbox}
+                >
+                  <X className="media-lightbox-control-icon" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div
+                className="media-lightbox-player-stage"
+                onMouseEnter={pinFullscreenControls}
+                onMouseLeave={unpinFullscreenControls}
+                onFocus={pinFullscreenControls}
+                onBlur={unpinFullscreenControls}
+              >
+                {canNavigate ? (
+                  <button
+                    type="button"
+                    className="media-lightbox-nav media-lightbox-nav-left"
+                    aria-label="Предыдущее медиа"
+                    disabled={!hasPreviousMedia}
+                    onClick={() => moveSelection(-1)}
+                  >
+                    <ChevronLeft className="media-lightbox-control-icon" aria-hidden="true" />
+                  </button>
+                ) : null}
+
+                <div className={`media-lightbox-stage media-lightbox-stage-minimal${isInlineVideoAsset(activeAsset) ? " media-lightbox-stage-video" : ""}${isFullscreen ? " media-lightbox-stage-fullscreen" : ""}`}>
+                  <MediaPreview
+                    asset={activeAsset}
+                    shareToken={shareToken}
+                    optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+                    expanded
+                    autoPlayVideo={autoPlayLightboxVideo}
+                    onLightboxVideoElementChange={(node) => {
+                      activeLightboxVideoElementRef.current = node;
+                    }}
+                    onLightboxMediaIntrinsicSizeChange={setActiveMediaIntrinsicSize}
+                    expandedMediaShellStyle={expandedMediaShellStyle}
+                    expandedMediaStyle={expandedMediaStyle}
+                  />
+                </div>
+
+                {canNavigate ? (
+                  <button
+                    type="button"
+                    className="media-lightbox-nav media-lightbox-nav-right"
+                    aria-label="Следующее медиа"
+                    disabled={!hasNextMedia}
+                    onClick={() => moveSelection(1)}
+                  >
+                    <ChevronRight className="media-lightbox-control-icon" aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             {showLightboxActions ? (
@@ -1576,22 +1594,6 @@ export function PersonMediaGallery({
               </div>
             ) : null}
           </div>
-
-          {canNavigate ? (
-            <button
-              type="button"
-              className="media-lightbox-nav media-lightbox-nav-right"
-              aria-label="Следующее медиа"
-              disabled={!hasNextMedia}
-              onClick={() => moveSelection(1)}
-              onMouseEnter={pinFullscreenControls}
-              onMouseLeave={unpinFullscreenControls}
-              onFocus={pinFullscreenControls}
-              onBlur={unpinFullscreenControls}
-            >
-              <ChevronRight className="media-lightbox-control-icon" aria-hidden="true" />
-            </button>
-          ) : null}
         </div>
 
         {media.length > 1 ? (
