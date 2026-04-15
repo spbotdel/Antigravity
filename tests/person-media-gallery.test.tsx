@@ -435,6 +435,8 @@ describe("person media gallery", () => {
     expect(dialog).toBeInTheDocument();
     const stageVideo = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
     expect(stageVideo).not.toBeNull();
+    expect(stageVideo?.getAttribute("style")).toBeNull();
+    expect(dialog.querySelector(".person-media-stage-video-shell")?.getAttribute("style")).toBeNull();
     expect(stageVideo?.hasAttribute("controls")).toBe(false);
     expect(stageVideo?.getAttribute("playsinline")).not.toBeNull();
     expect(dialog.querySelector(".media-lightbox-player-toolbar .media-lightbox-close")).not.toBeNull();

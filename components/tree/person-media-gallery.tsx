@@ -407,8 +407,6 @@ function LightboxVideoPlayer({
   onIntrinsicSizeChange,
   onPlaybackReady,
   onError,
-  shellStyle,
-  surfaceStyle,
 }: {
   asset: MediaAsset;
   src: string;
@@ -421,8 +419,6 @@ function LightboxVideoPlayer({
   onIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
   onPlaybackReady?: () => void;
   onError?: (video: HTMLVideoElement | null) => void;
-  shellStyle?: CSSProperties;
-  surfaceStyle?: CSSProperties;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -576,14 +572,13 @@ function LightboxVideoPlayer({
 
   return (
     <div className={`person-media-stage-video-frame${inline ? " person-media-stage-video-frame-inline" : ""}`}>
-      <div className={`person-media-stage-video-shell${inline ? " person-media-stage-video-shell-inline" : ""}`} style={shellStyle}>
+      <div className={`person-media-stage-video-shell${inline ? " person-media-stage-video-shell-inline" : ""}`}>
       <video
         ref={videoRef}
         key={`${asset.id}-lightbox`}
         src={resolvedVideoSrc}
         poster={poster}
         className={`person-media-stage-video person-media-stage-video-surface${inline ? " person-media-stage-video-inline" : ""}`}
-        style={surfaceStyle}
         playsInline
         autoPlay={autoPlay}
         preload={preload}
@@ -671,7 +666,6 @@ function MediaPreview({
   autoPlayVideo = false,
   onLightboxVideoElementChange,
   onLightboxMediaIntrinsicSizeChange,
-  expandedMediaShellStyle,
   expandedMediaStyle,
 }: {
   asset: MediaAsset;
@@ -681,7 +675,6 @@ function MediaPreview({
   autoPlayVideo?: boolean;
   onLightboxVideoElementChange?: (node: HTMLVideoElement | null) => void;
   onLightboxMediaIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
-  expandedMediaShellStyle?: CSSProperties;
   expandedMediaStyle?: CSSProperties;
 }) {
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
@@ -794,8 +787,6 @@ function MediaPreview({
           onIntrinsicSizeChange={onLightboxMediaIntrinsicSizeChange}
           onPlaybackReady={markPlaybackReady}
           onError={handleOriginalLoadError}
-          shellStyle={expandedMediaShellStyle}
-          surfaceStyle={expandedMediaStyle}
         />
       );
     }
@@ -1368,7 +1359,8 @@ export function PersonMediaGallery({
   }, [activeAsset, isLightboxOpen, media.length]);
 
   const isThumbnailStripVisible = media.length > 1 && (!isFullscreen || areFullscreenControlsVisible);
-  const isNarrowLightboxViewport = lightboxContentSize.width > 0 && lightboxContentSize.width <= 640;
+  const effectiveLightboxViewportWidth = lightboxContentSize.width || (typeof window !== "undefined" ? window.innerWidth : 0);
+  const isNarrowLightboxViewport = effectiveLightboxViewportWidth > 0 && effectiveLightboxViewportWidth <= 640;
   const lightboxStripChromeSpacePx = isNarrowLightboxViewport ? 104 : 128;
   const lightboxBottomChromeSpacePx = isFullscreen
     ? (isThumbnailStripVisible ? lightboxStripChromeSpacePx : 24)
@@ -1390,41 +1382,28 @@ export function PersonMediaGallery({
   }, [actionChromeInsetPx, lightboxContentSize.height, lightboxContentSize.width, topSafeInsetPx]);
 
   const expandedMediaStyle = useMemo<CSSProperties | undefined>(() => {
-    if (!expandedMediaViewport.width || !expandedMediaViewport.height) {
+    if (!expandedMediaViewport.width || !expandedMediaViewport.height || activeAsset?.kind !== "photo") {
       return undefined;
     }
 
-    const shouldClampToIntrinsicSize = activeAsset?.kind !== "video";
     const maxWidth =
-      activeMediaIntrinsicSize && shouldClampToIntrinsicSize
+      activeMediaIntrinsicSize
         ? Math.min(expandedMediaViewport.width, activeMediaIntrinsicSize.width)
         : expandedMediaViewport.width;
     const maxHeight =
-      activeMediaIntrinsicSize && shouldClampToIntrinsicSize
+      activeMediaIntrinsicSize
         ? Math.min(expandedMediaViewport.height, activeMediaIntrinsicSize.height)
         : expandedMediaViewport.height;
 
     return {
-      width: activeAsset?.kind === "video" ? "100%" : "auto",
-      height: activeAsset?.kind === "video" ? "100%" : "auto",
+      width: "auto",
+      height: "auto",
       maxWidth: `${maxWidth}px`,
       maxHeight: `${maxHeight}px`,
       objectFit: "contain",
       transition: "max-width 180ms ease, max-height 180ms ease",
     };
   }, [activeAsset?.kind, activeMediaIntrinsicSize, expandedMediaViewport.height, expandedMediaViewport.width]);
-
-  const expandedMediaShellStyle = useMemo<CSSProperties | undefined>(() => {
-    if (!expandedMediaViewport.width || !expandedMediaViewport.height) {
-      return undefined;
-    }
-
-    return {
-      maxWidth: `${expandedMediaViewport.width}px`,
-      maxHeight: `${expandedMediaViewport.height}px`,
-      transition: "max-width 180ms ease, max-height 180ms ease",
-    };
-  }, [expandedMediaViewport.height, expandedMediaViewport.width]);
 
   function openLightboxAtMedia(mediaId: string | null) {
     if (mediaId) {
@@ -1512,7 +1491,7 @@ export function PersonMediaGallery({
           <div ref={lightboxContentRef} className="media-lightbox-content">
             <div className={`media-lightbox-player-frame${isInlineVideoAsset(activeAsset) ? " media-lightbox-player-frame-video" : ""}`}>
               <div
-                className="media-lightbox-player-stage"
+                className={`media-lightbox-player-stage${isInlineVideoAsset(activeAsset) ? " media-lightbox-player-stage-video" : ""}`}
                 onMouseEnter={pinFullscreenControls}
                 onMouseLeave={unpinFullscreenControls}
                 onFocus={pinFullscreenControls}
@@ -1560,7 +1539,6 @@ export function PersonMediaGallery({
                       activeLightboxVideoElementRef.current = node;
                     }}
                     onLightboxMediaIntrinsicSizeChange={setActiveMediaIntrinsicSize}
-                    expandedMediaShellStyle={expandedMediaShellStyle}
                     expandedMediaStyle={expandedMediaStyle}
                   />
                 </div>
