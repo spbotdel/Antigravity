@@ -287,6 +287,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   const selectedMedia = selectedPerson ? collectPersonMedia(snapshot, selectedPerson.id) : [];
   const selectedVisualMedia = selectedMedia.filter((asset) => asset.kind !== "document");
   const selectedDocuments = selectedMedia.filter((asset) => asset.kind === "document");
+  const personCardPreviewStripLimit = viewportMode === "phone" ? 3 : viewportMode === "tablet" ? 4 : 5;
   const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
   const selectedPersonLifeRange = selectedPerson ? formatLifeRange(selectedPerson.birth_date, selectedPerson.death_date) : null;
   const collapsedTabName = getCollapsedTabNameParts(selectedPerson?.full_name);
@@ -859,6 +860,8 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
                       avatarMediaId={selectedAvatarMediaId}
                       showStage={false}
                       showStickyFooter={false}
+                      compactPreviewEntry
+                      previewStripLimit={personCardPreviewStripLimit}
                       emptyTitle="Материалы еще не добавлены"
                       emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
                     />
@@ -879,6 +882,8 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
                       avatarMediaId={selectedAvatarMediaId}
                       showStage={false}
                       showStickyFooter={false}
+                      compactPreviewEntry
+                      previewStripLimit={personCardPreviewStripLimit}
                       emptyTitle="Материалы еще не добавлены"
                       emptyMessage="Когда для этого человека появятся фотографии или видео, они будут собраны здесь в спокойной галерее."
                     />

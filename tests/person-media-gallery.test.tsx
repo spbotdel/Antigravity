@@ -1650,6 +1650,99 @@ describe("person media gallery", () => {
     expect(screen.queryByRole("button", { name: "Удалить фото" })).not.toBeInTheDocument();
   });
 
+  it("renders a limited preview-entry strip and keeps the lightbox as the full gallery flow", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-video-3",
+            kind: "video",
+            mime_type: "video/mp4",
+            title: "Видео 3",
+            storage_path: "trees/tree-1/media/video/media-video-3/video.mp4"
+          }),
+          createMediaAsset({
+            id: "media-photo-4",
+            title: "Фото 4",
+            storage_path: "trees/tree-1/media/photo/media-photo-4/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-5",
+            title: "Фото 5",
+            storage_path: "trees/tree-1/media/photo/media-photo-5/photo.jpg"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        compactPreviewEntry
+        previewStripLimit={3}
+      />
+    );
+
+    expect(screen.getByText("Галерея")).toBeInTheDocument();
+    expect(screen.getByText("Фото и видео • 5 материалов")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Показать медиа 1: Фото 1" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Показать медиа 2: Фото 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Показать медиа 3: Видео 3" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Показать медиа 4: Фото 4" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Открыть галерею и показать ещё 2/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Фото 2" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр медиа: Фото 2" });
+    expect(within(dialog).getByRole("button", { name: "Следующее медиа" })).toBeInTheDocument();
+    expect(dialog.querySelectorAll(".media-lightbox-strip-fixed .person-media-thumb")).toHaveLength(5);
+  });
+
+  it("opens the preview-entry overflow tile at the first hidden media item", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo-1",
+            title: "Фото 1",
+            storage_path: "trees/tree-1/media/photo/media-photo-1/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-2",
+            title: "Фото 2",
+            storage_path: "trees/tree-1/media/photo/media-photo-2/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-photo-3",
+            title: "Фото 3",
+            storage_path: "trees/tree-1/media/photo/media-photo-3/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-video-4",
+            kind: "video",
+            mime_type: "video/mp4",
+            title: "Видео 4",
+            storage_path: "trees/tree-1/media/video/media-video-4/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        compactPreviewEntry
+        previewStripLimit={3}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Открыть галерею и показать ещё 1/i }));
+
+    expect(screen.getByRole("dialog", { name: "Просмотр медиа: Видео 4" })).toBeInTheDocument();
+  });
+
   it("renders the per-card actions menu only when explicit builder action props are passed", () => {
     const media = [
       createMediaAsset({

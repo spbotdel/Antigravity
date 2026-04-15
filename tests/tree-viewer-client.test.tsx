@@ -43,8 +43,21 @@ vi.mock("@/components/tree/family-tree-canvas", () => ({
 }));
 
 vi.mock("@/components/tree/person-media-gallery", () => ({
-  PersonMediaGallery: ({ avatarMediaId, media = [] }: { avatarMediaId?: string | null; media?: Array<{ title: string }> }) => (
-    <div data-testid="person-media-gallery">avatar:{avatarMediaId || "none"}; media:{media.map((item) => item.title).join("|") || "none"}</div>
+  PersonMediaGallery: ({
+    avatarMediaId,
+    media = [],
+    compactPreviewEntry,
+    previewStripLimit,
+  }: {
+    avatarMediaId?: string | null;
+    media?: Array<{ title: string }>;
+    compactPreviewEntry?: boolean;
+    previewStripLimit?: number;
+  }) => (
+    <div data-testid="person-media-gallery">
+      avatar:{avatarMediaId || "none"}; media:{media.map((item) => item.title).join("|") || "none"}; entry:
+      {compactPreviewEntry ? "true" : "false"}; limit:{previewStripLimit ?? "none"}
+    </div>
   )
 }));
 
@@ -366,7 +379,7 @@ describe("tree viewer client", () => {
     render(<TreeViewerClient snapshot={createSnapshot()} />);
 
     expect(screen.getByAltText("Портрет: Demo Person")).toHaveAttribute("src", "/api/media/media-1?variant=thumb");
-    expect(screen.getByTestId("person-media-gallery")).toHaveTextContent("avatar:media-1; media:Portrait");
+    expect(screen.getByTestId("person-media-gallery")).toHaveTextContent("avatar:media-1; media:Portrait; entry:true; limit:4");
     expect(screen.getByRole("link", { name: "Посмотреть медиа" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=person&personId=person-1");
     expect(screen.getByText("1990")).toBeInTheDocument();
     expect(screen.queryByText("1990 — ?")).not.toBeInTheDocument();
@@ -418,7 +431,7 @@ describe("tree viewer client", () => {
 
     render(<TreeViewerClient snapshot={snapshot} />);
 
-    expect(screen.getByTestId("person-media-gallery")).toHaveTextContent("media:Portrait");
+    expect(screen.getByTestId("person-media-gallery")).toHaveTextContent("media:Portrait; entry:true; limit:4");
     expect(screen.queryByTestId("person-media-gallery")).not.toHaveTextContent("Family Archive.pdf");
     expect(screen.getByRole("heading", { name: "Документы" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Family Archive\.pdf/i })).toHaveAttribute("href", "/api/media/media-doc-1");

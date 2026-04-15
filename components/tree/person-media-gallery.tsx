@@ -53,6 +53,8 @@ interface PersonMediaGalleryProps {
   onLightboxOpenChange?: (open: boolean) => void;
   lightboxAriaLabelPrefix?: string;
   autoPlayLightboxVideo?: boolean;
+  compactPreviewEntry?: boolean;
+  previewStripLimit?: number;
 }
 
 function isPhotoAsset(asset: MediaAsset) {
@@ -101,6 +103,37 @@ function getMediaOpenLabel(asset: MediaAsset) {
 
 function getMediaStageSecondaryLabel(asset: MediaAsset) {
   return [formatMediaKind(asset.kind), formatMediaVisibility(asset.visibility), getMediaSourceLabel(asset)].join(" • ");
+}
+
+function formatGalleryMediaCount(count: number) {
+  if (count % 10 === 1 && count % 100 !== 11) {
+    return `${count} материал`;
+  }
+
+  if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) {
+    return `${count} материала`;
+  }
+
+  return `${count} материалов`;
+}
+
+function getPreviewEntrySummary(media: MediaAsset[]) {
+  const hasPhoto = media.some((asset) => asset.kind === "photo");
+  const hasVideo = media.some((asset) => asset.kind === "video");
+
+  if (hasPhoto && hasVideo) {
+    return `Фото и видео • ${formatGalleryMediaCount(media.length)}`;
+  }
+
+  if (hasPhoto) {
+    return `Фото • ${formatGalleryMediaCount(media.length)}`;
+  }
+
+  if (hasVideo) {
+    return `Видео • ${formatGalleryMediaCount(media.length)}`;
+  }
+
+  return formatGalleryMediaCount(media.length);
 }
 
 const LIGHTBOX_STRIP_CENTER_THRESHOLD_PX = 16;
@@ -876,6 +909,8 @@ export function PersonMediaGallery({
   onLightboxOpenChange,
   lightboxAriaLabelPrefix = "Просмотр медиа",
   autoPlayLightboxVideo = true,
+  compactPreviewEntry = false,
+  previewStripLimit,
 }: PersonMediaGalleryProps) {
   const [activeMediaId, setActiveMediaId] = useState<string | null>(() => {
     if (initialActiveMediaId && media.some((asset) => asset.id === initialActiveMediaId)) {
@@ -1138,6 +1173,14 @@ export function PersonMediaGallery({
   const resolvedInlineMediaAlbumHref = getInlineMediaAlbumHref ?? (() => null);
   const canShowInlineSelectionAction = Boolean(canManageInlineMediaActions && canSelectMedia && onStartMediaSelection);
   const canShowInlineDeleteAction = Boolean(canManageInlineMediaActions && onDeleteMedia);
+  const isCompactPreviewEntry = Boolean(compactPreviewEntry && !showStage && !lightboxOnly && !isInlineSelectionMode && !canShowInlineActionsMenu);
+  const resolvedPreviewStripLimit =
+    isCompactPreviewEntry && previewStripLimit && Number.isFinite(previewStripLimit)
+      ? Math.max(1, Math.min(media.length, Math.floor(previewStripLimit)))
+      : media.length;
+  const previewStripMedia = isCompactPreviewEntry ? media.slice(0, resolvedPreviewStripLimit) : media;
+  const hiddenPreviewCount = Math.max(0, media.length - previewStripMedia.length);
+  const previewOverflowTargetId = media[previewStripMedia.length]?.id ?? activeMediaId ?? media[0]?.id ?? null;
 
   useEffect(() => {
     if (!canShowInlineActionsMenu && openInlineActionsMediaId) {
@@ -1424,6 +1467,13 @@ export function PersonMediaGallery({
     };
   }, [expandedMediaViewport.height, expandedMediaViewport.width]);
 
+  function openLightboxAtMedia(mediaId: string | null) {
+    if (mediaId) {
+      setActiveMediaId(mediaId);
+    }
+    openLightbox();
+  }
+
   if (!media.length || !activeAsset) {
     if (lightboxOnly) {
       return null;
@@ -1641,7 +1691,7 @@ export function PersonMediaGallery({
   return (
     <>
       {!lightboxOnly ? (
-        <section className="person-media-gallery">
+        <section className={`person-media-gallery${isCompactPreviewEntry ? " person-media-gallery-preview-entry" : ""}`}>
           {showStage ? (
             <article className="person-media-stage utility-section-card">
               <div className="person-media-stage-shell">
@@ -1681,53 +1731,77 @@ export function PersonMediaGallery({
           ) : null}
 
           {!showStage || media.length > 1 ? (
-            <div className="person-media-thumb-strip">
-              {media.map((asset, index) => (
-                <MediaThumb
-                  key={asset.id}
-                  asset={asset}
-                  active={asset.id === activeAsset.id}
-                  shareToken={shareToken}
-                  optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
-                  onSelect={() => {
-                    if (isInlineSelectionMode) {
-                      resolvedToggleMediaSelection(asset.id);
-                      return;
+            <>
+              {isCompactPreviewEntry ? (
+                <div className="person-media-preview-strip-header">
+                  <div className="person-media-preview-strip-copy">
+                    <strong>Галерея</strong>
+                    <span>{getPreviewEntrySummary(media)}</span>
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" className="person-media-preview-strip-action" onClick={() => openLightboxAtMedia(activeMediaId)}>
+                    Открыть
+                  </Button>
+                </div>
+              ) : null}
+              <div className={`person-media-thumb-strip${isCompactPreviewEntry ? " person-media-thumb-strip-entry" : ""}`}>
+                {previewStripMedia.map((asset, index) => (
+                  <MediaThumb
+                    key={asset.id}
+                    asset={asset}
+                    active={!isCompactPreviewEntry && asset.id === activeAsset.id}
+                    shareToken={shareToken}
+                    optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+                    onSelect={() => {
+                      if (isInlineSelectionMode) {
+                        resolvedToggleMediaSelection(asset.id);
+                        return;
+                      }
+                      setActiveMediaId(asset.id);
+                      if (!showStage) {
+                        openLightbox();
+                      }
+                    }}
+                    index={index}
+                    isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
+                    compact={!showStage}
+                    selectionControl={
+                      isInlineSelectionMode
+                        ? {
+                            selected: resolvedSelectedMediaIds.has(asset.id),
+                            onToggle: () => resolvedToggleMediaSelection(asset.id),
+                          }
+                        : undefined
                     }
-                    setActiveMediaId(asset.id);
-                    if (!showStage) {
-                      openLightbox();
+                    actionMenu={
+                      canShowInlineActionsMenu
+                        ? {
+                            open: openInlineActionsMediaId === asset.id,
+                            onOpenChange: (open) => setOpenInlineActionsMediaId(open ? asset.id : null),
+                            downloadHref: buildMediaOpenRouteUrl(asset, shareToken),
+                            albumHref: resolvedInlineMediaAlbumHref(asset) || "#",
+                            showSelectAction: canShowInlineSelectionAction,
+                            showDeleteAction: canShowInlineDeleteAction,
+                            onStartSelection: () => resolvedStartMediaSelection(asset.id),
+                            onDelete: () => setDeleteTargetMediaId(asset.id),
+                          }
+                        : undefined
                     }
-                  }}
-                  index={index}
-                  isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
-                  compact={!showStage}
-                  selectionControl={
-                    isInlineSelectionMode
-                      ? {
-                          selected: resolvedSelectedMediaIds.has(asset.id),
-                          onToggle: () => resolvedToggleMediaSelection(asset.id),
-                        }
-                      : undefined
-                  }
-                  actionMenu={
-                    canShowInlineActionsMenu
-                      ? {
-                          open: openInlineActionsMediaId === asset.id,
-                          onOpenChange: (open) => setOpenInlineActionsMediaId(open ? asset.id : null),
-                          downloadHref: buildMediaOpenRouteUrl(asset, shareToken),
-                          albumHref: resolvedInlineMediaAlbumHref(asset) || "#",
-                          showSelectAction: canShowInlineSelectionAction,
-                          showDeleteAction: canShowInlineDeleteAction,
-                          onStartSelection: () => resolvedStartMediaSelection(asset.id),
-                          onDelete: () => setDeleteTargetMediaId(asset.id),
-                        }
-                      : undefined
-                  }
-                />
-              ))}
-              {appendTile}
-            </div>
+                  />
+                ))}
+                {isCompactPreviewEntry && hiddenPreviewCount > 0 ? (
+                  <button
+                    type="button"
+                    className="person-media-preview-more"
+                    aria-label={`Открыть галерею и показать ещё ${hiddenPreviewCount} ${hiddenPreviewCount === 1 ? "материал" : hiddenPreviewCount < 5 ? "материала" : "материалов"}`}
+                    onClick={() => openLightboxAtMedia(previewOverflowTargetId)}
+                  >
+                    <span className="person-media-preview-more-count">+{hiddenPreviewCount}</span>
+                    <span className="person-media-preview-more-label">Открыть всё</span>
+                  </button>
+                ) : null}
+                {appendTile}
+              </div>
+            </>
           ) : null}
 
           {showStickyFooter ? (
