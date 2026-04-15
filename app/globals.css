@@ -4927,6 +4927,10 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
   justify-content: center;
 }
 
+.person-media-stage-video-frame-inline {
+  align-self: stretch;
+}
+
 .person-media-stage-video-shell {
   position: relative;
   width: fit-content;
@@ -4937,6 +4941,11 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
   align-items: center;
   justify-content: center;
   z-index: 1;
+}
+
+.person-media-stage-video-shell-inline {
+  width: min(100%, 960px);
+  max-width: 100%;
 }
 
 .person-media-stage-video-start-overlay {

@@ -400,8 +400,9 @@ function LightboxVideoPlayer({
   src,
   poster,
   autoPlay = false,
-  preferNativeControls = false,
   requireExplicitStart = false,
+  preload = "metadata",
+  inline = false,
   onVideoElementChange,
   onIntrinsicSizeChange,
   onPlaybackReady,
@@ -413,8 +414,9 @@ function LightboxVideoPlayer({
   src: string;
   poster?: string;
   autoPlay?: boolean;
-  preferNativeControls?: boolean;
   requireExplicitStart?: boolean;
+  preload?: "none" | "metadata" | "auto";
+  inline?: boolean;
   onVideoElementChange?: (node: HTMLVideoElement | null) => void;
   onIntrinsicSizeChange?: (size: { width: number; height: number } | null) => void;
   onPlaybackReady?: () => void;
@@ -452,13 +454,20 @@ function LightboxVideoPlayer({
 
     emitVideoElementChange(video);
 
-    const syncFromVideo = () => {
+    const syncFromVideo = (event?: Event) => {
       setIsPlaying(!video.paused && !video.ended);
       setCurrentTime(Number.isFinite(video.currentTime) ? video.currentTime : 0);
       setDuration(Number.isFinite(video.duration) ? video.duration : 0);
       setVolume(Number.isFinite(video.volume) ? video.volume : 1);
       setIsMuted(video.muted);
-      if (video.readyState >= 1 || video.currentTime > 0) {
+      if (
+        event?.type === "loadedmetadata" ||
+        event?.type === "canplay" ||
+        event?.type === "play" ||
+        event?.type === "playing" ||
+        video.readyState >= 1 ||
+        video.currentTime > 0
+      ) {
         emitPlaybackReady();
       }
       if (video.videoWidth > 0 && video.videoHeight > 0) {
@@ -471,12 +480,12 @@ function LightboxVideoPlayer({
 
     syncFromVideo();
 
-    const syncEvents = ["play", "pause", "ended", "timeupdate", "loadedmetadata", "durationchange", "volumechange"] as const;
+    const syncEvents = ["play", "pause", "ended", "timeupdate", "loadedmetadata", "durationchange", "volumechange", "canplay", "playing"] as const;
     for (const eventName of syncEvents) {
       video.addEventListener(eventName, syncFromVideo);
     }
 
-    if (autoPlay && !preferNativeControls && isSourceAttached) {
+    if (autoPlay && isSourceAttached) {
       void playVideoSafely(video);
     }
 
@@ -488,7 +497,7 @@ function LightboxVideoPlayer({
         video.removeEventListener(eventName, syncFromVideo);
       }
     };
-  }, [asset.id, autoPlay, isSourceAttached, preferNativeControls, src]);
+  }, [asset.id, autoPlay, isSourceAttached, src]);
 
   async function handleExplicitStart() {
     const video = videoRef.current;
@@ -566,30 +575,27 @@ function LightboxVideoPlayer({
   const effectiveCurrentTime = Math.min(currentTime, effectiveDuration || 0);
 
   return (
-    <div className="person-media-stage-video-frame">
-      <div className="person-media-stage-video-shell" style={shellStyle}>
+    <div className={`person-media-stage-video-frame${inline ? " person-media-stage-video-frame-inline" : ""}`}>
+      <div className={`person-media-stage-video-shell${inline ? " person-media-stage-video-shell-inline" : ""}`} style={shellStyle}>
       <video
         ref={videoRef}
         key={`${asset.id}-lightbox`}
         src={resolvedVideoSrc}
         poster={poster}
-        className="person-media-stage-video person-media-stage-video-surface"
+        className={`person-media-stage-video person-media-stage-video-surface${inline ? " person-media-stage-video-inline" : ""}`}
         style={surfaceStyle}
-        controls={preferNativeControls && isSourceAttached}
         playsInline
-        autoPlay={preferNativeControls ? false : autoPlay}
-        preload="metadata"
+        autoPlay={autoPlay}
+        preload={preload}
         onError={() => onError?.(videoRef.current)}
         onClick={
           requireExplicitStart && !isSourceAttached
             ? () => {
                 void handleExplicitStart();
               }
-            : preferNativeControls
-              ? undefined
-              : () => {
-                  void togglePlayback();
-                }
+            : () => {
+                void togglePlayback();
+              }
         }
       >
         Ваш браузер не поддерживает встроенное воспроизведение видео.
@@ -609,52 +615,50 @@ function LightboxVideoPlayer({
         </div>
       ) : null}
       </div>
-      {!preferNativeControls ? (
-        <div className="person-media-stage-video-controls-anchor">
-          <div className="person-media-stage-video-controls" role="group" aria-label={`Управление видео: ${asset.title}`}>
-            <button
-              type="button"
-              className="person-media-stage-video-control person-media-stage-video-control-primary"
-              aria-label={isPlaying ? "Пауза" : "Воспроизвести видео"}
-              onClick={() => void togglePlayback()}
-            >
-              {isPlaying ? <Pause className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Play className="person-media-stage-video-control-icon" aria-hidden="true" />}
-            </button>
-            <span className="person-media-stage-video-time" aria-live="off">
-              {formatVideoTime(effectiveCurrentTime)} / {formatVideoTime(effectiveDuration)}
-            </span>
-            <input
-              type="range"
-              className="person-media-stage-video-slider"
-              aria-label="Позиция видео"
-              min={0}
-              max={effectiveDuration || 0}
-              step={0.1}
-              disabled={effectiveDuration <= 0}
-              value={effectiveCurrentTime}
-              onChange={(event) => handleSeek(Number(event.currentTarget.value))}
-            />
-            <button
-              type="button"
-              className="person-media-stage-video-control"
-              aria-label={isMuted || volume === 0 ? "Включить звук" : "Выключить звук"}
-              onClick={toggleMute}
-            >
-              {isMuted || volume === 0 ? <VolumeX className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Volume2 className="person-media-stage-video-control-icon" aria-hidden="true" />}
-            </button>
-            <input
-              type="range"
-              className="person-media-stage-video-slider person-media-stage-video-volume"
-              aria-label="Громкость"
-              min={0}
-              max={1}
-              step={0.05}
-              value={isMuted ? 0 : volume}
-              onChange={(event) => handleVolume(Number(event.currentTarget.value))}
-            />
-          </div>
+      <div className="person-media-stage-video-controls-anchor">
+        <div className="person-media-stage-video-controls" role="group" aria-label={`Управление видео: ${asset.title}`}>
+          <button
+            type="button"
+            className="person-media-stage-video-control person-media-stage-video-control-primary"
+            aria-label={isPlaying ? "Пауза" : "Воспроизвести видео"}
+            onClick={() => void togglePlayback()}
+          >
+            {isPlaying ? <Pause className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Play className="person-media-stage-video-control-icon" aria-hidden="true" />}
+          </button>
+          <span className="person-media-stage-video-time" aria-live="off">
+            {formatVideoTime(effectiveCurrentTime)} / {formatVideoTime(effectiveDuration)}
+          </span>
+          <input
+            type="range"
+            className="person-media-stage-video-slider"
+            aria-label="Позиция видео"
+            min={0}
+            max={effectiveDuration || 0}
+            step={0.1}
+            disabled={effectiveDuration <= 0}
+            value={effectiveCurrentTime}
+            onChange={(event) => handleSeek(Number(event.currentTarget.value))}
+          />
+          <button
+            type="button"
+            className="person-media-stage-video-control"
+            aria-label={isMuted || volume === 0 ? "Включить звук" : "Выключить звук"}
+            onClick={toggleMute}
+          >
+            {isMuted || volume === 0 ? <VolumeX className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Volume2 className="person-media-stage-video-control-icon" aria-hidden="true" />}
+          </button>
+          <input
+            type="range"
+            className="person-media-stage-video-slider person-media-stage-video-volume"
+            aria-label="Громкость"
+            min={0}
+            max={1}
+            step={0.05}
+            value={isMuted ? 0 : volume}
+            onChange={(event) => handleVolume(Number(event.currentTarget.value))}
+          />
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -682,15 +686,12 @@ function MediaPreview({
 }) {
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const [hasLoadError, setHasLoadError] = useState(false);
-  const [hasReachedPlayableState, setHasReachedPlayableState] = useState(false);
+  const hasReachedPlayableStateRef = useRef(false);
   const delayedFallbackTimeoutRef = useRef<number | null>(null);
   const isChromeAndroidVideoBrowser =
     isInlineVideoAsset(asset) &&
     typeof navigator !== "undefined" &&
     isChromeAndroidVideoQuirkBrowser(navigator.userAgent);
-  const preferNativeExpandedVideoControls =
-    expanded &&
-    isChromeAndroidVideoBrowser;
   const baseMediaUrl = isPhotoAsset(asset)
     ? buildPhotoPreviewRouteUrl(asset, expanded ? "medium" : "small", shareToken)
     : buildMediaOpenRouteUrl(asset, shareToken);
@@ -706,7 +707,7 @@ function MediaPreview({
   }
 
   function markPlaybackReady() {
-    setHasReachedPlayableState(true);
+    hasReachedPlayableStateRef.current = true;
     clearDelayedFallbackTimeout();
   }
 
@@ -721,7 +722,7 @@ function MediaPreview({
       if (video) {
       }
     }
-    if (isChromeAndroidVideoBrowser && !hasReachedPlayableState) {
+    if (isChromeAndroidVideoBrowser && !hasReachedPlayableStateRef.current) {
       if (delayedFallbackTimeoutRef.current === null) {
         delayedFallbackTimeoutRef.current = window.setTimeout(() => {
           delayedFallbackTimeoutRef.current = null;
@@ -730,7 +731,7 @@ function MediaPreview({
       }
       return;
     }
-    if (isChromeAndroidVideoBrowser && hasReachedPlayableState) {
+    if (isChromeAndroidVideoBrowser && hasReachedPlayableStateRef.current) {
       return;
     }
     setHasLoadError(true);
@@ -738,7 +739,7 @@ function MediaPreview({
 
   useEffect(() => {
     setHasLoadError(false);
-    setHasReachedPlayableState(false);
+    hasReachedPlayableStateRef.current = false;
     clearDelayedFallbackTimeout();
     return () => {
       clearDelayedFallbackTimeout();
@@ -781,55 +782,14 @@ function MediaPreview({
 
   if (isInlineVideoAsset(asset)) {
     if (expanded) {
-      if (preferNativeExpandedVideoControls) {
-        return (
-          <div className="person-media-stage-video-frame">
-            <div className="person-media-stage-video-shell" style={expandedMediaShellStyle}>
-              <video
-                ref={(node) => {
-                  onLightboxVideoElementChange?.(node);
-                }}
-                key={`${asset.id}-lightbox-native`}
-                src={mediaUrl || undefined}
-                poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
-                className="person-media-stage-video person-media-stage-video-surface"
-                style={expandedMediaStyle}
-                controls
-                playsInline
-                preload="metadata"
-                onLoadedMetadata={(event) => {
-                  markPlaybackReady();
-                  onLightboxMediaIntrinsicSizeChange?.({
-                    width: event.currentTarget.videoWidth,
-                    height: event.currentTarget.videoHeight,
-                  });
-                }}
-                onCanPlay={(event) => {
-                  markPlaybackReady();
-                }}
-                onPlay={(event) => {
-                  markPlaybackReady();
-                }}
-                onPlaying={(event) => {
-                  markPlaybackReady();
-                }}
-                onError={(event) => handleOriginalLoadError(event.currentTarget)}
-              >
-                Ваш браузер не поддерживает встроенное воспроизведение видео.
-              </video>
-            </div>
-          </div>
-        );
-      }
-
       return (
         <LightboxVideoPlayer
           asset={asset}
           src={mediaUrl || ""}
           poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
-          autoPlay={autoPlayVideo}
-          preferNativeControls={preferNativeExpandedVideoControls}
+          autoPlay={autoPlayVideo && !isChromeAndroidVideoBrowser}
           requireExplicitStart={false}
+          preload="metadata"
           onVideoElementChange={onLightboxVideoElementChange}
           onIntrinsicSizeChange={onLightboxMediaIntrinsicSizeChange}
           onPlaybackReady={markPlaybackReady}
@@ -841,31 +801,17 @@ function MediaPreview({
     }
 
     return (
-      <video
-        key={`${asset.id}-${expanded ? "expanded" : "inline"}`}
-        src={mediaUrl || undefined}
+      <LightboxVideoPlayer
+        asset={asset}
+        src={mediaUrl || ""}
         poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
-        className={`person-media-stage-video${expanded ? "" : " person-media-stage-video-inline"}`}
-        controls
-        playsInline
-        muted={autoPlayVideo}
+        autoPlay={autoPlayVideo}
+        requireExplicitStart={false}
         preload={isChromeAndroidVideoBrowser ? "metadata" : "none"}
-        onLoadedMetadata={(event) => {
-          markPlaybackReady();
-        }}
-        onCanPlay={(event) => {
-          markPlaybackReady();
-        }}
-        onPlay={(event) => {
-          markPlaybackReady();
-        }}
-        onPlaying={(event) => {
-          markPlaybackReady();
-        }}
-        onError={(event) => handleOriginalLoadError(event.currentTarget)}
-      >
-        Ваш браузер не поддерживает встроенное воспроизведение видео.
-      </video>
+        inline
+        onPlaybackReady={markPlaybackReady}
+        onError={handleOriginalLoadError}
+      />
     );
   }
 

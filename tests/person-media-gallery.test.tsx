@@ -319,6 +319,10 @@ describe("person media gallery", () => {
     const stageVideo = document.querySelector("video.person-media-stage-video-inline") as HTMLVideoElement | null;
     expect(stageVideo).not.toBeNull();
     expect(stageVideo?.preload).toBe("none");
+    expect(stageVideo?.hasAttribute("controls")).toBe(false);
+    expect(screen.getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Позиция видео")).toBeInTheDocument();
+    expect(screen.getByLabelText("Громкость")).toBeInTheDocument();
   });
 
   it("uses a generated thumb image for ready cloudflare video previews", () => {
@@ -355,6 +359,8 @@ describe("person media gallery", () => {
     const stageVideo = document.querySelector("video.person-media-stage-video-inline") as HTMLVideoElement | null;
     expect(stageVideo).not.toBeNull();
     expect(stageVideo?.preload).toBe("none");
+    expect(stageVideo?.hasAttribute("controls")).toBe(false);
+    expect(screen.getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
   });
 
   it("uses preview variants for fresh photo stage, thumbs, and fullscreen view", () => {
@@ -523,7 +529,7 @@ describe("person media gallery", () => {
     expect(within(dialog).getByLabelText("Громкость")).toBeInTheDocument();
   });
 
-  it("uses native controls for archive-style lightbox video on Chrome Android", async () => {
+  it("keeps the custom lightbox controls on Chrome Android while preserving the cautious startup path", async () => {
     const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
 
     Object.defineProperty(window.navigator, "userAgent", {
@@ -557,11 +563,55 @@ describe("person media gallery", () => {
       const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
       expect(video).not.toBeNull();
       expect(video).toHaveAttribute("src", "/api/media/media-video?source=person-media-lightbox-video");
-      expect(video?.hasAttribute("controls")).toBe(true);
+      expect(video?.hasAttribute("controls")).toBe(false);
       expect(video?.autoplay).toBe(false);
       expect(video?.preload).toBe("metadata");
       expect(within(dialog).queryByRole("button", { name: "Загрузить видео" })).toBeNull();
-      expect(within(dialog).queryByLabelText("Громкость")).toBeNull();
+      expect(within(dialog).getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
+      expect(within(dialog).getByLabelText("Позиция видео")).toBeInTheDocument();
+      expect(within(dialog).getByLabelText("Громкость")).toBeInTheDocument();
+    } finally {
+      if (originalUserAgentDescriptor) {
+        Object.defineProperty(window.navigator, "userAgent", originalUserAgentDescriptor);
+      } else {
+        Object.defineProperty(window.navigator, "userAgent", {
+          configurable: true,
+          get: () => "",
+        });
+      }
+    }
+  });
+
+  it("keeps the inline stage video on Chrome Android in custom-controls mode without native UI", () => {
+    const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
+    Object.defineProperty(window.navigator, "userAgent", {
+      configurable: true,
+      get: () =>
+        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Mobile Safari/537.36",
+    });
+
+    try {
+      render(
+        <PersonMediaGallery
+          media={[
+            createMediaAsset({
+              id: "media-video",
+              kind: "video",
+              title: "Семейное видео",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+            })
+          ]}
+        />
+      );
+
+      const stageVideo = document.querySelector("video.person-media-stage-video-inline") as HTMLVideoElement | null;
+      expect(stageVideo).not.toBeNull();
+      expect(stageVideo?.hasAttribute("controls")).toBe(false);
+      expect(stageVideo?.preload).toBe("metadata");
+      expect(screen.getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Позиция видео")).toBeInTheDocument();
+      expect(screen.getByLabelText("Громкость")).toBeInTheDocument();
     } finally {
       if (originalUserAgentDescriptor) {
         Object.defineProperty(window.navigator, "userAgent", originalUserAgentDescriptor);
@@ -670,7 +720,7 @@ describe("person media gallery", () => {
         vi.advanceTimersByTime(15_000);
       });
 
-      expect(dialog.querySelector("video.person-media-stage-video")).not.toBeNull();
+      expect(within(screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" })).getByLabelText("Позиция видео")).toBeInTheDocument();
       expect(screen.queryByText("Файл временно недоступен")).not.toBeInTheDocument();
     } finally {
       if (originalUserAgentDescriptor) {
