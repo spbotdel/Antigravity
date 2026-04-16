@@ -1,0 +1,835 @@
+.viewport {
+  --landing-sticky-top: 0px;
+  --story-unit: 180ms;
+  --story-duration-h1: 3280ms;
+  --story-duration-subtitle: 2720ms;
+  --story-duration-cta: 620ms;
+  --story-duration-hint-loop: 2520ms;
+  --story-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --story-title-rgb: 96, 144, 96;
+  --story-lead-rgb: 48, 112, 112;
+  --story-cta-text-rgb: 176, 80, 80;
+  --story-paper-rgb: 247, 240, 229;
+  --story-border-rgb: 176, 80, 80;
+  --story-hint-rgb: 94, 76, 58;
+  --story-leaf-soft-rgb: 192, 192, 112;
+  --story-leaf-mist-rgb: 168, 176, 104;
+  --story-leaf-deep-rgb: 48, 112, 112;
+  --story-leaf-red-rgb: 176, 80, 80;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100svh;
+  overflow: hidden;
+  background: #f8f5ee;
+}
+
+.backgroundLayers {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.backgroundBase,
+.decoration {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
+  transform-origin: center center;
+}
+
+.backgroundBase {
+  opacity: 0.52;
+  transform: scale(1.08);
+}
+
+.backgroundDecorations {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.decoration {
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+.cloudBanks {
+  inset: auto auto -7% calc(1% - 20px);
+  width: 116%;
+  height: auto;
+  opacity: 0.74;
+  animation: cloudBreath 8s ease-in-out infinite alternate;
+}
+
+.cloudBanks {
+  mix-blend-mode: multiply;
+  transform-origin: center bottom;
+}
+
+@keyframes cloudBreath {
+  0% {
+    opacity: 0.54;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0.84;
+    transform: scale(1.03);
+  }
+}
+
+.layout {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  align-items: stretch;
+}
+
+.copyColumn {
+  position: relative;
+  min-width: 0;
+}
+
+.storyPanel {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  align-content: start;
+  height: 100%;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 20svh)
+    clamp(20px, 4vw, 56px)
+    clamp(92px, 18svh, 150px)
+    clamp(42px, 6vw, 92px);
+  pointer-events: none;
+}
+
+.storyCopy {
+  display: grid;
+  gap: clamp(20px, 2.8vh, 32px);
+  max-width: min(560px, 42vw);
+  transform: translate3d(0, -100px, 0);
+}
+
+.storyTitle {
+  margin: 0;
+  max-width: 10ch;
+  font-size: clamp(3.65rem, 5.8vw, 5.75rem);
+  font-weight: 600;
+  line-height: 0.92;
+  letter-spacing: -0.065em;
+  color: rgba(var(--story-title-rgb), 0.96);
+  text-wrap: balance;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.26),
+    0 2px 10px rgba(33, 56, 36, 0.12),
+    0 0 24px rgba(var(--story-title-rgb), 0.18),
+    0 12px 30px rgba(var(--story-leaf-soft-rgb), 0.14);
+  opacity: 0;
+  transform: translate3d(-40px, 0, 0);
+  transition:
+    opacity var(--story-duration-h1) var(--story-ease),
+    transform var(--story-duration-h1) var(--story-ease);
+}
+
+.storyTitleVisible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.storyLead {
+  margin: 0;
+  max-width: 24ch;
+  font-size: clamp(1.38rem, 2vw, 1.78rem);
+  font-weight: 420;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: rgba(var(--story-lead-rgb), 0.86);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 18px rgba(var(--story-lead-rgb), 0.12),
+    0 0 26px rgba(var(--story-leaf-soft-rgb), 0.07);
+  opacity: 0;
+  transform: translate3d(0, 20px, 0);
+  transition:
+    opacity var(--story-duration-subtitle) var(--story-ease),
+    transform var(--story-duration-subtitle) var(--story-ease);
+}
+
+.storyLeadEmphasis {
+  color: rgba(var(--story-lead-rgb), 0.94);
+  font-weight: 500;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.24),
+    0 0 20px rgba(var(--story-lead-rgb), 0.18),
+    0 0 28px rgba(var(--story-leaf-soft-rgb), 0.1);
+}
+
+.storyLeadVisible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.storyActionSlot {
+  min-height: 4.2rem;
+}
+
+.storyCtaButton {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  cursor: pointer;
+  width: fit-content;
+  min-width: min(220px, 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 24px 15px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--story-leaf-red-rgb), 0.32);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(var(--story-leaf-soft-rgb), 0.06)),
+    linear-gradient(135deg, rgba(var(--story-leaf-red-rgb), 0.18), rgba(var(--story-leaf-red-rgb), 0.08));
+  box-shadow:
+    0 10px 22px rgba(var(--story-leaf-red-rgb), 0.14),
+    0 2px 8px rgba(255, 255, 255, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(6px) saturate(106%);
+  color: rgba(var(--story-cta-text-rgb), 0.88);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-align: center;
+  text-decoration: none;
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  pointer-events: none;
+  transition:
+    opacity var(--story-duration-cta) var(--story-ease),
+    transform var(--story-duration-cta) var(--story-ease),
+    color 240ms ease,
+    box-shadow 240ms ease,
+    border-color 240ms ease,
+    background-color 240ms ease;
+}
+
+.storyCtaButton::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02)),
+    radial-gradient(circle at 24% 24%, rgba(var(--story-leaf-red-rgb), 0.14), transparent 34%);
+  pointer-events: none;
+}
+
+.storyCtaButton::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: -2;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle, rgba(var(--story-leaf-red-rgb), 0.24), rgba(var(--story-leaf-red-rgb), 0));
+  filter: blur(12px);
+  opacity: 0.48;
+  pointer-events: none;
+}
+
+.storyCtaTitle {
+  font-size: 1.06rem;
+  font-weight: 500;
+  line-height: 1.04;
+  letter-spacing: 0.012em;
+  color: rgba(var(--story-cta-text-rgb), 0.92);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 12px rgba(var(--story-leaf-red-rgb), 0.12);
+}
+
+.storyCtaButtonVisible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  pointer-events: auto;
+  animation: storyCtaReveal var(--story-duration-cta) var(--story-ease) both;
+}
+
+.storyCtaButtonVisible:hover,
+.storyCtaButtonVisible:focus-visible {
+  border-color: rgba(var(--story-leaf-red-rgb), 0.42);
+  box-shadow:
+    0 12px 26px rgba(var(--story-leaf-red-rgb), 0.18),
+    0 3px 10px rgba(255, 255, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.46);
+  color: rgba(var(--story-leaf-red-rgb), 0.94);
+  opacity: 1;
+  transform: translate3d(0, -1px, 0);
+}
+
+.storyElementReducedMotion,
+.storyPanelReducedMotion .storyTitle,
+.storyPanelReducedMotion .storyLead,
+.storyPanelReducedMotion .storyCtaButton {
+  transform: none;
+}
+
+.authOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(21, 19, 16, 0.42);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.authDialog {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(156, 129, 102, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 246, 0.97), rgba(249, 242, 232, 0.95)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.44), transparent 58%);
+  box-shadow:
+    0 26px 60px rgba(48, 37, 26, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.52);
+  color: rgba(49, 39, 30, 0.96);
+}
+
+.authDialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.authDialogCopy {
+  display: grid;
+  gap: 8px;
+}
+
+.authDialogEyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  color: rgba(var(--story-leaf-red-rgb), 0.86);
+}
+
+.authDialogTitle {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 2.55rem);
+  line-height: 0.94;
+  letter-spacing: -0.05em;
+  color: rgba(59, 45, 32, 0.98);
+}
+
+.authDialogText {
+  margin: 0;
+  max-width: 28ch;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: rgba(94, 78, 63, 0.82);
+}
+
+.authDialogClose {
+  appearance: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1px solid rgba(156, 129, 102, 0.18);
+  background: rgba(255, 255, 255, 0.62);
+  color: rgba(78, 60, 45, 0.84);
+  cursor: pointer;
+}
+
+.authPopupForm {
+  display: grid;
+  gap: 12px;
+}
+
+.authPopupField {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(65, 50, 36, 0.9);
+}
+
+.authPopupInput {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(142, 115, 87, 0.16);
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.9);
+  color: rgba(49, 39, 30, 0.96);
+  outline: none;
+  box-shadow: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.authPopupInput::placeholder {
+  color: rgba(129, 111, 92, 0.72);
+}
+
+.authPopupInput:focus {
+  border-color: rgba(var(--story-leaf-red-rgb), 0.35);
+  box-shadow:
+    0 0 0 4px rgba(var(--story-leaf-red-rgb), 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.authPopupButton {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: rgb(var(--story-leaf-red-rgb));
+  color: #fff8f3;
+  font-size: 0.94rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.authPopupButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.authPopupButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.authPopupFormError {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(201, 74, 66, 0.12);
+  background: rgba(201, 74, 66, 0.08);
+  color: #c94a42;
+}
+
+.authDialogFooter {
+  margin: 0;
+  color: rgba(92, 74, 58, 0.76);
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.authDialogLink {
+  color: rgba(var(--story-leaf-red-rgb), 0.92);
+  font-weight: 600;
+}
+
+.sceneColumn {
+  position: relative;
+  height: 100%;
+  display: grid;
+  align-items: start;
+  justify-items: end;
+  padding: 0 24px 0 0;
+}
+
+.sceneColumn > * {
+  margin-top: -13vh;
+  margin-right: -12vw;
+}
+
+.scrollHint {
+  position: absolute;
+  left: 50%;
+  bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 14px));
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-50%, 0, 0);
+  transition:
+    opacity var(--story-duration-subtitle) var(--story-ease),
+    transform var(--story-duration-subtitle) var(--story-ease);
+}
+
+.scrollHintInner {
+  display: grid;
+  place-items: center;
+}
+
+.scrollHintButton {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.scrollHintButton:hover,
+.scrollHintButton:focus-visible {
+  opacity: 1;
+}
+
+.scrollHintButton:focus-visible {
+  outline: none;
+}
+
+.scrollHintVisible {
+  opacity: 0.9;
+  transform: translate3d(-50%, 0, 0);
+}
+
+.scrollHintVisible .scrollHintInner {
+  animation: scrollHintDrift var(--story-duration-hint-loop) var(--story-ease) infinite;
+}
+
+.scrollHintArrow {
+  font-size: clamp(3rem, 4.8vw, 4.4rem);
+  font-weight: 500;
+  line-height: 1;
+  color: rgba(var(--story-hint-rgb), 0.98);
+  filter:
+    drop-shadow(0 0 14px rgba(255, 248, 239, 0.95))
+    drop-shadow(0 0 34px rgba(249, 238, 216, 0.92))
+    drop-shadow(0 0 62px rgba(232, 204, 150, 0.74));
+  text-shadow:
+    0 0 14px rgba(255, 250, 243, 1),
+    0 0 28px rgba(252, 242, 224, 0.96),
+    0 0 52px rgba(240, 216, 171, 0.82),
+    0 0 84px rgba(221, 184, 117, 0.58),
+    0 4px 14px rgba(116, 92, 65, 0.14);
+}
+
+@keyframes scrollHintDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.54;
+  }
+
+  60% {
+    transform: translate3d(0, 8px, 0);
+    opacity: 0.72;
+  }
+}
+
+@keyframes storyCtaReveal {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .layout {
+    grid-template-columns: minmax(280px, 34vw) minmax(0, 1fr);
+  }
+
+  .storyPanel {
+    justify-items: start;
+    align-content: start;
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 12svh)
+      22px
+      clamp(88px, 13svh, 128px)
+      clamp(24px, 4vw, 40px);
+  }
+
+  .storyCopy {
+    max-width: min(320px, 28vw);
+    justify-items: start;
+    text-align: left;
+    gap: 18px;
+    transform: none;
+  }
+
+  .storyTitle {
+    font-size: clamp(3rem, 4.9vw, 4.2rem);
+    max-width: 8ch;
+  }
+
+  .storyLead {
+    max-width: 20ch;
+    font-size: clamp(1.02rem, 1.6vw, 1.22rem);
+  }
+
+  .storyActionSlot {
+    min-height: 3.8rem;
+  }
+
+  .storyCtaButton {
+    min-width: min(198px, 100%);
+    padding: 12px 18px 13px;
+  }
+
+  .storyCtaTitle {
+    font-size: 0.96rem;
+  }
+
+  .sceneColumn {
+    padding: 0;
+    align-items: end;
+    justify-items: center;
+    overflow: hidden;
+  }
+
+  .sceneColumn > * {
+    margin-top: 0;
+    margin-right: 0;
+    width: min(60vw, 700px);
+    max-width: none;
+    --stage-overlay-offset-x: 0px;
+    transform: translate3d(0, 5svh, 0);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) and (max-height: 900px) {
+  .storyPanel {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 10svh);
+    padding-bottom: clamp(80px, 12svh, 112px);
+  }
+
+  .sceneColumn > * {
+    transform: translate3d(0, 7svh, 0);
+  }
+}
+
+@media (max-width: 767px) {
+  .cloudBanks {
+    width: 126%;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .copyColumn {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .storyPanel {
+    justify-items: center;
+    align-content: start;
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 5svh)
+      18px
+      clamp(300px, 35svh, 370px)
+      18px;
+  }
+
+  .storyCopy {
+    max-width: min(84vw, 320px);
+    justify-items: center;
+    text-align: center;
+    gap: 14px;
+    transform: none;
+  }
+
+  .storyTitle {
+    font-size: clamp(2.55rem, 11vw, 3.6rem);
+    max-width: 8ch;
+  }
+
+  .storyLead {
+    max-width: 20ch;
+    font-size: clamp(1rem, 4.4vw, 1.18rem);
+  }
+
+  .storyActionSlot {
+    min-height: 3.8rem;
+  }
+
+  .storyCtaButton {
+    min-width: min(198px, 100%);
+    padding: 12px 18px 13px;
+  }
+
+  .storyCtaTitle {
+    font-size: 0.95rem;
+  }
+
+  .sceneColumn {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .sceneColumn > * {
+    margin-top: 0;
+    margin-right: 0;
+    flex: 0 0 auto;
+    width: min(148vw, 620px);
+    max-width: none;
+    --stage-overlay-offset-x: 0px;
+    transform: translate3d(0, 10svh, 0);
+  }
+
+  .scrollHint {
+    left: 18px;
+    bottom: max(124px, calc(env(safe-area-inset-bottom, 0px) + 108px));
+    transform: none;
+  }
+
+  .scrollHintVisible {
+    transform: none;
+  }
+
+  .scrollHintButton {
+    width: auto;
+    height: auto;
+    padding: 6px;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .scrollHintArrow {
+    font-size: clamp(2.35rem, 9.2vw, 2.9rem);
+    font-weight: 700;
+    color: rgba(var(--story-hint-rgb), 0.98);
+    filter:
+      drop-shadow(0 0 10px rgba(255, 248, 239, 0.98))
+      drop-shadow(0 0 24px rgba(249, 238, 216, 0.8))
+      drop-shadow(0 4px 10px rgba(116, 92, 65, 0.18));
+    text-shadow:
+      0 0 10px rgba(255, 250, 243, 0.96),
+      0 0 22px rgba(252, 242, 224, 0.88),
+      0 4px 12px rgba(116, 92, 65, 0.16);
+  }
+}
+
+@media (max-width: 767px) and (max-height: 760px) {
+  .storyPanel {
+    padding:
+      calc(env(safe-area-inset-top, 0px) + 4svh)
+      16px
+      clamp(344px, 50svh, 430px)
+      16px;
+  }
+
+  .storyCopy {
+    max-width: min(84vw, 268px);
+    gap: 8px;
+  }
+
+  .storyTitle {
+    font-size: clamp(1.95rem, 10vw, 2.75rem);
+    max-width: 8ch;
+  }
+
+  .storyLead {
+    max-width: 17ch;
+    font-size: clamp(0.88rem, 4vw, 0.98rem);
+  }
+
+  .storyActionSlot {
+    min-height: 3.15rem;
+  }
+
+  .storyCtaButton {
+    min-width: min(170px, 100%);
+    padding: 10px 16px 11px;
+  }
+
+  .storyCtaTitle {
+    font-size: 0.88rem;
+  }
+
+  .sceneColumn > * {
+    width: min(146vw, 540px);
+    transform: translate3d(0, 24svh, 0);
+  }
+
+  .scrollHint {
+    bottom: max(108px, calc(env(safe-area-inset-bottom, 0px) + 92px));
+  }
+}
+
+@media (max-width: 640px) {
+  .authOverlay {
+    padding: 14px;
+  }
+
+  .authDialog {
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .authDialogTitle {
+    font-size: clamp(1.72rem, 9vw, 2.2rem);
+  }
+
+  .authDialogText,
+  .authDialogFooter {
+    font-size: 0.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storyTitle,
+  .storyLead,
+  .storyCtaButton,
+  .scrollHint {
+    transition-duration: var(--story-duration-subtitle);
+    transition-delay: 0ms;
+    transform: none;
+  }
+
+  .storyCtaButtonVisible {
+    animation: none;
+  }
+
+  .storyLeadVisible {
+    transition-delay: 0ms;
+  }
+
+  .scrollHintInner {
+    animation: none;
+  }
+}
