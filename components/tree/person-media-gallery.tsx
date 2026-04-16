@@ -241,15 +241,22 @@ function MediaThumb({
   disableDurationProbe?: boolean;
 }) {
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
+  const preferredVideoThumbRoute =
+    isInlineVideoAsset(asset) && thumbSource?.kind !== "video"
+      ? buildMediaRouteUrl(asset.id, { shareToken, variant: "thumb" })
+      : null;
+  const videoFallbackSrc = isInlineVideoAsset(asset)
+    ? withMediaSourceContext(buildMediaOpenRouteUrl(asset, shareToken), "person-media-thumb-video")
+    : null;
   const resolvedThumbSource =
     thumbSource ??
-    (isInlineVideoAsset(asset)
+    (preferredVideoThumbRoute
       ? {
-          kind: "video" as const,
-          src: withMediaSourceContext(buildMediaOpenRouteUrl(asset, shareToken), "person-media-thumb-video"),
+          kind: "image" as const,
+          src: preferredVideoThumbRoute,
         }
       : null);
-  const mediaUrl = resolvedThumbSource?.src || buildMediaRouteUrl(asset.id, { shareToken });
+  const mediaUrl = resolvedThumbSource?.src || videoFallbackSrc || buildMediaRouteUrl(asset.id, { shareToken });
   const thumbFallback = (
     <span className="person-media-thumb-visual">
       {asset.kind === "video" ? (
@@ -290,6 +297,7 @@ function MediaThumb({
           placeholder={thumbFallback}
           overlayContent={isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
           disableDurationProbe={disableDurationProbe}
+          videoFallbackSrc={videoFallbackSrc}
         />
       ) : (
         thumbFallback

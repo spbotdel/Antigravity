@@ -52,7 +52,7 @@ function formatDurationLabel(durationSeconds: number) {
 
 interface MediaThumbVisualProps {
   asset: Pick<MediaAssetRecord, "id" | "kind" | "provider" | "title">;
-  thumbSource: MediaThumbSource;
+  thumbSource: Exclude<MediaThumbSource, null>;
   shareToken?: string | null;
   containerClassName: string;
   mediaClassName: string;
@@ -61,6 +61,7 @@ interface MediaThumbVisualProps {
   showToneOverlay?: boolean;
   showVideoChrome?: boolean;
   disableDurationProbe?: boolean;
+  videoFallbackSrc?: string | null;
   containerStyle?: CSSProperties;
   mediaStyle?: CSSProperties;
 }
@@ -76,17 +77,21 @@ export function MediaThumbVisual({
   showToneOverlay = true,
   showVideoChrome = true,
   disableDurationProbe = false,
+  videoFallbackSrc = null,
   containerStyle,
   mediaStyle
 }: MediaThumbVisualProps) {
   const [durationLabel, setDurationLabel] = useState<string | null>(() => durationLabelCache.get(asset.id) || null);
   const [hasLoadError, setHasLoadError] = useState(false);
+  const [isUsingVideoFallback, setIsUsingVideoFallback] = useState(false);
   const shouldDisableDurationProbeForBrowser =
     typeof navigator !== "undefined" && isChromeAndroidVideoProbeQuirkBrowser(navigator.userAgent);
+  const resolvedVideoSrc = isUsingVideoFallback && videoFallbackSrc ? videoFallbackSrc : thumbSource.kind === "video" ? thumbSource.src : null;
 
   useEffect(() => {
     setHasLoadError(false);
-  }, [asset.id, thumbSource?.kind, thumbSource?.src]);
+    setIsUsingVideoFallback(false);
+  }, [asset.id, thumbSource?.kind, thumbSource?.src, videoFallbackSrc]);
 
   useEffect(() => {
     if (
@@ -95,7 +100,7 @@ export function MediaThumbVisual({
       asset.kind !== "video" ||
       asset.provider === "yandex_disk" ||
       durationLabel ||
-      thumbSource?.kind === "video"
+      Boolean(resolvedVideoSrc)
     ) {
       return;
     }
@@ -143,7 +148,7 @@ export function MediaThumbVisual({
       video.removeEventListener("error", handleError);
       cleanup();
     };
-  }, [asset, disableDurationProbe, durationLabel, shareToken, shouldDisableDurationProbeForBrowser, thumbSource?.kind]);
+  }, [asset, disableDurationProbe, durationLabel, resolvedVideoSrc, shareToken, shouldDisableDurationProbeForBrowser]);
 
   if (!thumbSource || hasLoadError) {
     return <>{placeholder}</>;
@@ -151,34 +156,35 @@ export function MediaThumbVisual({
 
   const overlayToneClassName = asset.kind === "video" ? "media-thumb-overlay-video" : "media-thumb-overlay-photo";
   const handleThumbLoadError = () => {
+    if (asset.kind === "video" && !isUsingVideoFallback && videoFallbackSrc && thumbSource.kind !== "video") {
+      setIsUsingVideoFallback(true);
+      return;
+    }
+
     logMediaError({
       mediaId: asset.id,
       type: "thumb",
-      context: thumbSource.kind === "image" ? "MediaThumbVisual:image" : "MediaThumbVisual:video",
-      src: thumbSource.src,
+      context:
+        asset.kind === "video" && isUsingVideoFallback
+          ? "MediaThumbVisual:video-fallback"
+          : thumbSource.kind === "image"
+            ? "MediaThumbVisual:image"
+            : "MediaThumbVisual:video",
+      src: resolvedVideoSrc || thumbSource.src,
     });
     setHasLoadError(true);
   };
 
   return (
     <div className={`${containerClassName} media-thumb-visual`} style={containerStyle}>
-      {thumbSource.kind === "image" ? (
-        <img
-          src={thumbSource.src}
-          alt=""
-          loading="lazy"
-          className={mediaClassName}
-          style={mediaStyle}
-          onError={handleThumbLoadError}
-        />
-      ) : (
+      {resolvedVideoSrc ? (
         <video
-          src={thumbSource.src}
+          src={resolvedVideoSrc}
           className={mediaClassName}
           style={mediaStyle}
           muted
           playsInline
-          preload="metadata"
+          preload="auto"
           onError={handleThumbLoadError}
           onLoadedMetadata={(event) => {
             const nextDurationLabel = formatDurationLabel(event.currentTarget.duration);
@@ -190,7 +196,16 @@ export function MediaThumbVisual({
             setDurationLabel(nextDurationLabel);
           }}
         />
-      )}
+      ) : thumbSource.kind === "image" ? (
+        <img
+          src={thumbSource.src}
+          alt=""
+          loading="lazy"
+          className={mediaClassName}
+          style={mediaStyle}
+          onError={handleThumbLoadError}
+        />
+      ) : null}
 
       {showToneOverlay ? <span className={`media-thumb-overlay ${overlayToneClassName}`} aria-hidden="true" /> : null}
 

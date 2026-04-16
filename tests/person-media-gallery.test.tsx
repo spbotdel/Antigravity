@@ -312,9 +312,9 @@ describe("person media gallery", () => {
     expect(screen.getByText("Фото")).toBeInTheDocument();
     const videoThumbButton = screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" });
     expect(videoThumbButton).toBeInTheDocument();
-    const videoThumb = videoThumbButton.querySelector("video.person-media-thumb-video") as HTMLVideoElement | null;
+    const videoThumb = videoThumbButton.querySelector("img") as HTMLImageElement | null;
     expect(videoThumb).not.toBeNull();
-    expect(videoThumb).toHaveAttribute("src", "/api/media/media-video?source=person-media-thumb-video");
+    expect(videoThumb).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
 
     fireEvent.click(videoThumbButton);
 
@@ -450,9 +450,10 @@ describe("person media gallery", () => {
     expect(within(dialog).getByLabelText("Позиция видео")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Закрыть просмотр" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Закрыть просмотр" })).toHaveLength(1);
-    const stripVideoThumb = dialog.querySelector(".media-lightbox-strip-fixed video.person-media-thumb-video") as HTMLVideoElement | null;
+    const stripVideoThumbButton = within(dialog).getByRole("button", { name: "Показать медиа 2: Семейное видео" });
+    const stripVideoThumb = stripVideoThumbButton.querySelector("img") as HTMLImageElement | null;
     expect(stripVideoThumb).not.toBeNull();
-    expect(stripVideoThumb).toHaveAttribute("src", "/api/media/media-video?source=person-media-thumb-video");
+    expect(stripVideoThumb).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Следующее медиа" }));
 
@@ -1117,10 +1118,10 @@ describe("person media gallery", () => {
       );
 
       const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео 1" });
-      const thumbVideos = dialog.querySelectorAll(".media-lightbox-phone-video-strip video.person-media-thumb-video");
-      expect(thumbVideos).toHaveLength(2);
-      expect(thumbVideos[0]).toHaveAttribute("src", "/api/media/media-video-1?source=person-media-thumb-video");
-      expect(thumbVideos[1]).toHaveAttribute("src", "/api/media/media-video-2?source=person-media-thumb-video");
+      const thumbImages = dialog.querySelectorAll(".media-lightbox-phone-video-strip .person-media-thumb-visual img");
+      expect(thumbImages).toHaveLength(2);
+      expect(thumbImages[0]).toHaveAttribute("src", "/api/media/media-video-1?variant=thumb");
+      expect(thumbImages[1]).toHaveAttribute("src", "/api/media/media-video-2?variant=thumb");
 
       const firstVideo = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement;
       let firstReadyState = 0;
@@ -1168,6 +1169,38 @@ describe("person media gallery", () => {
         Object.defineProperty(window, "innerWidth", originalInnerWidthDescriptor);
       }
     }
+  });
+
+  it("falls back from the preferred thumb route to the original video source only after the thumb route fails", async () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            title: "Семейное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+      />
+    );
+
+    const thumbButton = screen.getByRole("button", { name: "Показать медиа 1: Семейное видео" });
+    const thumbImage = thumbButton.querySelector("img") as HTMLImageElement | null;
+    expect(thumbImage).not.toBeNull();
+    expect(thumbImage).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
+
+    fireEvent.error(thumbImage as HTMLImageElement);
+
+    await waitFor(() => {
+      const fallbackVideo = thumbButton.querySelector("video") as HTMLVideoElement | null;
+      expect(fallbackVideo).not.toBeNull();
+      expect(fallbackVideo).toHaveAttribute("src", "/api/media/media-video?source=person-media-thumb-video");
+    });
+    expect(thumbButton.querySelector(".person-media-thumb-video-placeholder")).toBeNull();
   });
 
   it("seeks lightbox video through the custom progress slider", () => {
