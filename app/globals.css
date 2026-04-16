@@ -5094,6 +5094,47 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
     border-color 0.18s ease;
 }
 
+.person-media-stage-video-start-overlay-prominent {
+  z-index: 4;
+}
+
+.person-media-stage-video-play-button {
+  width: min(280px, calc(100% - 40px));
+  min-height: 64px;
+  justify-content: center;
+  padding: 14px 18px 14px 16px;
+  gap: 12px;
+  border-color: rgba(255, 250, 244, 0.24);
+  background: rgba(8, 12, 20, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 34px rgba(0, 0, 0, 0.3);
+}
+
+.person-media-stage-video-play-button-copy {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.person-media-stage-video-play-button-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: rgba(247, 248, 251, 0.98);
+}
+
+.person-media-stage-video-play-button-hint {
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: rgba(247, 248, 251, 0.7);
+}
+
+.person-media-stage-video-play-button .person-media-stage-video-control-icon {
+  width: 20px;
+  height: 20px;
+}
+
 .person-media-stage-video-start-button:hover {
   transform: translateY(-1px);
   background: rgba(8, 12, 20, 0.82);
@@ -5425,6 +5466,26 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
   height: 52px;
 }
 
+.media-lightbox-phone-video-strip .media-thumb-play::before,
+.media-lightbox-strip-fixed .media-thumb-play::before {
+  width: 40px;
+  height: 40px;
+}
+
+.media-lightbox-phone-video-strip .media-thumb-play-icon,
+.media-lightbox-strip-fixed .media-thumb-play-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.media-lightbox-phone-video-strip .media-thumb-duration,
+.media-lightbox-strip-fixed .media-thumb-duration {
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
 .media-lightbox-phone-video-strip .person-media-thumb-active {
   border-color: rgba(240, 109, 61, 0.56);
   background: rgba(255, 250, 244, 0.14);
@@ -5448,6 +5509,57 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
 
 .media-lightbox-phone-video-mode.media-lightbox-fullscreen .person-media-stage-video-shell-phone {
   border-radius: 0;
+}
+
+@media (orientation: landscape) {
+  .media-lightbox-phone-video-mode.media-lightbox-fullscreen .media-lightbox-phone-video-shell {
+    position: relative;
+    padding: 0;
+    gap: 0;
+  }
+
+  .media-lightbox-phone-video-mode.media-lightbox-fullscreen .media-lightbox-phone-video-stage {
+    height: 100%;
+  }
+
+  .media-lightbox-phone-video-mode.media-lightbox-fullscreen .person-media-stage-video-shell-phone {
+    min-height: 0;
+  }
+
+  .media-lightbox-phone-video-mode.media-lightbox-fullscreen.media-lightbox-has-strip .media-lightbox-phone-video-strip {
+    position: absolute;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    z-index: 5;
+    padding: 8px;
+    gap: 8px;
+    grid-auto-columns: 64px;
+    border-radius: 18px;
+    background: rgba(8, 12, 20, 0.72);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .media-lightbox-phone-video-mode.media-lightbox-fullscreen.media-lightbox-has-strip .person-media-stage-video-controls-anchor-phone {
+    left: max(12px, env(safe-area-inset-left, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .media-lightbox-phone-video-mode.media-lightbox-fullscreen .person-media-stage-video-top-actions {
+    top: max(12px, env(safe-area-inset-top, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+  }
+
+  .media-lightbox-phone-video-mode.media-lightbox-fullscreen .person-media-stage-video-nav-slot-left {
+    left: max(10px, env(safe-area-inset-left, 0px));
+  }
+
+  .media-lightbox-phone-video-mode.media-lightbox-fullscreen .person-media-stage-video-nav-slot-right {
+    right: max(10px, env(safe-area-inset-right, 0px));
+  }
 }
 
 .media-lightbox-fullscreen .media-lightbox-stage-video {

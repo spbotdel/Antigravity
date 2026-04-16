@@ -241,7 +241,15 @@ function MediaThumb({
   disableDurationProbe?: boolean;
 }) {
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
-  const mediaUrl = thumbSource?.src || buildMediaRouteUrl(asset.id, { shareToken });
+  const resolvedThumbSource =
+    thumbSource ??
+    (isInlineVideoAsset(asset)
+      ? {
+          kind: "video" as const,
+          src: withMediaSourceContext(buildMediaOpenRouteUrl(asset, shareToken), "person-media-thumb-video"),
+        }
+      : null);
+  const mediaUrl = resolvedThumbSource?.src || buildMediaRouteUrl(asset.id, { shareToken });
   const thumbFallback = (
     <span className="person-media-thumb-visual">
       {asset.kind === "video" ? (
@@ -272,13 +280,13 @@ function MediaThumb({
       aria-label={`Показать медиа ${index + 1}: ${asset.title}`}
       onClick={onSelect}
     >
-      {thumbSource ? (
+      {resolvedThumbSource ? (
         <MediaThumbVisual
           asset={asset}
-          thumbSource={thumbSource}
+          thumbSource={resolvedThumbSource}
           shareToken={shareToken}
           containerClassName="person-media-thumb-visual"
-          mediaClassName={thumbSource.kind === "image" ? "" : "person-media-thumb-video"}
+          mediaClassName={resolvedThumbSource.kind === "image" ? "" : "person-media-thumb-video"}
           placeholder={thumbFallback}
           overlayContent={isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
           disableDurationProbe={disableDurationProbe}
@@ -401,6 +409,11 @@ function clampPositiveSize(value: number) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function isPhoneLikeViewport(width: number, height: number) {
+  const shortestSide = Math.min(clampPositiveSize(width), clampPositiveSize(height));
+  return shortestSide > 0 && shortestSide <= 720;
+}
+
 function resolveVideoStageState(video: HTMLVideoElement | null): VideoStageState {
   if (!video) {
     return "loading";
@@ -463,6 +476,8 @@ function LightboxVideoPlayer({
   const [isMuted, setIsMuted] = useState(false);
   const [isSourceAttached, setIsSourceAttached] = useState(!requireExplicitStart);
   const [stageState, setStageState] = useState<VideoStageState>("loading");
+  const [hasPlaybackStarted, setHasPlaybackStarted] = useState(false);
+  const [hasPlaybackEnded, setHasPlaybackEnded] = useState(false);
   const emitVideoElementChange = useEffectEvent((node: HTMLVideoElement | null) => {
     onVideoElementChange?.(node);
   });
@@ -486,6 +501,11 @@ function LightboxVideoPlayer({
   }, [asset.id, requireExplicitStart, src]);
 
   useEffect(() => {
+    setHasPlaybackStarted(false);
+    setHasPlaybackEnded(false);
+  }, [asset.id, requireExplicitStart, src]);
+
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) {
       return;
@@ -495,12 +515,16 @@ function LightboxVideoPlayer({
 
     const syncFromVideo = (event?: Event) => {
       setIsPlaying(!video.paused && !video.ended);
+      setHasPlaybackEnded(video.ended);
       setCurrentTime(Number.isFinite(video.currentTime) ? video.currentTime : 0);
       setDuration(Number.isFinite(video.duration) ? video.duration : 0);
       setVolume(Number.isFinite(video.volume) ? video.volume : 1);
       setIsMuted(video.muted);
       const nextStageState = resolveVideoStageState(video);
       setStageState((currentStageState) => (currentStageState === nextStageState ? currentStageState : nextStageState));
+      if (!video.ended && (!video.paused || event?.type === "play" || event?.type === "playing" || video.currentTime > 0)) {
+        setHasPlaybackStarted(true);
+      }
       if (
         event?.type === "loadedmetadata" ||
         event?.type === "canplay" ||
@@ -573,6 +597,11 @@ function LightboxVideoPlayer({
     }
 
     if (video.paused || video.ended) {
+      if (video.ended) {
+        video.currentTime = 0;
+        setCurrentTime(0);
+        setHasPlaybackEnded(false);
+      }
       await playVideoSafely(video);
       return;
     }
@@ -628,6 +657,12 @@ function LightboxVideoPlayer({
   const isPhoneStageLoading = showPhoneLayout && stageState === "loading";
   const showPhoneChrome = showPhoneLayout && chromeVisible;
   const arePhoneControlsDisabled = isPhoneStageLoading || effectiveDuration <= 0;
+  const showPhonePrimaryPlayOverlay =
+    showPhoneLayout &&
+    !requireExplicitStart &&
+    stageState !== "loading" &&
+    !isPlaying &&
+    (!hasPlaybackStarted || hasPlaybackEnded);
 
   if (showPhoneLayout) {
     return (
@@ -668,6 +703,26 @@ function LightboxVideoPlayer({
           {isPhoneStageLoading ? (
             <div className="person-media-stage-video-loading-overlay" aria-live="polite">
               <span className="person-media-stage-video-loading-chip">Загружается видео</span>
+            </div>
+          ) : null}
+          {showPhonePrimaryPlayOverlay ? (
+            <div className="person-media-stage-video-start-overlay person-media-stage-video-start-overlay-prominent">
+              <button
+                type="button"
+                className="person-media-stage-video-start-button person-media-stage-video-play-button"
+                aria-label={hasPlaybackEnded ? "Смотреть видео заново" : "Смотреть видео"}
+                onClick={() => {
+                  void togglePlayback();
+                }}
+              >
+                <Play className="person-media-stage-video-control-icon" aria-hidden="true" />
+                <span className="person-media-stage-video-play-button-copy">
+                  <span className="person-media-stage-video-play-button-title">{hasPlaybackEnded ? "Смотреть снова" : "Смотреть видео"}</span>
+                  <span className="person-media-stage-video-play-button-hint">
+                    {hasPlaybackEnded ? "Запустить ролик сначала" : "Нажмите, чтобы начать"}
+                  </span>
+                </span>
+              </button>
             </div>
           ) : null}
           {requireExplicitStart && !isSourceAttached ? (
@@ -1156,7 +1211,8 @@ export function PersonMediaGallery({
         webkitSupportsFullscreen?: boolean;
         webkitEnterFullscreen?: () => void;
       }) | null;
-      const isPhoneLikeViewport = typeof window !== "undefined" && window.innerWidth <= 720;
+      const isPhoneLikeViewportNow =
+        typeof window !== "undefined" && isPhoneLikeViewport(window.innerWidth, window.innerHeight);
       const isIphoneLikeBrowser =
         typeof navigator !== "undefined" &&
         /iPhone|iPod/i.test(navigator.userAgent) &&
@@ -1165,7 +1221,7 @@ export function PersonMediaGallery({
       if (document.fullscreenElement === target) {
         await document.exitFullscreen();
       } else if (
-        isPhoneLikeViewport &&
+        isPhoneLikeViewportNow &&
         isIphoneLikeBrowser &&
         activeVideo?.webkitSupportsFullscreen &&
         typeof activeVideo.webkitEnterFullscreen === "function"
@@ -1370,8 +1426,9 @@ export function PersonMediaGallery({
     }
 
     const viewportWidth = typeof window !== "undefined" ? window.innerWidth : lightboxContentSize.width;
-    setIsPhoneVideoSession(viewportWidth > 0 && viewportWidth <= 720);
-  }, [activeAsset?.id, isLightboxRendered, lightboxContentSize.width]);
+    const viewportHeight = typeof window !== "undefined" ? window.innerHeight : lightboxContentSize.height;
+    setIsPhoneVideoSession(isPhoneLikeViewport(viewportWidth, viewportHeight));
+  }, [activeAsset?.id, isLightboxRendered, lightboxContentSize.height, lightboxContentSize.width]);
 
   function moveSelection(direction: -1 | 1) {
     if (!media.length) {
@@ -1597,8 +1654,9 @@ export function PersonMediaGallery({
   }, [activeAsset, isLightboxOpen, media.length]);
 
   const effectiveLightboxViewportWidth = lightboxContentSize.width || (typeof window !== "undefined" ? window.innerWidth : 0);
+  const effectiveLightboxViewportHeight = lightboxContentSize.height || (typeof window !== "undefined" ? window.innerHeight : 0);
   const isNarrowLightboxViewport = effectiveLightboxViewportWidth > 0 && effectiveLightboxViewportWidth <= 640;
-  const isPhoneLightboxViewport = effectiveLightboxViewportWidth > 0 && effectiveLightboxViewportWidth <= 720;
+  const isPhoneLightboxViewport = isPhoneLikeViewport(effectiveLightboxViewportWidth, effectiveLightboxViewportHeight);
   const isPhoneLightboxVideoMode = Boolean(activeAsset && isInlineVideoAsset(activeAsset) && (isPhoneVideoSession || isPhoneLightboxViewport));
   const shouldUseManagedVideoChrome = Boolean(activeAsset && isInlineVideoAsset(activeAsset) && (isFullscreen || isPhoneLightboxVideoMode));
   const shouldAutoHideLightboxChrome = isFullscreen || Boolean(activeAsset && isInlineVideoAsset(activeAsset) && isPhoneLightboxVideoMode);
@@ -1723,7 +1781,7 @@ export function PersonMediaGallery({
     <>
       <div
         ref={lightboxContainerRef}
-        className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}${isFullscreen ? " media-lightbox-fullscreen" : ""}${isFullscreen && !areFullscreenControlsVisible ? " media-lightbox-fullscreen-idle" : ""}${shouldUseManagedVideoChrome ? " media-lightbox-video-mode" : ""}${shouldUseManagedVideoChrome && !areFullscreenControlsVisible ? " media-lightbox-video-chrome-hidden" : ""}${isPhoneLightboxVideoMode ? " media-lightbox-phone-video-mode" : ""}`}
+        className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}${isFullscreen ? " media-lightbox-fullscreen" : ""}${isFullscreen && !areFullscreenControlsVisible ? " media-lightbox-fullscreen-idle" : ""}${shouldUseManagedVideoChrome ? " media-lightbox-video-mode" : ""}${shouldUseManagedVideoChrome && !areFullscreenControlsVisible ? " media-lightbox-video-chrome-hidden" : ""}${isPhoneLightboxVideoMode ? " media-lightbox-phone-video-mode" : ""}${media.length > 1 ? " media-lightbox-has-strip" : ""}`}
         style={
           {
             "--media-lightbox-strip-space": `${lightboxActiveStripSpacePx}px`,

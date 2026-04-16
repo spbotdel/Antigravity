@@ -310,10 +310,13 @@ describe("person media gallery", () => {
     expect(document.querySelector("img.person-media-stage-photo-inline")).not.toBeNull();
     expect(screen.getByRole("heading", { name: "Семейное фото" })).toBeInTheDocument();
     expect(screen.getByText("Фото")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" })).toBeInTheDocument();
-    expect(document.querySelector(".person-media-thumb-video-placeholder")).not.toBeNull();
+    const videoThumbButton = screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" });
+    expect(videoThumbButton).toBeInTheDocument();
+    const videoThumb = videoThumbButton.querySelector("video.person-media-thumb-video") as HTMLVideoElement | null;
+    expect(videoThumb).not.toBeNull();
+    expect(videoThumb).toHaveAttribute("src", "/api/media/media-video?source=person-media-thumb-video");
 
-    fireEvent.click(screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" }));
+    fireEvent.click(videoThumbButton);
 
     expect(screen.getByRole("heading", { name: "Семейное видео" })).toBeInTheDocument();
     const stageVideo = document.querySelector("video.person-media-stage-video-inline") as HTMLVideoElement | null;
@@ -447,7 +450,9 @@ describe("person media gallery", () => {
     expect(within(dialog).getByLabelText("Позиция видео")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Закрыть просмотр" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Закрыть просмотр" })).toHaveLength(1);
-    expect(dialog.querySelector(".media-lightbox-strip-fixed .person-media-thumb-video-placeholder")).not.toBeNull();
+    const stripVideoThumb = dialog.querySelector(".media-lightbox-strip-fixed video.person-media-thumb-video") as HTMLVideoElement | null;
+    expect(stripVideoThumb).not.toBeNull();
+    expect(stripVideoThumb).toHaveAttribute("src", "/api/media/media-video?source=person-media-thumb-video");
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Следующее медиа" }));
 
@@ -595,10 +600,12 @@ describe("person media gallery", () => {
       fireEvent.loadedMetadata(video as HTMLVideoElement);
       expect(stage).toHaveAttribute("data-stage-state", "ready");
       expect(within(dialog).queryByText("Загружается видео")).not.toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
 
       pausedState = false;
       fireEvent.play(video as HTMLVideoElement);
       expect(stage).toHaveAttribute("data-stage-state", "playing");
+      expect(within(dialog).queryByRole("button", { name: "Смотреть видео" })).not.toBeInTheDocument();
     } finally {
       if (originalInnerWidthDescriptor) {
         Object.defineProperty(window, "innerWidth", originalInnerWidthDescriptor);
@@ -652,6 +659,22 @@ describe("person media gallery", () => {
       expect(dialog.querySelector(".media-lightbox-player-stage")).toBeNull();
       expect(dialog.querySelector(".person-media-stage-video-top-actions")).not.toBeNull();
       expect(within(dialog).queryByRole("button", { name: "Загрузить видео" })).toBeNull();
+      let readyState = 0;
+      Object.defineProperty(video as HTMLVideoElement, "readyState", {
+        configurable: true,
+        get: () => readyState,
+      });
+      Object.defineProperty(video as HTMLVideoElement, "paused", {
+        configurable: true,
+        get: () => true,
+      });
+      Object.defineProperty(video as HTMLVideoElement, "ended", {
+        configurable: true,
+        get: () => false,
+      });
+      readyState = 1;
+      fireEvent.loadedMetadata(video as HTMLVideoElement);
+      expect(within(dialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
       expect(within(dialog).getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
       expect(within(dialog).getByLabelText("Позиция видео")).toBeInTheDocument();
       expect(within(dialog).getByRole("button", { name: "Выключить звук" })).toBeInTheDocument();
@@ -1055,6 +1078,96 @@ describe("person media gallery", () => {
 
     expect(pauseSpy).toHaveBeenCalled();
     expect(screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео 2" })).toBeInTheDocument();
+  });
+
+  it("keeps phone-mode video navigation in a clear play-ready state and uses real preview thumbs", () => {
+    const originalInnerWidthDescriptor = Object.getOwnPropertyDescriptor(window, "innerWidth");
+
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+
+    try {
+      render(
+        <PersonMediaGallery
+          media={[
+            createMediaAsset({
+              id: "media-video-1",
+              kind: "video",
+              title: "Архивное видео 1",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/media-video-1/video.mp4"
+            }),
+            createMediaAsset({
+              id: "media-video-2",
+              kind: "video",
+              title: "Архивное видео 2",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/media-video-2/video.mp4"
+            })
+          ]}
+          showStage={false}
+          showStickyFooter={false}
+          lightboxOnly
+          openLightboxOnMount
+          initialActiveMediaId="media-video-1"
+          lightboxAriaLabelPrefix="Просмотр архива"
+        />
+      );
+
+      const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео 1" });
+      const thumbVideos = dialog.querySelectorAll(".media-lightbox-phone-video-strip video.person-media-thumb-video");
+      expect(thumbVideos).toHaveLength(2);
+      expect(thumbVideos[0]).toHaveAttribute("src", "/api/media/media-video-1?source=person-media-thumb-video");
+      expect(thumbVideos[1]).toHaveAttribute("src", "/api/media/media-video-2?source=person-media-thumb-video");
+
+      const firstVideo = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement;
+      let firstReadyState = 0;
+      Object.defineProperty(firstVideo, "readyState", {
+        configurable: true,
+        get: () => firstReadyState,
+      });
+      Object.defineProperty(firstVideo, "paused", {
+        configurable: true,
+        get: () => true,
+      });
+      Object.defineProperty(firstVideo, "ended", {
+        configurable: true,
+        get: () => false,
+      });
+      firstReadyState = 1;
+      fireEvent.loadedMetadata(firstVideo);
+      expect(within(dialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
+
+      fireEvent.click(within(dialog).getByRole("button", { name: "Следующее медиа" }));
+
+      const nextDialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео 2" });
+      const nextVideo = nextDialog.querySelector("video.person-media-stage-video") as HTMLVideoElement;
+      let nextReadyState = 0;
+      Object.defineProperty(nextVideo, "readyState", {
+        configurable: true,
+        get: () => nextReadyState,
+      });
+      Object.defineProperty(nextVideo, "paused", {
+        configurable: true,
+        get: () => true,
+      });
+      Object.defineProperty(nextVideo, "ended", {
+        configurable: true,
+        get: () => false,
+      });
+      nextReadyState = 1;
+      fireEvent.loadedMetadata(nextVideo);
+
+      expect(nextDialog).toHaveClass("media-lightbox-phone-video-mode");
+      expect(within(nextDialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
+      expect(within(nextDialog).queryByText("Загружается видео")).not.toBeInTheDocument();
+    } finally {
+      if (originalInnerWidthDescriptor) {
+        Object.defineProperty(window, "innerWidth", originalInnerWidthDescriptor);
+      }
+    }
   });
 
   it("seeks lightbox video through the custom progress slider", () => {
