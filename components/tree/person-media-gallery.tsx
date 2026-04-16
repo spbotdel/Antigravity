@@ -23,6 +23,8 @@ import { logMediaError } from "@/lib/utils";
 type MediaAsset = TreeSnapshot["media"][number];
 type LightboxState = "closed" | "open" | "closing";
 type LightboxGestureAxis = "undetermined" | "horizontal" | "vertical";
+type VideoStageState = "loading" | "ready" | "playing";
+type LightboxVideoLayout = "standard" | "phone-lightbox";
 
 interface PersonMediaGalleryProps {
   media: MediaAsset[];
@@ -162,7 +164,11 @@ function shouldIgnoreLightboxGestureStart(target: EventTarget | null) {
     return false;
   }
 
-  return Boolean(target.closest(".media-lightbox-strip-fixed, .media-lightbox-nav, .media-lightbox-close, button, a, input, textarea, select"));
+  return Boolean(
+    target.closest(
+      ".media-lightbox-strip-fixed, .media-lightbox-phone-video-strip, .media-lightbox-nav, .media-lightbox-close, .person-media-stage-video-nav, button, a, input, textarea, select"
+    )
+  );
 }
 
 function getLightboxStripScrollTarget(container: HTMLElement, activeThumb: HTMLElement) {
@@ -395,6 +401,19 @@ function clampPositiveSize(value: number) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+function resolveVideoStageState(video: HTMLVideoElement | null): VideoStageState {
+  if (!video) {
+    return "loading";
+  }
+
+  const hasReadyFrame = video.readyState >= 1 || video.currentTime > 0 || video.videoWidth > 0 || video.videoHeight > 0;
+  if (!hasReadyFrame) {
+    return "loading";
+  }
+
+  return !video.paused && !video.ended ? "playing" : "ready";
+}
+
 function LightboxVideoPlayer({
   asset,
   src,
@@ -410,6 +429,11 @@ function LightboxVideoPlayer({
   onSurfaceTap,
   onNativeFullscreenChange,
   surfaceInteractionMode = "playback",
+  layout = "standard",
+  chromeVisible = true,
+  stageActions = null,
+  previousNavigation = null,
+  nextNavigation = null,
 }: {
   asset: MediaAsset;
   src: string;
@@ -425,6 +449,11 @@ function LightboxVideoPlayer({
   onSurfaceTap?: () => void;
   onNativeFullscreenChange?: (fullscreen: boolean) => void;
   surfaceInteractionMode?: "playback" | "chrome";
+  layout?: LightboxVideoLayout;
+  chromeVisible?: boolean;
+  stageActions?: ReactNode;
+  previousNavigation?: ReactNode;
+  nextNavigation?: ReactNode;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -433,6 +462,7 @@ function LightboxVideoPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [isSourceAttached, setIsSourceAttached] = useState(!requireExplicitStart);
+  const [stageState, setStageState] = useState<VideoStageState>("loading");
   const emitVideoElementChange = useEffectEvent((node: HTMLVideoElement | null) => {
     onVideoElementChange?.(node);
   });
@@ -452,6 +482,10 @@ function LightboxVideoPlayer({
   }, [asset.id, requireExplicitStart, src]);
 
   useEffect(() => {
+    setStageState("loading");
+  }, [asset.id, requireExplicitStart, src]);
+
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) {
       return;
@@ -465,6 +499,8 @@ function LightboxVideoPlayer({
       setDuration(Number.isFinite(video.duration) ? video.duration : 0);
       setVolume(Number.isFinite(video.volume) ? video.volume : 1);
       setIsMuted(video.muted);
+      const nextStageState = resolveVideoStageState(video);
+      setStageState((currentStageState) => (currentStageState === nextStageState ? currentStageState : nextStageState));
       if (
         event?.type === "loadedmetadata" ||
         event?.type === "canplay" ||
@@ -485,7 +521,7 @@ function LightboxVideoPlayer({
 
     syncFromVideo();
 
-    const syncEvents = ["play", "pause", "ended", "timeupdate", "loadedmetadata", "durationchange", "volumechange", "canplay", "playing"] as const;
+    const syncEvents = ["play", "pause", "ended", "timeupdate", "loadedmetadata", "durationchange", "volumechange", "canplay", "playing", "waiting", "seeking", "seeked"] as const;
     const handleNativeFullscreenBegin = () => {
       emitNativeFullscreenChange(true);
     };
@@ -588,10 +624,119 @@ function LightboxVideoPlayer({
 
   const effectiveDuration = duration > 0 ? duration : 0;
   const effectiveCurrentTime = Math.min(currentTime, effectiveDuration || 0);
+  const showPhoneLayout = layout === "phone-lightbox";
+  const isPhoneStageLoading = showPhoneLayout && stageState === "loading";
+  const showPhoneChrome = showPhoneLayout && chromeVisible;
+  const arePhoneControlsDisabled = isPhoneStageLoading || effectiveDuration <= 0;
+
+  if (showPhoneLayout) {
+    return (
+      <div
+        className="person-media-stage-video-frame person-media-stage-video-frame-phone"
+        data-stage-state={stageState}
+      >
+        <div
+          className="person-media-stage-video-shell person-media-stage-video-shell-phone"
+          data-stage-state={stageState}
+        >
+          <video
+            ref={videoRef}
+            key={`${asset.id}-lightbox`}
+            src={resolvedVideoSrc}
+            poster={poster}
+            className="person-media-stage-video person-media-stage-video-surface person-media-stage-video-phone-surface"
+            playsInline
+            autoPlay={autoPlay}
+            preload={preload}
+            onError={() => onError?.(videoRef.current)}
+            onClick={
+              requireExplicitStart && !isSourceAttached
+                ? () => {
+                    void handleExplicitStart();
+                  }
+                : surfaceInteractionMode === "chrome"
+                  ? () => {
+                      onSurfaceTap?.();
+                    }
+                  : () => {
+                      void togglePlayback();
+                    }
+            }
+          >
+            Ваш браузер не поддерживает встроенное воспроизведение видео.
+          </video>
+          {isPhoneStageLoading ? (
+            <div className="person-media-stage-video-loading-overlay" aria-live="polite">
+              <span className="person-media-stage-video-loading-chip">Загружается видео</span>
+            </div>
+          ) : null}
+          {requireExplicitStart && !isSourceAttached ? (
+            <div className="person-media-stage-video-start-overlay">
+              <button
+                type="button"
+                className="person-media-stage-video-start-button"
+                onClick={() => {
+                  void handleExplicitStart();
+                }}
+              >
+                <Play className="person-media-stage-video-control-icon" aria-hidden="true" />
+                Загрузить видео
+              </button>
+            </div>
+          ) : null}
+          {showPhoneChrome ? <div className="person-media-stage-video-top-actions">{stageActions}</div> : null}
+          {showPhoneChrome && previousNavigation ? <div className="person-media-stage-video-nav-slot person-media-stage-video-nav-slot-left">{previousNavigation}</div> : null}
+          {showPhoneChrome && nextNavigation ? <div className="person-media-stage-video-nav-slot person-media-stage-video-nav-slot-right">{nextNavigation}</div> : null}
+          {showPhoneChrome ? (
+            <div className="person-media-stage-video-controls-anchor person-media-stage-video-controls-anchor-phone">
+              <div
+                className="person-media-stage-video-controls person-media-stage-video-controls-phone"
+                role="group"
+                aria-label={`Управление видео: ${asset.title}`}
+              >
+                <button
+                  type="button"
+                  className="person-media-stage-video-control person-media-stage-video-control-primary"
+                  aria-label={isPlaying ? "Пауза" : "Воспроизвести видео"}
+                  onClick={() => void togglePlayback()}
+                  disabled={isPhoneStageLoading}
+                >
+                  {isPlaying ? <Pause className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Play className="person-media-stage-video-control-icon" aria-hidden="true" />}
+                </button>
+                <input
+                  type="range"
+                  className="person-media-stage-video-slider person-media-stage-video-slider-phone"
+                  aria-label="Позиция видео"
+                  min={0}
+                  max={effectiveDuration || 0}
+                  step={0.1}
+                  disabled={arePhoneControlsDisabled}
+                  value={effectiveCurrentTime}
+                  onChange={(event) => handleSeek(Number(event.currentTarget.value))}
+                />
+                <button
+                  type="button"
+                  className="person-media-stage-video-control"
+                  aria-label={isMuted || volume === 0 ? "Включить звук" : "Выключить звук"}
+                  onClick={toggleMute}
+                  disabled={isPhoneStageLoading}
+                >
+                  {isMuted || volume === 0 ? <VolumeX className="person-media-stage-video-control-icon" aria-hidden="true" /> : <Volume2 className="person-media-stage-video-control-icon" aria-hidden="true" />}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`person-media-stage-video-frame${inline ? " person-media-stage-video-frame-inline" : ""}`}>
-      <div className={`person-media-stage-video-shell${inline ? " person-media-stage-video-shell-inline" : ""}`}>
+      <div
+        className={`person-media-stage-video-shell${inline ? " person-media-stage-video-shell-inline" : ""}`}
+        data-stage-state={stageState}
+      >
       <video
         ref={videoRef}
         key={`${asset.id}-lightbox`}
@@ -693,6 +838,11 @@ function MediaPreview({
   surfaceInteractionMode = "playback",
   onSurfaceTap,
   onNativeFullscreenChange,
+  videoLayout = "standard",
+  videoChromeVisible = true,
+  videoStageActions = null,
+  videoPreviousNavigation = null,
+  videoNextNavigation = null,
 }: {
   asset: MediaAsset;
   shareToken?: string | null;
@@ -705,6 +855,11 @@ function MediaPreview({
   surfaceInteractionMode?: "playback" | "chrome";
   onSurfaceTap?: () => void;
   onNativeFullscreenChange?: (fullscreen: boolean) => void;
+  videoLayout?: LightboxVideoLayout;
+  videoChromeVisible?: boolean;
+  videoStageActions?: ReactNode;
+  videoPreviousNavigation?: ReactNode;
+  videoNextNavigation?: ReactNode;
 }) {
   const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
   const [hasLoadError, setHasLoadError] = useState(false);
@@ -819,6 +974,11 @@ function MediaPreview({
           surfaceInteractionMode={surfaceInteractionMode}
           onSurfaceTap={onSurfaceTap}
           onNativeFullscreenChange={onNativeFullscreenChange}
+          layout={videoLayout}
+          chromeVisible={videoChromeVisible}
+          stageActions={videoStageActions}
+          previousNavigation={videoPreviousNavigation}
+          nextNavigation={videoNextNavigation}
         />
       );
     }
@@ -911,6 +1071,7 @@ export function PersonMediaGallery({
   const [areFullscreenControlsVisible, setAreFullscreenControlsVisible] = useState(true);
   const [lightboxContentSize, setLightboxContentSize] = useState({ width: 0, height: 0 });
   const [activeMediaIntrinsicSize, setActiveMediaIntrinsicSize] = useState<{ width: number; height: number } | null>(null);
+  const [isPhoneVideoSession, setIsPhoneVideoSession] = useState(false);
 
   function openLightbox() {
     setLightboxState("open");
@@ -1202,6 +1363,16 @@ export function PersonMediaGallery({
     setActiveMediaIntrinsicSize(null);
   }, [activeAsset?.id]);
 
+  useEffect(() => {
+    if (!isLightboxRendered || !activeAsset || !isInlineVideoAsset(activeAsset)) {
+      setIsPhoneVideoSession(false);
+      return;
+    }
+
+    const viewportWidth = typeof window !== "undefined" ? window.innerWidth : lightboxContentSize.width;
+    setIsPhoneVideoSession(viewportWidth > 0 && viewportWidth <= 720);
+  }, [activeAsset?.id, isLightboxRendered, lightboxContentSize.width]);
+
   function moveSelection(direction: -1 | 1) {
     if (!media.length) {
       return false;
@@ -1428,8 +1599,9 @@ export function PersonMediaGallery({
   const effectiveLightboxViewportWidth = lightboxContentSize.width || (typeof window !== "undefined" ? window.innerWidth : 0);
   const isNarrowLightboxViewport = effectiveLightboxViewportWidth > 0 && effectiveLightboxViewportWidth <= 640;
   const isPhoneLightboxViewport = effectiveLightboxViewportWidth > 0 && effectiveLightboxViewportWidth <= 720;
-  const shouldUseManagedVideoChrome = Boolean(activeAsset && isInlineVideoAsset(activeAsset) && (isFullscreen || isPhoneLightboxViewport));
-  const shouldAutoHideLightboxChrome = isFullscreen || Boolean(activeAsset && isInlineVideoAsset(activeAsset) && isPhoneLightboxViewport);
+  const isPhoneLightboxVideoMode = Boolean(activeAsset && isInlineVideoAsset(activeAsset) && (isPhoneVideoSession || isPhoneLightboxViewport));
+  const shouldUseManagedVideoChrome = Boolean(activeAsset && isInlineVideoAsset(activeAsset) && (isFullscreen || isPhoneLightboxVideoMode));
+  const shouldAutoHideLightboxChrome = isFullscreen || Boolean(activeAsset && isInlineVideoAsset(activeAsset) && isPhoneLightboxVideoMode);
   shouldAutoHideVideoChromeRef.current = shouldAutoHideLightboxChrome;
   const isThumbnailStripVisible = media.length > 1 && (!shouldAutoHideLightboxChrome || areFullscreenControlsVisible);
   const lightboxStripChromeSpacePx = isNarrowLightboxViewport ? 104 : 128;
@@ -1551,7 +1723,7 @@ export function PersonMediaGallery({
     <>
       <div
         ref={lightboxContainerRef}
-        className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}${isFullscreen ? " media-lightbox-fullscreen" : ""}${isFullscreen && !areFullscreenControlsVisible ? " media-lightbox-fullscreen-idle" : ""}${shouldUseManagedVideoChrome ? " media-lightbox-video-mode" : ""}${shouldUseManagedVideoChrome && !areFullscreenControlsVisible ? " media-lightbox-video-chrome-hidden" : ""}`}
+        className={`media-lightbox media-lightbox-minimal${isLightboxClosing ? " media-lightbox-closing" : ""}${isFullscreen ? " media-lightbox-fullscreen" : ""}${isFullscreen && !areFullscreenControlsVisible ? " media-lightbox-fullscreen-idle" : ""}${shouldUseManagedVideoChrome ? " media-lightbox-video-mode" : ""}${shouldUseManagedVideoChrome && !areFullscreenControlsVisible ? " media-lightbox-video-chrome-hidden" : ""}${isPhoneLightboxVideoMode ? " media-lightbox-phone-video-mode" : ""}`}
         style={
           {
             "--media-lightbox-strip-space": `${lightboxActiveStripSpacePx}px`,
@@ -1578,46 +1750,15 @@ export function PersonMediaGallery({
       >
         <div className="media-lightbox-shell">
           <div ref={lightboxContentRef} className="media-lightbox-content">
-            <div className={`media-lightbox-player-frame${isInlineVideoAsset(activeAsset) ? " media-lightbox-player-frame-video" : ""}`}>
+            {isPhoneLightboxVideoMode ? (
               <div
-                className={`media-lightbox-player-stage${isInlineVideoAsset(activeAsset) ? " media-lightbox-player-stage-video" : ""}`}
+                className="media-lightbox-phone-video-shell"
                 onMouseEnter={pinFullscreenControls}
                 onMouseLeave={unpinFullscreenControls}
                 onFocus={pinFullscreenControls}
                 onBlur={unpinFullscreenControls}
               >
-                <div className="media-lightbox-player-toolbar">
-                  <button
-                    type="button"
-                    className="media-lightbox-fullscreen-toggle"
-                    aria-label={isFullscreen ? "Выйти из полноэкранного режима" : "Открыть в полноэкранном режиме"}
-                    onClick={() => void toggleFullscreen()}
-                  >
-                    {isFullscreen ? <Minimize2 className="media-lightbox-control-icon" aria-hidden="true" /> : <Maximize2 className="media-lightbox-control-icon" aria-hidden="true" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="media-lightbox-close"
-                    aria-label="Закрыть просмотр"
-                    onClick={closeLightbox}
-                  >
-                    <X className="media-lightbox-control-icon" aria-hidden="true" />
-                  </button>
-                </div>
-
-                {canNavigate ? (
-                  <button
-                    type="button"
-                    className="media-lightbox-nav media-lightbox-nav-left"
-                    aria-label="Предыдущее медиа"
-                    disabled={!hasPreviousMedia}
-                    onClick={() => moveSelection(-1)}
-                  >
-                    <ChevronLeft className="media-lightbox-control-icon" aria-hidden="true" />
-                  </button>
-                ) : null}
-
-                <div className={`media-lightbox-stage media-lightbox-stage-minimal${isInlineVideoAsset(activeAsset) ? " media-lightbox-stage-video" : ""}${isFullscreen ? " media-lightbox-stage-fullscreen" : ""}`}>
+                <div className="media-lightbox-phone-video-stage">
                   <MediaPreview
                     asset={activeAsset}
                     shareToken={shareToken}
@@ -1639,24 +1780,175 @@ export function PersonMediaGallery({
                     }}
                     onLightboxMediaIntrinsicSizeChange={setActiveMediaIntrinsicSize}
                     expandedMediaStyle={expandedMediaStyle}
-                    surfaceInteractionMode={shouldUseManagedVideoChrome ? "chrome" : "playback"}
+                    surfaceInteractionMode="chrome"
                     onSurfaceTap={toggleLightboxChromeVisibility}
+                    videoLayout="phone-lightbox"
+                    videoChromeVisible={areFullscreenControlsVisible}
+                    videoStageActions={
+                      <>
+                        <button
+                          type="button"
+                          className="media-lightbox-fullscreen-toggle"
+                          aria-label={isFullscreen ? "Выйти из полноэкранного режима" : "Открыть в полноэкранном режиме"}
+                          onClick={() => void toggleFullscreen()}
+                        >
+                          {isFullscreen ? <Minimize2 className="media-lightbox-control-icon" aria-hidden="true" /> : <Maximize2 className="media-lightbox-control-icon" aria-hidden="true" />}
+                        </button>
+                        <button
+                          type="button"
+                          className="media-lightbox-close"
+                          aria-label="Закрыть просмотр"
+                          onClick={closeLightbox}
+                        >
+                          <X className="media-lightbox-control-icon" aria-hidden="true" />
+                        </button>
+                      </>
+                    }
+                    videoPreviousNavigation={
+                      canNavigate ? (
+                        <button
+                          type="button"
+                          className="person-media-stage-video-nav"
+                          aria-label="Предыдущее медиа"
+                          disabled={!hasPreviousMedia}
+                          onClick={() => moveSelection(-1)}
+                        >
+                          <ChevronLeft className="media-lightbox-control-icon" aria-hidden="true" />
+                        </button>
+                      ) : null
+                    }
+                    videoNextNavigation={
+                      canNavigate ? (
+                        <button
+                          type="button"
+                          className="person-media-stage-video-nav"
+                          aria-label="Следующее медиа"
+                          disabled={!hasNextMedia}
+                          onClick={() => moveSelection(1)}
+                        >
+                          <ChevronRight className="media-lightbox-control-icon" aria-hidden="true" />
+                        </button>
+                      ) : null
+                    }
                   />
                 </div>
-
-                {canNavigate ? (
-                  <button
-                    type="button"
-                    className="media-lightbox-nav media-lightbox-nav-right"
-                    aria-label="Следующее медиа"
-                    disabled={!hasNextMedia}
-                    onClick={() => moveSelection(1)}
+                {media.length > 1 && areFullscreenControlsVisible ? (
+                  <div
+                    ref={lightboxStripRef}
+                    className="media-lightbox-phone-video-strip"
+                    onMouseEnter={pinFullscreenControls}
+                    onMouseLeave={unpinFullscreenControls}
+                    onFocus={pinFullscreenControls}
+                    onBlur={unpinFullscreenControls}
                   >
-                    <ChevronRight className="media-lightbox-control-icon" aria-hidden="true" />
-                  </button>
+                    {media.map((asset, index) => (
+                      <MediaThumb
+                        key={asset.id}
+                        asset={asset}
+                        active={asset.id === activeAsset.id}
+                        shareToken={shareToken}
+                        optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+                        onSelect={() => {
+                          pauseActiveLightboxVideo();
+                          setActiveMediaId(asset.id);
+                        }}
+                        index={index}
+                        isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
+                        compact
+                        disableDurationProbe={lightboxOnly}
+                        thumbRef={(node) => {
+                          if (node) {
+                            lightboxThumbRefs.current.set(asset.id, node);
+                          } else {
+                            lightboxThumbRefs.current.delete(asset.id);
+                          }
+                        }}
+                      />
+                    ))}
+                  </div>
                 ) : null}
               </div>
-            </div>
+            ) : (
+              <div className={`media-lightbox-player-frame${isInlineVideoAsset(activeAsset) ? " media-lightbox-player-frame-video" : ""}`}>
+                <div
+                  className={`media-lightbox-player-stage${isInlineVideoAsset(activeAsset) ? " media-lightbox-player-stage-video" : ""}`}
+                  onMouseEnter={pinFullscreenControls}
+                  onMouseLeave={unpinFullscreenControls}
+                  onFocus={pinFullscreenControls}
+                  onBlur={unpinFullscreenControls}
+                >
+                  <div className="media-lightbox-player-toolbar">
+                    <button
+                      type="button"
+                      className="media-lightbox-fullscreen-toggle"
+                      aria-label={isFullscreen ? "Выйти из полноэкранного режима" : "Открыть в полноэкранном режиме"}
+                      onClick={() => void toggleFullscreen()}
+                    >
+                      {isFullscreen ? <Minimize2 className="media-lightbox-control-icon" aria-hidden="true" /> : <Maximize2 className="media-lightbox-control-icon" aria-hidden="true" />}
+                    </button>
+                    <button
+                      type="button"
+                      className="media-lightbox-close"
+                      aria-label="Закрыть просмотр"
+                      onClick={closeLightbox}
+                    >
+                      <X className="media-lightbox-control-icon" aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  {canNavigate ? (
+                    <button
+                      type="button"
+                      className="media-lightbox-nav media-lightbox-nav-left"
+                      aria-label="Предыдущее медиа"
+                      disabled={!hasPreviousMedia}
+                      onClick={() => moveSelection(-1)}
+                    >
+                      <ChevronLeft className="media-lightbox-control-icon" aria-hidden="true" />
+                    </button>
+                  ) : null}
+
+                  <div className={`media-lightbox-stage media-lightbox-stage-minimal${isInlineVideoAsset(activeAsset) ? " media-lightbox-stage-video" : ""}${isFullscreen ? " media-lightbox-stage-fullscreen" : ""}`}>
+                    <MediaPreview
+                      asset={activeAsset}
+                      shareToken={shareToken}
+                      optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+                      expanded
+                      autoPlayVideo={autoPlayLightboxVideo}
+                      onLightboxVideoElementChange={(node) => {
+                        activeLightboxVideoElementRef.current = node;
+                      }}
+                      onNativeFullscreenChange={(fullscreen) => {
+                        setIsFullscreen(fullscreen);
+                        setAreFullscreenControlsVisible(true);
+                        fullscreenControlsPinnedRef.current = false;
+                        if (fullscreen) {
+                          scheduleFullscreenControlsHide();
+                        } else {
+                          clearFullscreenIdleTimeout();
+                        }
+                      }}
+                      onLightboxMediaIntrinsicSizeChange={setActiveMediaIntrinsicSize}
+                      expandedMediaStyle={expandedMediaStyle}
+                      surfaceInteractionMode={shouldUseManagedVideoChrome ? "chrome" : "playback"}
+                      onSurfaceTap={toggleLightboxChromeVisibility}
+                    />
+                  </div>
+
+                  {canNavigate ? (
+                    <button
+                      type="button"
+                      className="media-lightbox-nav media-lightbox-nav-right"
+                      aria-label="Следующее медиа"
+                      disabled={!hasNextMedia}
+                      onClick={() => moveSelection(1)}
+                    >
+                      <ChevronRight className="media-lightbox-control-icon" aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )}
 
             {showLightboxActions ? (
               <div className="archive-action-bar media-lightbox-inline-actions">
@@ -1682,7 +1974,7 @@ export function PersonMediaGallery({
           </div>
         </div>
 
-        {media.length > 1 ? (
+        {media.length > 1 && !isPhoneLightboxVideoMode ? (
           <div
             ref={lightboxStripRef}
             className="media-lightbox-strip media-lightbox-strip-fixed"
