@@ -146,6 +146,7 @@ const LIGHTBOX_SWIPE_CLOSE_THRESHOLD_PX = 96;
 const LIGHTBOX_SWIPE_AXIS_DOMINANCE_RATIO = 1.2;
 const FULLSCREEN_CONTROLS_IDLE_MS = 2400;
 const CHROME_ANDROID_VIDEO_FALLBACK_DELAY_MS = 12_000;
+const LIGHTBOX_HISTORY_STATE_KEY = "__personMediaLightboxEntryId";
 
 function createIdleLightboxGestureState() {
   return {
@@ -407,6 +408,20 @@ function isChromeAndroidVideoQuirkBrowser(userAgent: string) {
 
 function clampPositiveSize(value: number) {
   return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function readHistoryStateRecord(state: unknown) {
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+
+  return state as Record<string, unknown>;
+}
+
+function getLightboxHistoryEntryId(state: unknown) {
+  const record = readHistoryStateRecord(state);
+  const entryId = record?.[LIGHTBOX_HISTORY_STATE_KEY];
+  return typeof entryId === "string" ? entryId : null;
 }
 
 function isPhoneLikeViewport(width: number, height: number) {
@@ -1113,6 +1128,7 @@ export function PersonMediaGallery({
   const lightboxGestureRef = useRef(createIdleLightboxGestureState());
   const pendingDeletedSuccessorIdRef = useRef<string | null>(null);
   const hasAutoOpenedLightboxRef = useRef(false);
+  const lightboxHistoryEntryIdRef = useRef<string | null>(null);
   const lightboxContainerRef = useRef<HTMLDivElement | null>(null);
   const lightboxContentRef = useRef<HTMLDivElement | null>(null);
   const activeLightboxVideoElementRef = useRef<HTMLVideoElement | null>(null);
@@ -1128,6 +1144,37 @@ export function PersonMediaGallery({
   const [activeMediaIntrinsicSize, setActiveMediaIntrinsicSize] = useState<{ width: number; height: number } | null>(null);
   const [isPhoneVideoSession, setIsPhoneVideoSession] = useState(false);
 
+  function ensureLightboxHistoryEntry() {
+    if (typeof window === "undefined" || lightboxHistoryEntryIdRef.current) {
+      return;
+    }
+
+    const entryId = `person-media-lightbox:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+    const currentState = readHistoryStateRecord(window.history.state);
+    window.history.pushState(
+      {
+        ...(currentState ?? {}),
+        [LIGHTBOX_HISTORY_STATE_KEY]: entryId,
+      },
+      "",
+      window.location.href
+    );
+    lightboxHistoryEntryIdRef.current = entryId;
+  }
+
+  function restoreHistoryAfterLightboxClose() {
+    const entryId = lightboxHistoryEntryIdRef.current;
+    lightboxHistoryEntryIdRef.current = null;
+
+    if (typeof window === "undefined" || !entryId) {
+      return;
+    }
+
+    if (getLightboxHistoryEntryId(window.history.state) === entryId) {
+      window.history.back();
+    }
+  }
+
   function openLightbox() {
     setLightboxState("open");
     onLightboxOpenChange?.(true);
@@ -1137,12 +1184,17 @@ export function PersonMediaGallery({
     activeLightboxVideoElementRef.current?.pause();
   }
 
-  function closeLightbox() {
+  function beginLightboxClose() {
     pauseActiveLightboxVideo();
     if (document.fullscreenElement && lightboxContainerRef.current && document.fullscreenElement === lightboxContainerRef.current) {
       void document.exitFullscreen().catch(() => undefined);
     }
     setLightboxState((currentState) => (currentState === "closed" ? currentState : "closing"));
+  }
+
+  function closeLightbox() {
+    restoreHistoryAfterLightboxClose();
+    beginLightboxClose();
   }
 
   function resetLightboxGesture() {
@@ -1265,6 +1317,7 @@ export function PersonMediaGallery({
     if (!media.length) {
       pendingDeletedSuccessorIdRef.current = null;
       setDeleteTargetMediaId(null);
+      restoreHistoryAfterLightboxClose();
       setLightboxState("closed");
       return;
     }
@@ -1273,6 +1326,14 @@ export function PersonMediaGallery({
       setDeleteTargetMediaId(null);
     }
   }, [deleteTargetMediaId, media]);
+
+  useEffect(() => {
+    if (!isLightboxOpen) {
+      return;
+    }
+
+    ensureLightboxHistoryEntry();
+  }, [isLightboxOpen]);
 
   useEffect(() => {
     if (!isLightboxRendered) {
@@ -1321,6 +1382,31 @@ export function PersonMediaGallery({
     };
   }, [isFullscreen, isLightboxRendered, areFullscreenControlsVisible]);
 
+  const handleLightboxPopState = useEffectEvent(() => {
+    const entryId = lightboxHistoryEntryIdRef.current;
+    if (!entryId) {
+      return;
+    }
+
+    if (getLightboxHistoryEntryId(window.history.state) === entryId) {
+      return;
+    }
+
+    lightboxHistoryEntryIdRef.current = null;
+    beginLightboxClose();
+  });
+
+  useEffect(() => {
+    function handlePopState() {
+      handleLightboxPopState();
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [handleLightboxPopState]);
+
   useEffect(() => {
     function handleFullscreenChange() {
       const isCurrentLightboxFullscreen = Boolean(lightboxContainerRef.current && document.fullscreenElement === lightboxContainerRef.current);
@@ -1347,6 +1433,7 @@ export function PersonMediaGallery({
     }
 
     const timeoutId = window.setTimeout(() => {
+      lightboxHistoryEntryIdRef.current = null;
       setLightboxState("closed");
       onLightboxOpenChange?.(false);
     }, LIGHTBOX_TRANSITION_MS);
@@ -1479,6 +1566,7 @@ export function PersonMediaGallery({
         setActiveMediaId(nextMediaId);
       } else {
         pendingDeletedSuccessorIdRef.current = null;
+        restoreHistoryAfterLightboxClose();
         setLightboxState("closed");
       }
     } catch {

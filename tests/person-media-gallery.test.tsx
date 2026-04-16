@@ -505,6 +505,57 @@ describe("person media gallery", () => {
     expect(screen.queryByText("2 материала в галерее")).not.toBeInTheDocument();
   });
 
+  it("closes the lightbox on browser back and stays on the current page surface", () => {
+    vi.useFakeTimers();
+    window.history.replaceState({ page: "gallery" }, "", "/tree/demo-family/media?mode=video");
+
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            title: "Архивное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          }),
+          createMediaAsset({
+            id: "media-video-2",
+            kind: "video",
+            title: "Второе архивное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video-2/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+        lightboxOnly
+        openLightboxOnMount
+        initialActiveMediaId="media-video"
+        lightboxAriaLabelPrefix="Просмотр архива"
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+    expect(dialog).toBeInTheDocument();
+    expect(typeof window.history.state?.__personMediaLightboxEntryId).toBe("string");
+
+    act(() => {
+      window.history.replaceState({ page: "gallery" }, "", window.location.href);
+      window.dispatchEvent(new PopStateEvent("popstate", { state: { page: "gallery" } }));
+    });
+
+    expect(screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" })).toHaveClass("media-lightbox-closing");
+
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(window.location.pathname).toBe("/tree/demo-family/media");
+    expect(window.location.search).toBe("?mode=video");
+  });
+
   it("autoplays archive-style lightbox video by default with metadata preload", () => {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => Promise.resolve());
 
