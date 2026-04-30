@@ -11008,10 +11008,21 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
     gap: 6px;
   }
 
+  .app-header .header-actions > a,
+  .app-header .header-actions .sign-out-button-trigger {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
+
   .workspace-page-canvas,
   .tree-page-shell {
     width: 100%;
     padding-top: 0;
+  }
+
+  .tree-page-nav-row .tree-nav-tabs a,
+  .tree-nav-tabs a {
+    min-height: 44px;
   }
 
   .viewer-layout-overlay[data-viewport-mode="tablet-portrait"],
@@ -11114,7 +11125,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
 
   .viewer-layout-overlay[data-viewport-mode="tablet-portrait"] .viewer-phone-sheet-toggle {
     width: 100%;
-    min-height: 38px;
+    min-height: 44px;
     padding: 0 0 1px;
     display: grid;
     grid-template-columns: 1fr;
@@ -11156,7 +11167,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
 
   .viewer-layout-overlay[data-viewport-mode="tablet-landscape"] {
     --viewer-rail-width: 360px;
-    --viewer-rail-handle-width: 40px;
+    --viewer-rail-handle-width: 44px;
   }
 
   .viewer-layout-overlay[data-viewport-mode="tablet-landscape"] .viewer-info-rail {
@@ -11320,12 +11331,12 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: 34px;
+    min-height: 44px;
   }
 
   .app-header .header-actions > a,
   .app-header .header-actions .sign-out-button-trigger {
-    min-height: 34px;
+    min-height: 44px;
     padding-inline: 10px;
     font-size: 0.78rem;
     border-radius: 10px;
@@ -11370,7 +11381,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
   .tree-nav-tabs a {
     min-width: 0;
     width: 100%;
-    min-height: 36px;
+    min-height: 44px;
     padding: 7px 6px;
     justify-content: center;
     font-size: 0.76rem;
@@ -11516,7 +11527,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
 
   .viewer-phone-sheet-toggle {
     width: 100%;
-    min-height: 38px;
+    min-height: 44px;
     padding: 0 0 1px;
     display: grid;
     grid-template-columns: 1fr;

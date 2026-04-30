@@ -262,6 +262,40 @@ function getArchiveUploadItemKindLabel(file: File) {
   return "Файл";
 }
 
+function isGenericArchiveUploadFileAllowed(file: File, mode: MediaMode) {
+  if (mode === "photo") {
+    return file.type.startsWith("image/");
+  }
+
+  if (mode === "video") {
+    return file.type.startsWith("video/");
+  }
+
+  if (mode === "all") {
+    return file.type.startsWith("image/") || file.type.startsWith("video/");
+  }
+
+  return false;
+}
+
+function getArchiveUploadRejectedMessage(mode: MediaMode, rejectedCount: number) {
+  const suffix = rejectedCount > 0 ? ` Пропущено файлов: ${rejectedCount}.` : "";
+
+  if (mode === "all") {
+    return `В разделе «Все медиа» можно загрузить только фото и видео. Аудио и документы добавляйте в отдельных разделах.${suffix}`;
+  }
+
+  if (mode === "photo") {
+    return `В этом режиме можно загрузить только фото.${suffix}`;
+  }
+
+  if (mode === "video") {
+    return `В этом режиме можно загрузить только видео.${suffix}`;
+  }
+
+  return `Для аудио и документов используйте отдельные разделы архива.${suffix}`;
+}
+
 function buildPendingUploadSummary(items: PendingArchiveUploadItem[]) {
   const stats = items.reduce(
     (accumulator, item) => {
@@ -3497,20 +3531,28 @@ export function TreeMediaArchiveClient({
       ? "image/*"
       : mode === "video"
         ? "video/*"
-        : "image/*,video/*,audio/*,.pdf,.doc,.docx,.docm,.txt,.rtf,.xls,.xlsx,.xlsm,.ppt,.pptx,.pptm";
+        : "image/*,video/*";
   const isDedicatedMode = mode === "audio" || mode === "document";
   function stageArchiveFiles(files: File[]) {
     if (!files.length) {
       return;
     }
 
-    const oversized = files.find((file) => file.size > getArchiveMaxMediaFileSizeBytes(file));
+    const acceptedFiles = files.filter((file) => isGenericArchiveUploadFileAllowed(file, mode));
+    const rejectedCount = files.length - acceptedFiles.length;
+
+    if (!acceptedFiles.length) {
+      setError(getArchiveUploadRejectedMessage(mode, rejectedCount));
+      return;
+    }
+
+    const oversized = acceptedFiles.find((file) => file.size > getArchiveMaxMediaFileSizeBytes(file));
     if (oversized) {
       setError(`Файл больше ${Math.round(getArchiveMaxMediaFileSizeBytes(oversized) / (1024 * 1024))} МБ: ${oversized.name}.`);
       return;
     }
 
-    const nextItems = files.map(buildPendingArchiveUploadItem);
+    const nextItems = acceptedFiles.map(buildPendingArchiveUploadItem);
     const nextPendingUploads = [...pendingUploadsRef.current, ...nextItems];
     const nextPendingUploadKind = resolveSingleAlbumKind(nextPendingUploads.map((item) => getAlbumCompatibleKindForFile(item.file)));
     setPendingUploads((current) => [...current, ...nextItems]);
@@ -3518,7 +3560,7 @@ export function TreeMediaArchiveClient({
       setReviewAlbumId(selectedAlbum.id);
     }
     setIsUploadReviewOpen(true);
-    setError(null);
+    setError(rejectedCount > 0 ? getArchiveUploadRejectedMessage(mode, rejectedCount) : null);
   }
 
   function handleArchiveDropzoneDragOver(event: React.DragEvent) {
@@ -4322,7 +4364,7 @@ export function TreeMediaArchiveClient({
               className="builder-native-file-input"
               type="file"
               multiple
-              accept={mode === "photo" ? "image/*" : mode === "video" ? "video/*" : "image/*,video/*,.pdf,.doc,.docx,.docm,.txt,.rtf,.xls,.xlsx,.xlsm,.ppt,.pptx,.pptm"}
+              accept={archiveUploadAccept}
               onChange={handleArchiveFileSelection}
             />
             <Button type="button" variant="secondary" onClick={() => reviewFileInputRef.current?.click()}>

@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { FilePlus } from "lucide-react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { uploadFileWithTransportContract } from "@/lib/utils";
 import { useTreeUploadPanel } from "@/components/upload/tree-upload-panel-provider";
 import { DocumentPreviewDialog } from "@/components/media/document-preview-dialog";
-import { buildCloudflareOfficeDocumentPublicUrl, isOfficeWordDocumentAsset } from "@/components/media/office-document-preview";
+import { buildCloudflareOfficeDocumentPublicUrl } from "@/components/media/office-document-preview";
 import { Button, buttonVariants } from "@/components/ui/button";
 
 interface DocumentArchiveViewProps {
@@ -81,11 +81,6 @@ function isPdfOrText(asset: MediaAssetRecord) {
     return mime === "application/pdf" || mime.endsWith("/pdf") || mime.startsWith("text/");
 }
 
-function isPdfAsset(asset: MediaAssetRecord) {
-    const mime = (asset.mime_type || "").toLowerCase();
-    return mime === "application/pdf" || mime.endsWith("/pdf");
-}
-
 function buildMediaUrl(mediaId: string, shareToken?: string | null, options?: { download?: boolean }) {
     const params = new URLSearchParams();
     if (options?.download) {
@@ -113,6 +108,25 @@ async function requestJson(url: string, method: string, body?: unknown) {
     return payload;
 }
 
+const FOCUSABLE_DIALOG_SELECTOR = [
+    "a[href]",
+    "button:not([disabled])",
+    "input:not([disabled])",
+    "select:not([disabled])",
+    "textarea:not([disabled])",
+    "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function getFocusableDialogElements(container: HTMLElement | null) {
+    if (!container) {
+        return [];
+    }
+
+    return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_DIALOG_SELECTOR)).filter(
+        (element) => element.tabIndex >= 0 && element.getAttribute("aria-disabled") !== "true"
+    );
+}
+
 interface ArchiveUploadTarget {
     mediaId: string;
     path: string;
@@ -130,12 +144,73 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
     const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const deleteDialogRef = useRef<HTMLDivElement | null>(null);
+    const deleteRestoreFocusRef = useRef<HTMLElement | null>(null);
     const mountedRef = useRef(true);
     const documentFileInputId = useId();
+    const deleteDialogTitleId = useId();
 
     const handleClosePreview = useCallback(() => {
         setPreviewAsset(null);
     }, []);
+
+    const closeDeleteConfirm = useCallback(() => {
+        setDeleteTargetId(null);
+    }, []);
+
+    useEffect(() => {
+        if (!deleteTargetId) return;
+
+        const previousBodyOverflow = document.body.style.overflow;
+        const focusTimerId = window.setTimeout(() => {
+            const focusTarget = getFocusableDialogElements(deleteDialogRef.current)[0] || deleteDialogRef.current;
+            focusTarget?.focus();
+        }, 0);
+
+        function handleKeyDown(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                closeDeleteConfirm();
+                return;
+            }
+
+            if (event.key !== "Tab") {
+                return;
+            }
+
+            const focusableElements = getFocusableDialogElements(deleteDialogRef.current);
+            if (!focusableElements.length) {
+                event.preventDefault();
+                deleteDialogRef.current?.focus();
+                return;
+            }
+
+            const firstElement = focusableElements[0];
+            const lastElement = focusableElements[focusableElements.length - 1];
+            const activeElement = document.activeElement;
+
+            if (event.shiftKey && (!deleteDialogRef.current?.contains(activeElement) || activeElement === firstElement)) {
+                event.preventDefault();
+                lastElement.focus();
+            } else if (!event.shiftKey && activeElement === lastElement) {
+                event.preventDefault();
+                firstElement.focus();
+            }
+        }
+
+        document.addEventListener("keydown", handleKeyDown);
+        document.body.style.overflow = "hidden";
+
+        return () => {
+            window.clearTimeout(focusTimerId);
+            document.removeEventListener("keydown", handleKeyDown);
+            document.body.style.overflow = previousBodyOverflow;
+            const restoreTarget = deleteRestoreFocusRef.current;
+            deleteRestoreFocusRef.current = null;
+            if (restoreTarget?.isConnected) {
+                restoreTarget.focus();
+            }
+        };
+    }, [closeDeleteConfirm, deleteTargetId]);
 
     async function uploadFiles(files: File[]) {
         if (isUploading || !files.length) {
@@ -347,9 +422,7 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                         const typeLabel = getDocumentTypeLabel(asset.mime_type);
                         const icon = getDocumentIcon(asset.mime_type);
                         const canPreviewThis = isPdfOrText(asset) || Boolean(buildCloudflareOfficeDocumentPublicUrl(asset, cloudflareR2PublicBaseUrl));
-                        const downloadUrl = isOfficeWordDocumentAsset(asset) || isPdfAsset(asset)
-                            ? buildMediaUrl(asset.id, shareToken, { download: true })
-                            : buildMediaUrl(asset.id, shareToken);
+                        const downloadUrl = buildMediaUrl(asset.id, shareToken, { download: true });
                         return (
                             <div key={asset.id} className="document-archive-row" role="listitem">
                                 <span className="document-archive-icon">{icon}</span>
@@ -367,7 +440,10 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                                         <button
                                             type="button"
                                             className="document-archive-action-btn"
-                                            onClick={() => setPreviewAsset(asset)}
+                                            onClick={(event) => {
+                                                event.currentTarget.focus();
+                                                setPreviewAsset(asset);
+                                            }}
                                             title="Открыть"
                                         >
                                             Открыть
@@ -384,7 +460,11 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
                                         <button
                                             type="button"
                                             className="document-archive-action-btn document-archive-action-btn-danger"
-                                            onClick={() => setDeleteTargetId(asset.id)}
+                                            onClick={(event) => {
+                                                event.currentTarget.focus();
+                                                deleteRestoreFocusRef.current = event.currentTarget;
+                                                setDeleteTargetId(asset.id);
+                                            }}
                                             title="Удалить"
                                         >
                                             ✕
@@ -417,12 +497,20 @@ export function DocumentArchiveView({ treeId, slug, shareToken, cloudflareR2Publ
             ) : null}
 
             {deleteTargetId ? (
-                <div className="document-archive-confirm-overlay" onClick={() => setDeleteTargetId(null)}>
-                    <div className="document-archive-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-                        <strong>Удалить документ?</strong>
+                <div className="document-archive-confirm-overlay" onClick={closeDeleteConfirm}>
+                    <div
+                        ref={deleteDialogRef}
+                        className="document-archive-confirm-dialog"
+                        onClick={(e) => e.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={deleteDialogTitleId}
+                        tabIndex={-1}
+                    >
+                        <strong id={deleteDialogTitleId}>Удалить документ?</strong>
                         <p>Это действие нельзя отменить.</p>
                         <div className="document-archive-confirm-actions">
-                            <Button type="button" variant="secondary" onClick={() => setDeleteTargetId(null)}>Отмена</Button>
+                            <Button type="button" variant="secondary" onClick={closeDeleteConfirm}>Отмена</Button>
                             <Button type="button" variant="destructive" onClick={handleDelete}>Удалить</Button>
                         </div>
                     </div>

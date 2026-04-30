@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { MediaAssetRecord } from "@/lib/types";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 
 const OFFICE_DOCUMENT_PREVIEW_TIMEOUT_MS = 7000;
 const MICROSOFT_OFFICE_VIEWER_BASE_URL = "https://view.officeapps.live.com/op/view.aspx?src=";
@@ -144,10 +144,8 @@ export function OfficeDocumentPreview({ publicFileUrl, title, downloadUrl }: Off
         <div className="document-preview-fallback-icon">📄</div>
         <strong>Предпросмотр не загрузился</strong>
         <p>Microsoft viewer не ответил вовремя. Попробуйте скачать документ и открыть его локально.</p>
-        <a href={downloadUrl} target="_blank" rel="noreferrer">
-          <Button type="button" variant="secondary">
-            Скачать файл
-          </Button>
+        <a href={downloadUrl} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "secondary" })}>
+          Скачать файл
         </a>
       </div>
     );

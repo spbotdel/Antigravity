@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { createElement, type ReactElement } from "react";
+import { createElement, useState, type ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 const { uploadFileWithTransportContract } = vi.hoisted(() => ({
@@ -742,6 +742,33 @@ describe("Document archive upload state", () => {
 });
 
 describe("document preview integration", () => {
+    function DocumentPreviewFocusHarness() {
+        const [open, setOpen] = useState(false);
+
+        return createElement(
+            "div",
+            null,
+            createElement(
+                "button",
+                {
+                    type: "button",
+                    onClick: () => setOpen(true),
+                },
+                "Open preview"
+            ),
+            createElement(DocumentPreviewDialog, {
+                asset: createDocumentAsset({
+                    id: "document-pdf",
+                    title: "family-book.pdf",
+                    mime_type: "application/pdf",
+                    storage_path: "trees/tree-1/media/document/document-pdf/family-book.pdf",
+                }),
+                open,
+                onClose: () => setOpen(false),
+            })
+        );
+    }
+
     it("builds a public Cloudflare Office document url from the configured base url", () => {
         const asset = createDocumentAsset({
             storage_path: "trees/tree 1/media/document/document-1/family history.docx",
@@ -772,6 +799,45 @@ describe("document preview integration", () => {
         expect(iframe).not.toBeNull();
         expect(iframe).toHaveAttribute("src", "/api/media/document-pdf?share=share-token");
         expect(screen.getByRole("link", { name: "Скачать" })).toHaveAttribute("href", "/api/media/document-pdf?download=1&share=share-token");
+    });
+
+    it("traps focus in the document preview dialog and restores the opener on close", async () => {
+        render(createElement(DocumentPreviewFocusHarness));
+
+        const opener = screen.getByRole("button", { name: "Open preview" });
+        opener.focus();
+        fireEvent.click(opener);
+
+        const dialog = screen.getByRole("dialog", { name: "family-book.pdf" });
+        await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+
+        const firstFocusable = dialog.querySelector("a[href], button") as HTMLElement;
+        firstFocusable.focus();
+        fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+        fireEvent.keyDown(document, { key: "Escape" });
+        await waitFor(() => expect(screen.queryByRole("dialog", { name: "family-book.pdf" })).toBeNull());
+        expect(opener).toHaveFocus();
+    });
+
+    it("uses an attachment-friendly fallback link without nested interactive HTML", () => {
+        render(
+            createElement(DocumentPreviewDialog, {
+                asset: createDocumentAsset({
+                    id: "document-rtf",
+                    title: "notes.rtf",
+                    mime_type: "application/rtf",
+                    storage_path: "trees/tree-1/media/document/document-rtf/notes.rtf",
+                }),
+                open: true,
+                onClose: () => undefined,
+            })
+        );
+
+        const fallbackLink = screen.getByRole("link", { name: "Скачать файл" });
+        expect(fallbackLink).toHaveAttribute("href", "/api/media/document-rtf?download=1");
+        expect(fallbackLink.querySelector("button")).toBeNull();
     });
 
     it("shows an Office preview entrypoint for docx only when a public Cloudflare url can be built", () => {
@@ -852,6 +918,28 @@ describe("document preview integration", () => {
         expect(pdfDownloadLink).not.toBeNull();
     });
 
+    it("traps focus in the document delete confirmation and restores the delete button", async () => {
+        render(
+            createElement(DocumentArchiveView, {
+                treeId: "tree-1",
+                slug: "demo-family",
+                canEdit: true,
+                media: [createDocumentAsset()],
+                onMediaChange: () => undefined,
+            })
+        );
+
+        const deleteButton = screen.getByTitle("Удалить");
+        fireEvent.click(deleteButton);
+
+        const dialog = screen.getByRole("dialog", { name: "Удалить документ?" });
+        await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+
+        fireEvent.keyDown(document, { key: "Escape" });
+        await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить документ?" })).toBeNull());
+        expect(deleteButton).toHaveFocus();
+    });
+
     it("renders the Microsoft Office viewer url for docx preview", () => {
         render(
             createElement(DocumentPreviewDialog, {
@@ -906,7 +994,7 @@ describe("document preview integration", () => {
                 createElement(OfficeDocumentPreview, {
                     publicFileUrl: "https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.docx",
                     title: "family-history.docx",
-                    downloadUrl: "/api/media/document-1",
+                    downloadUrl: "/api/media/document-1?download=1",
                 })
             );
 
@@ -917,7 +1005,7 @@ describe("document preview integration", () => {
             });
 
             expect(screen.getByText("Предпросмотр не загрузился")).toBeInTheDocument();
-            expect(screen.getByRole("link", { name: "Скачать файл" })).toHaveAttribute("href", "/api/media/document-1");
+            expect(screen.getByRole("link", { name: "Скачать файл" })).toHaveAttribute("href", "/api/media/document-1?download=1");
         } finally {
             vi.runOnlyPendingTimers();
             vi.useRealTimers();

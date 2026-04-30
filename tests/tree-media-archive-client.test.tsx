@@ -3277,6 +3277,35 @@ describe("tree media archive client", () => {
     expect(screen.getByText("Материал сохранен в семейный архив.")).toBeInTheDocument();
   });
 
+  it("keeps the all-media uploader constrained to photo and video files", async () => {
+    const view = renderArchiveClientWithUploadPanel({
+      initialMode: "all",
+      allMedia: [],
+    });
+
+    const input = view.container.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(input).toHaveAttribute("accept", "image/*,video/*");
+
+    const photoFile = new File([new Uint8Array([1])], "family.jpg", { type: "image/jpeg" });
+    const videoFile = new File([new Uint8Array([2])], "clip.mp4", { type: "video/mp4" });
+    const audioFile = new File([new Uint8Array([3])], "voice.mp3", { type: "audio/mpeg" });
+    const documentFile = new File([new Uint8Array([4])], "archive.pdf", { type: "application/pdf" });
+
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [photoFile, audioFile, documentFile, videoFile],
+    });
+    fireEvent.change(input);
+
+    await screen.findByRole("dialog", { name: "Подготовка загрузки" });
+    expect(screen.getByText("family.jpg")).toBeInTheDocument();
+    expect(screen.getByText("clip.mp4")).toBeInTheDocument();
+    expect(screen.queryByText("voice.mp3")).toBeNull();
+    expect(screen.queryByText("archive.pdf")).toBeNull();
+    expect(screen.getByText(/Аудио и документы добавляйте в отдельных разделах/)).toBeInTheDocument();
+    expect(document.querySelector('.archive-review-footer input[type="file"]')).toHaveAttribute("accept", "image/*,video/*");
+  });
+
   it("hides the top archive uploader in audio mode and leaves audio upload to the dedicated audio section", () => {
     const view = renderArchiveClient({
       initialMode: "audio",
