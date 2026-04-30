@@ -11098,6 +11098,7 @@ body.media-lightbox-open .workspace-page-canvas .viewer-info-rail {
 
   .tree-page-shell {
     width: min(100% - 8px, 100%);
+    padding-top: 1px;
   }
 
   .tree-page-nav-row {
