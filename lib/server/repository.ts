@@ -1306,6 +1306,15 @@ async function getTreeAccessContext(slug: string, shareToken?: string | null) {
   };
 }
 
+export async function getTreePageMetadata(slug: string, options?: { shareToken?: string | null }) {
+  const { tree } = await getTreeAccessContext(slug, options?.shareToken);
+
+  return {
+    title: tree.title,
+    description: tree.description
+  };
+}
+
 export async function getTreeAuditPageContext(slug: string, options?: { shareToken?: string | null }) {
   const { tree, actor } = await getTreeAccessContext(slug, options?.shareToken);
 

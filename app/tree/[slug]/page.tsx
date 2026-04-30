@@ -1,10 +1,12 @@
+import type { Metadata } from "next";
+
 import { AppHeader } from "@/components/layout/app-header";
 import { TreeNav } from "@/components/layout/tree-nav";
 import { Card } from "@/components/ui/card";
 import { resolveHeaderModeFromActor } from "@/lib/permissions";
 import { TreeViewerClient } from "@/components/tree/tree-viewer-client";
 import { AppError } from "@/lib/server/errors";
-import { getTreeSnapshot } from "@/lib/server/repository";
+import { getTreePageMetadata, getTreeSnapshot } from "@/lib/server/repository";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,26 @@ function getSearchParam(value: string | string[] | undefined) {
   }
 
   return value || null;
+}
+
+export async function generateMetadata({ params, searchParams }: TreePageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const shareToken = getSearchParam(resolvedSearchParams.share);
+
+  try {
+    const metadata = await getTreePageMetadata(slug, { shareToken });
+
+    return {
+      title: metadata.title,
+      description: metadata.description || "Семейное дерево"
+    };
+  } catch {
+    return {
+      title: "Семейное дерево",
+      description: "Семейное дерево"
+    };
+  }
 }
 
 export default async function TreePage({ params, searchParams }: TreePageProps) {

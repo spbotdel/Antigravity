@@ -103,25 +103,20 @@ function getNodeLines(node: Pick<DisplayTreeNode, "type" | "name" | "spouseName"
   return wrapName(node.name);
 }
 
-function getNodeSubtitle(node: { type: "person" | "couple"; spouseName?: string | null; gender?: string | null }) {
+function getNodeSubtitle(node: { type: "person" | "couple"; spouseName?: string | null }) {
   if (node.type === "couple") {
     return node.spouseName ? "Семейная пара" : "Партнерство";
   }
 
-  const normalizedGender = normalizeGenderValue(node.gender);
-  if (normalizedGender === "female") {
-    return "Женщина";
+  return null;
+}
+
+function getNodeMetaY(lineCount: number, hasSubtitle: boolean) {
+  if (hasSubtitle) {
+    return lineCount > 1 ? 34 : 26;
   }
 
-  if (normalizedGender === "male") {
-    return "Мужчина";
-  }
-
-  if (normalizedGender === "other") {
-    return "Другое";
-  }
-
-  return "Человек";
+  return lineCount > 1 ? 18 : 10;
 }
 
 function getNodeMeta(node: {
@@ -1956,6 +1951,7 @@ export function FamilyTreeCanvas({
       nodes.each(function renderBuilderNodeText(datum) {
         const group = d3.select(this);
         const lines = wrapName(datum.name);
+        const subtitle = getNodeSubtitle(datum);
 
         lines.forEach((line, index) => {
           group
@@ -1967,20 +1963,22 @@ export function FamilyTreeCanvas({
             .text(line);
         });
 
-        group
-          .append("text")
-          .attr("class", "tree-node-sub")
-          .attr("text-anchor", "start")
-          .attr("x", NODE_LABEL_X)
-          .attr("y", lines.length > 1 ? 18 : 10)
-          .text(getNodeSubtitle(datum));
+        if (subtitle) {
+          group
+            .append("text")
+            .attr("class", "tree-node-sub")
+            .attr("text-anchor", "start")
+            .attr("x", NODE_LABEL_X)
+            .attr("y", lines.length > 1 ? 18 : 10)
+            .text(subtitle);
+        }
 
         group
           .append("text")
           .attr("class", "tree-node-meta")
           .attr("text-anchor", "start")
           .attr("x", NODE_LABEL_X)
-          .attr("y", lines.length > 1 ? 34 : 26)
+          .attr("y", getNodeMetaY(lines.length, Boolean(subtitle)))
           .text(getNodeMeta(datum));
       });
 
@@ -2306,6 +2304,7 @@ export function FamilyTreeCanvas({
     nodes.each(function renderNodeText(datum) {
       const group = d3.select(this);
       const lines = getNodeLines(datum.data);
+      const subtitle = getNodeSubtitle(datum.data);
       lines.forEach((line, index) => {
         group
           .append("text")
@@ -2316,20 +2315,22 @@ export function FamilyTreeCanvas({
           .text(line);
       });
 
-      group
-        .append("text")
-        .attr("class", "tree-node-sub")
-        .attr("text-anchor", "start")
-        .attr("x", NODE_LABEL_X)
-        .attr("y", lines.length > 1 ? 18 : 10)
-        .text(getNodeSubtitle(datum.data));
+      if (subtitle) {
+        group
+          .append("text")
+          .attr("class", "tree-node-sub")
+          .attr("text-anchor", "start")
+          .attr("x", NODE_LABEL_X)
+          .attr("y", lines.length > 1 ? 18 : 10)
+          .text(subtitle);
+      }
 
       group
         .append("text")
         .attr("class", "tree-node-meta")
         .attr("text-anchor", "start")
         .attr("x", NODE_LABEL_X)
-        .attr("y", lines.length > 1 ? 34 : 26)
+        .attr("y", getNodeMetaY(lines.length, Boolean(subtitle)))
         .text(getNodeMeta(datum.data));
     });
 
