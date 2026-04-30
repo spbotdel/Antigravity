@@ -33,12 +33,32 @@ export async function generateMetadata({ params, searchParams }: TreePageProps):
 
     return {
       title: metadata.title,
-      description: metadata.description || "Семейное дерево"
+      description: metadata.description || "История семьи, собранная в одном месте",
+      openGraph: {
+        title: metadata.title,
+        description: metadata.description || "История семьи, собранная в одном месте",
+        type: "website"
+      },
+      twitter: {
+        card: "summary",
+        title: metadata.title,
+        description: metadata.description || "История семьи, собранная в одном месте"
+      }
     };
   } catch {
     return {
       title: "Семейное дерево",
-      description: "Семейное дерево"
+      description: "История семьи, собранная в одном месте",
+      openGraph: {
+        title: "Семейное дерево",
+        description: "История семьи, собранная в одном месте",
+        type: "website"
+      },
+      twitter: {
+        card: "summary",
+        title: "Семейное дерево",
+        description: "История семьи, собранная в одном месте"
+      }
     };
   }
 }
