@@ -340,6 +340,8 @@ interface FamilyTreeCanvasProps {
   viewportMarginX?: number;
   viewportMarginY?: number;
   preferInitialBoundsFit?: boolean;
+  preferInitialSelectedFocus?: boolean;
+  selectedMinScale?: number;
 }
 
 interface PositionedCanvasNode {
@@ -1368,6 +1370,8 @@ export function FamilyTreeCanvas({
   viewportMarginX,
   viewportMarginY,
   preferInitialBoundsFit = false,
+  preferInitialSelectedFocus = false,
+  selectedMinScale,
 }: FamilyTreeCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onSelectPersonRef = useRef(onSelectPerson);
@@ -1508,9 +1512,14 @@ export function FamilyTreeCanvas({
       right: Math.max(0, Math.min(viewportInsetRight, Math.max(width - 120, 0)))
     };
     const viewportMargins = resolveViewportMargins(width, viewportMarginX, viewportMarginY);
-    const autoFitSignature = preferInitialBoundsFit
+    const shouldResetInitialTransform = preferInitialBoundsFit || preferInitialSelectedFocus;
+    const autoFitSignature = shouldResetInitialTransform
       ? JSON.stringify({
           displayMode,
+          preferInitialBoundsFit,
+          preferInitialSelectedFocus,
+          selectedMinScale: selectedMinScale ?? null,
+          selectedPersonId: preferInitialSelectedFocus ? selectedPersonId : null,
           width,
           height,
           top: viewportInsets.top,
@@ -1586,7 +1595,7 @@ export function FamilyTreeCanvas({
       const layout = buildBuilderCanvasLayout(tree, people, parentLinks, partnerships, selectedPersonId);
       const selectedCanvasNode = selectedPersonId ? layout.nodes.find((node) => node.id === selectedPersonId) || null : null;
       const selectedChanged = lastSelectedPersonIdRef.current !== selectedPersonId;
-      const selectedMinScale = getBuilderSelectedMinScale(width);
+      const resolvedSelectedMinScale = selectedMinScale ?? getBuilderSelectedMinScale(width);
       const focusRatios = getBuilderFocusRatios(width);
       layout.nodes.forEach((node) => {
         if (node.type !== "person" || !node.id) {
@@ -2056,9 +2065,9 @@ export function FamilyTreeCanvas({
           if (
             selectedChanged &&
             (!isPointComfortablyVisible(zoomTransformRef.current, selectedCanvasNode, width, height, viewportInsets, viewportMargins) ||
-              zoomTransformRef.current.k < selectedMinScale)
+              zoomTransformRef.current.k < resolvedSelectedMinScale)
           ) {
-            const nextScale = Math.max(zoomTransformRef.current.k, selectedMinScale);
+            const nextScale = Math.max(zoomTransformRef.current.k, resolvedSelectedMinScale);
             svg.call(
               zoom.transform,
               getFocusedTransform(width, height, selectedCanvasNode, nextScale, focusRatios.x, focusRatios.y, viewportInsets)
@@ -2067,20 +2076,22 @@ export function FamilyTreeCanvas({
             svg.call(zoom.transform, zoomTransformRef.current);
           }
         } else {
-          const initialTransform = getBoundsFitTransform(
-            width,
-            height,
-            bounds,
-            viewportMargins,
-            preferInitialBoundsFit ? 0 : selectedMinScale,
-            viewportInsets
-          );
+          const initialTransform = preferInitialSelectedFocus
+            ? getFocusedTransform(width, height, selectedCanvasNode, resolvedSelectedMinScale, focusRatios.x, focusRatios.y, viewportInsets)
+            : getBoundsFitTransform(
+                width,
+                height,
+                bounds,
+                viewportMargins,
+                preferInitialBoundsFit ? 0 : resolvedSelectedMinScale,
+                viewportInsets
+              );
           if (initialTransform) {
             svg.call(zoom.transform, initialTransform);
           } else {
             svg.call(
               zoom.transform,
-              getFocusedTransform(width, height, selectedCanvasNode, selectedMinScale, focusRatios.x, focusRatios.y, viewportInsets)
+              getFocusedTransform(width, height, selectedCanvasNode, resolvedSelectedMinScale, focusRatios.x, focusRatios.y, viewportInsets)
             );
           }
         }
@@ -2498,7 +2509,9 @@ export function FamilyTreeCanvas({
     personPhotoCrops,
     personPhotoUrls,
     preferInitialBoundsFit,
+    preferInitialSelectedFocus,
     selectedPersonId,
+    selectedMinScale,
     viewportHeightHint,
     viewportInsetBottom,
     viewportInsetLeft,

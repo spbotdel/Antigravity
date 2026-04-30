@@ -14,6 +14,8 @@ vi.mock("@/components/tree/family-tree-canvas", () => ({
     viewportMarginX,
     viewportMarginY,
     preferInitialBoundsFit,
+    preferInitialSelectedFocus,
+    selectedMinScale,
   }: {
     people?: Array<{ id: string; full_name: string }>;
     onSelectPerson?: (personId: string) => void;
@@ -23,6 +25,8 @@ vi.mock("@/components/tree/family-tree-canvas", () => ({
     viewportMarginX?: number;
     viewportMarginY?: number;
     preferInitialBoundsFit?: boolean;
+    preferInitialSelectedFocus?: boolean;
+    selectedMinScale?: number;
   }) => (
     <div
       data-testid="family-tree-canvas"
@@ -31,6 +35,8 @@ vi.mock("@/components/tree/family-tree-canvas", () => ({
       data-viewport-margin-x={viewportMarginX ?? "none"}
       data-viewport-margin-y={viewportMarginY ?? "none"}
       data-prefer-initial-bounds-fit={preferInitialBoundsFit ? "true" : "false"}
+      data-prefer-initial-selected-focus={preferInitialSelectedFocus ? "true" : "false"}
+      data-selected-min-scale={selectedMinScale ?? "none"}
     >
       <div data-testid="canvas-selected-person">{selectedPersonId || "none"}</div>
       {people.map((person) => (
@@ -161,21 +167,31 @@ function createSnapshot(): TreeSnapshot {
 }
 
 const initialInnerWidth = window.innerWidth;
+const initialInnerHeight = window.innerHeight;
 
-function setViewportWidth(width: number) {
+function setViewportSize(width: number, height = window.innerHeight) {
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
     writable: true,
     value: width,
+  });
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    writable: true,
+    value: height,
   });
   act(() => {
     window.dispatchEvent(new Event("resize"));
   });
 }
 
+function setViewportWidth(width: number) {
+  setViewportSize(width);
+}
+
 describe("tree viewer client", () => {
   afterEach(() => {
-    setViewportWidth(initialInnerWidth);
+    setViewportSize(initialInnerWidth, initialInnerHeight);
   });
 
   it("renders the tree heading overlay with derived people and generation counts", () => {
@@ -222,6 +238,8 @@ describe("tree viewer client", () => {
   });
 
   it("starts collapsed when a selected person exists and opens from the collapsed tab", () => {
+    setViewportWidth(1280);
+
     render(<TreeViewerClient snapshot={createSnapshot()} />);
 
     const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
@@ -238,6 +256,8 @@ describe("tree viewer client", () => {
   });
 
   it("selecting a person from the tree opens the inspector and keeps it open for later selections", () => {
+    setViewportWidth(1280);
+
     render(<TreeViewerClient snapshot={createSnapshot()} />);
 
     const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
@@ -254,6 +274,62 @@ describe("tree viewer client", () => {
     expect(layout).toHaveClass("viewer-panel-open");
     expect(screen.getByText("Bio")).toBeInTheDocument();
     expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-1");
+  });
+
+  it("uses the bottom sheet in tablet portrait and keeps the selected card discoverable", () => {
+    setViewportSize(834, 1210);
+
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
+    expect(layout).toHaveAttribute("data-viewport-mode", "tablet-portrait");
+    expect(layout).toHaveClass("viewer-panel-peek");
+    expect(screen.getByRole("button", { name: "Развернуть карточку человека: Demo Person" })).toBeInTheDocument();
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-top", "56");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-inset-bottom", "64");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-x", "22");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-y", "28");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-prefer-initial-selected-focus", "true");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-selected-min-scale", "0.82");
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Second Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-peek");
+    expect(screen.getByRole("button", { name: "Развернуть карточку человека: Second Person" })).toBeInTheDocument();
+    expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-2");
+
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть карточку человека: Second Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-open");
+    expect(screen.getByText("Second bio")).toBeInTheDocument();
+    expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-2");
+
+    fireEvent.click(screen.getByRole("button", { name: "Свернуть карточку человека: Second Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-peek");
+    expect(screen.getByTestId("canvas-selected-person")).toHaveTextContent("person-2");
+  });
+
+  it("uses the right-side panel in tablet landscape", () => {
+    setViewportSize(1024, 768);
+
+    render(<TreeViewerClient snapshot={createSnapshot()} />);
+
+    const layout = screen.getByTestId("family-tree-canvas").closest(".viewer-layout-overlay");
+    expect(layout).toHaveAttribute("data-viewport-mode", "tablet-landscape");
+    expect(layout).toHaveClass("viewer-panel-collapsed");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-x", "none");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-viewport-margin-y", "none");
+    expect(screen.getByTestId("family-tree-canvas")).toHaveAttribute("data-prefer-initial-selected-focus", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть карточку человека: Demo Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-open");
+    expect(screen.getByText("Bio")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Свернуть карточку человека: Demo Person" }));
+
+    expect(layout).toHaveClass("viewer-panel-collapsed");
   });
 
   it("uses peek as the default phone sheet state and preserves selection when collapsing it", () => {
@@ -361,6 +437,8 @@ describe("tree viewer client", () => {
   });
 
   it("does not render an empty collapsed tab when no selected person exists", () => {
+    setViewportWidth(1280);
+
     const snapshot = createSnapshot();
     snapshot.tree.root_person_id = null;
     snapshot.people = [];
@@ -376,16 +454,20 @@ describe("tree viewer client", () => {
   });
 
   it("shows avatar preview for the selected person in the info rail", () => {
+    setViewportWidth(1280);
+
     render(<TreeViewerClient snapshot={createSnapshot()} />);
 
     expect(screen.getByAltText("Портрет: Demo Person")).toHaveAttribute("src", "/api/media/media-1?variant=thumb");
-    expect(screen.getByTestId("person-media-gallery")).toHaveTextContent("avatar:media-1; media:Portrait; entry:true; limit:4");
+    expect(screen.getByTestId("person-media-gallery")).toHaveTextContent("avatar:media-1; media:Portrait; entry:true; limit:5");
     expect(screen.getByRole("link", { name: "Посмотреть медиа" })).toHaveAttribute("href", "/tree/demo-tree/media?mode=photo&view=person&personId=person-1");
     expect(screen.getByText("1990")).toBeInTheDocument();
     expect(screen.queryByText("1990 — ?")).not.toBeInTheDocument();
   });
 
   it("hides the summary avatar tile when the preview image fails to load", () => {
+    setViewportWidth(1280);
+
     render(<TreeViewerClient snapshot={createSnapshot()} />);
 
     const avatarImage = screen.getByAltText("Портрет: Demo Person");
@@ -396,6 +478,8 @@ describe("tree viewer client", () => {
   });
 
   it("renders documents as a separate list and keeps them out of the visual media gallery", () => {
+    setViewportWidth(1280);
+
     const snapshot = createSnapshot();
     snapshot.media = [
       ...snapshot.media,
@@ -431,7 +515,7 @@ describe("tree viewer client", () => {
 
     render(<TreeViewerClient snapshot={snapshot} />);
 
-    expect(screen.getByTestId("person-media-gallery")).toHaveTextContent("media:Portrait; entry:true; limit:4");
+    expect(screen.getByTestId("person-media-gallery")).toHaveTextContent("media:Portrait; entry:true; limit:5");
     expect(screen.queryByTestId("person-media-gallery")).not.toHaveTextContent("Family Archive.pdf");
     expect(screen.getByRole("heading", { name: "Документы" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Family Archive\.pdf/i })).toHaveAttribute("href", "/api/media/media-doc-1");
@@ -440,6 +524,8 @@ describe("tree viewer client", () => {
   });
 
   it("falls back to the original avatar route for legacy photos without variants", () => {
+    setViewportWidth(1280);
+
     const snapshot = createSnapshot();
     snapshot.media = [
       {

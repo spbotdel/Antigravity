@@ -17,7 +17,7 @@ interface TreeViewerClientProps {
   shareToken?: string | null;
 }
 
-type ViewerViewportMode = "desktop" | "tablet" | "phone";
+type ViewerViewportMode = "desktop" | "tablet-landscape" | "tablet-portrait" | "phone";
 type ViewerPanelState = "hidden" | "peek" | "collapsed" | "open";
 type PhoneSheetGestureAxis = "horizontal" | "vertical";
 
@@ -33,25 +33,36 @@ const PHONE_VIEWER_CANVAS_INSET_TOP = 56;
 const PHONE_VIEWER_CANVAS_INSET_BOTTOM = 64;
 const PHONE_VIEWER_CANVAS_MARGIN_X = 8;
 const PHONE_VIEWER_CANVAS_MARGIN_Y = 12;
+const TABLET_VIEWER_CANVAS_MARGIN_X = 22;
+const TABLET_VIEWER_CANVAS_MARGIN_Y = 28;
+const TABLET_VIEWER_SELECTED_MIN_SCALE = 0.82;
 
-function getViewerViewportMode(width: number): ViewerViewportMode {
+function getViewerViewportMode(width: number, height: number): ViewerViewportMode {
   if (width <= PHONE_VIEWER_MAX_WIDTH) {
     return "phone";
   }
 
   if (width <= TABLET_VIEWER_MAX_WIDTH) {
-    return "tablet";
+    return height > width ? "tablet-portrait" : "tablet-landscape";
   }
 
   return "desktop";
 }
 
+function usesBottomSheetLayout(viewportMode: ViewerViewportMode) {
+  return viewportMode === "phone" || viewportMode === "tablet-portrait";
+}
+
+function usesSidePanelLayout(viewportMode: ViewerViewportMode) {
+  return viewportMode === "desktop" || viewportMode === "tablet-landscape";
+}
+
 function normalizeViewerPanelState(currentState: ViewerPanelState, hasSelection: boolean, viewportMode: ViewerViewportMode): ViewerPanelState {
   if (!hasSelection) {
-    return viewportMode === "phone" ? "hidden" : "open";
+    return usesSidePanelLayout(viewportMode) ? "open" : "hidden";
   }
 
-  if (viewportMode === "phone") {
+  if (usesBottomSheetLayout(viewportMode)) {
     return currentState === "open" ? "open" : "peek";
   }
 
@@ -284,10 +295,13 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   }, [shareToken, snapshot.media, snapshot.personMedia]);
   const selectedPerson = snapshot.people.find((person) => person.id === selectedPersonId) || null;
   const effectivePanelState = normalizeViewerPanelState(panelState, Boolean(selectedPerson), viewportMode);
+  const isBottomSheetLayout = usesBottomSheetLayout(viewportMode);
+  const isSidePanelLayout = usesSidePanelLayout(viewportMode);
+  const isTabletPortraitLayout = viewportMode === "tablet-portrait";
   const selectedMedia = selectedPerson ? collectPersonMedia(snapshot, selectedPerson.id) : [];
   const selectedVisualMedia = selectedMedia.filter((asset) => asset.kind !== "document");
   const selectedDocuments = selectedMedia.filter((asset) => asset.kind === "document");
-  const personCardPreviewStripLimit = viewportMode === "phone" ? 3 : viewportMode === "tablet" ? 4 : 5;
+  const personCardPreviewStripLimit = viewportMode === "phone" ? 3 : viewportMode === "tablet-portrait" ? 4 : 5;
   const selectedAvatarUrl = selectedPerson ? personPhotoPreviewUrls[selectedPerson.id] || null : null;
   const selectedPersonLifeRange = selectedPerson ? formatLifeRange(selectedPerson.birth_date, selectedPerson.death_date) : null;
   const collapsedTabName = getCollapsedTabNameParts(selectedPerson?.full_name);
@@ -301,14 +315,14 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
             snapshot.media.some((asset) => asset.id === relation.media_id && asset.kind === "photo")
         )?.media_id || null
       : null;
-  const shouldRenderInfoRail = Boolean(selectedPerson) || viewportMode !== "phone";
+  const shouldRenderInfoRail = isSidePanelLayout || Boolean(selectedPerson);
   useLayoutEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
     }
 
     const syncViewportMode = () => {
-      setViewportMode(getViewerViewportMode(window.innerWidth));
+      setViewportMode(getViewerViewportMode(window.innerWidth, window.innerHeight));
     };
 
     syncViewportMode();
@@ -319,7 +333,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setPanelState((currentState) => normalizeViewerPanelState(currentState, Boolean(selectedPerson), viewportMode));
   }, [selectedPerson, viewportMode]);
 
@@ -480,14 +494,14 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
 
   function handleSelectPerson(personId: string) {
     setSelectedPersonId(personId);
-    setPanelState(viewportMode === "phone" ? "peek" : "open");
+    setPanelState(isBottomSheetLayout ? "peek" : "open");
   }
 
   function handleTogglePanel() {
     setPanelState((currentState) => {
       const normalizedState = normalizeViewerPanelState(currentState, Boolean(selectedPerson), viewportMode);
 
-      if (viewportMode === "phone") {
+      if (usesBottomSheetLayout(viewportMode)) {
         return normalizedState === "open" ? "peek" : "open";
       }
 
@@ -496,7 +510,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   }
 
   function canStartPhoneSheetGesture(target: EventTarget | null) {
-    if (!selectedPerson || viewportMode !== "phone") {
+    if (!selectedPerson || !isBottomSheetLayout) {
       return false;
     }
 
@@ -516,7 +530,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   }
 
   function beginPhoneSheetGesture(clientX: number, clientY: number) {
-    if (viewportMode !== "phone" || !selectedPerson) {
+    if (!isBottomSheetLayout || !selectedPerson) {
       return;
     }
 
@@ -545,7 +559,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
 
   function updatePhoneSheetGesture(clientX: number, clientY: number) {
     const gesture = phoneSheetGestureRef.current;
-    if (viewportMode !== "phone" || !selectedPerson || !gesture) {
+    if (!isBottomSheetLayout || !selectedPerson || !gesture) {
       return;
     }
 
@@ -587,7 +601,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   }
 
   function completePhoneSheetGesture(clientX: number, clientY: number) {
-    if (viewportMode !== "phone" || !selectedPerson) {
+    if (!isBottomSheetLayout || !selectedPerson) {
       setIsPhoneSheetDragging(false);
       setPhoneSheetDragTranslate(null);
       phoneSheetGestureRef.current = null;
@@ -651,7 +665,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   }
 
   function handlePhoneSheetPointerDown(event: ReactPointerEvent<HTMLElement>) {
-    if (event.pointerType === "touch" || viewportMode !== "phone" || !selectedPerson) {
+    if (event.pointerType === "touch" || !isBottomSheetLayout || !selectedPerson) {
       return;
     }
 
@@ -671,7 +685,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   function handlePhoneSheetPointerMove(event: ReactPointerEvent<HTMLElement>) {
     if (
       event.pointerType === "touch" ||
-      viewportMode !== "phone" ||
+      !isBottomSheetLayout ||
       !selectedPerson ||
       activePhoneSheetPointerIdRef.current !== event.pointerId
     ) {
@@ -684,7 +698,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   function handlePhoneSheetPointerUp(event: ReactPointerEvent<HTMLElement>) {
     if (
       event.pointerType === "touch" ||
-      viewportMode !== "phone" ||
+      !isBottomSheetLayout ||
       !selectedPerson ||
       activePhoneSheetPointerIdRef.current !== event.pointerId
     ) {
@@ -706,7 +720,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
       ? 1 - phoneSheetDragTranslate / phoneSheetPeekTranslate
       : null;
   const phoneSheetStyle =
-    viewportMode === "phone" && isPhoneSheetDragging && typeof phoneSheetDragTranslate === "number"
+    isBottomSheetLayout && isPhoneSheetDragging && typeof phoneSheetDragTranslate === "number"
       ? ({
           transform: `translateY(${phoneSheetDragTranslate}px)`,
           transition: "none",
@@ -714,7 +728,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
         } as CSSProperties)
       : undefined;
   const phoneSheetBodyStyle =
-    viewportMode === "phone" && phoneSheetDragProgress !== null
+    isBottomSheetLayout && phoneSheetDragProgress !== null
       ? ({
           opacity: phoneSheetDragProgress,
           visibility: phoneSheetDragProgress <= 0.02 ? "hidden" : "visible",
@@ -724,7 +738,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
   const toggleLabel =
     effectivePanelState === "open"
       ? `Свернуть карточку человека: ${selectedPerson?.full_name || ""}`
-      : viewportMode === "phone"
+      : isBottomSheetLayout
         ? `Развернуть карточку человека: ${selectedPerson?.full_name || ""}`
         : `Открыть карточку человека: ${selectedPerson?.full_name || ""}`;
 
@@ -757,11 +771,25 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
           parentLinks={snapshot.parentLinks}
           partnerships={snapshot.partnerships}
           personPhotoUrls={personPhotoPreviewUrls}
-          viewportInsetTop={viewportMode === "phone" ? PHONE_VIEWER_CANVAS_INSET_TOP : 0}
-          viewportInsetBottom={viewportMode === "phone" ? PHONE_VIEWER_CANVAS_INSET_BOTTOM : 0}
-          viewportMarginX={viewportMode === "phone" ? PHONE_VIEWER_CANVAS_MARGIN_X : undefined}
-          viewportMarginY={viewportMode === "phone" ? PHONE_VIEWER_CANVAS_MARGIN_Y : undefined}
+          viewportInsetTop={isBottomSheetLayout ? PHONE_VIEWER_CANVAS_INSET_TOP : 0}
+          viewportInsetBottom={isBottomSheetLayout ? PHONE_VIEWER_CANVAS_INSET_BOTTOM : 0}
+          viewportMarginX={
+            viewportMode === "phone"
+              ? PHONE_VIEWER_CANVAS_MARGIN_X
+              : isTabletPortraitLayout
+                ? TABLET_VIEWER_CANVAS_MARGIN_X
+                : undefined
+          }
+          viewportMarginY={
+            viewportMode === "phone"
+              ? PHONE_VIEWER_CANVAS_MARGIN_Y
+              : isTabletPortraitLayout
+                ? TABLET_VIEWER_CANVAS_MARGIN_Y
+                : undefined
+          }
           preferInitialBoundsFit={viewportMode === "phone"}
+          preferInitialSelectedFocus={isTabletPortraitLayout}
+          selectedMinScale={isTabletPortraitLayout ? TABLET_VIEWER_SELECTED_MIN_SCALE : undefined}
         />
       </Card>
       {canResizeRail ? (
@@ -800,12 +828,12 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
               return;
             }
 
-            if (viewportMode === "phone" && selectedPerson && effectivePanelState !== "open") {
+            if (isBottomSheetLayout && selectedPerson && effectivePanelState !== "open") {
               setPanelState("open");
             }
           }}
         >
-          {viewportMode === "phone" && selectedPerson ? (
+          {isBottomSheetLayout && selectedPerson ? (
             <button
               type="button"
               className="viewer-phone-sheet-toggle"
@@ -921,7 +949,7 @@ export function TreeViewerClient({ snapshot, shareToken }: TreeViewerClientProps
           )}
         </Card>
       ) : null}
-      {selectedPerson && viewportMode !== "phone" ? (
+      {selectedPerson && isSidePanelLayout ? (
         <button
           type="button"
           className="viewer-info-rail-tab"

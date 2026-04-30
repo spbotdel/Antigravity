@@ -1686,4 +1686,77 @@ describe("family tree canvas interactions", () => {
       }
     }
   });
+
+  it("applies tablet selected focus with an explicit minimum scale", () => {
+    const tree: DisplayTreeNode = {
+      type: "person",
+      id: "root",
+      name: "Root",
+      gender: "male",
+      birthDate: "1990-01-01",
+      deathDate: null,
+      children: [],
+    };
+    const people: PersonRecord[] = [
+      {
+        id: "root",
+        tree_id: "tree-1",
+        full_name: "Root",
+        gender: "male",
+        birth_date: "1990-01-01",
+        death_date: null,
+        birth_place: null,
+        death_place: null,
+        bio: null,
+        is_living: true,
+        created_by: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+    const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+    const clientHeightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get: () => 834,
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get: () => 720,
+    });
+
+    try {
+      const { container } = render(
+        <FamilyTreeCanvas
+          tree={tree}
+          selectedPersonId="root"
+          onSelectPerson={vi.fn()}
+          displayMode="builder"
+          people={people}
+          parentLinks={[]}
+          partnerships={[]}
+          preferInitialSelectedFocus
+          selectedMinScale={0.82}
+        />
+      );
+
+      const graphTransform = parseGraphTransform(container.querySelector("svg > g")?.getAttribute("transform") || null);
+
+      expect(graphTransform).not.toBeNull();
+      expect(graphTransform?.scale).toBeCloseTo(0.82, 2);
+    } finally {
+      if (clientWidthDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, "clientWidth", clientWidthDescriptor);
+      } else {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      }
+
+      if (clientHeightDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", clientHeightDescriptor);
+      } else {
+        delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+      }
+    }
+  });
 });
