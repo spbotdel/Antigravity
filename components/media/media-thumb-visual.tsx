@@ -84,6 +84,7 @@ export function MediaThumbVisual({
   const [durationLabel, setDurationLabel] = useState<string | null>(() => durationLabelCache.get(asset.id) || null);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [isUsingVideoFallback, setIsUsingVideoFallback] = useState(false);
+  const [isMediaLoaded, setIsMediaLoaded] = useState(false);
   const shouldDisableDurationProbeForBrowser =
     typeof navigator !== "undefined" && isChromeAndroidVideoProbeQuirkBrowser(navigator.userAgent);
   const resolvedVideoSrc = isUsingVideoFallback && videoFallbackSrc ? videoFallbackSrc : thumbSource.kind === "video" ? thumbSource.src : null;
@@ -91,6 +92,7 @@ export function MediaThumbVisual({
   useEffect(() => {
     setHasLoadError(false);
     setIsUsingVideoFallback(false);
+    setIsMediaLoaded(false);
   }, [asset.id, thumbSource?.kind, thumbSource?.src, videoFallbackSrc]);
 
   useEffect(() => {
@@ -176,7 +178,18 @@ export function MediaThumbVisual({
   };
 
   return (
-    <div className={`${containerClassName} media-thumb-visual`} style={containerStyle}>
+    <div
+      className={`${containerClassName} media-thumb-visual${asset.kind === "video" ? " media-thumb-visual-video" : ""}`}
+      data-media-state={isMediaLoaded ? "ready" : "loading"}
+      style={containerStyle}
+    >
+      {asset.kind === "video" && !isMediaLoaded ? (
+        <span className="media-thumb-video-loading-fallback" aria-hidden="true">
+          <span className="media-thumb-video-loading-play">
+            <PlayIcon className="media-thumb-play-icon" />
+          </span>
+        </span>
+      ) : null}
       {resolvedVideoSrc ? (
         <video
           src={resolvedVideoSrc}
@@ -184,8 +197,10 @@ export function MediaThumbVisual({
           style={mediaStyle}
           muted
           playsInline
-          preload="auto"
+          preload="metadata"
           onError={handleThumbLoadError}
+          onLoadedData={() => setIsMediaLoaded(true)}
+          onCanPlay={() => setIsMediaLoaded(true)}
           onLoadedMetadata={(event) => {
             const nextDurationLabel = formatDurationLabel(event.currentTarget.duration);
             if (!nextDurationLabel) {
@@ -203,6 +218,7 @@ export function MediaThumbVisual({
           loading="lazy"
           className={mediaClassName}
           style={mediaStyle}
+          onLoad={() => setIsMediaLoaded(true)}
           onError={handleThumbLoadError}
         />
       ) : null}

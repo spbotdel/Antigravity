@@ -387,12 +387,16 @@ function formatVideoTime(totalSeconds: number) {
 }
 
 function playVideoSafely(video: HTMLVideoElement) {
-  const playResult = video.play();
-  if (playResult && typeof playResult.catch === "function") {
-    return playResult.catch(() => undefined);
-  }
+  try {
+    const playResult = video.play();
+    if (playResult && typeof playResult.then === "function") {
+      return playResult.then(() => true).catch(() => false);
+    }
 
-  return Promise.resolve();
+    return Promise.resolve(true);
+  } catch {
+    return Promise.resolve(false);
+  }
 }
 
 function isChromeAndroidVideoQuirkBrowser(userAgent: string) {
@@ -484,15 +488,18 @@ function LightboxVideoPlayer({
   nextNavigation?: ReactNode;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const showPhoneLayout = layout === "phone-lightbox";
+  const shouldStartMuted = showPhoneLayout && autoPlay;
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(shouldStartMuted);
   const [isSourceAttached, setIsSourceAttached] = useState(!requireExplicitStart);
   const [stageState, setStageState] = useState<VideoStageState>("loading");
   const [hasPlaybackStarted, setHasPlaybackStarted] = useState(false);
   const [hasPlaybackEnded, setHasPlaybackEnded] = useState(false);
+  const [hasAutoplayFailed, setHasAutoplayFailed] = useState(false);
   const emitVideoElementChange = useEffectEvent((node: HTMLVideoElement | null) => {
     onVideoElementChange?.(node);
   });
@@ -518,7 +525,9 @@ function LightboxVideoPlayer({
   useEffect(() => {
     setHasPlaybackStarted(false);
     setHasPlaybackEnded(false);
-  }, [asset.id, requireExplicitStart, src]);
+    setHasAutoplayFailed(false);
+    setIsMuted(shouldStartMuted);
+  }, [asset.id, requireExplicitStart, shouldStartMuted, src]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -539,6 +548,9 @@ function LightboxVideoPlayer({
       setStageState((currentStageState) => (currentStageState === nextStageState ? currentStageState : nextStageState));
       if (!video.ended && (!video.paused || event?.type === "play" || event?.type === "playing" || video.currentTime > 0)) {
         setHasPlaybackStarted(true);
+      }
+      if (event?.type === "play" || event?.type === "playing") {
+        setHasAutoplayFailed(false);
       }
       if (
         event?.type === "loadedmetadata" ||
@@ -573,11 +585,21 @@ function LightboxVideoPlayer({
     video.addEventListener("webkitbeginfullscreen", handleNativeFullscreenBegin as EventListener);
     video.addEventListener("webkitendfullscreen", handleNativeFullscreenEnd as EventListener);
 
+    let cancelled = false;
     if (autoPlay && isSourceAttached) {
-      void playVideoSafely(video);
+      if (shouldStartMuted) {
+        video.muted = true;
+        setIsMuted(true);
+      }
+      void playVideoSafely(video).then((didStart) => {
+        if (!cancelled && !didStart) {
+          setHasAutoplayFailed(true);
+        }
+      });
     }
 
     return () => {
+      cancelled = true;
       video.pause();
       emitVideoElementChange(null);
       emitIntrinsicSizeChange(null);
@@ -602,7 +624,11 @@ function LightboxVideoPlayer({
       video.load();
     }
 
-    await playVideoSafely(video);
+    setHasAutoplayFailed(false);
+    const didStart = await playVideoSafely(video);
+    if (!didStart) {
+      setHasAutoplayFailed(true);
+    }
   }
 
   async function togglePlayback() {
@@ -617,7 +643,11 @@ function LightboxVideoPlayer({
         setCurrentTime(0);
         setHasPlaybackEnded(false);
       }
-      await playVideoSafely(video);
+      setHasAutoplayFailed(false);
+      const didStart = await playVideoSafely(video);
+      if (!didStart) {
+        setHasAutoplayFailed(true);
+      }
       return;
     }
 
@@ -668,16 +698,16 @@ function LightboxVideoPlayer({
 
   const effectiveDuration = duration > 0 ? duration : 0;
   const effectiveCurrentTime = Math.min(currentTime, effectiveDuration || 0);
-  const showPhoneLayout = layout === "phone-lightbox";
+  const hasPoster = Boolean(poster);
   const isPhoneStageLoading = showPhoneLayout && stageState === "loading";
   const showPhoneChrome = showPhoneLayout && chromeVisible;
   const arePhoneControlsDisabled = isPhoneStageLoading || effectiveDuration <= 0;
   const showPhonePrimaryPlayOverlay =
     showPhoneLayout &&
     !requireExplicitStart &&
-    stageState !== "loading" &&
     !isPlaying &&
-    (!hasPlaybackStarted || hasPlaybackEnded);
+    (!hasPlaybackStarted || hasPlaybackEnded || hasAutoplayFailed || (!hasPoster && stageState === "loading"));
+  const showPhoneLoadingOverlay = isPhoneStageLoading && !showPhonePrimaryPlayOverlay;
 
   if (showPhoneLayout) {
     return (
@@ -696,6 +726,7 @@ function LightboxVideoPlayer({
             poster={poster}
             className="person-media-stage-video person-media-stage-video-surface person-media-stage-video-phone-surface"
             playsInline
+            muted={isMuted}
             autoPlay={autoPlay}
             preload={preload}
             onError={() => onError?.(videoRef.current)}
@@ -715,7 +746,7 @@ function LightboxVideoPlayer({
           >
             Ваш браузер не поддерживает встроенное воспроизведение видео.
           </video>
-          {isPhoneStageLoading ? (
+          {showPhoneLoadingOverlay ? (
             <div className="person-media-stage-video-loading-overlay" aria-live="polite">
               <span className="person-media-stage-video-loading-chip">Загружается видео</span>
             </div>
@@ -814,6 +845,7 @@ function LightboxVideoPlayer({
         poster={poster}
         className={`person-media-stage-video person-media-stage-video-surface${inline ? " person-media-stage-video-inline" : ""}`}
         playsInline
+        muted={isMuted}
         autoPlay={autoPlay}
         preload={preload}
         onError={() => onError?.(videoRef.current)}
@@ -1034,7 +1066,7 @@ function MediaPreview({
           asset={asset}
           src={mediaUrl || ""}
           poster={thumbSource?.kind === "image" ? thumbSource.src : undefined}
-          autoPlay={autoPlayVideo && !isChromeAndroidVideoBrowser}
+          autoPlay={autoPlayVideo}
           requireExplicitStart={false}
           preload="metadata"
           onVideoElementChange={onLightboxVideoElementChange}

@@ -366,6 +366,42 @@ describe("person media gallery", () => {
     expect(screen.getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
   });
 
+  it("keeps a video thumbnail fallback visible when a generated preview fails", () => {
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-photo",
+            title: "Семейное фото",
+            storage_path: "trees/tree-1/media/photo/media-photo/photo.jpg"
+          }),
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            provider: "cloudflare_r2",
+            preview_status: "ready",
+            title: "Семейное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          })
+        ]}
+      />
+    );
+
+    const thumbButton = screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" });
+    const thumbVisual = thumbButton.querySelector(".media-thumb-visual-video");
+    const thumbImage = thumbButton.querySelector("img");
+    expect(thumbVisual).toHaveAttribute("data-media-state", "loading");
+    expect(thumbButton.querySelector(".media-thumb-video-loading-fallback")).not.toBeNull();
+    expect(thumbImage).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
+
+    fireEvent.error(thumbImage as HTMLImageElement);
+
+    expect(thumbButton.querySelector(".person-media-thumb-video-placeholder")).not.toBeNull();
+    fireEvent.click(thumbButton);
+    expect(thumbButton).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("uses preview variants for fresh photo stage, thumbs, and fullscreen view", () => {
     render(
       <PersonMediaGallery
@@ -628,7 +664,8 @@ describe("person media gallery", () => {
       expect(stage).not.toBeNull();
       expect(video).not.toBeNull();
       expect(stage).toHaveAttribute("data-stage-state", "loading");
-      expect(within(dialog).getByText("Загружается видео")).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
+      expect(within(dialog).queryByText("Загружается видео")).not.toBeInTheDocument();
       expect(within(dialog).queryByLabelText("Громкость")).not.toBeInTheDocument();
       expect(dialog.querySelector(".person-media-stage-video-time")).toBeNull();
 
@@ -650,7 +687,6 @@ describe("person media gallery", () => {
       readyState = 1;
       fireEvent.loadedMetadata(video as HTMLVideoElement);
       expect(stage).toHaveAttribute("data-stage-state", "ready");
-      expect(within(dialog).queryByText("Загружается видео")).not.toBeInTheDocument();
       expect(within(dialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
 
       pausedState = false;
@@ -664,7 +700,7 @@ describe("person media gallery", () => {
     }
   });
 
-  it("uses the dedicated phone video mode on Chrome Android while preserving the cautious startup path", async () => {
+  it("uses the dedicated phone video mode on Chrome Android with muted best-effort autoplay", async () => {
     const originalUserAgentDescriptor = Object.getOwnPropertyDescriptor(window.navigator, "userAgent");
     const originalInnerWidthDescriptor = Object.getOwnPropertyDescriptor(window, "innerWidth");
 
@@ -705,11 +741,13 @@ describe("person media gallery", () => {
       expect(video).not.toBeNull();
       expect(video).toHaveAttribute("src", "/api/media/media-video?source=person-media-lightbox-video");
       expect(video?.hasAttribute("controls")).toBe(false);
-      expect(video?.autoplay).toBe(false);
+      expect(video?.autoplay).toBe(true);
+      expect(video?.muted).toBe(true);
       expect(video?.preload).toBe("metadata");
       expect(dialog.querySelector(".media-lightbox-player-stage")).toBeNull();
       expect(dialog.querySelector(".person-media-stage-video-top-actions")).not.toBeNull();
       expect(within(dialog).queryByRole("button", { name: "Загрузить видео" })).toBeNull();
+      expect(within(dialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
       let readyState = 0;
       Object.defineProperty(video as HTMLVideoElement, "readyState", {
         configurable: true,
@@ -728,7 +766,7 @@ describe("person media gallery", () => {
       expect(within(dialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
       expect(within(dialog).getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
       expect(within(dialog).getByLabelText("Позиция видео")).toBeInTheDocument();
-      expect(within(dialog).getByRole("button", { name: "Выключить звук" })).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Включить звук" })).toBeInTheDocument();
       expect(within(dialog).queryByLabelText("Громкость")).not.toBeInTheDocument();
     } finally {
       if (originalUserAgentDescriptor) {
@@ -740,6 +778,58 @@ describe("person media gallery", () => {
         });
       }
 
+      if (originalInnerWidthDescriptor) {
+        Object.defineProperty(window, "innerWidth", originalInnerWidthDescriptor);
+      }
+    }
+  });
+
+  it("keeps phone video previews visible when mobile autoplay is blocked", async () => {
+    const originalInnerWidthDescriptor = Object.getOwnPropertyDescriptor(window, "innerWidth");
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockImplementation(() => Promise.reject(new DOMException("Autoplay blocked", "NotAllowedError")));
+
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+
+    try {
+      render(
+        <PersonMediaGallery
+          media={[
+            createMediaAsset({
+              id: "media-video",
+              kind: "video",
+              title: "Архивное видео",
+              provider: "cloudflare_r2",
+              preview_status: "ready",
+              mime_type: "video/mp4",
+              storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+            })
+          ]}
+          showStage={false}
+          showStickyFooter={false}
+          lightboxOnly
+          openLightboxOnMount
+          initialActiveMediaId="media-video"
+          lightboxAriaLabelPrefix="Просмотр архива"
+        />
+      );
+
+      const dialog = screen.getByRole("dialog", { name: "Просмотр архива: Архивное видео" });
+      const video = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement | null;
+      expect(video).not.toBeNull();
+      expect(video).toHaveAttribute("poster", "/api/media/media-video?variant=thumb");
+      expect(video?.autoplay).toBe(true);
+      expect(video?.muted).toBe(true);
+      expect(within(dialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
+      expect(within(dialog).queryByText("Загружается видео")).not.toBeInTheDocument();
+
+      await waitFor(() => expect(playSpy).toHaveBeenCalled());
+      expect(within(dialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
+    } finally {
       if (originalInnerWidthDescriptor) {
         Object.defineProperty(window, "innerWidth", originalInnerWidthDescriptor);
       }
@@ -1172,6 +1262,13 @@ describe("person media gallery", () => {
       expect(thumbVideos).toHaveLength(2);
       expect(thumbVideos[0]).toHaveAttribute("src", "/api/media/media-video-1?source=person-media-thumb-video");
       expect(thumbVideos[1]).toHaveAttribute("src", "/api/media/media-video-2?source=person-media-thumb-video");
+      expect(dialog.querySelectorAll(".media-lightbox-phone-video-strip .media-thumb-video-loading-fallback")).toHaveLength(2);
+
+      const firstThumbButton = within(dialog).getByRole("button", { name: "Показать медиа 1: Архивное видео 1" });
+      const secondThumbButton = within(dialog).getByRole("button", { name: "Показать медиа 2: Архивное видео 2" });
+      expect(firstThumbButton).toHaveAttribute("aria-pressed", "true");
+      expect(secondThumbButton).toHaveAttribute("aria-pressed", "false");
+      expect(firstThumbButton.querySelector(".media-thumb-visual-video")).toHaveAttribute("data-media-state", "loading");
 
       const firstVideo = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement;
       let firstReadyState = 0;
@@ -1212,6 +1309,11 @@ describe("person media gallery", () => {
       fireEvent.loadedMetadata(nextVideo);
 
       expect(nextDialog).toHaveClass("media-lightbox-phone-video-mode");
+      const nextFirstThumbButton = within(nextDialog).getByRole("button", { name: "Показать медиа 1: Архивное видео 1" });
+      const nextSecondThumbButton = within(nextDialog).getByRole("button", { name: "Показать медиа 2: Архивное видео 2" });
+      expect(nextFirstThumbButton).toHaveAttribute("aria-pressed", "false");
+      expect(nextSecondThumbButton).toHaveAttribute("aria-pressed", "true");
+      expect(nextSecondThumbButton.querySelector(".media-thumb-video-loading-fallback")).not.toBeNull();
       expect(within(nextDialog).getByRole("button", { name: "Смотреть видео" })).toBeInTheDocument();
       expect(within(nextDialog).queryByText("Загружается видео")).not.toBeInTheDocument();
     } finally {
