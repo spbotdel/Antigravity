@@ -964,11 +964,11 @@ Future media work must preserve these rules:
 
 ---
 
-# 2026-04-04 — Office Word preview depends on `CF_R2_PUBLIC_BASE_URL`, while download stays the safe fallback
+# 2026-04-04 — Office document preview depends on `CF_R2_PUBLIC_BASE_URL`, while download stays the safe fallback
 
 ### Decision
 
-Office `.doc/.docx` preview is not a generic right of all document records.
+Microsoft Office document preview (`.doc/.docx`, `.xls/.xlsx`, `.ppt/.pptx`, plus macro-enabled variants) is not a generic right of all document records.
 
 It depends on:
 
@@ -979,7 +979,7 @@ When those preconditions are not met, the product should prefer download/open be
 
 ### Why
 
-Word document preview relies on a publicly reachable R2 or custom-domain base that an iframe-style viewer can fetch directly.
+Office document preview relies on a publicly reachable R2 or custom-domain base that an iframe-style viewer can fetch directly.
 
 Private signed URLs are still correct for access control, but they are not the same thing as a stable preview base.
 

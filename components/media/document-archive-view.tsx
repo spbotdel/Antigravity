@@ -21,7 +21,7 @@ interface DocumentArchiveViewProps {
 
 const MAX_DOCUMENT_FILE_SIZE_BYTES = 100 * 1024 * 1024;
 
-const DOCUMENT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf";
+const DOCUMENT_ACCEPT = ".pdf,.doc,.docx,.docm,.xls,.xlsx,.xlsm,.ppt,.pptx,.pptm,.txt,.csv,.rtf";
 
 function formatFileSize(sizeBytes: number | null | undefined) {
     if (!sizeBytes) {

@@ -203,7 +203,7 @@ Document handling must preserve a clear split between:
 - attachment-style download when preview is not appropriate
 
 Current practical rules:
-- Office `.doc/.docx` iframe preview depends on `CF_R2_PUBLIC_BASE_URL`
+- Microsoft Office document iframe preview (`.doc/.docx`, `.xls/.xlsx`, `.ppt/.pptx`, plus macro-enabled variants) depends on `CF_R2_PUBLIC_BASE_URL`
 - if `CF_R2_PUBLIC_BASE_URL` is absent or the document is not preview-compatible, the UI should fall back to download/open flows instead of pretending preview is available
 - audio and document downloads should remain attachment-friendly where the product explicitly expects download behavior
 

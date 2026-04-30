@@ -410,6 +410,28 @@ describe("PowerPoint document support", () => {
             "https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.pptx"
         );
     });
+
+    it("treats macro-enabled PowerPoint and Excel assets as Office-preview candidates", () => {
+        const powerPointAsset = createDocumentAsset({
+            title: "family-history.pptm",
+            storage_path: "trees/tree-1/media/document/document-1/family-history.pptm",
+            mime_type: "application/vnd.ms-powerpoint.presentation.macroenabled.12",
+        });
+        const excelAsset = createDocumentAsset({
+            title: "family-budget.xlsx",
+            storage_path: "trees/tree-1/media/document/document-2/family-budget.xlsx",
+            mime_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+
+        expect(isOfficeWordDocumentAsset(powerPointAsset)).toBe(true);
+        expect(buildCloudflareOfficeDocumentPublicUrl(powerPointAsset, "https://media.example.com/archive/")).toBe(
+            "https://media.example.com/archive/trees/tree-1/media/document/document-1/family-history.pptm"
+        );
+        expect(isOfficeWordDocumentAsset(excelAsset)).toBe(true);
+        expect(buildCloudflareOfficeDocumentPublicUrl(excelAsset, "https://media.example.com/archive/")).toBe(
+            "https://media.example.com/archive/trees/tree-1/media/document/document-2/family-budget.xlsx"
+        );
+    });
 });
 
 function mockAudioPlayback() {
@@ -503,7 +525,8 @@ describe("Audio archive player state", () => {
         expect(document.querySelector(".audio-archive-upload-status")).toBeNull();
         const panel = document.querySelector(".tree-upload-panel");
         expect(panel).not.toBeNull();
-        expect(within(panel as HTMLElement).getByText("voice-note.mp3")).toBeInTheDocument();
+        expect(within(panel as HTMLElement).getByText("Загрузка завершена")).toBeInTheDocument();
+        expect(within(panel as HTMLElement).getByText("1 файл обработано.")).toBeInTheDocument();
     });
 
     it("routes audio row download through explicit attachment mode", () => {
@@ -688,7 +711,7 @@ describe("Document archive upload state", () => {
             })
         );
 
-        const input = view.container.querySelector('input[type="file"][accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf"]') as HTMLInputElement | null;
+        const input = view.container.querySelector('input[type="file"][accept=".pdf,.doc,.docx,.docm,.xls,.xlsx,.xlsm,.ppt,.pptx,.pptm,.txt,.csv,.rtf"]') as HTMLInputElement | null;
         expect(input).not.toBeNull();
 
         const file = new File([new Uint8Array([1, 2, 3])], "archive-deck.pptx", {
@@ -765,6 +788,34 @@ describe("document preview integration", () => {
 
         expect(screen.getByRole("button", { name: "Открыть" })).toBeInTheDocument();
         expect(document.querySelector('.document-archive-actions a[href="/api/media/document-1?download=1"]')).not.toBeNull();
+    });
+
+    it("shows an Office preview entrypoint for supported PowerPoint and Excel files", () => {
+        render(
+            createElement(DocumentArchiveView, {
+                treeId: "tree-1",
+                slug: "demo-family",
+                canEdit: false,
+                media: [
+                    createDocumentAsset({
+                        id: "document-pptm",
+                        title: "family-history.pptm",
+                        storage_path: "trees/tree-1/media/document/document-pptm/family-history.pptm",
+                        mime_type: "application/vnd.ms-powerpoint.presentation.macroenabled.12",
+                    }),
+                    createDocumentAsset({
+                        id: "document-xlsx",
+                        title: "family-budget.xlsx",
+                        storage_path: "trees/tree-1/media/document/document-xlsx/family-budget.xlsx",
+                        mime_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    }),
+                ],
+                cloudflareR2PublicBaseUrl: "https://media.example.com/archive",
+                onMediaChange: () => undefined,
+            })
+        );
+
+        expect(screen.getAllByRole("button", { name: "Открыть" })).toHaveLength(2);
     });
 
     it("keeps docx download-only when the public Cloudflare base url is missing", () => {

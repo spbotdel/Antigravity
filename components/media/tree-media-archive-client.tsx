@@ -3497,7 +3497,7 @@ export function TreeMediaArchiveClient({
       ? "image/*"
       : mode === "video"
         ? "video/*"
-        : "image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx";
+        : "image/*,video/*,audio/*,.pdf,.doc,.docx,.docm,.txt,.rtf,.xls,.xlsx,.xlsm,.ppt,.pptx,.pptm";
   const isDedicatedMode = mode === "audio" || mode === "document";
   function stageArchiveFiles(files: File[]) {
     if (!files.length) {
@@ -4322,7 +4322,7 @@ export function TreeMediaArchiveClient({
               className="builder-native-file-input"
               type="file"
               multiple
-              accept={mode === "photo" ? "image/*" : mode === "video" ? "video/*" : "image/*,video/*,.pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx"}
+              accept={mode === "photo" ? "image/*" : mode === "video" ? "video/*" : "image/*,video/*,.pdf,.doc,.docx,.docm,.txt,.rtf,.xls,.xlsx,.xlsm,.ppt,.pptx,.pptm"}
               onChange={handleArchiveFileSelection}
             />
             <Button type="button" variant="secondary" onClick={() => reviewFileInputRef.current?.click()}>

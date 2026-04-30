@@ -169,7 +169,7 @@ function getBuilderUploadScopeConfig(scope: BuilderUploadScope) {
   return {
     heading: "Документы",
     inputLabel: "Документы",
-    accept: ".pdf,.doc,.docx,.txt,.rtf,.xls,.xlsx,.ppt,.pptx",
+    accept: ".pdf,.doc,.docx,.docm,.txt,.rtf,.xls,.xlsx,.xlsm,.ppt,.pptx,.pptm",
     chooseButtonLabel: "Загрузить документы"
   };
 }

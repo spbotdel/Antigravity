@@ -9,12 +9,25 @@ const OFFICE_DOCUMENT_PREVIEW_TIMEOUT_MS = 7000;
 const MICROSOFT_OFFICE_VIEWER_BASE_URL = "https://view.officeapps.live.com/op/view.aspx?src=";
 const OFFICE_DOCUMENT_MIME_TYPES = new Set([
   "application/msword",
+  "application/vnd.ms-word.document.macroenabled.12",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-excel.sheet.macroenabled.12",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.ms-powerpoint.presentation.macroenabled.12",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
 ]);
 const POWERPOINT_DOCUMENT_MIME_TYPES = new Set([
   "application/vnd.ms-powerpoint",
+  "application/vnd.ms-powerpoint.presentation.macroenabled.12",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
 ]);
+const OFFICE_DOCUMENT_EXTENSIONS = new Set([".doc", ".docx", ".docm", ".xls", ".xlsx", ".xlsm", ".ppt", ".pptx", ".pptm", ".ppsx"]);
+const POWERPOINT_DOCUMENT_EXTENSIONS = new Set([".ppt", ".pptx", ".pptm", ".ppsx"]);
 
 function getFileExtension(value: string | null | undefined) {
   if (!value) {
@@ -42,6 +55,8 @@ export function isOfficeWordDocumentAsset(asset: Pick<MediaAssetRecord, "mime_ty
   const mimeType = asset.mime_type?.trim().toLowerCase() || "";
   if (
     OFFICE_DOCUMENT_MIME_TYPES.has(mimeType) ||
+    mimeType.includes("spreadsheet") ||
+    mimeType.includes("excel") ||
     mimeType.includes("presentation") ||
     mimeType.includes("powerpoint")
   ) {
@@ -49,17 +64,12 @@ export function isOfficeWordDocumentAsset(asset: Pick<MediaAssetRecord, "mime_ty
   }
 
   const titleExtension = getFileExtension(asset.title);
-  if (titleExtension === ".doc" || titleExtension === ".docx" || titleExtension === ".ppt" || titleExtension === ".pptx") {
+  if (titleExtension && OFFICE_DOCUMENT_EXTENSIONS.has(titleExtension)) {
     return true;
   }
 
   const storagePathExtension = getFileExtension(asset.storage_path);
-  return (
-    storagePathExtension === ".doc" ||
-    storagePathExtension === ".docx" ||
-    storagePathExtension === ".ppt" ||
-    storagePathExtension === ".pptx"
-  );
+  return Boolean(storagePathExtension && OFFICE_DOCUMENT_EXTENSIONS.has(storagePathExtension));
 }
 
 export function isOfficePowerPointDocumentAsset(asset: Pick<MediaAssetRecord, "mime_type" | "storage_path" | "title">) {
@@ -73,12 +83,12 @@ export function isOfficePowerPointDocumentAsset(asset: Pick<MediaAssetRecord, "m
   }
 
   const titleExtension = getFileExtension(asset.title);
-  if (titleExtension === ".ppt" || titleExtension === ".pptx") {
+  if (titleExtension && POWERPOINT_DOCUMENT_EXTENSIONS.has(titleExtension)) {
     return true;
   }
 
   const storagePathExtension = getFileExtension(asset.storage_path);
-  return storagePathExtension === ".ppt" || storagePathExtension === ".pptx";
+  return Boolean(storagePathExtension && POWERPOINT_DOCUMENT_EXTENSIONS.has(storagePathExtension));
 }
 
 export function buildCloudflareOfficeDocumentPublicUrl(
