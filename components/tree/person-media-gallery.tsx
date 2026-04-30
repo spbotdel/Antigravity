@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { MediaThumbVisual } from "@/components/media/media-thumb-visual";
+import { MediaThumbVisual, type MediaThumbVisualLoadState } from "@/components/media/media-thumb-visual";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Play, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { type CSSProperties, type ReactNode, type TouchEvent as ReactTouchEvent, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -30,6 +30,7 @@ interface PersonMediaGalleryProps {
   media: MediaAsset[];
   shareToken?: string | null;
   optimisticVideoPreviewUrls?: Readonly<Record<string, string>>;
+  lightboxResolvedThumbUrlsByMediaId?: Readonly<Record<string, string>>;
   emptyMessage?: string;
   emptyTitle?: string | null;
   emptyActions?: ReactNode;
@@ -207,6 +208,7 @@ function MediaThumb({
   active,
   shareToken,
   optimisticVideoPreviewUrls,
+  lightboxResolvedThumbUrlsByMediaId,
   onSelect,
   index,
   isAvatar,
@@ -215,11 +217,15 @@ function MediaThumb({
   selectionControl,
   actionMenu,
   disableDurationProbe = false,
+  staticVideoThumbOnly = false,
+  thumbLoadStates,
+  onThumbLoadStateChange,
 }: {
   asset: MediaAsset;
   active: boolean;
   shareToken?: string | null;
   optimisticVideoPreviewUrls?: Readonly<Record<string, string>>;
+  lightboxResolvedThumbUrlsByMediaId?: Readonly<Record<string, string>>;
   onSelect: () => void;
   index: number;
   isAvatar: boolean;
@@ -240,16 +246,33 @@ function MediaThumb({
     onDelete: () => void;
   };
   disableDurationProbe?: boolean;
+  staticVideoThumbOnly?: boolean;
+  thumbLoadStates?: Readonly<Record<string, MediaThumbVisualLoadState>>;
+  onThumbLoadStateChange?: (key: string, state: MediaThumbVisualLoadState) => void;
 }) {
-  const thumbSource = resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
+  const lightboxResolvedThumbUrl = asset.kind === "video" ? lightboxResolvedThumbUrlsByMediaId?.[asset.id] : null;
+  const thumbSource = lightboxResolvedThumbUrl
+    ? {
+        kind: "image" as const,
+        src: lightboxResolvedThumbUrl,
+      }
+    : resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
+  const shouldUseVideoFallback = !(staticVideoThumbOnly && asset.kind === "video");
   const resolvedThumbSource =
     thumbSource ??
-    (isInlineVideoAsset(asset)
+    (shouldUseVideoFallback && isInlineVideoAsset(asset)
       ? {
           kind: "video" as const,
           src: withMediaSourceContext(buildMediaOpenRouteUrl(asset, shareToken), "person-media-thumb-video"),
         }
       : null);
+  const controlledThumbLoadKey =
+    staticVideoThumbOnly && asset.kind === "video" && resolvedThumbSource
+      ? `${asset.id}:${resolvedThumbSource.kind}:${resolvedThumbSource.src}`
+      : null;
+  const controlledThumbLoadState = controlledThumbLoadKey
+    ? (thumbLoadStates?.[controlledThumbLoadKey] ?? "loading")
+    : undefined;
   const mediaUrl = resolvedThumbSource?.src || buildMediaRouteUrl(asset.id, { shareToken });
   const thumbFallback = (
     <span className="person-media-thumb-visual">
@@ -291,6 +314,12 @@ function MediaThumb({
           placeholder={thumbFallback}
           overlayContent={isAvatar ? <span className="person-media-thumb-badge">Аватар</span> : null}
           disableDurationProbe={disableDurationProbe}
+          controlledLoadState={controlledThumbLoadState}
+          onLoadStateChange={
+            controlledThumbLoadKey
+              ? (state) => onThumbLoadStateChange?.(controlledThumbLoadKey, state)
+              : undefined
+          }
         />
       ) : (
         thumbFallback
@@ -1115,6 +1144,7 @@ export function PersonMediaGallery({
   media,
   shareToken,
   optimisticVideoPreviewUrls,
+  lightboxResolvedThumbUrlsByMediaId,
   emptyMessage = "Для этого человека пока не добавлено медиа.",
   emptyTitle = "Галерея пока пуста",
   emptyActions = null,
@@ -1175,6 +1205,20 @@ export function PersonMediaGallery({
   const [lightboxContentSize, setLightboxContentSize] = useState({ width: 0, height: 0 });
   const [activeMediaIntrinsicSize, setActiveMediaIntrinsicSize] = useState<{ width: number; height: number } | null>(null);
   const [isPhoneVideoSession, setIsPhoneVideoSession] = useState(false);
+  const [lightboxThumbLoadStates, setLightboxThumbLoadStates] = useState<Record<string, MediaThumbVisualLoadState>>({});
+
+  function updateLightboxThumbLoadState(key: string, state: MediaThumbVisualLoadState) {
+    setLightboxThumbLoadStates((currentStates) => {
+      if (currentStates[key] === state) {
+        return currentStates;
+      }
+
+      return {
+        ...currentStates,
+        [key]: state,
+      };
+    });
+  }
 
   function ensureLightboxHistoryEntry() {
     if (typeof window === "undefined" || lightboxHistoryEntryIdRef.current) {
@@ -2026,6 +2070,7 @@ export function PersonMediaGallery({
                         active={asset.id === activeAsset.id}
                         shareToken={shareToken}
                         optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+                        lightboxResolvedThumbUrlsByMediaId={lightboxResolvedThumbUrlsByMediaId}
                         onSelect={() => {
                           pauseActiveLightboxVideo();
                           setActiveMediaId(asset.id);
@@ -2034,6 +2079,9 @@ export function PersonMediaGallery({
                         isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
                         compact
                         disableDurationProbe={lightboxOnly}
+                        staticVideoThumbOnly
+                        thumbLoadStates={lightboxThumbLoadStates}
+                        onThumbLoadStateChange={updateLightboxThumbLoadState}
                         thumbRef={(node) => {
                           if (node) {
                             lightboxThumbRefs.current.set(asset.id, node);
@@ -2168,6 +2216,7 @@ export function PersonMediaGallery({
                 active={asset.id === activeAsset.id}
                 shareToken={shareToken}
                 optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+                lightboxResolvedThumbUrlsByMediaId={lightboxResolvedThumbUrlsByMediaId}
                 onSelect={() => {
                   pauseActiveLightboxVideo();
                   setActiveMediaId(asset.id);
@@ -2176,6 +2225,9 @@ export function PersonMediaGallery({
                 isAvatar={asset.id === avatarMediaId && isPhotoAsset(asset)}
                 compact
                 disableDurationProbe={lightboxOnly}
+                staticVideoThumbOnly
+                thumbLoadStates={lightboxThumbLoadStates}
+                onThumbLoadStateChange={updateLightboxThumbLoadState}
                 thumbRef={(node) => {
                   if (node) {
                     lightboxThumbRefs.current.set(asset.id, node);

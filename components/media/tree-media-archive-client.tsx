@@ -4069,6 +4069,7 @@ export function TreeMediaArchiveClient({
           media={viewerMedia}
           shareToken={shareToken}
           optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+          lightboxResolvedThumbUrlsByMediaId={resolvedThumbUrlsByMediaId}
           showStage={false}
           showStickyFooter={false}
           lightboxOnly

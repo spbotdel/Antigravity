@@ -9,6 +9,7 @@ import { logMediaError } from "@/lib/utils";
 
 const MAX_DURATION_LABEL_CACHE_SIZE = 200;
 const durationLabelCache = new Map<string, string>();
+export type MediaThumbVisualLoadState = "loading" | "loaded" | "error";
 
 function isChromeAndroidVideoProbeQuirkBrowser(userAgent: string) {
   const normalized = userAgent.toLowerCase();
@@ -62,6 +63,8 @@ interface MediaThumbVisualProps {
   showVideoChrome?: boolean;
   disableDurationProbe?: boolean;
   videoFallbackSrc?: string | null;
+  controlledLoadState?: MediaThumbVisualLoadState;
+  onLoadStateChange?: (state: MediaThumbVisualLoadState) => void;
   containerStyle?: CSSProperties;
   mediaStyle?: CSSProperties;
 }
@@ -78,6 +81,8 @@ export function MediaThumbVisual({
   showVideoChrome = true,
   disableDurationProbe = false,
   videoFallbackSrc = null,
+  controlledLoadState,
+  onLoadStateChange,
   containerStyle,
   mediaStyle
 }: MediaThumbVisualProps) {
@@ -152,7 +157,9 @@ export function MediaThumbVisual({
     };
   }, [asset, disableDurationProbe, durationLabel, resolvedVideoSrc, shareToken, shouldDisableDurationProbeForBrowser]);
 
-  if (!thumbSource || hasLoadError) {
+  const effectiveLoadState = controlledLoadState ?? (hasLoadError ? "error" : isMediaLoaded ? "loaded" : "loading");
+
+  if (!thumbSource || effectiveLoadState === "error") {
     return <>{placeholder}</>;
   }
 
@@ -160,6 +167,7 @@ export function MediaThumbVisual({
   const handleThumbLoadError = () => {
     if (asset.kind === "video" && !isUsingVideoFallback && videoFallbackSrc && thumbSource.kind !== "video") {
       setIsUsingVideoFallback(true);
+      onLoadStateChange?.("loading");
       return;
     }
 
@@ -175,15 +183,21 @@ export function MediaThumbVisual({
       src: resolvedVideoSrc || thumbSource.src,
     });
     setHasLoadError(true);
+    onLoadStateChange?.("error");
+  };
+
+  const handleThumbLoadSuccess = () => {
+    setIsMediaLoaded(true);
+    onLoadStateChange?.("loaded");
   };
 
   return (
     <div
       className={`${containerClassName} media-thumb-visual${asset.kind === "video" ? " media-thumb-visual-video" : ""}`}
-      data-media-state={isMediaLoaded ? "ready" : "loading"}
+      data-media-state={effectiveLoadState === "loaded" ? "ready" : "loading"}
       style={containerStyle}
     >
-      {asset.kind === "video" && !isMediaLoaded ? (
+      {asset.kind === "video" && effectiveLoadState !== "loaded" ? (
         <span className="media-thumb-video-loading-fallback" aria-hidden="true">
           <span className="media-thumb-video-loading-play">
             <PlayIcon className="media-thumb-play-icon" />
@@ -199,8 +213,8 @@ export function MediaThumbVisual({
           playsInline
           preload="metadata"
           onError={handleThumbLoadError}
-          onLoadedData={() => setIsMediaLoaded(true)}
-          onCanPlay={() => setIsMediaLoaded(true)}
+          onLoadedData={handleThumbLoadSuccess}
+          onCanPlay={handleThumbLoadSuccess}
           onLoadedMetadata={(event) => {
             const nextDurationLabel = formatDurationLabel(event.currentTarget.duration);
             if (!nextDurationLabel) {
@@ -218,7 +232,7 @@ export function MediaThumbVisual({
           loading="lazy"
           className={mediaClassName}
           style={mediaStyle}
-          onLoad={() => setIsMediaLoaded(true)}
+          onLoad={handleThumbLoadSuccess}
           onError={handleThumbLoadError}
         />
       ) : null}
