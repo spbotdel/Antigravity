@@ -769,6 +769,29 @@ describe("document preview integration", () => {
         );
     }
 
+    function OfficePreviewFocusHarness() {
+        const [open, setOpen] = useState(false);
+
+        return createElement(
+            "div",
+            null,
+            createElement(
+                "button",
+                {
+                    type: "button",
+                    onClick: () => setOpen(true),
+                },
+                "Open office preview"
+            ),
+            createElement(DocumentPreviewDialog, {
+                asset: createDocumentAsset(),
+                cloudflareR2PublicBaseUrl: "https://media.example.com/archive",
+                open,
+                onClose: () => setOpen(false),
+            })
+        );
+    }
+
     it("builds a public Cloudflare Office document url from the configured base url", () => {
         const asset = createDocumentAsset({
             storage_path: "trees/tree 1/media/document/document-1/family history.docx",
@@ -818,6 +841,29 @@ describe("document preview integration", () => {
 
         fireEvent.keyDown(document, { key: "Escape" });
         await waitFor(() => expect(screen.queryByRole("dialog", { name: "family-book.pdf" })).toBeNull());
+        expect(opener).toHaveFocus();
+    });
+
+    it("keeps Escape available after an Office preview iframe load takes focus", async () => {
+        render(createElement(OfficePreviewFocusHarness));
+
+        const opener = screen.getByRole("button", { name: "Open office preview" });
+        opener.focus();
+        fireEvent.click(opener);
+
+        const dialog = screen.getByRole("dialog", { name: "family-history.docx" });
+        const iframe = document.querySelector(".document-preview-iframe") as HTMLIFrameElement | null;
+        expect(iframe).not.toBeNull();
+
+        iframe?.focus();
+        expect(iframe).toHaveFocus();
+        fireEvent.load(iframe as HTMLIFrameElement);
+
+        await waitFor(() => expect(document.activeElement).not.toBe(iframe), { timeout: 1500 });
+        expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+        fireEvent.keyDown(document, { key: "Escape" });
+        await waitFor(() => expect(screen.queryByRole("dialog", { name: "family-history.docx" })).toBeNull());
         expect(opener).toHaveFocus();
     });
 

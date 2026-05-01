@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useCallback, useEffect, useId, useRef } from "react";
 import type { MediaAssetRecord } from "@/lib/types";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -66,6 +66,17 @@ export function DocumentPreviewDialog({ asset, shareToken, cloudflareR2PublicBas
     const overlayRef = useRef<HTMLDivElement | null>(null);
     const restoreFocusRef = useRef<HTMLElement | null>(null);
     const titleId = useId();
+
+    const restoreDialogFocusAfterPreviewLoad = useCallback((iframe: HTMLIFrameElement) => {
+        const delays = [0, 100, 500, 1000];
+        for (const delay of delays) {
+            window.setTimeout(() => {
+                if (overlayRef.current && document.activeElement === iframe) {
+                    overlayRef.current.focus();
+                }
+            }, delay);
+        }
+    }, []);
 
     useEffect(() => {
         if (!open) return;
@@ -180,12 +191,15 @@ export function DocumentPreviewDialog({ asset, shareToken, cloudflareR2PublicBas
                             src={mediaUrl}
                             className="document-preview-iframe"
                             title={asset.title || "Документ"}
+                            tabIndex={-1}
+                            onLoad={(event) => restoreDialogFocusAfterPreviewLoad(event.currentTarget)}
                         />
                     ) : officePreviewUrl ? (
                         <OfficeDocumentPreview
                             publicFileUrl={officePreviewUrl}
                             title={asset.title}
                             downloadUrl={downloadUrl}
+                            onPreviewLoad={restoreDialogFocusAfterPreviewLoad}
                         />
                     ) : (
                         <div className="document-preview-fallback">

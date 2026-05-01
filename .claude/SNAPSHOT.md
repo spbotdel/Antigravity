@@ -2,7 +2,7 @@
 
 *Operational memory only. Not the canonical architecture document.*
 
-*Last updated: 2026-04-13*
+*Last updated: 2026-04-16*
 
 ## Current State
 
@@ -12,7 +12,7 @@
 - Backend/data layer: `Supabase` auth, database, RLS + S3-compatible object storage
 - Dev environment: linked to Supabase project `untwxmiqqwepopeepzqe`
 - Legacy static viewer: preserved in `legacy/` and old `index.html`, but no longer the main runtime
-- Current workstream: family archive foundation, unified upload, variant-aware media delivery, and Cloudflare R2 groundwork are already in the worktree; the latest local pass added responsive viewer/media behavior for phone and tablet, and current effort should focus on hosted/real-device QA plus remaining archive/member validation
+- Current workstream: family archive foundation, uploader/manual albums, variant-aware media delivery, and Cloudflare R2 groundwork are already in the worktree; current effort should focus on stabilizing `smoke:media` and finishing archive/viewer QA
 - Target media platform: `Cloudflare` for the next binary/media delivery stage, while the current Yandex path remains transitional compatibility.
 
 ## Current Active Task
@@ -47,8 +47,6 @@
 - [x] Archive upload review flow exists with batch confirmation and discard guard.
 - [x] Variant-aware media delivery foundation exists for `thumb/small/medium` photo previews.
 - [x] Cloudflare R2 runtime/config foundation is present for the next media storage stage.
-- [x] Viewer info rail now adapts by viewport: desktop keeps a resizable side rail, tablet uses an overlay rail, and phone uses a bottom sheet with `peek/open/hidden` behavior.
-- [x] Archive and viewer media controls now have mobile-specific tabs, coarse-pointer touch targets, and bounded lightbox navigation instead of one shared over-broad responsive rule set.
 - [ ] Finish the current `family-tree-canvas` interaction and visual pass.
 - [ ] Validate `Участники`, invites and share links as one coherent access-management flow.
 - [ ] QA the reworked builder layout so the tree keeps visual priority on desktop and mobile.
@@ -60,7 +58,6 @@
 - [ ] Cloudflare target foundations exist in code/env, but the actual migration away from the transitional Yandex path is still incomplete.
 - [ ] Preview variant foundations exist, but rollout and QA are still incomplete; originals should not leak back into archive/viewer/builder previews.
 - [ ] The tree-level family archive foundation exists, but sticky actions, large viewer/lightbox flow, and broader end-to-end QA are still unfinished.
-- [ ] The latest phone/tablet viewer and archive responsive pass is local-first and still needs practical QA on hosted `Vercel` plus real device widths.
 - [ ] Builder canvas resize and overlay inspector still need practical QA on desktop, tablet and mobile widths.
 - [ ] Members/invite/share-link flows need end-to-end validation against live API responses and clipboard behavior.
 - [ ] Manual memory notes must stay aligned with the actual workstream after each `/fi`.
@@ -71,7 +68,6 @@
 - [ ] Convert the Cloudflare target into an explicit migration sequence: rollout gating, direct upload, Stream, and Queues.
 - [ ] Finish the archive surface with sticky actions, large viewer/lightbox behavior, and broader album flow QA.
 - [ ] Switch tree cards, side rails, archive tiles, and media galleries to preview variants by default and confirm legacy fallbacks.
-- [ ] Run phone/tablet QA for the new viewer sheet, archive tabs/grid, coarse-pointer actions, and builder inspector overlay on both local and hosted surfaces.
 - [ ] Run targeted QA for viewer, builder and members after the current media UI pass.
 - [ ] Review `Участники` end-to-end with invite, copy and revoke flows.
 - [ ] Revisit landing and dashboard only after tree/member workflows are stable.
@@ -84,8 +80,6 @@
 - Detected archive upload review flow with pending batch state and discard confirmation.
 - Detected variant-aware media delivery foundation for photo previews (`thumb/small/medium`).
 - Detected Cloudflare R2 foundation in env/runtime config and supporting project files.
-- Detected responsive viewer shell in the last local pass: desktop resizable rail, tablet overlay rail, and phone bottom sheet with stable selection state.
-- Detected mobile media polish in the last local pass: archive tab lists use mobile grid classes, coarse-pointer actions are enlarged, and lightbox prev/next now stop at list bounds instead of wrapping.
 - No `smoke:media` artifact was found during completion capture.
 
 ## Runtime Rules
@@ -93,6 +87,6 @@
 - Server-side Supabase transport is `native-first`: `lib/supabase/admin-rest.ts` and `lib/supabase/server-fetch.ts` should prefer native Node fetch and use the PowerShell bridge only as fallback or explicit override.
 - Tree pages should not default to `getTreeSnapshot(...)`: `audit`, `members`, `media`, and `settings` now rely on specialized repository page-data loaders, while full snapshots remain for real snapshot consumers such as viewer and snapshot APIs.
 - Project helper commands under `.codex/commands/*.sh` require a real Bash runtime; on Windows this means Git Bash or WSL with an installed distro, not the bare WSL stub.
-- Shared responsive media classes must stay scoped by context: fullscreen lightbox, inline gallery, archive controls, and viewer rails should not share unsafe global mobile rules.
-- Viewer person details are now viewport-specific UI shell behavior: desktop uses a resizable rail, tablet an overlay rail, and phone a bottom sheet; shell changes must not break selection state or create empty floating chrome.
+- Tree pages should prefer specialized repository page-data loaders over full snapshots unless rendering truly needs the whole snapshot contract.
+- Server-side Supabase admin REST should stay native-first; the PowerShell bridge is fallback/debug transport, not the default request path.
 

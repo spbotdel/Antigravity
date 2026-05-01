@@ -119,9 +119,10 @@ interface OfficeDocumentPreviewProps {
   publicFileUrl: string;
   title?: string | null;
   downloadUrl: string;
+  onPreviewLoad?: (iframe: HTMLIFrameElement) => void;
 }
 
-export function OfficeDocumentPreview({ publicFileUrl, title, downloadUrl }: OfficeDocumentPreviewProps) {
+export function OfficeDocumentPreview({ publicFileUrl, title, downloadUrl, onPreviewLoad }: OfficeDocumentPreviewProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasTimedOut, setHasTimedOut] = useState(false);
 
@@ -163,7 +164,11 @@ export function OfficeDocumentPreview({ publicFileUrl, title, downloadUrl }: Off
         src={buildMicrosoftOfficeViewerUrl(publicFileUrl)}
         className="document-preview-iframe"
         title={title || "Документ Microsoft Office"}
-        onLoad={() => setIsLoaded(true)}
+        tabIndex={-1}
+        onLoad={(event) => {
+          setIsLoaded(true);
+          onPreviewLoad?.(event.currentTarget);
+        }}
       />
     </div>
   );

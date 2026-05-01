@@ -2,7 +2,7 @@
 
 *Operational task backlog only.*
 
-*Updated: 2026-04-13*
+*Updated: 2026-04-16*
 
 ## Wave 1 — Current Execution
 
@@ -61,7 +61,6 @@ Operational note:
 
 ### High Priority
 
-- [x] Закрыт локальный responsive pass для viewer/media: phone bottom sheet, tablet overlay rail, mobile archive tabs и enlarged touch targets, plus lightbox edge-nav fixes.
 - [ ] Подтвердить, что единый upload для фото и видео с устройства, multi-file, progress и limits copy работают без остаточных регрессий.
 - [ ] Дожать Cloudflare migration plan поверх уже добавленного R2 foundation: rollout, direct upload, `Stream` для видео и `Queues` для async jobs.
 - [ ] Довести уже созданный tree-level раздел `Медиа`: sticky actions, большой viewer/lightbox, upload/album QA и спокойные empty states.
@@ -69,7 +68,6 @@ Operational note:
 - [ ] Довести текущий media UX pass: спокойнее copy, чище empty states, понятнее gallery/viewer в builder и viewer.
 - [ ] Завершить текущий pass по `family-tree-canvas`: age-aware avatars, fallback badge states, читаемость карточек и стабильное выделение выбранного узла в viewer и builder.
 - [ ] Стабилизировать layout конструктора: resizable canvas shell, overlay inspector на desktop и предсказуемое поведение на tablet/mobile без потери приоритета дерева.
-- [ ] Подтвердить на реальных phone/tablet экранах и на hosted `Vercel`, что новый viewer sheet, archive tabs/grid, coarse-pointer actions и builder inspector overlay не дают регрессий.
 - [ ] Довести экран `Участники`: приглашения по аккаунту и read-only share links должны быть самодостаточными, с понятными подсказками, копированием ссылок и безопасным отзывом доступа.
 - [ ] Провести целевой QA для builder/viewer/members, чтобы не было регрессий в партнерах, родителях, действиях над узлами и режимах доступа.
 - [ ] Держать startup context, task capsules и memory-файлы актуальными: `.claude/BACKLOG.md` и `.claude/SNAPSHOT.md` должны отражать реальный workstream текущего цикла.

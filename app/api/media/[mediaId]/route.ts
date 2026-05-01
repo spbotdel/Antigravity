@@ -153,6 +153,43 @@ function isPdfDocumentMimeType(mimeType: string | null | undefined) {
   return normalizedMimeType === "application/pdf" || normalizedMimeType.endsWith("/pdf");
 }
 
+async function proxyPdfDocumentResponse(input: {
+  mediaId: string;
+  shareToken?: string | null;
+  media: Awaited<ReturnType<typeof getMediaSummary>>;
+  download: boolean;
+}) {
+  const result = await resolveMediaAccess(input.mediaId, input.shareToken, null, { download: input.download });
+  const upstreamResponse = await fetch(result.url);
+  if (!upstreamResponse.ok || !upstreamResponse.body) {
+    throw new Error(input.download ? "Не удалось подготовить PDF для скачивания." : "Не удалось подготовить PDF для просмотра.");
+  }
+
+  const contentLength = upstreamResponse.headers.get("content-length");
+  const parsedContentLength = contentLength ? Number(contentLength) : Number.NaN;
+  if (Number.isFinite(parsedContentLength) && parsedContentLength > MAX_PDF_PROXY_BYTES) {
+    throw new AppError(413, input.download ? "PDF слишком большой для скачивания через сервер." : "PDF слишком большой для просмотра через сервер.");
+  }
+
+  const responseHeaders = new Headers();
+  responseHeaders.set("Content-Type", input.download ? "application/octet-stream" : "application/pdf");
+  responseHeaders.set(
+    "Content-Disposition",
+    input.download ? buildAttachmentContentDisposition(buildMediaDownloadFilename(input.media)) : "inline"
+  );
+  responseHeaders.set("Cache-Control", "no-store");
+  responseHeaders.set("X-Content-Type-Options", "nosniff");
+
+  if (contentLength) {
+    responseHeaders.set("Content-Length", contentLength);
+  }
+
+  return new Response(upstreamResponse.body, {
+    status: 200,
+    headers: responseHeaders,
+  });
+}
+
 function classifyVideoClient(request: Request) {
   const userAgent = request.headers.get("user-agent") || "";
   const secChUa = request.headers.get("sec-ch-ua") || "";
@@ -358,32 +395,14 @@ export async function GET(request: Request, { params }: Params) {
     if (download) {
       const media = await getMediaSummary(mediaId, shareToken);
       if (media.kind === "document" && isPdfDocumentMimeType(media.mime_type)) {
-        const result = await resolveMediaAccess(mediaId, shareToken, null, { download: true });
-        const upstreamResponse = await fetch(result.url);
-        if (!upstreamResponse.ok || !upstreamResponse.body) {
-          throw new Error("Не удалось подготовить PDF для скачивания.");
-        }
+        return await proxyPdfDocumentResponse({ mediaId, shareToken, media, download: true });
+      }
+    }
 
-        const contentLength = upstreamResponse.headers.get("content-length");
-        const parsedContentLength = contentLength ? Number(contentLength) : Number.NaN;
-        if (Number.isFinite(parsedContentLength) && parsedContentLength > MAX_PDF_PROXY_BYTES) {
-          throw new AppError(413, "PDF слишком большой для скачивания через сервер.");
-        }
-
-        const responseHeaders = new Headers();
-        responseHeaders.set("Content-Type", "application/octet-stream");
-        responseHeaders.set("Content-Disposition", buildAttachmentContentDisposition(buildMediaDownloadFilename(media)));
-        responseHeaders.set("Cache-Control", "no-store");
-        responseHeaders.set("X-Content-Type-Options", "nosniff");
-
-        if (contentLength) {
-          responseHeaders.set("Content-Length", contentLength);
-        }
-
-        return new Response(upstreamResponse.body, {
-          status: 200,
-          headers: responseHeaders,
-        });
+    if (!download && !variant) {
+      const media = await getMediaSummary(mediaId, shareToken);
+      if (media.kind === "document" && isPdfDocumentMimeType(media.mime_type)) {
+        return await proxyPdfDocumentResponse({ mediaId, shareToken, media, download: false });
       }
     }
 

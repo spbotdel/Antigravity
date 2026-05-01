@@ -102,6 +102,49 @@ describe("media route", () => {
     expect(response.headers.get("content-disposition")).toBe('attachment; filename="resume.pdf"');
   });
 
+  it("proxies pdf previews inline through GET /api/media/[mediaId] without download mode", async () => {
+    const { GET } = await import("@/app/api/media/[mediaId]/route");
+    getMediaSummary.mockResolvedValue({
+      id: "media-pdf",
+      tree_id: "tree-1",
+      kind: "document",
+      provider: "cloudflare_r2",
+      visibility: "members",
+      storage_path: "trees/tree-1/media/document/media-pdf/file.pdf",
+      external_url: null,
+      title: "resume.pdf",
+      caption: null,
+      mime_type: "application/pdf",
+      size_bytes: 597,
+    });
+    resolveMediaAccess.mockResolvedValue({ url: "https://example.com/inline-file.pdf", kind: "document" });
+    fetchMock.mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: {
+          "content-length": "3",
+          "content-type": "application/octet-stream",
+        },
+      })
+    );
+
+    const response = await GET(
+      new Request("http://localhost/api/media/media-pdf"),
+      {
+        params: Promise.resolve({ mediaId: "media-pdf" })
+      }
+    );
+
+    expect(getMediaSummary).toHaveBeenCalledWith("media-pdf", null);
+    expect(resolveMediaAccess).toHaveBeenCalledWith("media-pdf", null, null, { download: false });
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com/inline-file.pdf");
+    expect(buildAttachmentContentDisposition).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/pdf");
+    expect(response.headers.get("content-disposition")).toBe("inline");
+    expect(response.headers.get("location")).toBeNull();
+  });
+
   it("returns 413 when a proxied pdf exceeds the hard size limit", async () => {
     const { GET } = await import("@/app/api/media/[mediaId]/route");
     getMediaSummary.mockResolvedValue({
