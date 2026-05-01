@@ -5342,20 +5342,25 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
 }
 
 .media-lightbox-phone-video-shell {
+  --media-lightbox-phone-strip-space: 72px;
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: block;
 }
 
 .media-lightbox-phone-video-stage {
-  flex: 1 1 auto;
+  position: absolute;
+  inset: 0;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.media-lightbox-phone-video-mode.media-lightbox-has-strip .media-lightbox-phone-video-stage {
+  bottom: var(--media-lightbox-phone-strip-space);
 }
 
 .media-lightbox-phone-video-mode .person-media-stage-video-frame-phone {
@@ -5488,7 +5493,12 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
 }
 
 .media-lightbox-phone-video-strip {
-  width: 100%;
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 0;
+  z-index: 5;
+  width: auto;
   padding: 4px 2px 2px;
   display: grid;
   grid-auto-flow: column;
@@ -5499,6 +5509,20 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
   box-sizing: border-box;
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    opacity 180ms ease,
+    visibility 180ms ease,
+    transform 180ms ease;
+}
+
+.media-lightbox-video-chrome-hidden .media-lightbox-phone-video-strip {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(10px);
 }
 
 .media-lightbox-phone-video-strip .person-media-thumb {
@@ -5590,6 +5614,7 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
   }
 
   .media-lightbox-phone-video-mode.media-lightbox-fullscreen .media-lightbox-phone-video-stage {
+    inset: 0;
     height: 100%;
   }
 

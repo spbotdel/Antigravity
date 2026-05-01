@@ -1910,20 +1910,14 @@ export function PersonMediaGallery({
   const shouldUseManagedVideoChrome = Boolean(activeAsset && isInlineVideoAsset(activeAsset) && (isFullscreen || isPhoneLightboxVideoMode));
   const shouldAutoHideLightboxChrome = isFullscreen || Boolean(activeAsset && isInlineVideoAsset(activeAsset) && isPhoneLightboxVideoMode);
   shouldAutoHideVideoChromeRef.current = shouldAutoHideLightboxChrome;
-  const isThumbnailStripVisible = media.length > 1 && (!shouldAutoHideLightboxChrome || areFullscreenControlsVisible);
+  const hasLightboxStrip = media.length > 1;
   const lightboxStripChromeSpacePx = isNarrowLightboxViewport ? 104 : 128;
-  const lightboxActiveStripSpacePx = isThumbnailStripVisible ? lightboxStripChromeSpacePx : 24;
-  const lightboxBottomChromeSpacePx = isFullscreen
-    ? lightboxActiveStripSpacePx
-    : shouldAutoHideLightboxChrome
-      ? lightboxActiveStripSpacePx
-      : media.length > 1
-        ? lightboxStripChromeSpacePx
-      : 24;
+  const lightboxActiveStripSpacePx = hasLightboxStrip ? lightboxStripChromeSpacePx : 24;
+  const lightboxBottomChromeSpacePx = lightboxActiveStripSpacePx;
   const showLightboxActions =
     Boolean(activeAsset) &&
     (!isInlineRenderableAsset(activeAsset) || (showViewerAvatarAction && canSetAvatar) || canDeleteCurrentMedia);
-  const topSafeInsetPx = isFullscreen && areFullscreenControlsVisible ? 72 : 20;
+  const topSafeInsetPx = isFullscreen ? 72 : 20;
   const actionChromeInsetPx = showLightboxActions ? 72 : 0;
   const expandedMediaViewport = useMemo(() => {
     const availableWidth = clampPositiveSize(lightboxContentSize.width);
@@ -2139,7 +2133,7 @@ export function PersonMediaGallery({
                     }
                   />
                 </div>
-                {media.length > 1 && areFullscreenControlsVisible ? (
+                {media.length > 1 ? (
                   <div
                     ref={lightboxStripRef}
                     className="media-lightbox-phone-video-strip"

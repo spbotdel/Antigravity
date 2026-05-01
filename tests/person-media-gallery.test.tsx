@@ -935,7 +935,8 @@ describe("person media gallery", () => {
 
       const stageVideo = dialog.querySelector("video.person-media-stage-video") as HTMLVideoElement;
       fireEvent.click(stageVideo);
-      expect(dialog.querySelector(".media-lightbox-phone-video-strip")).toBeNull();
+      expect(dialog).toHaveClass("media-lightbox-video-chrome-hidden");
+      expect(dialog.querySelector(".media-lightbox-phone-video-strip")).not.toBeNull();
       fireEvent.click(stageVideo);
 
       const remountedFirstThumbButton = within(dialog).getByRole("button", { name: "Показать медиа 1: Архивное видео 1" });
@@ -1062,7 +1063,7 @@ describe("person media gallery", () => {
     }
   });
 
-  it("hides phone video chrome by removing nav and strip from the DOM, then restores them on tap", () => {
+  it("hides phone video chrome without unmounting the overlay strip, then restores controls on tap", () => {
     vi.useFakeTimers();
 
     const originalInnerWidthDescriptor = Object.getOwnPropertyDescriptor(window, "innerWidth");
@@ -1112,7 +1113,7 @@ describe("person media gallery", () => {
 
       expect(dialog).toHaveClass("media-lightbox-video-chrome-hidden");
       expect(dialog.querySelector(".person-media-stage-video-controls-anchor-phone")).toBeNull();
-      expect(dialog.querySelector(".media-lightbox-phone-video-strip")).toBeNull();
+      expect(dialog.querySelector(".media-lightbox-phone-video-strip")).not.toBeNull();
       expect(dialog.querySelector(".person-media-stage-video-nav")).toBeNull();
 
       fireEvent.click(video as HTMLVideoElement);
@@ -1124,7 +1125,7 @@ describe("person media gallery", () => {
       fireEvent.click(video as HTMLVideoElement);
       expect(dialog).toHaveClass("media-lightbox-video-chrome-hidden");
       expect(dialog.querySelector(".person-media-stage-video-controls-anchor-phone")).toBeNull();
-      expect(dialog.querySelector(".media-lightbox-phone-video-strip")).toBeNull();
+      expect(dialog.querySelector(".media-lightbox-phone-video-strip")).not.toBeNull();
     } finally {
       if (originalInnerWidthDescriptor) {
         Object.defineProperty(window, "innerWidth", originalInnerWidthDescriptor);
