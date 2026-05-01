@@ -16,20 +16,20 @@ const onest = Onest({
 
 export const metadata: Metadata = {
   title: "Семейное дерево",
-  description: "История семьи, собранная в одном месте",
+  description: "История, собранная в одном месте",
   icons: {
     icon: "/brandmarks/family-tree-mark.png",
     apple: "/brandmarks/family-tree-mark.png"
   },
   openGraph: {
     title: "Семейное дерево",
-    description: "История семьи, собранная в одном месте",
+    description: "История, собранная в одном месте",
     type: "website"
   },
   twitter: {
     card: "summary",
     title: "Семейное дерево",
-    description: "История семьи, собранная в одном месте"
+    description: "История, собранная в одном месте"
   }
 };
 
