@@ -76,6 +76,8 @@ Required env vars:
 - `SUPABASE_ADMIN_REST_TRANSPORT=native` disables the PowerShell fallback and forces native fetch only
 - `SUPABASE_ADMIN_REST_TRANSPORT=powershell` forces the legacy PowerShell bridge for debugging or environment isolation
 - `NEXT_PUBLIC_SITE_URL`
+- `FAMILY_DOMAIN_HOST` optional single-family custom-domain host, for example `popovi.ru`; matching is exact after lowercase and port stripping
+- `FAMILY_DOMAIN_TREE_SLUG` optional tree slug for clean custom-domain routing, for example `popovi`; only active when `FAMILY_DOMAIN_HOST` is also set
 - `MEDIA_STORAGE_BACKEND` optional, defaults to `supabase`
 - `NEXT_PUBLIC_STORAGE_BUCKET` optional for Supabase Storage, defaults to `tree-photos`
 - `OBJECT_STORAGE_BUCKET` required when `MEDIA_STORAGE_BACKEND=object_storage`

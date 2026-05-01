@@ -93,6 +93,8 @@ describe("settings page", () => {
     expect(screen.getByRole("heading", { name: "Demo Family" })).toBeInTheDocument();
     expect(screen.getByText("Закрытое")).toBeInTheDocument();
     expect(screen.getByText("Корень и доступ")).toBeInTheDocument();
+    expect(screen.getByText("Корень дерева и режим доступа собраны в один спокойный экран с понятной иерархией.")).toBeInTheDocument();
+    expect(screen.queryByText("Название, адрес, корень дерева и режим доступа собраны в один спокойный экран с понятной иерархией.")).not.toBeInTheDocument();
     expect(screen.queryByText("2 человек")).not.toBeInTheDocument();
     expect(screen.getByTestId("tree-nav")).toHaveTextContent("share:none;edit:true");
     expect(screen.getByTestId("tree-settings-form")).toHaveTextContent("title:Demo Family;people:2;base:");

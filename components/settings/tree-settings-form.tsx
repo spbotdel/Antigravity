@@ -7,9 +7,7 @@ import { CopyIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { SelectField } from "@/components/ui/select-field";
-import { Textarea } from "@/components/ui/textarea";
 import type { PersonRecord, TreeRecord } from "@/lib/types";
 import { formatTreeVisibility } from "@/lib/ui-text";
 import { cn } from "@/lib/utils";
@@ -28,19 +26,26 @@ function buildTreeUrl(baseUrl: string, slug: string) {
   return `${normalizeBaseUrl(baseUrl)}/tree/${slug}`;
 }
 
+function buildCleanTreeUrl(baseUrl: string) {
+  return `${normalizeBaseUrl(baseUrl)}/`;
+}
+
+function isCleanFamilyPath(pathname: string) {
+  const normalizedPathname = pathname === "/" ? pathname : pathname.replace(/\/+$/, "");
+  return ["/", "/media", "/builder", "/settings", "/members", "/audit"].includes(normalizedPathname);
+}
+
 export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [currentVisibility, setCurrentVisibility] = useState<TreeRecord["visibility"]>(tree.visibility);
-  const [title, setTitle] = useState(tree.title);
-  const [draftSlug, setDraftSlug] = useState(tree.slug);
-  const [description, setDescription] = useState(tree.description || "");
   const [rootPersonId, setRootPersonId] = useState(tree.root_person_id || "");
   const [resolvedBaseUrl, setResolvedBaseUrl] = useState(() => normalizeBaseUrl(initialBaseUrl || "http://localhost:3000"));
-  const [pendingAction, setPendingAction] = useState<"identity" | "public" | "private" | null>(null);
+  const [useCleanTreeUrl, setUseCleanTreeUrl] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"root" | "public" | "private" | null>(null);
   const currentRootPerson = people.find((person) => person.id === rootPersonId) || null;
-  const treeUrl = buildTreeUrl(resolvedBaseUrl, draftSlug || tree.slug);
+  const treeUrl = useCleanTreeUrl ? buildCleanTreeUrl(resolvedBaseUrl) : buildTreeUrl(resolvedBaseUrl, tree.slug);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.location?.origin) {
@@ -48,15 +53,13 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
     }
 
     setResolvedBaseUrl(normalizeBaseUrl(window.location.origin));
+    setUseCleanTreeUrl(isCleanFamilyPath(window.location.pathname));
   }, []);
 
   useEffect(() => {
-    setTitle(tree.title);
-    setDraftSlug(tree.slug);
-    setDescription(tree.description || "");
     setRootPersonId(tree.root_person_id || "");
     setCurrentVisibility(tree.visibility);
-  }, [tree.description, tree.root_person_id, tree.slug, tree.title, tree.visibility]);
+  }, [tree.root_person_id, tree.visibility]);
 
   async function send(url: string, body: unknown) {
     const response = await fetch(url, {
@@ -76,13 +79,10 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
     return payload;
   }
 
-  async function updateIdentity(event: FormEvent<HTMLFormElement>) {
+  async function updateRootPerson(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPendingAction("identity");
+    setPendingAction("root");
     await send(`/api/trees/${tree.id}`, {
-      title: title.trim(),
-      slug: draftSlug.trim(),
-      description: description,
       rootPersonId: rootPersonId || null
     });
     setPendingAction(null);
@@ -118,8 +118,8 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
         <CardHeader className="settings-card-header utility-section-heading px-6 pt-6 pb-0">
           <div className="settings-card-header-copy utility-section-heading-copy">
             <p className="eyebrow">Данные дерева</p>
-            <h2 className="settings-title">Название, адрес и структура</h2>
-            <p className="muted-copy settings-lead">Задайте название, короткий адрес и человека, от которого начинается основная ветка схемы.</p>
+            <h2 className="settings-title">Корень и структура</h2>
+            <p className="muted-copy settings-lead">Выберите человека, от которого начинается основная ветка схемы.</p>
           </div>
         </CardHeader>
 
@@ -148,27 +148,7 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
             </div>
           </div>
 
-          <form className="stack-form settings-form" onSubmit={updateIdentity}>
-            <div className="form-grid form-grid-2">
-              <label className="form-field">
-                Название дерева
-                <Input name="title" value={title} required onChange={(event) => setTitle(event.target.value)} />
-                <small className="settings-field-note">Так дерево увидят участники и гости по ссылке.</small>
-              </label>
-
-              <label className="form-field">
-                Адрес страницы
-                <Input name="slug" value={draftSlug} required onChange={(event) => setDraftSlug(event.target.value)} />
-                <small className="settings-field-note">Лучше оставить короткий и читаемый адрес, например `/tree/ivanovy`.</small>
-              </label>
-            </div>
-
-            <label className="form-field">
-              Описание
-              <Textarea name="description" rows={4} value={description} onChange={(event) => setDescription(event.target.value)} />
-              <small className="settings-field-note">Несколько строк о том, что это за дерево и кому оно посвящено.</small>
-            </label>
-
+          <form className="stack-form settings-form" onSubmit={updateRootPerson}>
             <div className="form-grid form-grid-2">
               <label className="form-field">
                 Корневой человек
@@ -190,8 +170,8 @@ export function TreeSettingsForm({ tree, people, initialBaseUrl }: TreeSettingsF
             </div>
 
             <div className="settings-actions-row">
-              <Button className="settings-save-button" type="submit" disabled={pendingAction === "identity"}>
-                {pendingAction === "identity" ? "Сохраняю..." : "Сохранить данные"}
+              <Button className="settings-save-button" type="submit" disabled={pendingAction === "root"}>
+                {pendingAction === "root" ? "Сохраняю..." : "Сохранить данные"}
               </Button>
             </div>
           </form>

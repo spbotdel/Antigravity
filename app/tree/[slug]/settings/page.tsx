@@ -75,7 +75,7 @@ export default async function SettingsPage({ params, searchParams }: SettingsPag
               <span className="workspace-meta-chip">{formatTreeVisibility(pageData.tree.visibility)}</span>
               <span className="workspace-meta-chip">Корень и доступ</span>
             </div>
-            <p className="muted-copy">Название, адрес, корень дерева и режим доступа собраны в один спокойный экран с понятной иерархией.</p>
+            <p className="muted-copy">Корень дерева и режим доступа собраны в один спокойный экран с понятной иерархией.</p>
           </div>
         </section>
         <TreeSettingsForm tree={pageData.tree} people={pageData.people} initialBaseUrl={getBaseUrl()} />
