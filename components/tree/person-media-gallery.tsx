@@ -68,6 +68,10 @@ function isInlineVideoAsset(asset: MediaAsset) {
   return asset.kind === "video" && asset.provider !== "yandex_disk";
 }
 
+function canResolveGeneratedVideoThumb(asset: MediaAsset) {
+  return asset.kind === "video" && asset.provider === "cloudflare_r2" && asset.preview_status === "ready";
+}
+
 function isInlineRenderableAsset(asset: MediaAsset) {
   return isPhotoAsset(asset) || isInlineVideoAsset(asset);
 }
@@ -257,15 +261,7 @@ function MediaThumb({
         src: lightboxResolvedThumbUrl,
       }
     : resolveMediaThumbSource(asset, shareToken, optimisticVideoPreviewUrls);
-  const shouldUseVideoFallback = !(staticVideoThumbOnly && asset.kind === "video");
-  const resolvedThumbSource =
-    thumbSource ??
-    (shouldUseVideoFallback && isInlineVideoAsset(asset)
-      ? {
-          kind: "video" as const,
-          src: withMediaSourceContext(buildMediaOpenRouteUrl(asset, shareToken), "person-media-thumb-video"),
-        }
-      : null);
+  const resolvedThumbSource = thumbSource;
   const controlledThumbLoadKey =
     staticVideoThumbOnly && asset.kind === "video" && resolvedThumbSource
       ? `${asset.id}:${resolvedThumbSource.kind}:${resolvedThumbSource.src}`
@@ -1206,6 +1202,24 @@ export function PersonMediaGallery({
   const [activeMediaIntrinsicSize, setActiveMediaIntrinsicSize] = useState<{ width: number; height: number } | null>(null);
   const [isPhoneVideoSession, setIsPhoneVideoSession] = useState(false);
   const [lightboxThumbLoadStates, setLightboxThumbLoadStates] = useState<Record<string, MediaThumbVisualLoadState>>({});
+  const [resolvedVideoThumbUrlsByMediaId, setResolvedVideoThumbUrlsByMediaId] = useState<Record<string, string>>({});
+  const generatedVideoThumbRequest = useMemo(() => {
+    const mediaIds = [...new Set(media.filter(canResolveGeneratedVideoThumb).map((asset) => asset.id))].sort();
+    const treeId = media.find(canResolveGeneratedVideoThumb)?.tree_id || null;
+
+    return {
+      treeId,
+      mediaIds,
+      key: `${treeId || "none"}:${mediaIds.join(",")}`,
+    };
+  }, [media]);
+  const effectiveResolvedThumbUrlsByMediaId = useMemo(
+    () => ({
+      ...resolvedVideoThumbUrlsByMediaId,
+      ...(lightboxResolvedThumbUrlsByMediaId || {}),
+    }),
+    [lightboxResolvedThumbUrlsByMediaId, resolvedVideoThumbUrlsByMediaId]
+  );
 
   function updateLightboxThumbLoadState(key: string, state: MediaThumbVisualLoadState) {
     setLightboxThumbLoadStates((currentStates) => {
@@ -1219,6 +1233,77 @@ export function PersonMediaGallery({
       };
     });
   }
+
+  useEffect(() => {
+    if (
+      lightboxOnly ||
+      !generatedVideoThumbRequest.treeId ||
+      !generatedVideoThumbRequest.mediaIds.length ||
+      typeof fetch !== "function"
+    ) {
+      return undefined;
+    }
+
+    const unresolvedMediaIds = generatedVideoThumbRequest.mediaIds.filter((mediaId) => !resolvedVideoThumbUrlsByMediaId[mediaId]);
+    if (!unresolvedMediaIds.length) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const params = new URLSearchParams();
+    if (shareToken) {
+      params.set("share", shareToken);
+    }
+    const requestUrl = params.size ? `/api/media/thumbs?${params.toString()}` : "/api/media/thumbs";
+
+    void fetch(requestUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        treeId: generatedVideoThumbRequest.treeId,
+        mediaIds: unresolvedMediaIds,
+      }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        return response.json().catch(() => null) as Promise<{ urlsByMediaId?: Record<string, unknown> } | null>;
+      })
+      .then((payload) => {
+        if (!payload?.urlsByMediaId) {
+          return;
+        }
+
+        const nextUrls = Object.fromEntries(
+          Object.entries(payload.urlsByMediaId).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0)
+        );
+        if (!Object.keys(nextUrls).length) {
+          return;
+        }
+
+        setResolvedVideoThumbUrlsByMediaId((currentUrls) => ({
+          ...currentUrls,
+          ...nextUrls,
+        }));
+      })
+      .catch(() => undefined);
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    generatedVideoThumbRequest.key,
+    generatedVideoThumbRequest.mediaIds,
+    generatedVideoThumbRequest.treeId,
+    lightboxOnly,
+    resolvedVideoThumbUrlsByMediaId,
+    shareToken,
+  ]);
 
   function ensureLightboxHistoryEntry() {
     if (typeof window === "undefined" || lightboxHistoryEntryIdRef.current) {
@@ -2070,7 +2155,7 @@ export function PersonMediaGallery({
                         active={asset.id === activeAsset.id}
                         shareToken={shareToken}
                         optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
-                        lightboxResolvedThumbUrlsByMediaId={lightboxResolvedThumbUrlsByMediaId}
+                        lightboxResolvedThumbUrlsByMediaId={effectiveResolvedThumbUrlsByMediaId}
                         onSelect={() => {
                           pauseActiveLightboxVideo();
                           setActiveMediaId(asset.id);
@@ -2216,7 +2301,7 @@ export function PersonMediaGallery({
                 active={asset.id === activeAsset.id}
                 shareToken={shareToken}
                 optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
-                lightboxResolvedThumbUrlsByMediaId={lightboxResolvedThumbUrlsByMediaId}
+                lightboxResolvedThumbUrlsByMediaId={effectiveResolvedThumbUrlsByMediaId}
                 onSelect={() => {
                   pauseActiveLightboxVideo();
                   setActiveMediaId(asset.id);
@@ -2307,6 +2392,7 @@ export function PersonMediaGallery({
                     active={!isCompactPreviewEntry && asset.id === activeAsset.id}
                     shareToken={shareToken}
                     optimisticVideoPreviewUrls={optimisticVideoPreviewUrls}
+                    lightboxResolvedThumbUrlsByMediaId={effectiveResolvedThumbUrlsByMediaId}
                     onSelect={() => {
                       if (isInlineSelectionMode) {
                         resolvedToggleMediaSelection(asset.id);

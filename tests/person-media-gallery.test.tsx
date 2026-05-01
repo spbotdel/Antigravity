@@ -312,9 +312,8 @@ describe("person media gallery", () => {
     expect(screen.getByText("Фото")).toBeInTheDocument();
     const videoThumbButton = screen.getByRole("button", { name: "Показать медиа 2: Семейное видео" });
     expect(videoThumbButton).toBeInTheDocument();
-    const videoThumb = videoThumbButton.querySelector("video.person-media-thumb-video") as HTMLVideoElement | null;
-    expect(videoThumb).not.toBeNull();
-    expect(videoThumb).toHaveAttribute("src", "/api/media/media-video?source=person-media-thumb-video");
+    expect(videoThumbButton.querySelector("video.person-media-thumb-video")).toBeNull();
+    expect(videoThumbButton.querySelector(".person-media-thumb-video-placeholder")).not.toBeNull();
 
     fireEvent.click(videoThumbButton);
 
@@ -364,6 +363,52 @@ describe("person media gallery", () => {
     expect(stageVideo?.preload).toBe("none");
     expect(stageVideo?.hasAttribute("controls")).toBe(false);
     expect(screen.getByRole("button", { name: "Воспроизвести видео" })).toBeInTheDocument();
+  });
+
+  it("uses resolved signed thumb URLs for ready person-linked cloudflare video previews", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({
+        urlsByMediaId: {
+          "media-video": "https://example.com/resolved-video-thumb.webp",
+        },
+      })
+    );
+
+    render(
+      <PersonMediaGallery
+        media={[
+          createMediaAsset({
+            id: "media-video",
+            kind: "video",
+            provider: "cloudflare_r2",
+            preview_status: "ready",
+            title: "Семейное видео",
+            mime_type: "video/mp4",
+            storage_path: "trees/tree-1/media/video/media-video/video.mp4"
+          })
+        ]}
+        showStage={false}
+        showStickyFooter={false}
+      />
+    );
+
+    const thumbButton = screen.getByRole("button", { name: "Показать медиа 1: Семейное видео" });
+    expect(thumbButton.querySelector("img")).toHaveAttribute("src", "/api/media/media-video?variant=thumb");
+
+    await waitFor(() => {
+      expect(thumbButton.querySelector("img")).toHaveAttribute("src", "https://example.com/resolved-video-thumb.webp");
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/media/thumbs",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          treeId: "tree-1",
+          mediaIds: ["media-video"],
+        }),
+      })
+    );
   });
 
   it("keeps a video thumbnail fallback visible when a generated preview fails", () => {
