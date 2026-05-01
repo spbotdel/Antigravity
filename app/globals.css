@@ -5347,20 +5347,18 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
   width: 100%;
   height: 100%;
   min-height: 0;
-  display: block;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) var(--media-lightbox-phone-strip-space);
+  align-items: stretch;
 }
 
 .media-lightbox-phone-video-stage {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  grid-row: 1;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.media-lightbox-phone-video-mode.media-lightbox-has-strip .media-lightbox-phone-video-stage {
-  bottom: var(--media-lightbox-phone-strip-space);
 }
 
 .media-lightbox-phone-video-mode .person-media-stage-video-frame-phone {
@@ -5493,12 +5491,12 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
 }
 
 .media-lightbox-phone-video-strip {
-  position: absolute;
-  left: 2px;
-  right: 2px;
-  bottom: 0;
+  position: relative;
+  grid-row: 2;
+  align-self: end;
   z-index: 5;
-  width: auto;
+  width: 100%;
+  min-width: 0;
   padding: 4px 2px 2px;
   display: grid;
   grid-auto-flow: column;
@@ -5609,11 +5607,13 @@ body.media-lightbox-open .media-lightbox-confirm-dialog[data-slot="dialog-conten
 @media (orientation: landscape) {
   .media-lightbox-phone-video-mode.media-lightbox-fullscreen .media-lightbox-phone-video-shell {
     position: relative;
+    display: block;
     padding: 0;
     gap: 0;
   }
 
   .media-lightbox-phone-video-mode.media-lightbox-fullscreen .media-lightbox-phone-video-stage {
+    position: absolute;
     inset: 0;
     height: 100%;
   }
